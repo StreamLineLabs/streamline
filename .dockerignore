@@ -1,0 +1,31 @@
+# Build artifacts
+target/
+debug/
+*.pdb
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Git
+.git/
+.gitignore
+
+# Documentation (keep README)
+*.md
+!README.md
+
+# Test data
+data/
+example_data/
+*.log
+
+# CI/CD
+.github/
+
+# Misc
+.DS_Store
+Thumbs.db

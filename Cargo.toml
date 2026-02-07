@@ -1,0 +1,315 @@
+[workspace]
+members = [".", "crates/streamline-wasm", "crates/streamline-analytics"]
+resolver = "2"
+
+[package]
+name = "streamline"
+version = "0.2.0"
+edition = "2021"
+authors = ["Jose David Baena"]
+description = "A developer-first, operationally simple streaming solution with Kafka protocol compatibility"
+license = "Apache-2.0"
+repository = "https://github.com/streamlinelabs/streamline"
+homepage = "https://github.com/streamlinelabs/streamline"
+documentation = "https://docs.rs/streamline"
+readme = "README.md"
+keywords = ["streaming", "kafka", "messaging", "event-sourcing"]
+categories = ["network-programming", "asynchronous"]
+rust-version = "1.75"
+exclude = [
+    ".github/",
+    "example_data/",
+    "data/",
+    "*.md",
+    "!README.md",
+]
+
+[dependencies]
+# Async runtime
+tokio = { version = "1.41", features = ["full"] }
+
+# Kafka protocol
+kafka-protocol = "0.14"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+bincode = "1.3"
+bytes = { version = "1.7", features = ["serde"] }
+
+# Error handling
+thiserror = "2.0"
+anyhow = "1.0"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+# CLI parsing
+clap = { version = "4.5", features = ["derive", "env"] }
+clap_complete = "4.5"
+
+# CLI enhancements
+colored = "2.1"
+indicatif = "0.17"
+comfy-table = "7.1"
+dialoguer = "0.11"
+dirs = "5.0"
+regex = "1.10"
+jsonpath-rust = "0.7"
+
+# Compression
+lz4_flex = "0.11"
+zstd = "0.13"
+snap = "1.1"
+flate2 = "1.0"
+
+# CRC32 for checksums
+crc32fast = "1.4"
+
+# Time utilities
+chrono = { version = "0.4", features = ["serde"] }
+
+# UUID for unique identifiers
+uuid = { version = "1.11", features = ["v4", "serde"] }
+
+# TLS/SSL support
+rustls = "0.23"
+tokio-rustls = "0.26"
+rustls-pemfile = "2.2"
+
+# Low-level socket options (TCP keepalive, buffer tuning)
+socket2 = "0.5"
+
+# Metrics and monitoring (optional)
+metrics = { version = "0.24", optional = true }
+metrics-exporter-prometheus = { version = "0.16", optional = true }
+
+# HTTP server for metrics and WebSocket
+axum = { version = "0.7", features = ["ws"] }
+tower = { version = "0.4", features = ["util"] }
+
+# Async stream utilities for WebSocket
+futures-util = "0.3"
+
+# Authentication (optional - auth feature)
+argon2 = { version = "0.5", features = ["std"], optional = true }
+base64 = "0.22"
+serde_yaml = "0.9"
+rand = "0.8"
+
+# SCRAM authentication (SHA256/SHA512) - optional, part of auth feature
+sha2 = { version = "0.10", optional = true }
+hmac = { version = "0.12", optional = true }
+pbkdf2 = { version = "0.12", optional = true }
+
+# Secure memory handling (zeroization) - optional, part of auth feature
+zeroize = { version = "1.8", features = ["derive"], optional = true }
+
+# OAuth 2.0 / OIDC authentication (optional - auth feature)
+jsonwebtoken = { version = "9.3", optional = true }
+
+# Encryption at rest (optional - encryption feature)
+aes-gcm = { version = "0.10", optional = true }
+
+# Hex encoding (always available - small crate, used for debugging)
+hex = "0.4"
+
+# Schema Registry (optional - schema-registry feature)
+apache-avro = { version = "0.17", optional = true }
+prost = { version = "0.13", optional = true }
+prost-types = { version = "0.13", optional = true }
+jsonschema = { version = "0.26", optional = true }
+
+# Clustering and Raft consensus (optional - clustering feature)
+openraft = { version = "0.9", features = ["serde", "tracing-log", "loosen-follower-log-revert"], optional = true }
+async-trait = "0.1"
+
+# Concurrent data structures
+dashmap = "6.1"
+parking_lot = "0.12"
+
+# Bloom filters for efficient key lookups
+bloomfilter = "1.0"
+
+# Memory-mapped I/O for zero-copy reads
+memmap2 = "0.9"
+
+# Low-level system calls (sendfile, madvise)
+libc = "0.2"
+
+# Note: io_uring is Linux-only, see target-specific dependencies below
+# tokio-uring dependency is defined in [target.'cfg(target_os = "linux")'.dependencies]
+
+# Object storage for tiered storage (optional - cloud-storage feature)
+object_store = { version = "0.11", features = ["aws", "azure", "gcp"], optional = true }
+
+# OpenTelemetry for distributed tracing (optional - telemetry feature)
+opentelemetry = { version = "0.27", optional = true }
+opentelemetry_sdk = { version = "0.27", features = ["rt-tokio"], optional = true }
+opentelemetry-otlp = { version = "0.27", features = ["tonic", "grpc-tonic"], optional = true }
+tracing-opentelemetry = { version = "0.28", optional = true }
+
+# HTTP client for OAuth JWKS fetching (optional - auth feature)
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "blocking", "stream"], optional = true }
+
+# Apache Iceberg for lakehouse sink (optional - iceberg feature)
+iceberg = { version = "0.4", optional = true }
+iceberg-catalog-rest = { version = "0.4", optional = true }
+# Note: HMS and Glue catalogs disabled due to hive_metastore v0.1.0 compilation errors
+# They will be re-enabled when the upstream dependency is fixed
+# iceberg-catalog-hms = { version = "0.4", optional = true }
+# iceberg-catalog-glue = { version = "0.4", optional = true }
+# arrow/parquet v53 matches deltalake's transitive dep, eliminating duplicate compilation
+parquet = { version = "53", optional = true }
+arrow = { version = "53", optional = true }
+
+# Delta Lake for lakehouse sink (optional - delta-lake feature)
+deltalake = { version = "0.22", optional = true }
+
+# Web UI dependencies (optional, behind feature flag)
+async-stream = { version = "0.3" }
+toml = "0.9.6"
+
+# TUI dashboard
+ratatui = "0.29"
+crossterm = "0.28"
+
+# Fuzzy matching for smart suggestions
+strsim = "0.11"
+
+# Analytics engine (workspace crate, isolates heavy DuckDB C++ compilation)
+streamline-analytics = { path = "crates/streamline-analytics", optional = true }
+
+# DuckDB for embedded analytics (optional - analytics feature)
+# Note: duckdb is now compiled inside the streamline-analytics workspace crate.
+# This dep is kept for backward compat if anything imports it directly.
+duckdb = { version = "1.1", features = ["bundled", "vtab"], optional = true }
+
+# SQLite for lightweight embedded queries (optional - sqlite-queries feature)
+rusqlite = { version = "0.31", features = ["bundled"], optional = true }
+
+# WebAssembly transformation engine (workspace crate, isolates wasmtime compilation)
+streamline-wasm = { path = "crates/streamline-wasm" }
+
+# WebAssembly runtime (optional - wasm-transforms feature, enables real WASM execution)
+wasmtime = { version = "27", optional = true }
+
+# PostgreSQL CDC (optional - postgres-cdc feature)
+tokio-postgres = { version = "0.7", features = ["with-chrono-0_4", "with-serde_json-1", "with-uuid-1"], optional = true }
+postgres-types = { version = "0.2", features = ["derive", "with-chrono-0_4", "with-serde_json-1", "with-uuid-1"], optional = true }
+postgres-protocol = { version = "0.6", optional = true }
+
+# QUIC transport (optional - quic feature)
+quinn = { version = "0.11", default-features = false, features = ["runtime-tokio", "rustls", "ring"], optional = true }
+rcgen = { version = "0.13", optional = true }
+webpki-roots = { version = "0.26", optional = true }
+
+# GraphQL API (optional - graphql feature)
+async-graphql = { version = "7.0.9", features = ["chrono", "uuid"], optional = true }
+tokio-stream = { version = "0.1", optional = true }
+
+# Readline for REPL (optional - repl feature)
+rustyline = { version = "14.0", optional = true }
+
+[features]
+# Edition meta-features
+default = ["lite"]
+lite = []  # Core streaming only - no optional features
+full = ["clustering", "telemetry", "cloud-storage", "schema-registry", "metrics", "auth", "encryption", "analytics", "iceberg", "repl", "lakehouse", "ai", "cdc", "geo-replication", "kafka-connect", "graphql"]
+
+# Individual features (can be combined)
+clustering = ["dep:openraft"]
+telemetry = ["dep:opentelemetry", "dep:opentelemetry_sdk", "dep:opentelemetry-otlp", "dep:tracing-opentelemetry"]
+cloud-storage = ["dep:object_store"]
+schema-registry = ["dep:apache-avro", "dep:prost", "dep:prost-types", "dep:jsonschema"]
+metrics = ["dep:metrics", "dep:metrics-exporter-prometheus"]
+auth = ["dep:argon2", "dep:sha2", "dep:hmac", "dep:pbkdf2", "dep:zeroize", "dep:jsonwebtoken", "dep:reqwest"]
+encryption = ["dep:aes-gcm"]
+analytics = ["dep:duckdb", "dep:streamline-analytics"]
+sqlite-queries = ["dep:rusqlite"]  # Lightweight SQLite-based query interface for ad-hoc SQL on topics
+io-uring = ["dep:tokio-uring"]
+iceberg = ["dep:iceberg", "dep:iceberg-catalog-rest", "dep:parquet", "dep:arrow"]
+# Note: HMS and Glue catalog features disabled until upstream hive_metastore dependency is fixed
+# iceberg-hms = ["iceberg", "dep:iceberg-catalog-hms"]
+# iceberg-glue = ["iceberg", "dep:iceberg-catalog-glue"]
+delta-lake = ["dep:deltalake"]
+serverless = ["dep:reqwest", "dep:sha2", "dep:hmac"]  # Serverless connectors: HTTP webhooks, SaaS integrations
+columnar = ["dep:arrow", "dep:parquet"]
+lakehouse = ["columnar"]
+ai = ["dep:reqwest"]  # AI-native streaming: embeddings, semantic search, LLM integration, anomaly detection
+wasm-transforms = ["dep:wasmtime", "streamline-wasm/wasm-runtime"]
+postgres-cdc = ["dep:tokio-postgres", "dep:postgres-types", "dep:postgres-protocol"]
+mysql-cdc = []  # MySQL CDC: binlog replication with row-based format
+mongodb-cdc = []  # MongoDB CDC: change streams
+sqlserver-cdc = []  # SQL Server CDC: polling-based CDC
+cdc = ["postgres-cdc", "mysql-cdc", "mongodb-cdc", "sqlserver-cdc"]  # All CDC sources
+edge = []  # Edge-first architecture: offline-first, sync-when-connected, conflict resolution
+quic = ["dep:quinn", "dep:rcgen", "dep:webpki-roots"]
+graphql = ["dep:async-graphql", "dep:tokio-stream"]
+repl = ["dep:rustyline"]
+kafka-connect = []  # Kafka Connect REST API compatibility layer
+
+# Next-gen / experimental features (not included in `full` — enable individually)
+featurestore = []  # Real-time ML Feature Store
+faas = ["wasm-transforms"]  # Functions-as-a-Service (requires WASM runtime)
+geo-replication = ["clustering"]  # Multi-region active-active replication
+control-plane = []  # Cloud SaaS control plane
+native-cdc = ["postgres-cdc", "mysql-cdc"]  # Built-in CDC from PostgreSQL/MySQL
+
+# UI feature
+web-ui = ["dep:reqwest"]
+
+# Test categories - enable specific test suites
+integration-tests = []      # End-to-end tests requiring running server
+stress-tests = []           # High-load and performance stress tests
+long-running-tests = []     # Tests > 1 hour (72h stability, etc.)
+compatibility-tests = []    # External Kafka client tests (require clients installed)
+
+[dev-dependencies]
+tokio-test = "0.4"
+tempfile = "3.14"
+criterion = { version = "0.5", features = ["html_reports", "async_tokio"] }
+proptest = "1.4"
+serial_test = "3.1"
+http-body-util = "0.1"
+insta = { version = "1.41", features = ["yaml", "json"] }
+
+[[bin]]
+name = "streamline"
+path = "src/main.rs"
+
+[[bin]]
+name = "streamline-cli"
+path = "src/cli.rs"
+
+[[bin]]
+name = "streamline-ui"
+path = "src/bin/streamline-ui.rs"
+required-features = ["web-ui"]
+
+# io_uring for high-performance async I/O (Linux only)
+[target.'cfg(target_os = "linux")'.dependencies]
+tokio-uring = { version = "0.5", optional = true }
+
+# Release profile is configured in .cargo/config.toml to avoid duplication
+
+[[bench]]
+name = "storage_benchmarks"
+harness = false
+
+[[bench]]
+name = "protocol_benchmarks"
+harness = false
+
+[[bench]]
+name = "zerocopy_benchmarks"
+harness = false
+
+[[bench]]
+name = "comparative_benchmarks"
+harness = false
+
+[[bench]]
+name = "io_backend_benchmarks"
+harness = false

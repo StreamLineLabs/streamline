@@ -1,0 +1,93 @@
+# Cargo configuration for Streamline development
+
+# Development profile optimizations
+[profile.dev]
+# Use packed debug info for faster incremental builds on macOS
+split-debuginfo = "packed"
+
+[profile.dev.package."*"]
+# Optimize dependencies in dev mode (1 = basic opts, much faster to compile than 2)
+opt-level = 1
+
+# Release profile optimizations
+# thin LTO is 10-20x faster to link than full LTO, with ~2% perf difference
+# codegen-units=16 enables parallel codegen (vs 1 which serializes), ~1-3% perf cost
+[profile.release]
+lto = "thin"
+codegen-units = 16
+strip = "symbols"
+
+# Custom profile for profiling (release with debug symbols)
+[profile.profiling]
+inherits = "release"
+debug = true
+strip = "none"
+
+# Useful aliases for development
+[alias]
+# Quick check with all features
+c = "check --all-features"
+
+# Watch mode for development (requires cargo-watch)
+dev = "watch -x 'check --all-features'"
+
+# Run clippy with strict warnings
+lint = "clippy --all-targets --all-features -- -D warnings"
+
+# Run all tests with all features
+t = "test --all-features"
+
+# Build lite edition
+lite = "build"
+
+# Build full edition
+full = "build --features full"
+
+# Build release
+rel = "build --release"
+
+# Generate and open documentation
+docs = "doc --no-deps --all-features --open"
+
+# Run the server in playground mode
+play = "run --bin streamline -- --playground"
+
+# Run the TUI dashboard
+top = "run --bin streamline-cli -- top"
+
+# Full validation (format, lint, test, doc)
+validate = "make validate"
+
+# Security audit
+audit = "audit"
+
+# Check for unused dependencies (requires cargo-machete)
+unused = "machete"
+
+[build]
+# Limit parallel jobs to leave headroom for the OS and IDE.
+# With heavy deps (duckdb, wasmtime, arrow), peak memory per rustc can be 2-4GB.
+# On a 64GB machine with 10 cores, 6 jobs keeps memory under ~24GB peak.
+# Adjust based on your system: more RAM = more jobs, freezing = fewer jobs.
+jobs = 6
+
+# Use sccache to cache compiled crates across clean builds and branch switches.
+# Install with: cargo install sccache
+# Then uncomment the line below to enable build caching.
+# Note: sccache is incompatible with incremental compilation; cargo will
+# automatically disable incremental when rustc-wrapper is set, which is the
+# right trade-off for a project this size (cache hits >> incremental rebuilds).
+# rustc-wrapper = "sccache"
+
+# Target directory (can be overridden for CI)
+# target-dir = "target"
+
+[net]
+# Retry downloads on failure
+retry = 3
+
+[term]
+# Enable colored output
+color = "auto"
+# Show progress bar
+progress.when = "auto"

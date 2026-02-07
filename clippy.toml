@@ -1,0 +1,10 @@
+# Clippy configuration for Streamline
+# See: https://doc.rust-lang.org/clippy/configuration.html
+
+# Allow up to 8 function arguments (default is 7).
+# Builder-heavy codebase with protocol handlers that pass many parameters.
+too-many-arguments-threshold = 8
+
+# Allow up to 4 type complexity (default is 250).
+# Generous for deeply nested generics in async code.
+type-complexity-threshold = 300

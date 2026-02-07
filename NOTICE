@@ -1,0 +1,81 @@
+Streamline
+Copyright 2024-2025 Jose David Baena
+
+This product includes software developed at:
+https://github.com/josedab/streamline
+
+Licensed under the Apache License, Version 2.0.
+
+================================================================================
+
+This product includes software developed by third parties:
+
+--------------------------------------------------------------------------------
+kafka-protocol - Kafka Wire Protocol Implementation
+https://github.com/influxdata/kafka-protocol-rs
+Licensed under Apache License, Version 2.0
+
+--------------------------------------------------------------------------------
+tokio - Asynchronous Runtime for Rust
+https://github.com/tokio-rs/tokio
+Licensed under MIT License
+
+--------------------------------------------------------------------------------
+openraft - Raft Consensus Implementation
+https://github.com/datafuselabs/openraft
+Licensed under Apache License, Version 2.0
+
+--------------------------------------------------------------------------------
+Apache Avro - Data Serialization System
+https://avro.apache.org/
+Licensed under Apache License, Version 2.0
+
+--------------------------------------------------------------------------------
+Apache Iceberg - Table Format for Large Analytic Datasets
+https://iceberg.apache.org/
+Licensed under Apache License, Version 2.0
+
+--------------------------------------------------------------------------------
+Apache Arrow - In-Memory Columnar Format
+https://arrow.apache.org/
+Licensed under Apache License, Version 2.0
+
+--------------------------------------------------------------------------------
+DuckDB - Embedded Analytical Database
+https://duckdb.org/
+Licensed under MIT License
+
+--------------------------------------------------------------------------------
+ratatui - Terminal User Interface Library
+https://github.com/ratatui-org/ratatui
+Licensed under MIT License
+
+--------------------------------------------------------------------------------
+clap - Command Line Argument Parser
+https://github.com/clap-rs/clap
+Licensed under Apache License, Version 2.0 or MIT License
+
+--------------------------------------------------------------------------------
+serde - Serialization Framework
+https://github.com/serde-rs/serde
+Licensed under Apache License, Version 2.0 or MIT License
+
+--------------------------------------------------------------------------------
+tracing - Application-level Tracing
+https://github.com/tokio-rs/tracing
+Licensed under MIT License
+
+--------------------------------------------------------------------------------
+axum - Web Framework
+https://github.com/tokio-rs/axum
+Licensed under MIT License
+
+--------------------------------------------------------------------------------
+rustls - TLS Implementation
+https://github.com/rustls/rustls
+Licensed under Apache License, Version 2.0, MIT License, or ISC License
+
+================================================================================
+
+For a complete list of dependencies and their licenses, see the Cargo.toml
+file and use `cargo license` to generate a detailed license report.

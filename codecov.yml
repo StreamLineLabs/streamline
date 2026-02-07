@@ -1,0 +1,82 @@
+# Codecov Configuration
+# https://docs.codecov.com/docs/codecov-yaml
+
+# Coverage requirements
+coverage:
+  # Overall project coverage status
+  status:
+    project:
+      default:
+        # Target coverage percentage
+        target: 70%
+        # Allow coverage to drop by this much before failing
+        threshold: 2%
+        # Only check coverage on files that were changed
+        if_ci_failed: error
+        # Require at least this many uploads before reporting
+        informational: false
+
+    # Per-patch coverage (new/changed code)
+    patch:
+      default:
+        # New code should have at least 60% coverage
+        target: 60%
+        threshold: 5%
+        if_ci_failed: error
+
+# Flags for different test types (optional granularity)
+flags:
+  unit:
+    paths:
+      - src/
+    carryforward: true
+  integration:
+    paths:
+      - tests/
+    carryforward: true
+
+# Files/paths to ignore from coverage
+ignore:
+  # Build scripts
+  - "build.rs"
+  # Benchmarks (not production code)
+  - "benches/**/*"
+  # Examples
+  - "examples/**/*"
+  # Generated code
+  - "**/*.generated.rs"
+  # Test utilities
+  - "tests/common/**/*"
+
+# Comment configuration for PRs
+comment:
+  # Post coverage report as PR comment
+  layout: "header, diff, flags, files"
+  # Update existing comment instead of creating new ones
+  behavior: default
+  # Require coverage change to post comment
+  require_changes: true
+  # Show coverage for specific number of files
+  require_base: false
+  require_head: true
+
+# GitHub checks integration
+github_checks:
+  annotations: true
+
+# Parsing configuration
+parsers:
+  gcov:
+    branch_detection:
+      conditional: true
+      loop: true
+      macro: false
+      method: false
+
+# Pull request comment settings
+codecov:
+  # Require CI to pass before posting coverage
+  require_ci_to_pass: true
+  # Wait for all CI jobs before posting
+  notify:
+    wait_for_ci: true

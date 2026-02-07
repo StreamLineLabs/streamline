@@ -1,0 +1,114 @@
+# cargo-deny configuration
+# Run with: cargo deny check
+# Documentation: https://embarkstudios.github.io/cargo-deny/
+
+[graph]
+# Targets to check dependencies for
+targets = [
+    "x86_64-unknown-linux-gnu",
+    "x86_64-apple-darwin",
+    "aarch64-apple-darwin",
+    "x86_64-pc-windows-msvc",
+]
+
+# ============================================================================
+# Advisories - Check for known security vulnerabilities
+# ============================================================================
+[advisories]
+# The database of security advisories
+db-path = "~/.cargo/advisory-db"
+db-urls = ["https://github.com/rustsec/advisory-db"]
+
+# How to handle advisories
+vulnerability = "deny"
+unmaintained = "warn"
+yanked = "warn"
+notice = "warn"
+
+# Ignore specific advisories (use sparingly, document why)
+ignore = []
+
+# ============================================================================
+# Licenses - Ensure dependencies use acceptable licenses
+# ============================================================================
+[licenses]
+# Confidence threshold for license detection
+confidence-threshold = 0.8
+
+# List of allowed licenses (SPDX identifiers)
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Zlib",
+    "0BSD",
+    "CC0-1.0",
+    "BSL-1.0",
+    "MPL-2.0",
+    "Unicode-DFS-2016",
+]
+
+# Deny copyleft licenses that would require source disclosure
+deny = [
+    "GPL-2.0",
+    "GPL-3.0",
+    "AGPL-3.0",
+]
+
+# Clarifications for crates with unclear licensing
+[[licenses.clarify]]
+name = "ring"
+expression = "MIT AND ISC AND OpenSSL"
+license-files = [{ path = "LICENSE", hash = 0xbd0eed23 }]
+
+[[licenses.clarify]]
+name = "webpki"
+expression = "ISC"
+license-files = [{ path = "LICENSE", hash = 0x001c7e6c }]
+
+# ============================================================================
+# Bans - Prevent specific crates or duplicate versions
+# ============================================================================
+[bans]
+# How to handle multiple versions of the same crate
+multiple-versions = "warn"
+
+# How to handle wildcard dependencies
+wildcards = "allow"
+
+# Allow build/dev dependencies to have multiple versions
+allow-build-scripts = ["*"]
+
+# Highlight specific crates when they appear as duplicates
+highlight = "all"
+
+# Crates to deny entirely (security concerns, deprecated, etc.)
+deny = [
+    # Known problematic crates
+    { name = "openssl", wrappers = ["openssl-sys"] },  # Prefer rustls
+]
+
+# Crates to allow even if they have issues
+allow = []
+
+# Skip checking certain crate versions for duplicates
+skip = []
+
+# ============================================================================
+# Sources - Restrict where crates can be fetched from
+# ============================================================================
+[sources]
+# Only allow crates from crates.io and git repositories
+unknown-registry = "deny"
+unknown-git = "warn"
+
+# Allow private git repositories if needed
+allow-git = []
+
+# Require all crates to come from crates.io
+[sources.allow-org]
+# Allow crates from specific GitHub organizations if needed
+# github = ["anthropics"]
