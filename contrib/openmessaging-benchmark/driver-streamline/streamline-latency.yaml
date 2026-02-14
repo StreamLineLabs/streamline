@@ -1,0 +1,57 @@
+# Streamline Latency-Optimized Driver Configuration
+#
+# Tuned for minimum latency. Trades throughput for responsiveness.
+# Use with latency-focused workloads.
+#
+# Usage:
+#   bin/benchmark --drivers driver-streamline/streamline-latency.yaml \
+#                 --workloads workloads/streamline-latency.yaml
+
+name: Streamline (Low Latency)
+driverClass: io.openmessaging.benchmark.driver.streamline.StreamlineBenchmarkDriver
+
+bootstrapServers: localhost:9092
+replicationFactor: 1
+topicPartitions: 0
+
+commonConfig: |
+  request.timeout.ms=10000
+  retry.backoff.ms=10
+
+# Producer: minimal batching, immediate sends
+producerConfig: |
+  # Minimal batching - send immediately
+  batch.size=1
+  linger.ms=0
+
+  # Wait for leader ack
+  acks=1
+
+  # No compression for speed
+  compression.type=none
+
+  # Smaller buffer
+  buffer.memory=33554432
+
+  # Single in-flight for ordering
+  max.in.flight.requests.per.connection=1
+
+  retries=1
+  retry.backoff.ms=10
+
+# Consumer: immediate fetches, frequent polling
+consumerConfig: |
+  # Fetch immediately when data available
+  fetch.min.bytes=1
+  fetch.max.wait.ms=10
+  max.partition.fetch.bytes=1048576
+
+  # Small batches for responsiveness
+  max.poll.records=100
+
+  auto.offset.reset=earliest
+  enable.auto.commit=false
+
+  # Tight session timeout
+  session.timeout.ms=10000
+  heartbeat.interval.ms=3000

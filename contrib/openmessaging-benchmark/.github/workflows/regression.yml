@@ -1,0 +1,265 @@
+# Benchmark Regression Detection Workflow
+#
+# Runs benchmarks on each PR and compares against baseline.
+# Fails if performance regresses beyond threshold.
+#
+name: Benchmark Regression
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+  workflow_dispatch:
+    inputs:
+      baseline_ref:
+        description: 'Git ref for baseline comparison'
+        required: false
+        default: 'main'
+
+env:
+  REGRESSION_THRESHOLD_PERCENT: 10
+  BENCHMARK_DURATION_MINUTES: 5
+
+jobs:
+  benchmark-regression:
+    name: Detect Performance Regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout PR
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Streamline Image (PR)
+        run: |
+          docker build -t streamline:pr -f Dockerfile .
+
+      - name: Start Test Environment
+        working-directory: contrib/openmessaging-benchmark
+        run: |
+          # Start with PR image
+          docker compose -f docker-compose.benchmarks.yml up -d streamline
+          sleep 15
+
+      - name: Run PR Benchmark
+        working-directory: contrib/openmessaging-benchmark
+        run: |
+          mkdir -p results
+
+          # Quick benchmark for regression testing
+          docker run --rm --network=benchmark-network \
+            -v $PWD/results:/results \
+            -v $PWD/driver-streamline:/benchmark/driver-streamline \
+            -v $PWD/workloads:/benchmark/workloads \
+            openmessaging/benchmark:latest \
+            /benchmark/bin/benchmark \
+              --drivers /benchmark/driver-streamline/streamline.yaml \
+              --workloads /benchmark/workloads/streamline-quick.yaml \
+              --output /results/pr-result.json || true
+
+      - name: Stop PR Environment
+        working-directory: contrib/openmessaging-benchmark
+        run: |
+          docker compose -f docker-compose.benchmarks.yml down -v
+
+      - name: Checkout Baseline
+        run: |
+          git checkout ${{ github.event.inputs.baseline_ref || 'main' }}
+
+      - name: Build Streamline Image (Baseline)
+        run: |
+          docker build -t streamline:baseline -f Dockerfile .
+
+      - name: Start Baseline Environment
+        working-directory: contrib/openmessaging-benchmark
+        run: |
+          docker compose -f docker-compose.benchmarks.yml up -d streamline
+          sleep 15
+
+      - name: Run Baseline Benchmark
+        working-directory: contrib/openmessaging-benchmark
+        run: |
+          docker run --rm --network=benchmark-network \
+            -v $PWD/results:/results \
+            -v $PWD/driver-streamline:/benchmark/driver-streamline \
+            -v $PWD/workloads:/benchmark/workloads \
+            openmessaging/benchmark:latest \
+            /benchmark/bin/benchmark \
+              --drivers /benchmark/driver-streamline/streamline.yaml \
+              --workloads /benchmark/workloads/streamline-quick.yaml \
+              --output /results/baseline-result.json || true
+
+      - name: Stop Baseline Environment
+        working-directory: contrib/openmessaging-benchmark
+        run: |
+          docker compose -f docker-compose.benchmarks.yml down -v
+
+      - name: Compare Results
+        id: compare
+        working-directory: contrib/openmessaging-benchmark
+        run: |
+          python3 << 'EOF'
+          import json
+          import sys
+          import os
+
+          THRESHOLD = float(os.environ.get('REGRESSION_THRESHOLD_PERCENT', 10))
+
+          def load_result(path):
+              try:
+                  with open(path) as f:
+                      return json.load(f)
+              except:
+                  return None
+
+          pr = load_result('results/pr-result.json')
+          baseline = load_result('results/baseline-result.json')
+
+          if not pr or not baseline:
+              print("::warning::Could not load benchmark results for comparison")
+              sys.exit(0)
+
+          # Compare key metrics
+          metrics = [
+              ('publishRate', 'Publish Rate (msg/s)', 'higher'),
+              ('aggregatedPublishLatencyAvg', 'Avg Publish Latency (ms)', 'lower'),
+          ]
+
+          regressions = []
+          improvements = []
+
+          for key, name, direction in metrics:
+              pr_val = pr.get(key, 0)
+              base_val = baseline.get(key, 0)
+
+              if base_val == 0:
+                  continue
+
+              if direction == 'higher':
+                  change_pct = ((pr_val - base_val) / base_val) * 100
+                  regressed = change_pct < -THRESHOLD
+              else:
+                  change_pct = ((base_val - pr_val) / base_val) * 100
+                  regressed = change_pct < -THRESHOLD
+
+              result = {
+                  'name': name,
+                  'baseline': base_val,
+                  'pr': pr_val,
+                  'change_pct': change_pct
+              }
+
+              if regressed:
+                  regressions.append(result)
+              elif abs(change_pct) > 5:
+                  improvements.append(result)
+
+          # Generate summary
+          print("## Benchmark Comparison\n")
+          print(f"| Metric | Baseline | PR | Change |")
+          print(f"|--------|----------|-----|--------|")
+
+          for key, name, _ in metrics:
+              pr_val = pr.get(key, 0)
+              base_val = baseline.get(key, 0)
+              if base_val > 0:
+                  change = ((pr_val - base_val) / base_val) * 100
+                  emoji = "🟢" if change >= 0 else "🔴"
+                  print(f"| {name} | {base_val:.2f} | {pr_val:.2f} | {emoji} {change:+.1f}% |")
+
+          print("")
+
+          if regressions:
+              print("### ⚠️ Performance Regressions Detected\n")
+              for r in regressions:
+                  print(f"- **{r['name']}**: {r['change_pct']:.1f}% regression")
+              print(f"\nThreshold: {THRESHOLD}%")
+              with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+                  f.write("regression=true\n")
+          else:
+              print("### ✅ No significant regressions detected\n")
+              with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+                  f.write("regression=false\n")
+
+          if improvements:
+              print("### 🚀 Performance Improvements\n")
+              for i in improvements:
+                  print(f"- **{i['name']}**: {i['change_pct']:.1f}% improvement")
+
+          EOF
+
+      - name: Upload Results
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results
+          path: contrib/openmessaging-benchmark/results/
+          retention-days: 30
+
+      - name: Fail on Regression
+        if: steps.compare.outputs.regression == 'true'
+        run: |
+          echo "::error::Performance regression detected! See benchmark comparison above."
+          exit 1
+
+  # Weekly full benchmark for historical tracking
+  scheduled-benchmark:
+    name: Weekly Full Benchmark
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Streamline
+        run: |
+          docker build -t streamline:latest -f Dockerfile .
+
+      - name: Run Full Benchmark Suite
+        working-directory: contrib/openmessaging-benchmark
+        run: |
+          docker compose -f docker-compose.benchmarks.yml up -d
+          sleep 30
+
+          mkdir -p results
+
+          for workload in streamline-comparison workload-ecommerce workload-iot workload-logging; do
+            docker run --rm --network=benchmark-network \
+              -v $PWD/results:/results \
+              -v $PWD/driver-streamline:/benchmark/driver-streamline \
+              -v $PWD/workloads:/benchmark/workloads \
+              openmessaging/benchmark:latest \
+              /benchmark/bin/benchmark \
+                --drivers /benchmark/driver-streamline/streamline.yaml \
+                --workloads /benchmark/workloads/${workload}.yaml \
+                --output /results/${workload}-$(date +%Y%m%d).json || true
+          done
+
+      - name: Generate Report
+        working-directory: contrib/openmessaging-benchmark
+        run: |
+          python3 scripts/process_results.py \
+            results/*.json \
+            --format html \
+            --output results/weekly-report.html \
+            --efficiency \
+            --title "Streamline Weekly Benchmark - $(date +%Y-%m-%d)"
+
+      - name: Upload Weekly Results
+        uses: actions/upload-artifact@v4
+        with:
+          name: weekly-benchmark-${{ github.run_number }}
+          path: contrib/openmessaging-benchmark/results/
+          retention-days: 90

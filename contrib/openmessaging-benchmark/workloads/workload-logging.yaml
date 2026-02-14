@@ -1,0 +1,37 @@
+# Log Aggregation Workload
+#
+# Simulates centralized logging infrastructure:
+# - Application logs from multiple services
+# - Larger message sizes (log lines, stack traces)
+# - Bursty traffic (errors cause log storms)
+# - High durability requirements
+#
+# Characteristics:
+# - Variable message sizes (avg 2KB, up to 10KB for stack traces)
+# - Moderate throughput sustained, with burst capacity
+# - Single consumer for aggregation (ELK, Splunk, etc.)
+# - Ordering less critical (timestamp in payload)
+# - Must not lose logs (at-least-once delivery)
+
+name: Log Aggregation Pipeline
+
+# Topic configuration
+topics: 1
+partitionsPerTopic: 6
+messageSize: 2048
+keyDistributor: KEY_ROUND_ROBIN
+
+# Producer configuration - multiple services logging
+producersPerTopic: 8
+producerRate: 15000
+
+# Consumer configuration - centralized aggregator
+subscriptionsPerTopic: 1
+consumerPerSubscription: 3
+
+# Test timing
+warmupDurationMinutes: 2
+testDurationMinutes: 10
+
+# Payload configuration
+payloadFile: ""

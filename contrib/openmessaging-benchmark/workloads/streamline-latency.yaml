@@ -1,0 +1,34 @@
+# Streamline Latency Benchmark
+#
+# Workload optimized for measuring latency characteristics.
+# Uses single partition and low rate for accurate measurements.
+# Completes in approximately 10 minutes.
+#
+# Usage:
+#   bin/benchmark --drivers driver-streamline/streamline.yaml \
+#                 --workloads workloads/streamline-latency.yaml
+
+name: Streamline Latency Test
+
+# Topic configuration
+topics: 1
+partitionsPerTopic: 1       # Single partition for accurate latency
+
+# Message configuration
+messageSize: 512            # Medium-small messages
+payloadFile: ""
+
+# Producer configuration
+producersPerTopic: 1        # Single producer
+producerRate: 1000          # Low rate for latency focus
+
+# Consumer configuration
+subscriptionsPerTopic: 1
+consumerPerSubscription: 1
+
+# Timing
+warmupDurationMinutes: 1
+testDurationMinutes: 5
+
+# Key distribution
+keyDistributor: NO_KEY

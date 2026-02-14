@@ -1,0 +1,37 @@
+# IoT Sensor Data Workload
+#
+# Simulates IoT telemetry ingestion with:
+# - Millions of sensors sending small messages
+# - Very high message rate (100K+ msgs/sec)
+# - Small payloads (sensor readings)
+# - Real-time processing requirements
+#
+# Characteristics:
+# - Extremely high throughput
+# - Small message sizes (128-256 bytes typical)
+# - Many producers (simulating sensors)
+# - Time-series friendly (timestamp-ordered)
+# - Can tolerate some message loss (at-most-once OK)
+
+name: IoT Sensor Telemetry
+
+# Topic configuration - fewer partitions, more messages
+topics: 1
+partitionsPerTopic: 24
+messageSize: 128
+keyDistributor: KEY_ROUND_ROBIN
+
+# Producer configuration - high volume
+producersPerTopic: 16
+producerRate: 100000
+
+# Consumer configuration - real-time processing
+subscriptionsPerTopic: 2
+consumerPerSubscription: 8
+
+# Test timing
+warmupDurationMinutes: 1
+testDurationMinutes: 5
+
+# Payload configuration
+payloadFile: ""

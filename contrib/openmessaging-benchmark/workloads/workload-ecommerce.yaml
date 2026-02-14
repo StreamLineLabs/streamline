@@ -1,0 +1,36 @@
+# E-commerce Event Stream Workload
+#
+# Simulates an e-commerce platform event stream with:
+# - Order events, cart updates, inventory changes
+# - Moderate to high throughput (10K-50K events/sec)
+# - Variable message sizes (JSON payloads)
+# - Multiple consumers (analytics, fulfillment, notifications)
+#
+# Characteristics:
+# - Business-critical: low latency required
+# - Bursty traffic (flash sales, promotions)
+# - Multiple consumer groups processing same events
+# - Ordering within partition matters (by customer/order ID)
+
+name: E-commerce Event Stream
+
+# Topic configuration
+topics: 3
+partitionsPerTopic: 12
+messageSize: 512
+keyDistributor: KEY_ROUND_ROBIN
+
+# Producer configuration
+producersPerTopic: 4
+producerRate: 25000
+
+# Consumer configuration
+subscriptionsPerTopic: 3
+consumerPerSubscription: 4
+
+# Test timing
+warmupDurationMinutes: 2
+testDurationMinutes: 10
+
+# Payload configuration
+payloadFile: ""

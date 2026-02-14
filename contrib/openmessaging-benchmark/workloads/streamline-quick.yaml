@@ -1,0 +1,33 @@
+# Streamline Quick Benchmark
+#
+# A fast validation workload for quick testing and CI pipelines.
+# Completes in approximately 1 minute.
+#
+# Usage:
+#   bin/benchmark --drivers driver-streamline/streamline.yaml \
+#                 --workloads workloads/streamline-quick.yaml
+
+name: Streamline Quick Validation
+
+# Topic configuration
+topics: 1
+partitionsPerTopic: 1
+
+# Message configuration
+messageSize: 1024           # 1 KB messages
+payloadFile: ""             # Empty = generate random payload
+
+# Producer configuration
+producersPerTopic: 1
+producerRate: 10000         # 10K messages/sec target
+
+# Consumer configuration
+subscriptionsPerTopic: 1
+consumerPerSubscription: 1
+
+# Timing
+warmupDurationMinutes: 0.5  # 30 seconds warmup
+testDurationMinutes: 1      # 1 minute test
+
+# Key distribution
+keyDistributor: NO_KEY      # No key = round-robin partitioning

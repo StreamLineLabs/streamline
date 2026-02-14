@@ -1,0 +1,231 @@
+# Streamline Benchmark CI
+#
+# Runs benchmarks against Streamline and comparison systems.
+# Triggered on schedule (weekly) and manual dispatch.
+#
+# Results are:
+# - Posted as workflow artifacts
+# - Optionally published to GitHub Pages
+# - Summarized in workflow output
+
+name: Benchmark
+
+on:
+  # Run weekly on Sunday at midnight UTC
+  schedule:
+    - cron: '0 0 * * 0'
+
+  # Manual trigger with options
+  workflow_dispatch:
+    inputs:
+      systems:
+        description: 'Systems to benchmark (comma-separated)'
+        required: false
+        default: 'streamline,kafka,redpanda'
+        type: string
+      workload:
+        description: 'Workload to run'
+        required: false
+        default: 'streamline-quick'
+        type: choice
+        options:
+          - streamline-quick
+          - streamline-comparison
+          - streamline-throughput
+          - streamline-latency
+      publish_results:
+        description: 'Publish results to GitHub Pages'
+        required: false
+        default: false
+        type: boolean
+
+  # Run on PRs that modify benchmark code
+  pull_request:
+    paths:
+      - 'driver-streamline/**'
+      - 'workloads/streamline-*.yaml'
+      - '.github/workflows/benchmark.yml'
+
+env:
+  JAVA_VERSION: '17'
+  MAVEN_OPTS: '-Xmx1g'
+
+jobs:
+  build:
+    name: Build Benchmark Framework
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: 'temurin'
+          cache: 'maven'
+
+      - name: Build
+        run: mvn clean install -DskipTests -q
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-build
+          path: |
+            benchmark-framework/target/
+            driver-*/target/
+            bin/
+          retention-days: 1
+
+  benchmark:
+    name: Run Benchmarks
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    services:
+      docker:
+        image: docker:dind
+        options: --privileged
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: benchmark-build
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: 'temurin'
+
+      - name: Start benchmark systems
+        run: |
+          docker-compose -f docker-compose.benchmarks.yml up -d \
+            streamline kafka redpanda
+
+          # Wait for health checks
+          echo "Waiting for systems to be healthy..."
+          for service in streamline kafka redpanda; do
+            timeout 120 bash -c "
+              until docker-compose -f docker-compose.benchmarks.yml ps $service | grep -q healthy; do
+                echo 'Waiting for $service...'
+                sleep 5
+              done
+            " || { echo "$service failed to start"; exit 1; }
+          done
+
+          echo "All systems ready!"
+
+      - name: Run Streamline benchmark
+        run: |
+          WORKLOAD="${{ github.event.inputs.workload || 'streamline-quick' }}"
+
+          chmod +x bin/benchmark
+          bin/benchmark \
+            --drivers driver-streamline/streamline.yaml \
+            --workloads workloads/${WORKLOAD}.yaml \
+            --output results/streamline
+
+      - name: Run Kafka benchmark
+        if: contains(github.event.inputs.systems || 'streamline,kafka,redpanda', 'kafka')
+        run: |
+          WORKLOAD="${{ github.event.inputs.workload || 'streamline-quick' }}"
+
+          bin/benchmark \
+            --drivers driver-kafka/kafka.yaml \
+            --workloads workloads/${WORKLOAD}.yaml \
+            --output results/kafka
+        env:
+          KAFKA_BOOTSTRAP_SERVERS: localhost:9093
+
+      - name: Run Redpanda benchmark
+        if: contains(github.event.inputs.systems || 'streamline,kafka,redpanda', 'redpanda')
+        run: |
+          WORKLOAD="${{ github.event.inputs.workload || 'streamline-quick' }}"
+
+          bin/benchmark \
+            --drivers driver-kafka/kafka.yaml \
+            --workloads workloads/${WORKLOAD}.yaml \
+            --output results/redpanda
+        env:
+          KAFKA_BOOTSTRAP_SERVERS: localhost:9095
+
+      - name: Generate comparison report
+        run: |
+          mkdir -p reports
+
+          # Generate markdown summary
+          cat > reports/benchmark-summary.md << 'EOF'
+          # Benchmark Results
+
+          **Date**: $(date -u +"%Y-%m-%d %H:%M UTC")
+          **Workflow**: ${{ github.workflow }}
+          **Run**: ${{ github.run_number }}
+          **Workload**: ${{ github.event.inputs.workload || 'streamline-quick' }}
+
+          ## Results
+
+          | System | Throughput (msg/s) | P50 Latency | P99 Latency |
+          |--------|-------------------|-------------|-------------|
+          EOF
+
+          # Parse and add results (simplified - real implementation would use jq)
+          for system in streamline kafka redpanda; do
+            if [ -f "results/${system}/*.json" ]; then
+              echo "| ${system} | TBD | TBD | TBD |" >> reports/benchmark-summary.md
+            fi
+          done
+
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results-${{ github.run_number }}
+          path: |
+            results/
+            reports/
+          retention-days: 30
+
+      - name: Post summary to workflow
+        run: |
+          if [ -f reports/benchmark-summary.md ]; then
+            cat reports/benchmark-summary.md >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Cleanup
+        if: always()
+        run: |
+          docker-compose -f docker-compose.benchmarks.yml down -v || true
+
+  publish:
+    name: Publish Results
+    needs: benchmark
+    if: github.event.inputs.publish_results == 'true' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+      pages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download results
+        uses: actions/download-artifact@v4
+        with:
+          name: benchmark-results-${{ github.run_number }}
+          path: results/
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./results/reports
+          destination_dir: benchmarks/${{ github.run_number }}

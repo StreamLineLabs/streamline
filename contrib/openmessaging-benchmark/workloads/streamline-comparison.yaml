@@ -1,0 +1,34 @@
+# Streamline Comparison Benchmark
+#
+# A balanced workload for comparing Streamline against other systems.
+# Tests both throughput and latency characteristics.
+# Completes in approximately 15 minutes.
+#
+# Usage:
+#   bin/benchmark --drivers driver-streamline/streamline.yaml,driver-kafka/kafka.yaml \
+#                 --workloads workloads/streamline-comparison.yaml
+
+name: Streamline vs Kafka Comparison
+
+# Topic configuration
+topics: 1
+partitionsPerTopic: 6       # Standard production partition count
+
+# Message configuration
+messageSize: 1024           # 1 KB messages (standard for benchmarks)
+payloadFile: ""
+
+# Producer configuration
+producersPerTopic: 4        # Multiple producers for realistic load
+producerRate: 100000        # 100K messages/sec target
+
+# Consumer configuration
+subscriptionsPerTopic: 1
+consumerPerSubscription: 4  # Match producer count
+
+# Timing
+warmupDurationMinutes: 2    # 2 minutes warmup
+testDurationMinutes: 10     # 10 minutes test
+
+# Key distribution
+keyDistributor: RANDOM_NANO # Random keys for even partition distribution

@@ -1,0 +1,62 @@
+# Streamline Benchmark Driver Configuration
+#
+# This configuration file defines how the benchmark connects to and
+# interacts with Streamline. Since Streamline is Kafka-compatible,
+# we use the Kafka client with Streamline-optimized settings.
+
+name: Streamline
+driverClass: io.openmessaging.benchmark.driver.streamline.StreamlineBenchmarkDriver
+
+# Streamline server address
+# Override with environment variable: STREAMLINE_BOOTSTRAP_SERVERS
+bootstrapServers: localhost:9092
+
+# Topic configuration
+replicationFactor: 1
+
+# Number of partitions per topic (0 = use workload default)
+topicPartitions: 0
+
+# Common Kafka client properties
+# These are optimized for Streamline's characteristics
+commonConfig: |
+  # Connection settings
+  request.timeout.ms=30000
+  retry.backoff.ms=100
+
+# Producer configuration
+# Optimized for Streamline's low-latency design
+producerConfig: |
+  # Batching - moderate for good throughput/latency balance
+  batch.size=65536
+  linger.ms=1
+
+  # Acknowledgement - wait for leader
+  acks=1
+
+  # Compression - LZ4 for best speed/ratio
+  compression.type=lz4
+
+  # Memory
+  buffer.memory=67108864
+
+  # Retries
+  retries=3
+  retry.backoff.ms=100
+
+# Consumer configuration
+consumerConfig: |
+  # Fetch settings - optimized for throughput
+  fetch.min.bytes=1
+  fetch.max.wait.ms=100
+  max.partition.fetch.bytes=1048576
+
+  # Auto offset reset
+  auto.offset.reset=earliest
+
+  # Commit settings
+  enable.auto.commit=false
+
+  # Session timeout
+  session.timeout.ms=30000
+  heartbeat.interval.ms=10000

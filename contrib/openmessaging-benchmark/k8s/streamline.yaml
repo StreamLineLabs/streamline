@@ -1,0 +1,77 @@
+# Streamline deployment for benchmarking
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: streamline
+  namespace: streamline-benchmark
+  labels:
+    app: streamline
+    app.kubernetes.io/name: streamline
+    app.kubernetes.io/component: messaging
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: streamline
+  template:
+    metadata:
+      labels:
+        app: streamline
+    spec:
+      containers:
+        - name: streamline
+          image: streamlinelabs/streamline:latest
+          ports:
+            - containerPort: 9092
+              name: kafka
+            - containerPort: 9094
+              name: http
+          env:
+            - name: STREAMLINE_LOG_LEVEL
+              value: "warn"
+            - name: STREAMLINE_HTTP_ADDR
+              value: "0.0.0.0:9094"
+          resources:
+            requests:
+              cpu: "1"
+              memory: "512Mi"
+            limits:
+              cpu: "2"
+              memory: "2Gi"
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: 9094
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 9094
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          volumeMounts:
+            - name: data
+              mountPath: /data
+      volumes:
+        - name: data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: streamline
+  namespace: streamline-benchmark
+  labels:
+    app: streamline
+spec:
+  selector:
+    app: streamline
+  ports:
+    - name: kafka
+      port: 9092
+      targetPort: 9092
+    - name: http
+      port: 9094
+      targetPort: 9094
+  type: ClusterIP

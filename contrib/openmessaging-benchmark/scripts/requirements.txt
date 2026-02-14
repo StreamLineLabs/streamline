@@ -1,0 +1,9 @@
+# OpenMessaging Benchmark Results Processor Dependencies
+#
+# Install with: pip install -r requirements.txt
+#
+# Note: The script works without matplotlib (text reports only)
+#       Install matplotlib for chart generation and heatmaps
+
+matplotlib>=3.7.0
+numpy>=1.24.0

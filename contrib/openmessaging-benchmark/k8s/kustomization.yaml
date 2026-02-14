@@ -1,0 +1,42 @@
+# Kustomization for Streamline Benchmark
+#
+# Deploy with: kubectl apply -k k8s/
+#
+# This deploys:
+# - Namespace: streamline-benchmark
+# - Streamline server
+# - Kafka server (for comparison)
+# - Redpanda server (for comparison)
+#
+# Run benchmark:
+#   kubectl apply -f k8s/benchmark-job.yaml
+#
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: streamline-benchmark
+
+resources:
+  - namespace.yaml
+  - streamline.yaml
+  - kafka.yaml
+  - redpanda.yaml
+
+commonLabels:
+  app.kubernetes.io/part-of: streamline-benchmark
+  app.kubernetes.io/managed-by: kustomize
+
+# Common annotations
+commonAnnotations:
+  benchmark.streamline.io/version: "1.0"
+
+# Patches for resource customization (optional)
+# Uncomment and modify to adjust resources
+# patches:
+#   - patch: |-
+#       - op: replace
+#         path: /spec/template/spec/containers/0/resources/limits/cpu
+#         value: "4"
+#     target:
+#       kind: Deployment
+#       name: streamline

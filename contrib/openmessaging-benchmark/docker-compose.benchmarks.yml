@@ -1,0 +1,260 @@
+# Docker Compose for Streamline OpenMessaging Benchmark
+#
+# This file sets up all messaging systems for local comparison benchmarking.
+# All services have identical resource limits for fair comparison.
+#
+# Usage:
+#   docker-compose -f docker-compose.benchmarks.yml up -d
+#   docker-compose -f docker-compose.benchmarks.yml down -v
+#
+# With monitoring:
+#   docker-compose -f docker-compose.benchmarks.yml --profile monitoring up -d
+#   Open Grafana: http://localhost:3000 (admin/admin)
+#
+# Port assignments:
+#   Streamline: 9092 (Kafka protocol), 9094 (HTTP)
+#   Kafka:      9093 (Kafka protocol)
+#   Redpanda:   9095 (Kafka protocol), 9644 (Admin)
+#   Pulsar:     6650 (Pulsar protocol), 8080 (HTTP)
+#   NATS:       4222 (NATS protocol), 8222 (HTTP)
+#   RabbitMQ:   5552 (Streams), 5672 (AMQP), 15672 (Management)
+#   Prometheus: 9090
+#   Grafana:    3000
+
+version: '3.8'
+
+# Common resource limits for fair comparison
+x-resource-limits: &resource-limits
+  deploy:
+    resources:
+      limits:
+        cpus: '2'
+        memory: 2G
+      reservations:
+        cpus: '1'
+        memory: 512M
+
+services:
+  # ============================================================
+  # Streamline - The Redis of Streaming
+  # ============================================================
+  streamline:
+    image: josedab/streamline:latest
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    container_name: benchmark-streamline
+    <<: *resource-limits
+    ports:
+      - "9092:9092"   # Kafka protocol
+      - "9094:9094"   # HTTP API
+    environment:
+      STREAMLINE_LOG_LEVEL: warn
+      STREAMLINE_HTTP_ADDR: "0.0.0.0:9094"
+    volumes:
+      - streamline_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:9094/health/live"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+
+  # ============================================================
+  # Apache Kafka (KRaft mode - no ZooKeeper)
+  # ============================================================
+  kafka:
+    image: apache/kafka:3.7.0
+    container_name: benchmark-kafka
+    <<: *resource-limits
+    ports:
+      - "9093:9093"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://:9093,CONTROLLER://:9096
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9093
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9096
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      CLUSTER_ID: benchmark-kafka-cluster
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_LOG_RETENTION_HOURS: 1
+      KAFKA_LOG_SEGMENT_BYTES: 1073741824
+      KAFKA_NUM_PARTITIONS: 6
+      # JVM memory limits to match container
+      KAFKA_HEAP_OPTS: "-Xms512m -Xmx1536m"
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-broker-api-versions.sh --bootstrap-server localhost:9093 || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+
+  # ============================================================
+  # Redpanda
+  # ============================================================
+  redpanda:
+    image: docker.redpanda.com/redpandadata/redpanda:v24.1.1
+    container_name: benchmark-redpanda
+    <<: *resource-limits
+    command:
+      - redpanda start
+      - --mode dev-container
+      - --smp 2
+      - --memory 1536M
+      - --reserve-memory 0M
+      - --overprovisioned
+      - --kafka-addr PLAINTEXT://0.0.0.0:9092
+      - --advertise-kafka-addr PLAINTEXT://redpanda:9092
+    ports:
+      - "9095:9092"   # Kafka protocol (remapped to avoid conflict)
+      - "9644:9644"   # Admin API
+    volumes:
+      - redpanda_data:/var/lib/redpanda/data
+    healthcheck:
+      test: ["CMD", "rpk", "cluster", "health"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
+  # ============================================================
+  # Apache Pulsar (standalone mode)
+  # ============================================================
+  pulsar:
+    image: apachepulsar/pulsar:3.2.0
+    container_name: benchmark-pulsar
+    <<: *resource-limits
+    command: bin/pulsar standalone
+    ports:
+      - "6650:6650"   # Pulsar protocol
+      - "8080:8080"   # HTTP Admin
+    environment:
+      PULSAR_MEM: "-Xms512m -Xmx1536m"
+    volumes:
+      - pulsar_data:/pulsar/data
+    healthcheck:
+      test: ["CMD", "bin/pulsar-admin", "brokers", "healthcheck"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  # ============================================================
+  # NATS with JetStream
+  # ============================================================
+  nats:
+    image: nats:2.10
+    container_name: benchmark-nats
+    <<: *resource-limits
+    command: --jetstream --store_dir /data -m 8222 --max_memory_store 1536MB
+    ports:
+      - "4222:4222"   # NATS protocol
+      - "8222:8222"   # HTTP monitoring
+    volumes:
+      - nats_data:/data
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:8222/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
+  # ============================================================
+  # RabbitMQ with Streams
+  # ============================================================
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    container_name: benchmark-rabbitmq
+    <<: *resource-limits
+    environment:
+      RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS: -rabbitmq_stream advertised_host localhost
+    ports:
+      - "5552:5552"   # Streams protocol
+      - "5672:5672"   # AMQP
+      - "15672:15672" # Management UI
+    command: >
+      bash -c "rabbitmq-plugins enable --offline rabbitmq_stream rabbitmq_stream_management &&
+               rabbitmq-server"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  # ============================================================
+  # Monitoring Stack (optional, use --profile monitoring)
+  # ============================================================
+  prometheus:
+    image: prom/prometheus:v2.48.0
+    container_name: benchmark-prometheus
+    profiles: ["monitoring"]
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.enable-lifecycle'
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:9090/-/healthy"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  grafana:
+    image: grafana/grafana:10.2.2
+    container_name: benchmark-grafana
+    profiles: ["monitoring"]
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - prometheus
+
+  # ============================================================
+  # cAdvisor for container metrics
+  # ============================================================
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.47.2
+    container_name: benchmark-cadvisor
+    profiles: ["monitoring"]
+    ports:
+      - "8081:8080"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    privileged: true
+
+volumes:
+  streamline_data:
+  kafka_data:
+  redpanda_data:
+  pulsar_data:
+  nats_data:
+  rabbitmq_data:
+  prometheus_data:
+  grafana_data:
+
+networks:
+  default:
+    name: benchmark-network

@@ -1,0 +1,34 @@
+# Streamline Maximum Throughput Benchmark
+#
+# Stress test workload to measure maximum sustainable throughput.
+# Uses smaller messages and more producers to maximize message rate.
+# Completes in approximately 30 minutes.
+#
+# Usage:
+#   bin/benchmark --drivers driver-streamline/streamline.yaml \
+#                 --workloads workloads/streamline-throughput.yaml
+
+name: Streamline Maximum Throughput
+
+# Topic configuration
+topics: 1
+partitionsPerTopic: 12      # More partitions for parallelism
+
+# Message configuration
+messageSize: 256            # Small messages for max msg/sec
+payloadFile: ""
+
+# Producer configuration
+producersPerTopic: 8        # Many producers
+producerRate: 0             # 0 = unlimited, as fast as possible
+
+# Consumer configuration
+subscriptionsPerTopic: 1
+consumerPerSubscription: 8
+
+# Timing
+warmupDurationMinutes: 5
+testDurationMinutes: 20
+
+# Key distribution
+keyDistributor: RANDOM_NANO

@@ -1,0 +1,27 @@
+[package]
+name = "streamline-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+kafka-protocol = "0.14"
+bytes = "1"
+anyhow = "1"
+
+# Prevent this from interfering with workspace
+[workspace]
+
+[[bin]]
+name = "fuzz_protocol_parse"
+path = "fuzz_targets/fuzz_protocol_parse.rs"
+doc = false
+
+[[bin]]
+name = "fuzz_record_batch"
+path = "fuzz_targets/fuzz_record_batch.rs"
+doc = false

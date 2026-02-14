@@ -1,0 +1,52 @@
+# Prometheus configuration for benchmark monitoring
+#
+# Scrapes metrics from all benchmark systems and cAdvisor
+
+global:
+  scrape_interval: 5s
+  evaluation_interval: 5s
+
+scrape_configs:
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # Container metrics via cAdvisor
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets: ['cadvisor:8080']
+    metric_relabel_configs:
+      # Only keep benchmark containers
+      - source_labels: [container_label_com_docker_compose_project]
+        regex: 'openmessaging-benchmark'
+        action: keep
+
+  # Streamline metrics (if enabled)
+  - job_name: 'streamline'
+    static_configs:
+      - targets: ['streamline:9094']
+    metrics_path: /metrics
+
+  # Kafka JMX metrics (requires JMX exporter, not included by default)
+  # - job_name: 'kafka'
+  #   static_configs:
+  #     - targets: ['kafka:9999']
+
+  # Redpanda metrics
+  - job_name: 'redpanda'
+    static_configs:
+      - targets: ['redpanda:9644']
+    metrics_path: /public_metrics
+
+  # NATS metrics
+  - job_name: 'nats'
+    static_configs:
+      - targets: ['nats:8222']
+    metrics_path: /metrics
+
+  # RabbitMQ metrics (via management plugin)
+  - job_name: 'rabbitmq'
+    static_configs:
+      - targets: ['rabbitmq:15692']
+    metrics_path: /metrics

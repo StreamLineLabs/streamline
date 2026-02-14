@@ -1,0 +1,8 @@
+# Kubernetes namespace for benchmark resources
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: streamline-benchmark
+  labels:
+    app.kubernetes.io/name: streamline-benchmark
+    app.kubernetes.io/component: benchmarking

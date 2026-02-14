@@ -1,0 +1,99 @@
+# OpenMessaging Benchmark Job
+#
+# This job runs the OMB benchmark against the specified systems.
+# Configure the DRIVER and WORKLOAD environment variables to customize.
+#
+# Usage:
+#   kubectl apply -f k8s/benchmark-job.yaml
+#   kubectl logs -f job/benchmark -n streamline-benchmark
+#
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: benchmark
+  namespace: streamline-benchmark
+  labels:
+    app: benchmark
+    app.kubernetes.io/name: benchmark
+    app.kubernetes.io/component: testing
+spec:
+  ttlSecondsAfterFinished: 3600
+  backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        app: benchmark
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: benchmark
+          image: openmessaging/benchmark:latest
+          command:
+            - /bin/bash
+            - -c
+            - |
+              echo "Waiting for systems to be ready..."
+              sleep 30
+
+              echo "Running benchmark..."
+              /benchmark/bin/benchmark \
+                --drivers /benchmark/${DRIVER} \
+                --workloads /benchmark/workloads/${WORKLOAD}.yaml \
+                --output /results/benchmark-result.json
+
+              echo "Benchmark complete!"
+              cat /results/benchmark-result.json | head -100
+          env:
+            - name: DRIVER
+              value: "driver-streamline/streamline.yaml"
+            - name: WORKLOAD
+              value: "streamline-quick"
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "512Mi"
+            limits:
+              cpu: "2"
+              memory: "2Gi"
+          volumeMounts:
+            - name: results
+              mountPath: /results
+            - name: driver-config
+              mountPath: /benchmark/driver-streamline
+      volumes:
+        - name: results
+          emptyDir: {}
+        - name: driver-config
+          configMap:
+            name: streamline-driver-config
+---
+# ConfigMap for Streamline driver configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: streamline-driver-config
+  namespace: streamline-benchmark
+data:
+  streamline.yaml: |
+    name: Streamline
+    driverClass: io.openmessaging.benchmark.driver.streamline.StreamlineBenchmarkDriver
+
+    # Connection
+    bootstrapServers: streamline:9092
+
+    # Producer settings
+    producerConfig: |
+      acks=1
+      batch.size=65536
+      linger.ms=1
+      compression.type=none
+      max.in.flight.requests.per.connection=5
+
+    # Consumer settings
+    consumerConfig: |
+      auto.offset.reset=earliest
+      enable.auto.commit=true
+      auto.commit.interval.ms=1000
+
+    # Topic defaults
+    replicationFactor: 1

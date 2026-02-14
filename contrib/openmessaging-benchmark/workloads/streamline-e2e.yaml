@@ -1,0 +1,34 @@
+# Streamline End-to-End Latency Benchmark
+#
+# Measures the complete round-trip time from publish to consume.
+# Uses minimal batching and single partition for accurate measurements.
+# Completes in approximately 5 minutes.
+#
+# Usage:
+#   bin/benchmark --drivers driver-streamline/streamline.yaml \
+#                 --workloads workloads/streamline-e2e.yaml
+
+name: Streamline End-to-End Latency
+
+# Topic configuration
+topics: 1
+partitionsPerTopic: 1
+
+# Message configuration
+messageSize: 1024
+payloadFile: ""
+
+# Producer configuration
+producersPerTopic: 1
+producerRate: 500           # Low rate for accurate E2E measurement
+
+# Consumer configuration
+subscriptionsPerTopic: 1
+consumerPerSubscription: 1
+
+# Timing
+warmupDurationMinutes: 0.5
+testDurationMinutes: 3
+
+# Key distribution
+keyDistributor: NO_KEY
