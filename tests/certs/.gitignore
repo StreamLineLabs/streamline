@@ -1,0 +1,3 @@
+# Keep public certs but ignore private keys for security
+*-key.pem
+*.srl

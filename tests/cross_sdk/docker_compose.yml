@@ -1,0 +1,115 @@
+# Cross-SDK Integration Test Docker Compose
+#
+# Runs a Streamline server and SDK test containers to validate
+# protocol compatibility across all supported languages.
+#
+# Usage:
+#   docker compose -f tests/cross_sdk/docker_compose.yml up --abort-on-container-exit
+#
+# Prerequisites:
+#   - Docker images for each SDK test runner must be built first.
+#   - The Streamline server image must be available locally or in a registry.
+
+services:
+  # Streamline server
+  streamline:
+    image: streamlinelabs/streamline:latest
+    build:
+      context: ../../
+      dockerfile: ../streamline-deploy/Dockerfile
+    ports:
+      - "9092:9092"
+      - "9094:9094"
+    environment:
+      STREAMLINE_LOG_LEVEL: info
+      STREAMLINE_IN_MEMORY: "true"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9094/health"]
+      interval: 2s
+      timeout: 5s
+      retries: 15
+      start_period: 5s
+    networks:
+      - sdk-test-net
+
+  # Java SDK tests (Maven)
+  java-sdk-test:
+    build:
+      context: ../../streamline-java-sdk
+      dockerfile: Dockerfile.test
+    environment:
+      STREAMLINE_BOOTSTRAP: streamline:9092
+    depends_on:
+      streamline:
+        condition: service_healthy
+    networks:
+      - sdk-test-net
+
+  # Python SDK tests (pytest)
+  python-sdk-test:
+    build:
+      context: ../../streamline-python-sdk
+      dockerfile: Dockerfile.test
+    environment:
+      STREAMLINE_BOOTSTRAP: streamline:9092
+    depends_on:
+      streamline:
+        condition: service_healthy
+    networks:
+      - sdk-test-net
+
+  # Go SDK tests
+  go-sdk-test:
+    build:
+      context: ../../streamline-go-sdk
+      dockerfile: Dockerfile.test
+    environment:
+      STREAMLINE_BOOTSTRAP: streamline:9092
+    depends_on:
+      streamline:
+        condition: service_healthy
+    networks:
+      - sdk-test-net
+
+  # Node.js SDK tests (vitest)
+  node-sdk-test:
+    build:
+      context: ../../streamline-node-sdk
+      dockerfile: Dockerfile.test
+    environment:
+      STREAMLINE_BOOTSTRAP: streamline:9092
+    depends_on:
+      streamline:
+        condition: service_healthy
+    networks:
+      - sdk-test-net
+
+  # Rust SDK tests
+  rust-sdk-test:
+    build:
+      context: ../../streamline-rust-sdk
+      dockerfile: Dockerfile.test
+    environment:
+      STREAMLINE_BOOTSTRAP: streamline:9092
+    depends_on:
+      streamline:
+        condition: service_healthy
+    networks:
+      - sdk-test-net
+
+  # .NET SDK tests
+  dotnet-sdk-test:
+    build:
+      context: ../../streamline-dotnet-sdk
+      dockerfile: Dockerfile.test
+    environment:
+      STREAMLINE_BOOTSTRAP: streamline:9092
+    depends_on:
+      streamline:
+        condition: service_healthy
+    networks:
+      - sdk-test-net
+
+networks:
+  sdk-test-net:
+    driver: bridge

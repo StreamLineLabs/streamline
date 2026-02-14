@@ -1,0 +1,6 @@
+---
+source: tests/snapshot_test.rs
+expression: error.with_hint()
+---
+Authentication failed: SASL handshake failed
+  hint: Authentication failed. Check credentials in `~/.streamline/config.toml` or verify with: `streamline-cli doctor --check auth`

@@ -1,0 +1,6 @@
+---
+source: tests/snapshot_test.rs
+expression: error.with_hint()
+---
+Request timeout
+  hint: Request timed out. Check server status with: `streamline-cli doctor --check connectivity` or increase timeout: `--timeout 60000`

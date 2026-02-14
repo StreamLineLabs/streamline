@@ -1,0 +1,8 @@
+---
+source: tests/snapshot_test.rs
+expression: output
+---
+- "Topic not found: topic1\n  hint: Topic 'topic1' does not exist. Create it with: `streamline-cli topics create topic1 --partitions 3`"
+- "Invalid offset: 999\n  hint: Offset 999 is out of range. Reset consumer position with: `streamline-cli consume <topic> --from-beginning` or check valid offsets with: `streamline-cli topics offsets <topic>`"
+- "Rate limit exceeded\n  hint: Rate limit exceeded. Check current quotas with: `streamline-cli quotas describe` or increase limits in server configuration"
+- "Storage error: disk full\n  hint: Disk space may be low. Check usage with: `streamline-cli storage status` and free space with: `streamline-cli storage compact --topic <topic>`"

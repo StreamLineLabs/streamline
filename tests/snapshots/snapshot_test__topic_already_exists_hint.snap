@@ -1,0 +1,6 @@
+---
+source: tests/snapshot_test.rs
+expression: error.with_hint()
+---
+Topic already exists: users
+  hint: Topic 'users' already exists. Inspect it with: `streamline-cli topics describe users` or delete with: `streamline-cli topics delete users`

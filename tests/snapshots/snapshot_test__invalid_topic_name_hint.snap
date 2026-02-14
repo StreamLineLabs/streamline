@@ -1,0 +1,6 @@
+---
+source: tests/snapshot_test.rs
+expression: error.with_hint()
+---
+Invalid topic name: invalid/topic/name
+  hint: Topic name 'invalid/topic/name' is invalid. Names must be 1-255 characters using alphanumeric, '.', '_', or '-'. Validate with: `streamline-cli topics validate invalid_topic_name`

@@ -1,0 +1,6 @@
+---
+source: tests/snapshot_test.rs
+expression: error.with_hint()
+---
+Partition not found: topic=events, partition=5
+  hint: Partition 5 does not exist for topic 'events'. Check available partitions with: `streamline-cli topics describe events`

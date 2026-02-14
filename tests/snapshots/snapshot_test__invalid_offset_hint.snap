@@ -1,0 +1,6 @@
+---
+source: tests/snapshot_test.rs
+expression: error.with_hint()
+---
+Invalid offset: -100
+  hint: Offset -100 is out of range. Reset consumer position with: `streamline-cli consume <topic> --from-beginning` or check valid offsets with: `streamline-cli topics offsets <topic>`

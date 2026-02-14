@@ -1,0 +1,6 @@
+---
+source: tests/snapshot_test.rs
+expression: error.with_hint()
+---
+Message too large: size=2000000, max=1000000
+  hint: Message size 2000000 exceeds limit of 1000000. Reduce message size or increase `max_message_bytes` in server config: `streamline-cli config set max_message_bytes 2000000`

@@ -1,0 +1,6 @@
+---
+source: tests/snapshot_test.rs
+expression: error.with_hint()
+---
+Topic not found: orders
+  hint: Topic 'orders' does not exist. Create it with: `streamline-cli topics create orders --partitions 3`
