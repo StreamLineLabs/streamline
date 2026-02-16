@@ -1,0 +1,101 @@
+# Streamline systemd Service File
+#
+# Installation:
+#   1. Copy this file to /etc/systemd/system/streamline.service
+#   2. Create a streamline user: sudo useradd -r -s /bin/false streamline
+#   3. Create directories and set ownership:
+#      sudo mkdir -p /var/lib/streamline /etc/streamline /var/log/streamline
+#      sudo chown streamline:streamline /var/lib/streamline /var/log/streamline
+#   4. Copy binary: sudo cp ./target/release/streamline /usr/local/bin/
+#   5. (Optional) Create config: sudo cp streamline.toml /etc/streamline/
+#   6. Enable and start:
+#      sudo systemctl daemon-reload
+#      sudo systemctl enable streamline
+#      sudo systemctl start streamline
+#
+# Management:
+#   sudo systemctl status streamline   # Check status
+#   sudo systemctl stop streamline     # Stop service
+#   sudo systemctl restart streamline  # Restart service
+#   sudo journalctl -u streamline -f   # View logs
+
+[Unit]
+Description=Streamline - The Redis of Streaming
+Documentation=https://github.com/streamline-project/streamline
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=streamline
+Group=streamline
+
+# Binary and config
+ExecStart=/usr/local/bin/streamline \
+    --config /etc/streamline/streamline.toml \
+    --data-dir /var/lib/streamline \
+    --log-level info
+
+# Alternative: run without config file (uses defaults)
+# ExecStart=/usr/local/bin/streamline \
+#     --listen-addr 0.0.0.0:9092 \
+#     --http-addr 0.0.0.0:9094 \
+#     --data-dir /var/lib/streamline \
+#     --log-level info
+
+# Graceful shutdown
+ExecStop=/bin/kill -SIGTERM $MAINPID
+TimeoutStopSec=30
+KillMode=mixed
+KillSignal=SIGTERM
+
+# Restart policy
+Restart=on-failure
+RestartSec=5
+StartLimitIntervalSec=60
+StartLimitBurst=3
+
+# Working directory
+WorkingDirectory=/var/lib/streamline
+
+# Environment
+Environment="RUST_BACKTRACE=1"
+# Environment="STREAMLINE_LOG_LEVEL=debug"
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+
+# Allow binding to privileged ports (below 1024) if needed
+# AmbientCapabilities=CAP_NET_BIND_SERVICE
+# CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+
+# Resource limits
+LimitNOFILE=65536
+LimitNPROC=4096
+
+# Read-write paths
+ReadWritePaths=/var/lib/streamline /var/log/streamline
+
+# Read-only paths
+ReadOnlyPaths=/etc/streamline
+
+# Standard output/error to journal
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=streamline
+
+[Install]
+WantedBy=multi-user.target

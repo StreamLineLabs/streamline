@@ -1,0 +1,25 @@
+# Minimal Streamline configuration for local development.
+# Copy to streamline.toml in the project root.
+#
+# For the full configuration reference with all options, run:
+#   streamline --generate-config
+# Or see docs/CONFIGURATION.md
+
+[server]
+listen_addr = "0.0.0.0:9092"
+http_addr = "0.0.0.0:9094"
+data_dir = "./data"
+log_level = "info"
+auto_create_topics = true
+
+[storage]
+# Use in-memory mode for fast iteration (no disk writes)
+# in_memory = true
+
+# Or persist to disk (default)
+segment_max_bytes = 1073741824  # 1GB
+
+[wal]
+enabled = true
+sync_mode = "interval"
+sync_ms = 100

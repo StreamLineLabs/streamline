@@ -1,0 +1,157 @@
+# Pre-commit hooks for Streamline
+# Install: pip install pre-commit && pre-commit install
+# Run manually: pre-commit run --all-files
+# Documentation: https://pre-commit.com
+
+# Minimum pre-commit version
+minimum_pre_commit_version: "3.0.0"
+
+# Default settings
+default_stages: [commit]
+fail_fast: false
+
+repos:
+  # ============================================================================
+  # General file checks
+  # ============================================================================
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      # Prevent large files from being committed
+      - id: check-added-large-files
+        args: ['--maxkb=1000']
+
+      # Check for files that would conflict on case-insensitive filesystems
+      - id: check-case-conflict
+
+      # Check for merge conflict markers
+      - id: check-merge-conflict
+
+      # Check YAML syntax
+      - id: check-yaml
+        args: ['--allow-multiple-documents']
+
+      # Check TOML syntax
+      - id: check-toml
+
+      # Check JSON syntax
+      - id: check-json
+        exclude: '^\.vscode/'
+
+      # Ensure files end with newline
+      - id: end-of-file-fixer
+        exclude: '\.md$'
+
+      # Remove trailing whitespace
+      - id: trailing-whitespace
+        exclude: '\.md$'
+
+      # Check for broken symlinks
+      - id: check-symlinks
+
+      # Don't commit directly to main
+      - id: no-commit-to-branch
+        args: ['--branch', 'main']
+
+  # ============================================================================
+  # Rust-specific hooks
+  # ============================================================================
+  - repo: local
+    hooks:
+      # Format Rust code
+      - id: cargo-fmt
+        name: cargo fmt
+        description: Format Rust code with rustfmt
+        entry: cargo fmt --all --
+        language: system
+        types: [rust]
+        pass_filenames: false
+
+      # Lint Rust code
+      - id: cargo-clippy
+        name: cargo clippy
+        description: Lint Rust code with clippy
+        entry: cargo clippy --all-targets --all-features -- -D warnings
+        language: system
+        types: [rust]
+        pass_filenames: false
+
+      # Check Rust code compiles
+      - id: cargo-check
+        name: cargo check
+        description: Check Rust code compiles
+        entry: cargo check --all-targets --all-features
+        language: system
+        types: [rust]
+        pass_filenames: false
+
+      # Run cargo deny (licenses, advisories)
+      - id: cargo-deny
+        name: cargo deny
+        description: Check dependencies for issues
+        entry: cargo deny check
+        language: system
+        files: '(Cargo\.toml|Cargo\.lock)$'
+        pass_filenames: false
+
+  # ============================================================================
+  # Documentation checks
+  # ============================================================================
+  - repo: local
+    hooks:
+      # Check documentation builds
+      - id: cargo-doc
+        name: cargo doc
+        description: Check documentation builds without errors
+        entry: cargo doc --no-deps --all-features
+        language: system
+        types: [rust]
+        pass_filenames: false
+        stages: [push]  # Only on push (slower)
+
+  # ============================================================================
+  # Security checks (on push only - slower)
+  # ============================================================================
+  - repo: local
+    hooks:
+      # Security audit
+      - id: cargo-audit
+        name: cargo audit
+        description: Check for security vulnerabilities
+        entry: cargo audit
+        language: system
+        files: '(Cargo\.toml|Cargo\.lock)$'
+        pass_filenames: false
+        stages: [push]
+
+  # ============================================================================
+  # Shell script checks
+  # ============================================================================
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.9.0.6
+    hooks:
+      - id: shellcheck
+        args: ['--severity=warning']
+
+  # ============================================================================
+  # Markdown linting (optional)
+  # ============================================================================
+  - repo: https://github.com/igorshubovych/markdownlint-cli
+    rev: v0.38.0
+    hooks:
+      - id: markdownlint
+        args: ['--disable', 'MD013', 'MD033', 'MD041', '--']
+        exclude: 'CHANGELOG\.md$'
+
+# CI configuration
+ci:
+  autofix_commit_msg: |
+    [pre-commit.ci] auto fixes from pre-commit hooks
+
+    for more information, see https://pre-commit.ci
+  autofix_prs: true
+  autoupdate_branch: ''
+  autoupdate_commit_msg: '[pre-commit.ci] pre-commit autoupdate'
+  autoupdate_schedule: weekly
+  skip: [cargo-fmt, cargo-clippy, cargo-check, cargo-deny, cargo-doc, cargo-audit]
+  submodules: false

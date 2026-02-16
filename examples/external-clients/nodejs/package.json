@@ -1,0 +1,7 @@
+{
+  "name": "streamline-kafkajs-example",
+  "private": true,
+  "dependencies": {
+    "kafkajs": "^2.2.4"
+  }
+}
