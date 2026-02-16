@@ -1,0 +1,26 @@
+image:
+  file: .gitpod.Dockerfile
+
+tasks:
+  - name: Setup
+    init: |
+      rustup default stable
+      rustup component add clippy rustfmt
+      cargo build
+    command: |
+      echo "Ready! Run 'cargo run' to start Streamline"
+      echo "Or 'cargo run -- --playground' for demo mode"
+
+ports:
+  - port: 9092
+    name: Kafka Protocol
+    onOpen: ignore
+  - port: 9094
+    name: HTTP API
+    onOpen: open-preview
+
+vscode:
+  extensions:
+    - rust-lang.rust-analyzer
+    - vadimcn.vscode-lldb
+    - tamasfe.even-better-toml

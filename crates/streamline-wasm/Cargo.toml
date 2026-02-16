@@ -1,0 +1,51 @@
+[package]
+name = "streamline-wasm"
+version = "0.2.0"
+edition = "2021"
+authors = ["Jose David Baena"]
+description = "WASM transformation engine for Streamline"
+license = "Apache-2.0"
+repository = "https://github.com/streamlinelabs/streamline"
+
+[dependencies]
+# Error handling
+thiserror = "2.0"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Async
+tokio = { version = "1.41", features = ["sync", "time", "fs"] }
+async-trait = "0.1"
+
+# Concurrency
+parking_lot = "0.12"
+dashmap = "6.1"
+
+# Logging
+tracing = "0.1"
+
+# HTTP API (REST endpoints for managing transformations)
+axum = { version = "0.7" }
+
+# UUID for identifiers
+uuid = { version = "1.11", features = ["v4"] }
+chrono = { version = "0.4", features = ["serde"] }
+
+# Base64 encoding
+base64 = "0.22"
+
+# Random number generation (used in WASM runtime stubs)
+rand = "0.8"
+
+# WASM runtime (optional - provides real WASM execution when enabled)
+wasmtime = { version = "27", optional = true }
+
+[features]
+default = []
+wasm-runtime = ["dep:wasmtime"]
+
+[dev-dependencies]
+tokio-test = "0.4"
+tempfile = "3.14"

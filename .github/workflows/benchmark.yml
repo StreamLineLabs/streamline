@@ -1,0 +1,128 @@
+name: Benchmark Comparison
+
+on:
+  pull_request:
+    branches: [main]
+    # Only run on changes that might affect performance
+    paths:
+      - 'src/**'
+      - 'benches/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  benchmark:
+    name: Performance Regression Check
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write  # For posting comments
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Need full history for checkout
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          # Cache separately from regular CI to avoid conflicts
+          prefix-key: "bench"
+
+      - name: Install critcmp
+        run: cargo install critcmp
+
+      - name: Run benchmarks on PR branch
+        run: |
+          cargo bench -- --save-baseline pr
+          # Save PR benchmark results
+          mkdir -p benchmark-results
+          cp -r target/criterion benchmark-results/pr
+
+      - name: Checkout main branch
+        run: |
+          git checkout main
+
+      - name: Run benchmarks on main branch
+        run: |
+          cargo bench -- --save-baseline main
+          # Save main benchmark results
+          cp -r target/criterion benchmark-results/main
+
+      - name: Compare benchmarks
+        id: compare
+        run: |
+          echo "## Benchmark Comparison" > benchmark-report.md
+          echo "" >> benchmark-report.md
+          echo "Comparing PR against main branch:" >> benchmark-report.md
+          echo "" >> benchmark-report.md
+          echo '```' >> benchmark-report.md
+          critcmp main pr 2>&1 | tee -a benchmark-report.md || true
+          echo '```' >> benchmark-report.md
+          echo "" >> benchmark-report.md
+          echo "---" >> benchmark-report.md
+          echo "*Benchmarks run on \`ubuntu-latest\` GitHub Actions runner*" >> benchmark-report.md
+
+          # Check for significant regressions (>10% slower)
+          if critcmp main pr --threshold 10 2>&1 | grep -q "regressed"; then
+            echo "regression=true" >> $GITHUB_OUTPUT
+            echo "" >> benchmark-report.md
+            echo "⚠️ **Warning**: Some benchmarks show >10% regression" >> benchmark-report.md
+          else
+            echo "regression=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Post benchmark results as comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const report = fs.readFileSync('benchmark-report.md', 'utf8');
+
+            // Find existing comment
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+
+            const botComment = comments.find(comment =>
+              comment.user.type === 'Bot' &&
+              comment.body.includes('Benchmark Comparison')
+            );
+
+            if (botComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body: report
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: report
+              });
+            }
+
+      - name: Upload benchmark artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results
+          path: benchmark-results/
+          retention-days: 7
+
+      - name: Check for regressions
+        if: steps.compare.outputs.regression == 'true'
+        run: |
+          echo "::warning::Performance regression detected (>10% slower than main)"
+          # Note: Not failing the build, just warning
+          # Uncomment below to fail on regression:
+          # exit 1

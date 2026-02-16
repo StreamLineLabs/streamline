@@ -1,0 +1,31 @@
+# CODEOWNERS for Streamline
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default owner for everything in the repo
+* @josedab
+
+# Core components
+/src/protocol/ @josedab
+/src/storage/ @josedab
+/src/cluster/ @josedab
+/src/replication/ @josedab
+
+# Security-sensitive areas
+/src/auth/ @josedab
+/src/server/tls.rs @josedab
+/src/cluster/tls.rs @josedab
+
+# Configuration and CLI
+/src/config/ @josedab
+/src/cli.rs @josedab
+/src/main.rs @josedab
+
+# Documentation
+/docs/ @josedab
+/*.md @josedab
+
+# CI/CD and deployment
+/.github/ @josedab
+/k8s/ @josedab
+/helm/ @josedab
+/Dockerfile @josedab

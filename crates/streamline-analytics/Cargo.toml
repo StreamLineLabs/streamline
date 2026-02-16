@@ -1,0 +1,43 @@
+[package]
+name = "streamline-analytics"
+version = "0.2.0"
+edition = "2021"
+authors = ["Jose David Baena"]
+description = "Embedded analytics engine for Streamline (DuckDB-powered SQL queries on stream data)"
+license = "Apache-2.0"
+repository = "https://github.com/streamlinelabs/streamline"
+
+[dependencies]
+# Error handling
+thiserror = "2.0"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Async
+tokio = { version = "1.41", features = ["sync", "time"] }
+
+# Concurrency
+parking_lot = "0.12"
+dashmap = "6.1"
+
+# Logging
+tracing = "0.1"
+
+# Time
+chrono = { version = "0.4", features = ["serde"] }
+
+# Regex for query parsing
+regex = "1.10"
+
+# Base64 for binary data encoding
+base64 = "0.22"
+
+# DuckDB embedded database
+duckdb = { version = ">=1.1, <1.2", features = ["bundled", "vtab"] }
+
+[dev-dependencies]
+tokio = { version = "1.41", features = ["macros", "rt"] }
+tokio-test = "0.4"
+tempfile = "3.14"

@@ -1,0 +1,98 @@
+# Streamline Benchmark Workflow
+#
+# Runs benchmarks on a schedule and on manual trigger.
+# Results are stored as artifacts.
+
+name: Benchmarks
+
+on:
+  # Run weekly on Sunday at midnight UTC
+  schedule:
+    - cron: '0 0 * * 0'
+
+  # Allow manual trigger with customization
+  workflow_dispatch:
+    inputs:
+      benchmarks:
+        description: 'Benchmarks to run (comma-separated: producer,consumer,e2e,startup)'
+        required: false
+        default: 'producer,consumer,startup'
+      duration:
+        description: 'Benchmark duration in seconds'
+        required: false
+        default: '60'
+      message_size:
+        description: 'Message size in bytes'
+        required: false
+        default: '1024'
+
+  # Run on push to benchmark-related files
+  push:
+    branches:
+      - main
+    paths:
+      - 'benches/**'
+      - 'scripts/run_benchmarks.sh'
+      - '.github/workflows/benchmarks.yml'
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  benchmark:
+    name: Run Benchmarks
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-action@stable
+        with:
+          toolchain: stable
+          components: rustfmt, clippy
+
+      - name: Cache Cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-bench-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-bench-
+            ${{ runner.os }}-cargo-
+
+      - name: Build Streamline (release)
+        run: cargo build --release
+
+      - name: Create benchmark results directory
+        run: mkdir -p benchmark-results
+
+      - name: Run Streamline benchmarks
+        run: |
+          # Start Streamline
+          ./target/release/streamline \
+            --data-dir ./benchmark-results/streamline-data \
+            --listen-addr 127.0.0.1:9092 \
+            --http-addr 127.0.0.1:9095 \
+            --log-level warn &
+          STREAMLINE_PID=$!
+          sleep 5
+
+          # Run benchmarks
+          cargo bench --bench comparative_benchmarks -- --noplot 2>&1 | tee benchmark-results/streamline-bench.log
+
+          # Stop Streamline
+          kill $STREAMLINE_PID || true
+
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results-${{ github.run_number }}
+          path: benchmark-results/
+          retention-days: 90

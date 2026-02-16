@@ -1,0 +1,120 @@
+name: Chaos Tests
+
+on:
+  # Weekly schedule: Sunday at 3:00 AM UTC
+  schedule:
+    - cron: '0 3 * * 0'
+  # Allow manual triggering
+  workflow_dispatch:
+    inputs:
+      test_filter:
+        description: 'Specific test to run (leave empty for all)'
+        required: false
+        default: ''
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+  RUST_LOG: streamline=debug
+
+jobs:
+  chaos-tests:
+    name: Chaos Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: "chaos"
+
+      - name: Run chaos tests
+        run: |
+          if [ -n "${{ github.event.inputs.test_filter }}" ]; then
+            echo "Running specific test: ${{ github.event.inputs.test_filter }}"
+            cargo test --test chaos_test ${{ github.event.inputs.test_filter }} -- --ignored --nocapture
+          else
+            echo "Running all chaos tests"
+            cargo test --test chaos_test -- --ignored --nocapture
+          fi
+
+      - name: Run fast chaos tests (sanity check)
+        run: |
+          cargo test --test chaos_test -- --nocapture
+
+  chaos-extended:
+    name: Extended Chaos Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    # Only run on schedule, not manual triggers (unless explicitly requested)
+    if: github.event_name == 'schedule'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: "chaos-extended"
+
+      - name: Run all ignored tests
+        run: |
+          # Run all ignored tests across the test suite
+          cargo test -- --ignored --nocapture
+        continue-on-error: true
+
+      - name: Run protocol compatibility tests
+        run: |
+          cargo test --test protocol_compatibility_test -- --ignored --nocapture
+        continue-on-error: true
+
+  notify-failure:
+    name: Notify on Failure
+    runs-on: ubuntu-latest
+    needs: [chaos-tests]
+    if: failure()
+
+    steps:
+      - name: Create issue on failure
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const date = new Date().toISOString().split('T')[0];
+            const runUrl = `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`;
+
+            // Check for existing open issue
+            const issues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'chaos-test-failure'
+            });
+
+            if (issues.data.length === 0) {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: `Chaos tests failing (${date})`,
+                body: `## Chaos Test Failure\n\nThe weekly chaos tests have failed.\n\n**Run:** ${runUrl}\n**Date:** ${date}\n\nPlease investigate the cluster resilience issues.`,
+                labels: ['bug', 'chaos-test-failure', 'reliability']
+              });
+            } else {
+              // Add comment to existing issue
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issues.data[0].number,
+                body: `Chaos tests failed again on ${date}.\n\n**Run:** ${runUrl}`
+              });
+            }
