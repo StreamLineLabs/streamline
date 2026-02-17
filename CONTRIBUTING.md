@@ -6,7 +6,7 @@ Thank you for your interest in contributing to Streamline! This document provide
 
 ### Prerequisites
 
-- Rust 1.75 or later
+- Rust 1.80 or later
 - Git
 - `pkg-config` (Linux: `apt-get install pkg-config`, macOS: `brew install pkg-config`)
 - Node.js 18+ (only required for the website docs)
