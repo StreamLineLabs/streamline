@@ -147,7 +147,7 @@ pub fn infer_schema(messages: &[&str]) -> InferredSchema {
 
             // Determine dominant type
             let field_type = if types.len() == 1 {
-                types.into_keys().next().unwrap()
+                types.into_keys().next().unwrap_or(InferredType::Mixed)
             } else {
                 // Pick the most common, fall back to Mixed
                 let mut entries: Vec<_> = types.into_iter().collect();
