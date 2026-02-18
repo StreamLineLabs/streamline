@@ -3,7 +3,7 @@
 [![Build Status](https://img.shields.io/github/actions/workflow/status/streamlinelabs/streamline/ci-full.yml?branch=main&style=flat-square)](https://github.com/streamlinelabs/streamline/actions)
 [![codecov](https://img.shields.io/codecov/c/github/streamlinelabs/streamline?style=flat-square)](https://codecov.io/gh/streamlinelabs/streamline)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue?style=flat-square)](LICENSE)
-[![Rust](https://img.shields.io/badge/rust-1.75%2B-orange?style=flat-square)](https://www.rust-lang.org/)
+[![Rust](https://img.shields.io/badge/rust-1.80%2B-orange?style=flat-square)](https://www.rust-lang.org/)
 [![Stability](https://img.shields.io/badge/stability-alpha-yellow?style=flat-square)](#project-status)
 [![Documentation](https://img.shields.io/badge/docs-josedab.github.io%2Fstreamline-blue?style=flat-square)](https://josedab.github.io/streamline/)
 
@@ -75,7 +75,7 @@ docker compose up -d && curl http://localhost:9094/health
 # Full demo with produce/consume in Docker
 docker compose -f docker-compose.demo.yml up
 
-# From source (requires Rust 1.75+)
+# From source (requires Rust 1.80+)
 git clone https://github.com/streamlinelabs/streamline.git && cd streamline
 cargo run -- --playground
 
