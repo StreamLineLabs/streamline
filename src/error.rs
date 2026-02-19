@@ -596,6 +596,9 @@ pub enum StreamlineError {
     #[error("Invalid topic name: {0}")]
     InvalidTopicName(String),
 
+    #[error("Invalid partition count: {0}")]
+    InvalidPartitionCount(String),
+
     #[error("Invalid client ID: {0}")]
     InvalidClientId(String),
 
@@ -887,6 +890,7 @@ impl StreamlineError {
             StreamlineError::Replication(_) => KafkaErrorCode::ReplicaNotAvailable,
             StreamlineError::TopicAlreadyExists(_) => KafkaErrorCode::TopicAlreadyExists,
             StreamlineError::InvalidTopicName(_) => KafkaErrorCode::InvalidTopicException,
+            StreamlineError::InvalidPartitionCount(_) => KafkaErrorCode::InvalidPartitions,
             StreamlineError::InvalidClientId(_) => KafkaErrorCode::InvalidRequest,
             StreamlineError::MessageTooLarge(_, _) => KafkaErrorCode::MessageTooLarge,
             StreamlineError::RateLimitExceeded => KafkaErrorCode::ThrottlingQuotaExceeded,
@@ -1064,6 +1068,10 @@ impl ErrorHint for StreamlineError {
             StreamlineError::InvalidTopicName(name) => Some(format!(
                 "Topic name '{}' is invalid. Names must be 1-255 characters using alphanumeric, '.', '_', or '-'. Validate with: `streamline-cli topics validate {}`",
                 name, name.replace('/', "_")
+            )),
+            StreamlineError::InvalidPartitionCount(msg) => Some(format!(
+                "{}. Partition count must be between 1 and 10,000. Use: `streamline-cli topics create <name> --partitions <N>`",
+                msg
             )),
             StreamlineError::AuthenticationFailed(_) => Some(
                 "Authentication failed. Check credentials in `~/.streamline/config.toml` or verify with: `streamline-cli doctor --check auth`".into()
@@ -1255,7 +1263,8 @@ impl ErrorHint for StreamlineError {
         match self {
             StreamlineError::TopicNotFound(_)
             | StreamlineError::TopicAlreadyExists(_)
-            | StreamlineError::InvalidTopicName(_) => Some(format!("{}/reference/topics", base)),
+            | StreamlineError::InvalidTopicName(_)
+            | StreamlineError::InvalidPartitionCount(_) => Some(format!("{}/reference/topics", base)),
             StreamlineError::PartitionNotFound(_, _) => {
                 Some(format!("{}/concepts/partitions", base))
             }

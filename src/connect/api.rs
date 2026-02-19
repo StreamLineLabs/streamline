@@ -888,12 +888,9 @@ impl ConnectorManager {
     /// Reset (delete) offsets for a source connector
     pub fn reset_connector_offsets(&self, name: &str) -> Result<(), ConnectError> {
         let connectors = self.connectors.read();
-        if !connectors.contains_key(name) {
-            return Err(ConnectError::not_found(name));
-        }
 
         // Only allow offset reset when connector is stopped or paused
-        let runtime = connectors.get(name).unwrap();
+        let runtime = connectors.get(name).ok_or_else(|| ConnectError::not_found(name))?;
         if runtime.state == ConnectorState::Running {
             return Err(ConnectError::bad_request(
                 "Cannot reset offsets while connector is running. Pause or stop it first.",
