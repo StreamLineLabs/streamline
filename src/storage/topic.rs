@@ -148,6 +148,12 @@ impl std::str::FromStr for CleanupPolicy {
 /// Maximum allowed topic name length (Kafka standard)
 const MAX_TOPIC_NAME_LENGTH: usize = 249;
 
+/// Maximum allowed partition count per topic
+const MAX_PARTITIONS: i32 = 10_000;
+
+/// Minimum allowed partition count per topic
+const MIN_PARTITIONS: i32 = 1;
+
 /// Reserved topic name prefixes that are used internally
 const RESERVED_TOPIC_PREFIXES: &[&str] = &["__"];
 
@@ -1803,6 +1809,14 @@ impl TopicManager {
     ) -> Result<()> {
         // Validate topic name before creating
         validate_topic_name(name)?;
+
+        // Validate partition count
+        if num_partitions < MIN_PARTITIONS || num_partitions > MAX_PARTITIONS {
+            return Err(StreamlineError::Config(format!(
+                "Invalid partition count {} for topic '{}': must be between {} and {}",
+                num_partitions, name, MIN_PARTITIONS, MAX_PARTITIONS
+            )));
+        }
 
         let topic = self
             .storage
