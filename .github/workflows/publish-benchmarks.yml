@@ -1,0 +1,96 @@
+name: Publish Benchmarks
+
+on:
+  release:
+    types: [published]
+  schedule:
+    - cron: '0 4 * * 1'  # Weekly on Mondays at 4am UTC
+  workflow_dispatch:
+
+concurrency:
+  group: benchmarks-publish
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  run-benchmarks:
+    name: Run & Publish Benchmarks
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build Streamline (release)
+        run: cargo build --release
+
+      - name: Run microbenchmarks
+        run: |
+          cargo bench --bench storage_benchmarks -- --output-format bencher | tee storage.txt
+          cargo bench --bench protocol_benchmarks -- --output-format bencher | tee protocol.txt
+          cargo bench --bench zerocopy_benchmarks -- --output-format bencher | tee zerocopy.txt
+
+      - name: Run CLI benchmarks
+        run: |
+          # Start server for CLI benchmark
+          ./target/release/streamline &
+          SERVER_PID=$!
+          sleep 3
+
+          # Quick throughput benchmark
+          ./target/release/streamline-cli benchmark \
+            --profile throughput \
+            --output throughput-results.json 2>&1 | tee throughput.txt || true
+
+          # Latency benchmark
+          ./target/release/streamline-cli benchmark \
+            --profile latency \
+            --output latency-results.json 2>&1 | tee latency.txt || true
+
+          kill $SERVER_PID || true
+
+      - name: Combine results
+        run: |
+          mkdir -p benchmark-results
+          cp *.txt *.json benchmark-results/ 2>/dev/null || true
+
+          # Generate summary
+          cat > benchmark-results/summary.md << 'EOF'
+          # Benchmark Results
+
+          **Date:** $(date -u +"%Y-%m-%d")
+          **Version:** $(cargo metadata --no-deps --format-version 1 | python3 -c "import sys,json; print(json.load(sys.stdin)['packages'][0]['version'])")
+          **Commit:** ${{ github.sha }}
+          **Runner:** $(uname -a)
+
+          ## Files
+          - `storage.txt` — Storage engine benchmarks
+          - `protocol.txt` — Protocol codec benchmarks
+          - `zerocopy.txt` — Zero-copy I/O benchmarks
+          - `throughput-results.json` — CLI throughput benchmark
+          - `latency-results.json` — CLI latency benchmark
+          EOF
+
+      - name: Store benchmark results
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          name: Streamline Microbenchmarks
+          tool: 'cargo'
+          output-file-path: storage.txt
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          auto-push: true
+          alert-threshold: '120%'
+          comment-on-alert: true
+          fail-on-alert: false
+          benchmark-data-dir-path: 'dev/bench'
+
+      - name: Upload raw results
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results-${{ github.sha }}
+          path: benchmark-results/
+          retention-days: 90
