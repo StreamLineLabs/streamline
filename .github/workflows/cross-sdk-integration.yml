@@ -1,0 +1,349 @@
+name: Cross-SDK Integration Tests
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/protocol/**'
+      - 'src/server.rs'
+      - 'src/consumer/**'
+      - 'src/storage/**'
+  schedule:
+    - cron: '0 3 * * *'  # Nightly at 3am UTC
+  workflow_dispatch:
+    inputs:
+      server-ref:
+        description: 'Git ref for the Streamline server'
+        required: false
+        type: string
+        default: 'main'
+
+concurrency:
+  group: cross-sdk-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  STREAMLINE_BOOTSTRAP_SERVERS: localhost:9092
+  STREAMLINE_HTTP_URL: http://localhost:9094
+
+jobs:
+  build-server:
+    name: Build Server
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.server-ref || github.sha }}
+
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build Streamline
+        run: cargo build --release
+
+      - name: Upload binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: streamline-binary
+          path: target/release/streamline
+          retention-days: 1
+
+  sdk-python:
+    name: Python SDK
+    runs-on: ubuntu-latest
+    needs: build-server
+    timeout-minutes: 15
+    steps:
+      - name: Download server binary
+        uses: actions/download-artifact@v4
+        with:
+          name: streamline-binary
+          path: /tmp/server
+
+      - name: Start server
+        run: |
+          chmod +x /tmp/server/streamline
+          /tmp/server/streamline &
+          echo "Waiting for server..."
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:9094/health > /dev/null 2>&1 && break
+            sleep 2
+          done
+
+      - name: Checkout Python SDK
+        uses: actions/checkout@v4
+        with:
+          repository: streamlinelabs/streamline-python-sdk
+          path: sdk
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install & test
+        working-directory: sdk
+        run: |
+          pip install -e ".[dev]" || pip install -e .
+          python -m pytest tests/ -v --timeout=60
+        env:
+          STREAMLINE_BOOTSTRAP_SERVERS: localhost:9092
+
+      - name: Server logs on failure
+        if: failure()
+        run: cat /tmp/server/streamline.log 2>/dev/null || echo "No log file"
+
+  sdk-node:
+    name: Node.js SDK
+    runs-on: ubuntu-latest
+    needs: build-server
+    timeout-minutes: 15
+    steps:
+      - name: Download server binary
+        uses: actions/download-artifact@v4
+        with:
+          name: streamline-binary
+          path: /tmp/server
+
+      - name: Start server
+        run: |
+          chmod +x /tmp/server/streamline
+          /tmp/server/streamline &
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:9094/health > /dev/null 2>&1 && break
+            sleep 2
+          done
+
+      - name: Checkout Node.js SDK
+        uses: actions/checkout@v4
+        with:
+          repository: streamlinelabs/streamline-node-sdk
+          path: sdk
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: sdk/package-lock.json
+
+      - name: Install & test
+        working-directory: sdk
+        run: |
+          npm ci
+          npm test
+        env:
+          STREAMLINE_BOOTSTRAP_SERVERS: localhost:9092
+
+  sdk-go:
+    name: Go SDK
+    runs-on: ubuntu-latest
+    needs: build-server
+    timeout-minutes: 15
+    steps:
+      - name: Download server binary
+        uses: actions/download-artifact@v4
+        with:
+          name: streamline-binary
+          path: /tmp/server
+
+      - name: Start server
+        run: |
+          chmod +x /tmp/server/streamline
+          /tmp/server/streamline &
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:9094/health > /dev/null 2>&1 && break
+            sleep 2
+          done
+
+      - name: Checkout Go SDK
+        uses: actions/checkout@v4
+        with:
+          repository: streamlinelabs/streamline-go-sdk
+          path: sdk
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: sdk/go.mod
+          cache-dependency-path: sdk/go.sum
+
+      - name: Test
+        working-directory: sdk
+        run: go test -v -count=1 -timeout=60s ./...
+        env:
+          STREAMLINE_BOOTSTRAP_SERVERS: localhost:9092
+
+  sdk-java:
+    name: Java SDK
+    runs-on: ubuntu-latest
+    needs: build-server
+    timeout-minutes: 20
+    steps:
+      - name: Download server binary
+        uses: actions/download-artifact@v4
+        with:
+          name: streamline-binary
+          path: /tmp/server
+
+      - name: Start server
+        run: |
+          chmod +x /tmp/server/streamline
+          /tmp/server/streamline &
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:9094/health > /dev/null 2>&1 && break
+            sleep 2
+          done
+
+      - name: Checkout Java SDK
+        uses: actions/checkout@v4
+        with:
+          repository: streamlinelabs/streamline-java-sdk
+          path: sdk
+
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: 'maven'
+
+      - name: Test
+        working-directory: sdk
+        run: mvn --batch-mode verify -Dmaven.test.failure.ignore=false
+        env:
+          STREAMLINE_BOOTSTRAP_SERVERS: localhost:9092
+
+  sdk-rust:
+    name: Rust SDK
+    runs-on: ubuntu-latest
+    needs: build-server
+    timeout-minutes: 15
+    steps:
+      - name: Download server binary
+        uses: actions/download-artifact@v4
+        with:
+          name: streamline-binary
+          path: /tmp/server
+
+      - name: Start server
+        run: |
+          chmod +x /tmp/server/streamline
+          /tmp/server/streamline &
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:9094/health > /dev/null 2>&1 && break
+            sleep 2
+          done
+
+      - name: Checkout Rust SDK
+        uses: actions/checkout@v4
+        with:
+          repository: streamlinelabs/streamline-rust-sdk
+          path: sdk
+
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: sdk
+
+      - name: Test
+        working-directory: sdk
+        run: cargo test
+        env:
+          STREAMLINE_BOOTSTRAP_SERVERS: localhost:9092
+
+  sdk-dotnet:
+    name: .NET SDK
+    runs-on: ubuntu-latest
+    needs: build-server
+    timeout-minutes: 15
+    steps:
+      - name: Download server binary
+        uses: actions/download-artifact@v4
+        with:
+          name: streamline-binary
+          path: /tmp/server
+
+      - name: Start server
+        run: |
+          chmod +x /tmp/server/streamline
+          /tmp/server/streamline &
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:9094/health > /dev/null 2>&1 && break
+            sleep 2
+          done
+
+      - name: Checkout .NET SDK
+        uses: actions/checkout@v4
+        with:
+          repository: streamlinelabs/streamline-dotnet-sdk
+          path: sdk
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Test
+        working-directory: sdk
+        run: |
+          dotnet restore
+          dotnet test --no-restore --verbosity normal
+        env:
+          STREAMLINE_BOOTSTRAP_SERVERS: localhost:9092
+
+  compatibility-report:
+    name: Compatibility Report
+    runs-on: ubuntu-latest
+    needs: [sdk-python, sdk-node, sdk-go, sdk-java, sdk-rust, sdk-dotnet]
+    if: always()
+    timeout-minutes: 5
+    steps:
+      - name: Generate compatibility matrix
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const sdks = [
+              { name: 'Python SDK', job: 'sdk-python' },
+              { name: 'Node.js SDK', job: 'sdk-node' },
+              { name: 'Go SDK', job: 'sdk-go' },
+              { name: 'Java SDK', job: 'sdk-java' },
+              { name: 'Rust SDK', job: 'sdk-rust' },
+              { name: '.NET SDK', job: 'sdk-dotnet' }
+            ];
+
+            const { data: jobs } = await github.rest.actions.listJobsForWorkflowRun({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: context.runId,
+              per_page: 100
+            });
+
+            let passed = 0, failed = 0;
+            const rows = [];
+
+            for (const sdk of sdks) {
+              const job = jobs.jobs.find(j => j.name === sdk.name);
+              const conclusion = job?.conclusion || 'skipped';
+              const status = conclusion === 'success' ? '✅ Pass' :
+                             conclusion === 'failure' ? '❌ Fail' : '⏭️ Skipped';
+              if (conclusion === 'success') passed++;
+              else if (conclusion === 'failure') failed++;
+              rows.push(`| ${sdk.name} | ${status} |`);
+            }
+
+            const summary = [
+              '## 🔄 SDK Compatibility Matrix',
+              '',
+              `**Server:** \`${{ github.sha }}\` | **Run:** [#${context.runNumber}](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})`,
+              '',
+              '| SDK | Status |',
+              '|-----|--------|',
+              ...rows,
+              '',
+              `**Result:** ${passed}/6 passed` + (failed > 0 ? ` | ${failed}/6 failed` : ''),
+            ].join('\n');
+
+            core.summary.addRaw(summary);
+            await core.summary.write();
+            console.log(summary);
+
+            if (failed > 0) {
+              core.setFailed(`${failed} SDK(s) failed integration tests`);
+            }
