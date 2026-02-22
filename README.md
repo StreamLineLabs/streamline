@@ -6,6 +6,8 @@
 [![Rust](https://img.shields.io/badge/rust-1.80%2B-orange?style=flat-square)](https://www.rust-lang.org/)
 [![Stability](https://img.shields.io/badge/stability-alpha-yellow?style=flat-square)](#project-status)
 [![Documentation](https://img.shields.io/badge/docs-josedab.github.io%2Fstreamline-blue?style=flat-square)](https://josedab.github.io/streamline/)
+[![Benchmarks](https://img.shields.io/badge/benchmarks-live-brightgreen?style=flat-square)](https://josedab.github.io/streamline/dev/bench/)
+[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/streamlinelabs/streamline/badge?style=flat-square)](https://securityscorecards.dev/viewer/?uri=github.com/streamlinelabs/streamline)
 
 **The Redis of Streaming** — A developer-first, operationally simple streaming solution that bridges the gap between enterprise platforms (Kafka, Redpanda) and simple messaging systems (Redis Pub/Sub).
 
@@ -16,7 +18,7 @@
 
 ## Quick Demo
 
-<!-- TODO: Replace with animated terminal recording (asciinema/VHS) -->
+> 🎬 *[Watch the full demo →](https://streamlinelabs.dev/docs/getting-started/quick-start)*
 
 ```bash
 # Start the server — that's it, no config needed
@@ -309,6 +311,37 @@ See **[Configuration Reference](docs/CONFIGURATION.md)** for all options (TLS, c
 | [Operations](docs/OPERATIONS.md) | Production operations guide |
 | [Contributing](CONTRIBUTING.md) | Development setup and guidelines |
 
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        Streamline Server                        │
+├────────────────┬──────────────────┬─────────────────────────────┤
+│  Kafka Protocol│   HTTP/REST API  │   WebSocket Gateway         │
+│  (port 9092)   │   (port 9094)    │   (port 9094/ws)            │
+├────────────────┴──────────────────┴─────────────────────────────┤
+│                     Protocol Handler Layer                       │
+│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────────────┐   │
+│  │ Produce  │ │  Fetch   │ │  Admin   │ │ Consumer Groups  │   │
+│  │ (v0-v9)  │ │ (v0-v15) │ │ (50 APIs)│ │ (Classic+KIP848) │   │
+│  └──────────┘ └──────────┘ └──────────┘ └──────────────────┘   │
+├─────────────────────────────────────────────────────────────────┤
+│                       Storage Engine                            │
+│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────────────┐   │
+│  │  Topics  │ │Partitions│ │ Segments │ │   I/O Backends   │   │
+│  │          │ │          │ │  + WAL   │ │ io_uring│standard │   │
+│  └──────────┘ └──────────┘ └──────────┘ └──────────────────┘   │
+├────────────────┬──────────────────┬─────────────────────────────┤
+│  Auth/ACL      │  Raft Clustering │  Analytics (DuckDB)         │
+│  (SASL/OAuth)  │  (OpenRaft)      │  (SQL on streams)           │
+└────────────────┴──────────────────┴─────────────────────────────┘
+         │                │                      │
+    ┌────┴────┐    ┌──────┴──────┐    ┌─────────┴─────────┐
+    │  SDKs   │    │  Operator   │    │  Sink Connectors   │
+    │ 7 langs │    │  (K8s CRDs) │    │ Iceberg/Delta/S3   │
+    └─────────┘    └─────────────┘    └───────────────────┘
+```
+
 ## Contributing
 
 ```bash
@@ -328,14 +361,17 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 **Not yet recommended for:** Production workloads with critical data, high-availability requirements.
 
-See [API Stability](docs/API_STABILITY.md) for detailed compatibility matrices and [Benchmarks](docs/BENCHMARKS.md) for performance data.
+See [API Stability](docs/API_STABILITY.md) for detailed compatibility matrices and [Benchmarks](https://josedab.github.io/streamline/dev/bench/) for live performance data.
 
 ## Community
 
 We'd love to have you involved! Whether you have questions, ideas, or want to contribute — all are welcome.
 
 - 💬 [GitHub Discussions](https://github.com/streamlinelabs/streamline/discussions) — Ask questions, share ideas, and connect with other users
+- 💭 [Discord](https://discord.gg/streamlinelabs) — Real-time chat with the community and maintainers
 - 🐛 [Issue Tracker](https://github.com/streamlinelabs/streamline/issues) — Report bugs or request features
+- 📖 [Documentation](https://streamlinelabs.dev) — Guides, API reference, tutorials
+- 🗺️ [Roadmap](https://github.com/streamlinelabs/.github/blob/main/ROADMAP.md) — What's coming next
 - 🤝 [Contributing Guide](CONTRIBUTING.md) — Learn how to contribute to Streamline
 - 📜 [Code of Conduct](CODE_OF_CONDUCT.md)
 
