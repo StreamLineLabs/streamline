@@ -1,6 +1,7 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+- refactor: extract protocol decoder into separate module (2026-02-22)
 - fix: resolve partition rebalance edge case in consumer groups (2026-02-22)
 - feat: add configurable retry backoff (2026-02-21)
 
