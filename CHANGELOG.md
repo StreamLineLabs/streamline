@@ -1,6 +1,7 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+- fix: resolve partition rebalance edge case in consumer groups (2026-02-22)
 - feat: add configurable retry backoff (2026-02-21)
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
