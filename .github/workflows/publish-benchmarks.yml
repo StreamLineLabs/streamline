@@ -88,6 +88,20 @@ jobs:
           fail-on-alert: false
           benchmark-data-dir-path: 'dev/bench'
 
+      - name: Deploy benchmark dashboard
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          cp dev/bench/index.html /tmp/bench-index.html
+          git fetch origin gh-pages || true
+          git checkout gh-pages 2>/dev/null || git checkout --orphan gh-pages
+          mkdir -p dev/bench
+          cp /tmp/bench-index.html dev/bench/index.html
+          git add dev/bench/index.html
+          git diff --cached --quiet || git commit -m "chore: update benchmark dashboard"
+          git push origin gh-pages
+          git checkout main
+
       - name: Upload raw results
         uses: actions/upload-artifact@v4
         with:
