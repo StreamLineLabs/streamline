@@ -1,0 +1,26 @@
+cff-version: 1.2.0
+message: "If you use Streamline in your research, please cite it as below."
+title: "Streamline: The Redis of Streaming"
+abstract: >-
+  Streamline is a Kafka-protocol-compatible, single-binary streaming platform
+  that eliminates the operational complexity of Apache Kafka. It supports 50+
+  Kafka APIs, multi-protocol ingestion (MQTT, AMQP, gRPC), WASM transforms,
+  SQL-on-streams (StreamQL), and embeddable library mode in under 10MB.
+type: software
+authors:
+  - given-names: Jose David
+    family-names: Baena
+    alias: josedab
+license: Apache-2.0
+repository-code: "https://github.com/streamlinelabs/streamline"
+url: "https://streamlinelabs.dev"
+keywords:
+  - streaming
+  - kafka
+  - event-streaming
+  - message-queue
+  - rust
+  - mqtt
+  - real-time
+version: 0.2.0
+date-released: "2026-02-01"

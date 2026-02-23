@@ -1,0 +1,27 @@
+# Auto-detect text files and perform LF normalization
+* text=auto
+
+# Rust source
+*.rs text diff=rust
+
+# Generated / vendored files — exclude from language stats
+Cargo.lock linguist-generated=true
+*.json linguist-detectable=false
+
+# Binary files
+*.wasm binary
+*.gz binary
+*.tar binary
+*.zip binary
+
+# Documentation
+*.md text diff=markdown
+
+# Shell scripts
+*.sh text eol=lf
+
+# TOML config
+*.toml text
+
+# Docker
+Dockerfile text
