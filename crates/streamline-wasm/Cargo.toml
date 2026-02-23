@@ -37,7 +37,7 @@ chrono = { version = "0.4", features = ["serde"] }
 base64 = "0.22"
 
 # Random number generation (used in WASM runtime stubs)
-rand = "0.8"
+rand = "0.9"
 
 # WASM runtime (optional - provides real WASM execution when enabled)
 wasmtime = { version = "27", optional = true }
