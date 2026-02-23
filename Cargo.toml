@@ -146,7 +146,7 @@ object_store = { version = "0.11", features = ["aws", "azure", "gcp"], optional 
 
 # OpenTelemetry for distributed tracing (optional - telemetry feature)
 opentelemetry = { version = "0.27", optional = true }
-opentelemetry_sdk = { version = "0.27", features = ["rt-tokio"], optional = true }
+opentelemetry_sdk = { version = "0.31", features = ["rt-tokio"], optional = true }
 opentelemetry-otlp = { version = "0.27", features = ["tonic", "grpc-tonic"], optional = true }
 tracing-opentelemetry = { version = "0.28", optional = true }
 
