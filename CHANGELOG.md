@@ -1,15 +1,23 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
-- perf: optimize log segment index lookup (2026-02-22)
-- refactor: extract protocol decoder into separate module (2026-02-22)
-- fix: resolve partition rebalance edge case in consumer groups (2026-02-22)
-- feat: add configurable retry backoff (2026-02-21)
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+### Performance
+- Optimize log segment index lookup
+
+### Changed
+- Extract protocol decoder into separate module
+
+### Fixed
+- Resolve partition rebalance edge case in consumer groups
+
+### Added
+- Add configurable retry backoff
 
 ### Changed
 
