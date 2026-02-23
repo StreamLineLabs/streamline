@@ -1,0 +1,85 @@
+name: Sync Core Docs to Website
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/**'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync-docs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout core repo
+        uses: actions/checkout@v4
+        with:
+          path: streamline
+
+      - name: Checkout docs repo
+        uses: actions/checkout@v4
+        with:
+          repository: streamlinelabs/streamline-docs
+          path: streamline-docs
+          token: ${{ secrets.DOCS_SYNC_TOKEN }}
+
+      - name: Sync ADR documents
+        run: |
+          # Map core ADR files to website ADR format
+          SRC="streamline/docs/adr"
+          DEST="streamline-docs/docs/architecture/decisions"
+
+          mkdir -p "$DEST"
+
+          for file in "$SRC"/0*.md; do
+            [ -f "$file" ] || continue
+            basename=$(basename "$file")
+            # Transform 0001-foo.md -> adr-001-foo.md
+            num=$(echo "$basename" | grep -oE '^[0-9]+' | sed 's/^0*//')
+            rest=$(echo "$basename" | sed 's/^[0-9]*-//')
+            new_name="adr-$(printf '%03d' "$num")-$rest"
+
+            echo "Syncing $basename -> $new_name"
+            cp "$file" "$DEST/$new_name"
+          done
+
+      - name: Sync feature documents
+        run: |
+          SRC="streamline/docs"
+          DEST="streamline-docs/docs/features"
+
+          mkdir -p "$DEST"
+
+          for file in "$SRC"/*.md; do
+            [ -f "$file" ] || continue
+            basename=$(basename "$file")
+            echo "Syncing $basename"
+            cp "$file" "$DEST/$basename"
+          done
+
+      - name: Check for changes
+        id: changes
+        working-directory: streamline-docs
+        run: |
+          git diff --quiet && git diff --staged --quiet && echo "changed=false" >> "$GITHUB_OUTPUT" || echo "changed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Create Pull Request
+        if: steps.changes.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          path: streamline-docs
+          token: ${{ secrets.DOCS_SYNC_TOKEN }}
+          commit-message: "docs: sync from core repo"
+          title: "docs: auto-sync from streamline core"
+          body: |
+            Automated sync of documentation from [streamline](https://github.com/streamlinelabs/streamline) core repo.
+
+            Synced paths:
+            - `docs/adr/` → `docs/architecture/decisions/`
+            - `docs/*.md` → `docs/features/`
+          branch: docs-sync/auto
+          base: main
+          labels: documentation,automated

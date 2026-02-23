@@ -1,0 +1,122 @@
+name: Jepsen Linearizability Tests
+
+on:
+  schedule:
+    - cron: '0 2 * * 0'  # Weekly on Sunday at 2am UTC
+  workflow_dispatch:
+    inputs:
+      nodes:
+        description: "Number of cluster nodes"
+        default: "3"
+        type: string
+      workload:
+        description: "Jepsen workload"
+        default: "all"
+        type: choice
+        options:
+          - all
+          - linearizability
+          - durability
+          - consistency
+
+concurrency:
+  group: jepsen
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  jepsen:
+    name: Jepsen (${{ github.event.inputs.workload || 'all' }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build Streamline (full)
+        run: cargo build --release --features full
+
+      - name: Install Leiningen
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/technomancy/leiningen/stable/bin/lein -o /usr/local/bin/lein
+          chmod +x /usr/local/bin/lein
+          lein version
+
+      - name: Install Docker Compose
+        uses: docker/setup-buildx-action@v3
+
+      - name: Start Streamline cluster
+        run: |
+          NODES="${{ github.event.inputs.nodes || '3' }}"
+          echo "Starting $NODES-node cluster..."
+
+          for i in $(seq 1 "$NODES"); do
+            PORT_KAFKA=$((9092 + i - 1))
+            PORT_HTTP=$((9094 + (i - 1) * 2))
+            PORT_RAFT=$((9095 + (i - 1) * 2))
+
+            ./target/release/streamline \
+              --data-dir "/tmp/streamline-node-$i" \
+              --port "$PORT_KAFKA" \
+              --http-port "$PORT_HTTP" \
+              --node-id "$i" \
+              --cluster-peers "localhost:9095,localhost:9097,localhost:9099" \
+              --features clustering &
+
+            echo "  Node $i: kafka=$PORT_KAFKA http=$PORT_HTTP raft=$PORT_RAFT"
+          done
+
+          # Wait for cluster to form
+          sleep 10
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:9094/health >/dev/null 2>&1; then
+              echo "  Cluster healthy after ${i}s"
+              break
+            fi
+            sleep 1
+          done
+
+      - name: Run Jepsen tests
+        working-directory: tests/jepsen
+        run: |
+          WORKLOAD="${{ github.event.inputs.workload || 'all' }}"
+          echo "Running Jepsen workload: $WORKLOAD"
+
+          if [ "$WORKLOAD" = "all" ]; then
+            lein run test-all \
+              --nodes "localhost:9092,localhost:9093,localhost:9094" \
+              --time-limit 60 \
+              --concurrency 10
+          else
+            lein run test \
+              --workload "$WORKLOAD" \
+              --nodes "localhost:9092,localhost:9093,localhost:9094" \
+              --time-limit 60 \
+              --concurrency 10
+          fi
+
+      - name: Upload Jepsen results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jepsen-results-${{ github.run_number }}
+          path: tests/jepsen/store/
+          retention-days: 30
+
+      - name: Create issue on failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `Jepsen test failure: ${context.workflow} #${context.runNumber}`,
+              body: `Jepsen linearizability tests failed.\n\nWorkflow: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}\n\nPlease investigate.`,
+              labels: ['bug', 'clustering']
+            });

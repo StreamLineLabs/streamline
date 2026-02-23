@@ -1,0 +1,187 @@
+name: Publish All SDKs
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to publish (e.g., 0.2.0)'
+        required: true
+      dry_run:
+        description: 'Dry run (no actual publishing)'
+        type: boolean
+        default: true
+
+concurrency:
+  group: publish-sdks
+  cancel-in-progress: false
+
+jobs:
+  publish-rust-crate:
+    name: Publish Rust Crate (crates.io)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Verify version
+        run: |
+          TOML_VER=$(grep '^version' Cargo.toml | head -1 | sed 's/.*"\(.*\)"/\1/')
+          if [ "$TOML_VER" != "${{ inputs.version }}" ]; then
+            echo "::error::Cargo.toml version ($TOML_VER) doesn't match input (${{ inputs.version }})"
+            exit 1
+          fi
+      - name: Publish to crates.io
+        if: ${{ !inputs.dry_run }}
+        run: cargo publish --token ${{ secrets.CRATES_IO_TOKEN }}
+      - name: Dry run
+        if: ${{ inputs.dry_run }}
+        run: cargo publish --dry-run
+
+  publish-rust-sdk:
+    name: Publish Rust SDK (crates.io)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: streamlinelabs/streamline-rust-sdk
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Publish
+        if: ${{ !inputs.dry_run }}
+        run: cargo publish --token ${{ secrets.CRATES_IO_TOKEN }}
+      - name: Dry run
+        if: ${{ inputs.dry_run }}
+        run: cargo publish --dry-run
+
+  publish-npm:
+    name: Publish Node.js SDK (npm)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: streamlinelabs/streamline-node-sdk
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+      - run: npm ci && npm run build
+      - name: Publish
+        if: ${{ !inputs.dry_run }}
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - name: Dry run
+        if: ${{ inputs.dry_run }}
+        run: npm pack --dry-run
+
+  publish-pypi:
+    name: Publish Python SDK (PyPI)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: streamlinelabs/streamline-python-sdk
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install build twine
+      - run: python -m build
+      - name: Publish
+        if: ${{ !inputs.dry_run }}
+        run: twine upload dist/*
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
+      - name: Dry run
+        if: ${{ inputs.dry_run }}
+        run: twine check dist/*
+
+  publish-maven:
+    name: Publish Java SDK (Maven Central)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: streamlinelabs/streamline-java-sdk
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          server-id: ossrh
+          server-username: MAVEN_USERNAME
+          server-password: MAVEN_PASSWORD
+          gpg-private-key: ${{ secrets.GPG_PRIVATE_KEY }}
+          gpg-passphrase: GPG_PASSPHRASE
+      - name: Publish
+        if: ${{ !inputs.dry_run }}
+        run: mvn deploy -P release -DskipTests
+        env:
+          MAVEN_USERNAME: ${{ secrets.OSSRH_USERNAME }}
+          MAVEN_PASSWORD: ${{ secrets.OSSRH_TOKEN }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+      - name: Dry run
+        if: ${{ inputs.dry_run }}
+        run: mvn package -DskipTests
+
+  publish-nuget:
+    name: Publish .NET SDK (NuGet)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: streamlinelabs/streamline-dotnet-sdk
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0'
+      - run: dotnet pack -c Release
+      - name: Publish
+        if: ${{ !inputs.dry_run }}
+        run: dotnet nuget push **/*.nupkg --source https://api.nuget.org/v3/index.json --api-key ${{ secrets.NUGET_API_KEY }}
+      - name: Dry run
+        if: ${{ inputs.dry_run }}
+        run: dotnet pack -c Release --no-build
+
+  publish-wasm:
+    name: Publish WASM SDK (npm)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: streamlinelabs/streamline-wasm-sdk
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+      - name: Install wasm-pack
+        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+      - name: Build
+        run: wasm-pack build --target web --scope streamlinelabs
+      - name: Publish
+        if: ${{ !inputs.dry_run }}
+        working-directory: pkg
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  summary:
+    name: Publish Summary
+    needs: [publish-rust-crate, publish-rust-sdk, publish-npm, publish-pypi, publish-maven, publish-nuget, publish-wasm]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Report
+        run: |
+          echo "## SDK Publishing Results" >> $GITHUB_STEP_SUMMARY
+          echo "| SDK | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Rust Core | ${{ needs.publish-rust-crate.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Rust SDK | ${{ needs.publish-rust-sdk.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| npm (Node.js) | ${{ needs.publish-npm.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| PyPI (Python) | ${{ needs.publish-pypi.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Maven Central (Java) | ${{ needs.publish-maven.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| NuGet (.NET) | ${{ needs.publish-nuget.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| npm (WASM) | ${{ needs.publish-wasm.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Version: ${{ inputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "Dry run: ${{ inputs.dry_run }}" >> $GITHUB_STEP_SUMMARY

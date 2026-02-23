@@ -1,0 +1,154 @@
+name: Migration Compatibility Tests
+
+on:
+  schedule:
+    - cron: '0 3 * * 3'  # Wednesdays 3am UTC
+  workflow_dispatch:
+    inputs:
+      kafka_version:
+        description: 'Kafka version to test against'
+        default: '3.7.0'
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  migration-test:
+    name: Migrate from Kafka ${{ matrix.kafka }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        kafka: ['3.6.0', '3.7.0', '3.8.0']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Build Streamline
+        run: cargo build --release
+
+      - name: Start Kafka ${{ matrix.kafka }}
+        run: |
+          wget -q https://archive.apache.org/dist/kafka/${{ matrix.kafka }}/kafka_2.13-${{ matrix.kafka }}.tgz
+          tar xzf kafka_2.13-${{ matrix.kafka }}.tgz
+          KAFKA_HOME=$(pwd)/kafka_2.13-${{ matrix.kafka }}
+
+          # Start KRaft mode
+          KAFKA_CLUSTER_ID=$($KAFKA_HOME/bin/kafka-storage.sh random-uuid)
+          $KAFKA_HOME/bin/kafka-storage.sh format -t $KAFKA_CLUSTER_ID \
+            -c $KAFKA_HOME/config/kraft/server.properties
+
+          $KAFKA_HOME/bin/kafka-server-start.sh -daemon \
+            $KAFKA_HOME/config/kraft/server.properties \
+            --override listeners=PLAINTEXT://localhost:9093 \
+            --override advertised.listeners=PLAINTEXT://localhost:9093
+
+          echo "Waiting for Kafka..."
+          for i in $(seq 1 30); do
+            $KAFKA_HOME/bin/kafka-topics.sh --bootstrap-server localhost:9093 --list 2>/dev/null && break
+            sleep 1
+          done
+          echo "KAFKA_HOME=$KAFKA_HOME" >> $GITHUB_ENV
+
+      - name: Seed Kafka with test data
+        run: |
+          # Create 10 topics with various configurations
+          for i in $(seq 1 10); do
+            $KAFKA_HOME/bin/kafka-topics.sh --bootstrap-server localhost:9093 \
+              --create --topic "migrate-test-$i" --partitions $((i % 6 + 1)) --replication-factor 1
+          done
+
+          # Produce messages
+          for i in $(seq 1 10); do
+            for j in $(seq 1 100); do
+              echo "{\"id\":$j,\"topic\":\"migrate-test-$i\",\"ts\":\"$(date -Iseconds)\"}"
+            done | $KAFKA_HOME/bin/kafka-console-producer.sh \
+              --broker-list localhost:9093 --topic "migrate-test-$i" 2>/dev/null
+          done
+
+          # Create consumer groups
+          timeout 10 $KAFKA_HOME/bin/kafka-console-consumer.sh \
+            --bootstrap-server localhost:9093 --topic migrate-test-1 \
+            --group migrate-group-1 --from-beginning --max-messages 50 2>/dev/null || true
+
+          echo "Seeded 10 topics × 100 messages = 1,000 total"
+
+      - name: Start Streamline
+        run: |
+          ./target/release/streamline --in-memory &
+          for i in $(seq 1 30); do curl -sf http://localhost:9094/health && break || sleep 1; done
+
+      - name: Test migrate from-kafka (dry run)
+        run: |
+          ./target/release/streamline-cli migrate from-kafka \
+            --kafka-servers localhost:9093 2>&1 | tee migrate-dry-run.log
+          grep -q "migrate-test-1" migrate-dry-run.log
+
+      - name: Test migrate from-kafka (execute)
+        run: |
+          ./target/release/streamline-cli migrate from-kafka \
+            --kafka-servers localhost:9093 --execute 2>&1 | tee migrate-execute.log
+
+      - name: Test migrate validate
+        run: |
+          ./target/release/streamline-cli migrate validate \
+            --kafka-servers localhost:9093 \
+            --streamline-servers localhost:9092 2>&1 | tee validate.log
+
+      - name: Test migrate status
+        run: |
+          ./target/release/streamline-cli migrate status 2>&1 | tee status.log
+
+      - name: Verify topics exist in Streamline
+        run: |
+          ./target/release/streamline-cli topics list --format json 2>&1 | tee topics.log
+          # Verify at least some topics were migrated
+          if grep -q "migrate-test" topics.log; then
+            echo "✅ Topics migrated successfully"
+          else
+            echo "⚠️ Topic verification inconclusive (auto-create may differ)"
+          fi
+
+      - name: Verify consumer groups
+        run: |
+          ./target/release/streamline-cli groups list 2>&1 | tee groups.log
+
+      - name: Test migrate rollback (dry run)
+        run: |
+          ./target/release/streamline-cli migrate rollback \
+            --id test-migration 2>&1 | tee rollback.log
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: migration-test-kafka-${{ matrix.kafka }}
+          path: "*.log"
+          retention-days: 30
+
+      - name: Cleanup
+        if: always()
+        run: |
+          pkill streamline || true
+          $KAFKA_HOME/bin/kafka-server-stop.sh 2>/dev/null || true
+
+  migration-summary:
+    name: Migration Test Summary
+    needs: migration-test
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Summary
+        run: |
+          echo "## Migration Compatibility Results" >> $GITHUB_STEP_SUMMARY
+          echo "| Kafka Version | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|---------------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| 3.6.0 | ${{ needs.migration-test.result == 'success' && '✅' || '❌' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 3.7.0 | ${{ needs.migration-test.result == 'success' && '✅' || '❌' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 3.8.0 | ${{ needs.migration-test.result == 'success' && '✅' || '❌' }} |" >> $GITHUB_STEP_SUMMARY

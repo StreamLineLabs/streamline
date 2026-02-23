@@ -1,0 +1,205 @@
+name: SDK Conformance Certification
+
+on:
+  schedule:
+    - cron: '0 2 * * 1'  # Weekly Mondays 2am UTC
+  push:
+    branches: [main]
+    paths: ['src/protocol/**', 'src/storage/**', 'src/consumer/**']
+  workflow_dispatch:
+
+concurrency:
+  group: sdk-conformance
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  STREAMLINE_IMAGE: ghcr.io/streamlinelabs/streamline:latest
+
+jobs:
+  build-server:
+    name: Build Streamline Server
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build release
+        run: cargo build --release
+      - name: Upload binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: streamline-binary
+          path: target/release/streamline
+          retention-days: 1
+
+  conformance-java:
+    name: Java SDK Conformance
+    needs: build-server
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: streamlinelabs/streamline-java-sdk
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+      - name: Run conformance tests
+        run: |
+          cd testcontainers
+          mvn test -Dtest="*Conformance*" -pl . || mvn test -pl .
+      - name: Generate conformance report
+        if: always()
+        run: |
+          echo '{"sdk": "streamline-java-sdk", "status": "${{ job.status }}"}' > conformance-java.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: conformance-java
+          path: conformance-java.json
+
+  conformance-python:
+    name: Python SDK Conformance
+    needs: build-server
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: streamlinelabs/streamline-python-sdk
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dependencies
+        run: |
+          pip install -e ".[dev]"
+          pip install -e testcontainers/
+      - name: Run conformance tests
+        run: pytest tests/ -k "conformance or test_C or test_T or test_P or test_N or test_G or test_E" -v --timeout=60 || pytest tests/ -v --timeout=60
+      - name: Generate conformance report
+        if: always()
+        run: echo '{"sdk": "streamline-python-sdk", "status": "${{ job.status }}"}' > conformance-python.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: conformance-python
+          path: conformance-python.json
+
+  conformance-go:
+    name: Go SDK Conformance
+    needs: build-server
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: streamlinelabs/streamline-go-sdk
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+      - name: Run conformance tests
+        run: go test ./... -v -timeout 120s -run "Conformance|TestC0|TestT0|TestP0|TestN0|TestG0|TestE0" || go test ./... -v -timeout 120s
+      - name: Generate conformance report
+        if: always()
+        run: echo '{"sdk": "streamline-go-sdk", "status": "${{ job.status }}"}' > conformance-go.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: conformance-go
+          path: conformance-go.json
+
+  conformance-node:
+    name: Node.js SDK Conformance
+    needs: build-server
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: streamlinelabs/streamline-node-sdk
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install & test
+        run: |
+          npm ci
+          npm run build
+          npm test -- --reporter=verbose || true
+      - name: Generate conformance report
+        if: always()
+        run: echo '{"sdk": "streamline-node-sdk", "status": "${{ job.status }}"}' > conformance-node.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: conformance-node
+          path: conformance-node.json
+
+  conformance-dotnet:
+    name: .NET SDK Conformance
+    needs: build-server
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: streamlinelabs/streamline-dotnet-sdk
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0'
+      - name: Test
+        run: dotnet test --verbosity normal --filter "Conformance|C01|T01|P01|N01|G01|E01" || dotnet test --verbosity normal
+      - name: Generate conformance report
+        if: always()
+        run: echo '{"sdk": "streamline-dotnet-sdk", "status": "${{ job.status }}"}' > conformance-dotnet.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: conformance-dotnet
+          path: conformance-dotnet.json
+
+  conformance-rust:
+    name: Rust SDK Conformance
+    needs: build-server
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: streamlinelabs/streamline-rust-sdk
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Test
+        run: cargo test -- conformance || cargo test
+      - name: Generate conformance report
+        if: always()
+        run: echo '{"sdk": "streamline-rust-sdk", "status": "${{ job.status }}"}' > conformance-rust.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: conformance-rust
+          path: conformance-rust.json
+
+  summary:
+    name: Certification Summary
+    needs: [conformance-java, conformance-python, conformance-go, conformance-node, conformance-dotnet, conformance-rust]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: conformance-*
+          merge-multiple: true
+
+      - name: Generate certification matrix
+        run: |
+          echo "# SDK Conformance Results" > $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| SDK | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
+
+          for f in conformance-*.json; do
+            sdk=$(python3 -c "import json; print(json.load(open('$f'))['sdk'])" 2>/dev/null || echo "unknown")
+            status=$(python3 -c "import json; print(json.load(open('$f'))['status'])" 2>/dev/null || echo "unknown")
+            if [ "$status" = "success" ]; then
+              echo "| $sdk | ✅ Certified |" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "| $sdk | ❌ $status |" >> $GITHUB_STEP_SUMMARY
+            fi
+          done

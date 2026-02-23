@@ -1,0 +1,115 @@
+name: Nightly Comparative Benchmarks
+
+on:
+  schedule:
+    - cron: '0 3 * * *'  # 3 AM UTC daily
+  workflow_dispatch:
+    inputs:
+      targets:
+        description: 'Targets to benchmark (comma-separated: streamline,kafka,redpanda)'
+        default: 'streamline,kafka,redpanda'
+      duration:
+        description: 'Test duration per scenario in seconds'
+        default: '60'
+
+env:
+  CARGO_TERM_COLOR: always
+  BENCHMARK_RESULTS_DIR: benchmark-results
+
+jobs:
+  comparative-benchmark:
+    name: Comparative Benchmark Suite
+    runs-on: ubuntu-latest-16-core  # Dedicated hardware for consistent results
+    timeout-minutes: 120
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: bench-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Build release binary
+        run: cargo build --release
+
+      - name: Start Streamline
+        run: |
+          ./target/release/streamline --in-memory --log-level warn &
+          sleep 2
+          curl -sf http://localhost:9094/health/live || exit 1
+          echo "Streamline started successfully"
+
+      - name: Start Kafka (if enabled)
+        if: contains(github.event.inputs.targets || 'streamline,kafka,redpanda', 'kafka')
+        run: |
+          docker run -d --name kafka \
+            -p 29092:29092 \
+            -e KAFKA_BROKER_ID=1 \
+            -e KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=PLAINTEXT:PLAINTEXT \
+            -e KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://localhost:29092 \
+            -e KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1 \
+            confluentinc/cp-kafka:7.6.0
+          sleep 30  # Kafka startup is slow
+          echo "Kafka started"
+
+      - name: Start Redpanda (if enabled)
+        if: contains(github.event.inputs.targets || 'streamline,kafka,redpanda', 'redpanda')
+        run: |
+          docker run -d --name redpanda \
+            -p 39092:9092 \
+            docker.redpanda.com/redpandadata/redpanda:v24.1.1 \
+            redpanda start --smp 2 --memory 2G --overprovisioned
+          sleep 10
+          echo "Redpanda started"
+
+      - name: Run benchmark suite
+        run: |
+          mkdir -p $BENCHMARK_RESULTS_DIR
+          ./benches/comparative/run_comparative.sh \
+            --streamline-addr localhost:9092 \
+            --kafka-addr localhost:29092 \
+            --redpanda-addr localhost:39092 \
+            --duration ${{ github.event.inputs.duration || '60' }} \
+            --output-dir $BENCHMARK_RESULTS_DIR
+
+      - name: Generate report
+        run: |
+          python3 benches/comparative/dashboard/generate_dashboard.py \
+            --input $BENCHMARK_RESULTS_DIR/latest.json \
+            --output $BENCHMARK_RESULTS_DIR/report.md
+
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results-${{ github.run_number }}
+          path: ${{ env.BENCHMARK_RESULTS_DIR }}/
+          retention-days: 90
+
+      - name: Comment on latest commit
+        if: github.event_name == 'schedule'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const report = fs.readFileSync('${{ env.BENCHMARK_RESULTS_DIR }}/report.md', 'utf8');
+            const truncated = report.substring(0, 60000); // GitHub comment limit
+            await github.rest.repos.createCommitComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              commit_sha: context.sha,
+              body: `## 📊 Nightly Benchmark Report\n\n${truncated}`
+            });
+
+      - name: Cleanup
+        if: always()
+        run: |
+          docker rm -f kafka redpanda 2>/dev/null || true
+          pkill streamline 2>/dev/null || true

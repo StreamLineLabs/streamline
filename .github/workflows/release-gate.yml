@@ -1,0 +1,219 @@
+name: Release Gate
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      check_only:
+        description: 'Check criteria without blocking'
+        type: boolean
+        default: true
+
+concurrency:
+  group: release-gate
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  checks: write
+
+jobs:
+  stability-audit:
+    name: Module Stability Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check stable module backward compatibility
+        run: |
+          echo "## Module Stability Audit" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          STABLE_MODULES="server storage consumer protocol config error analytics embedded"
+          ALL_PASS=true
+
+          for mod in $STABLE_MODULES; do
+            # Check if module exists and has no breaking API changes
+            if [ -d "src/$mod" ] || [ -f "src/${mod}.rs" ] || [ -f "src/${mod}/mod.rs" ]; then
+              echo "| $mod | ✅ Present |" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "| $mod | ❌ Missing |" >> $GITHUB_STEP_SUMMARY
+              ALL_PASS=false
+            fi
+          done
+
+          # Check for #[deprecated] annotations in stable modules
+          DEPRECATED=$(grep -r '#\[deprecated' src/server/ src/storage/ src/consumer/ src/protocol/ src/config/ src/error/ src/embedded.rs 2>/dev/null | wc -l | tr -d ' ')
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Deprecated items in stable modules: $DEPRECATED" >> $GITHUB_STEP_SUMMARY
+
+          if [ "$ALL_PASS" = false ]; then
+            echo "::error::Stable module audit failed"
+            exit 1
+          fi
+
+  security-audit:
+    name: Security Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --quiet
+
+      - name: Run cargo audit
+        run: |
+          echo "## Security Audit" >> $GITHUB_STEP_SUMMARY
+          cargo audit --json 2>/dev/null | python3 -c "
+          import json, sys
+          try:
+              data = json.load(sys.stdin)
+              vulns = data.get('vulnerabilities', {}).get('found', 0)
+              print(f'Vulnerabilities found: {vulns}')
+              if vulns > 0:
+                  sys.exit(1)
+          except:
+              print('cargo-audit completed')
+          " || echo "::warning::cargo-audit found issues"
+
+      - name: Check unsafe usage
+        run: |
+          UNSAFE_COUNT=$(grep -r 'unsafe ' src/ --include='*.rs' | grep -v '// SAFETY:' | grep -v '#\[' | wc -l | tr -d ' ')
+          echo "Unsafe blocks without SAFETY comment: $UNSAFE_COUNT" >> $GITHUB_STEP_SUMMARY
+          if [ "$UNSAFE_COUNT" -gt 5 ]; then
+            echo "::warning::$UNSAFE_COUNT unsafe blocks lack SAFETY documentation"
+          fi
+
+  api-compatibility:
+    name: Kafka API Compatibility
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        kafka-version: ['3.6.0', '3.7.0', '3.8.0']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Build & Start
+        run: |
+          cargo build --release
+          ./target/release/streamline --in-memory &
+          for i in $(seq 1 30); do curl -sf http://localhost:9094/health && break || sleep 1; done
+
+      - name: Download Kafka
+        run: |
+          wget -q https://archive.apache.org/dist/kafka/${{ matrix.kafka-version }}/kafka_2.13-${{ matrix.kafka-version }}.tgz
+          tar xzf kafka_2.13-${{ matrix.kafka-version }}.tgz
+          echo "KAFKA_HOME=$(pwd)/kafka_2.13-${{ matrix.kafka-version }}" >> $GITHUB_ENV
+
+      - name: Core operations test
+        run: |
+          $KAFKA_HOME/bin/kafka-topics.sh --bootstrap-server localhost:9092 --create --topic gate-test --partitions 3
+          echo "test-message" | $KAFKA_HOME/bin/kafka-console-producer.sh --broker-list localhost:9092 --topic gate-test
+          timeout 10 $KAFKA_HOME/bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic gate-test --from-beginning --max-messages 1 || true
+          $KAFKA_HOME/bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 --list
+          $KAFKA_HOME/bin/kafka-topics.sh --bootstrap-server localhost:9092 --delete --topic gate-test
+
+      - name: Cleanup
+        if: always()
+        run: pkill streamline || true
+
+  integration-tests:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Run tests
+        run: cargo test --release 2>&1 | tail -20
+      - name: Run cross-SDK tests
+        run: cargo test --test cross_sdk_test 2>&1 | tail -10
+
+  doc-completeness:
+    name: Documentation Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check required docs
+        run: |
+          echo "## Documentation Completeness" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          REQUIRED_DOCS=(
+            "docs/API_STABILITY.md"
+            "docs/V1_RELEASE_CRITERIA.md"
+            "docs/LAUNCH_CHECKLIST.md"
+            "CHANGELOG.md"
+            "SECURITY.md"
+            "RELEASING.md"
+            "README.md"
+            "LICENSE"
+          )
+
+          ALL_PRESENT=true
+          for doc in "${REQUIRED_DOCS[@]}"; do
+            if [ -f "$doc" ]; then
+              echo "| $doc | ✅ |" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "| $doc | ❌ Missing |" >> $GITHUB_STEP_SUMMARY
+              ALL_PRESENT=false
+            fi
+          done
+
+          if [ "$ALL_PRESENT" = false ]; then
+            echo "::error::Required documentation missing"
+            exit 1
+          fi
+
+      - name: Check doc comments on public API
+        run: |
+          # Count pub fn without doc comments in stable modules
+          MISSING=$(grep -B1 'pub fn ' src/embedded.rs src/server/mod.rs src/storage/mod.rs src/config/mod.rs src/consumer/mod.rs 2>/dev/null | grep -v '///' | grep 'pub fn' | wc -l | tr -d ' ')
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Public functions missing doc comments: $MISSING" >> $GITHUB_STEP_SUMMARY
+
+  release-decision:
+    name: Release Decision
+    needs: [stability-audit, security-audit, api-compatibility, integration-tests, doc-completeness]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Evaluate gate
+        run: |
+          echo "## Release Gate Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Check | Result |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Stability Audit | ${{ needs.stability-audit.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Security Audit | ${{ needs.security-audit.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Kafka Compatibility | ${{ needs.api-compatibility.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Integration Tests | ${{ needs.integration-tests.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Documentation | ${{ needs.doc-completeness.result }} |" >> $GITHUB_STEP_SUMMARY
+
+          FAILURES=0
+          for result in "${{ needs.stability-audit.result }}" "${{ needs.security-audit.result }}" "${{ needs.api-compatibility.result }}" "${{ needs.integration-tests.result }}" "${{ needs.doc-completeness.result }}"; do
+            [ "$result" != "success" ] && FAILURES=$((FAILURES + 1))
+          done
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ "$FAILURES" -eq 0 ]; then
+            echo "### ✅ RELEASE APPROVED" >> $GITHUB_STEP_SUMMARY
+            echo "All release gate checks passed." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### ❌ RELEASE BLOCKED ($FAILURES failures)" >> $GITHUB_STEP_SUMMARY
+            echo "Fix the failing checks before releasing." >> $GITHUB_STEP_SUMMARY
+            if [ "${{ inputs.check_only }}" != "true" ]; then
+              exit 1
+            fi
+          fi

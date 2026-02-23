@@ -1,0 +1,100 @@
+name: LTS Branch Management
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Action to perform'
+        required: true
+        type: choice
+        options:
+          - create-lts-branch
+          - backport-to-lts
+      version:
+        description: 'LTS version (e.g., 1.0)'
+        required: true
+      commit_sha:
+        description: 'Commit SHA to backport (only for backport action)'
+        required: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  create-lts:
+    name: Create LTS Branch
+    if: inputs.action == 'create-lts-branch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Create LTS branch
+        run: |
+          BRANCH="lts/${{ inputs.version }}"
+          TAG="v${{ inputs.version }}.0"
+
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "Creating LTS branch from tag $TAG"
+            git checkout -b "$BRANCH" "$TAG"
+          else
+            echo "Tag $TAG not found, creating from current HEAD"
+            git checkout -b "$BRANCH"
+          fi
+
+          git push origin "$BRANCH"
+          echo "Created LTS branch: $BRANCH"
+
+      - name: Create tracking issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const version = '${{ inputs.version }}';
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `LTS ${version}: Tracking issue`,
+              body: `## LTS ${version} Branch\n\nBranch: \`lts/${version}\`\nCreated: ${new Date().toISOString()}\nSupport ends: ${new Date(Date.now() + 365*24*60*60*1000).toISOString().split('T')[0]}\n\n### Backported Patches\n\n_None yet_\n\n### Policy\n- Critical security fixes\n- Data loss bugs\n- No new features\n`,
+              labels: ['lts']
+            });
+
+  backport:
+    name: Backport to LTS
+    if: inputs.action == 'backport-to-lts'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Cherry-pick commit
+        run: |
+          BRANCH="lts/${{ inputs.version }}"
+          SHA="${{ inputs.commit_sha }}"
+
+          git fetch origin "$BRANCH"
+          git checkout "$BRANCH"
+
+          echo "Cherry-picking $SHA onto $BRANCH"
+          git cherry-pick "$SHA" --no-edit || {
+            echo "::error::Cherry-pick failed. Manual resolution needed."
+            exit 1
+          }
+
+          git push origin "$BRANCH"
+          echo "Successfully backported $SHA to $BRANCH"
+
+      - name: Create backport PR
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `[LTS ${{ inputs.version }}] Manual backport needed: ${{ inputs.commit_sha }}`,
+              body: `Cherry-pick of \`${{ inputs.commit_sha }}\` to \`lts/${{ inputs.version }}\` failed.\n\nPlease resolve conflicts manually:\n\`\`\`bash\ngit fetch origin lts/${{ inputs.version }}\ngit checkout lts/${{ inputs.version }}\ngit cherry-pick ${{ inputs.commit_sha }}\n# resolve conflicts\ngit push origin lts/${{ inputs.version }}\n\`\`\``,
+              labels: ['lts', 'needs-manual-backport']
+            });
