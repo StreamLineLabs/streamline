@@ -116,7 +116,7 @@ aes-gcm = { version = "0.10", optional = true }
 hex = "0.4"
 
 # Schema Registry (optional - schema-registry feature)
-apache-avro = { version = "0.17", optional = true }
+apache-avro = { version = "0.21", optional = true }
 prost = { version = "0.13", optional = true }
 prost-types = { version = "0.13", optional = true }
 jsonschema = { version = "0.26", optional = true }
