@@ -6,12 +6,17 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"os"
 
 	"github.com/twmb/franz-go/pkg/kgo"
 )
 
 func main() {
-	client, err := kgo.NewClient(kgo.SeedBrokers("localhost:9092"))
+	brokers := os.Getenv("KAFKA_BOOTSTRAP_SERVERS")
+	if brokers == "" {
+		brokers = "localhost:9092"
+	}
+	client, err := kgo.NewClient(kgo.SeedBrokers(brokers))
 	if err != nil {
 		log.Fatal(err)
 	}

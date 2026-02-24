@@ -20,7 +20,7 @@ spec:
     spec:
       containers:
         - name: streamline
-          image: streamlinelabs/streamline:latest
+          image: ghcr.io/streamlinelabs/streamline:0.2.0
           ports:
             - containerPort: 9092
               name: kafka

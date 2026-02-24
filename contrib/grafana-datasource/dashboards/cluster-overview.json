@@ -1,0 +1,114 @@
+{
+  "__inputs": [
+    {
+      "name": "DS_STREAMLINE",
+      "label": "Streamline",
+      "description": "Streamline StreamQL datasource",
+      "type": "datasource",
+      "pluginId": "streamlinelabs-streamql-datasource"
+    }
+  ],
+  "title": "Streamline Cluster Overview",
+  "uid": "streamline-cluster-overview",
+  "version": 1,
+  "description": "Real-time overview of Streamline cluster health, throughput, and consumer lag",
+  "tags": ["streamline", "streaming", "kafka"],
+  "panels": [
+    {
+      "title": "Messages In/Out (per second)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "datasource": { "uid": "${DS_STREAMLINE}" },
+      "targets": [
+        {
+          "queryText": "SELECT $__timeGroup(timestamp, $__interval) as time, SUM(messages_in) as messages_in, SUM(messages_out) as messages_out FROM streamline_metrics WHERE timestamp BETWEEN $__timeFrom AND $__timeTo GROUP BY time ORDER BY time",
+          "format": "time_series"
+        }
+      ]
+    },
+    {
+      "title": "Bytes In/Out (per second)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "datasource": { "uid": "${DS_STREAMLINE}" },
+      "targets": [
+        {
+          "queryText": "SELECT $__timeGroup(timestamp, $__interval) as time, SUM(bytes_in) as bytes_in, SUM(bytes_out) as bytes_out FROM streamline_metrics WHERE timestamp BETWEEN $__timeFrom AND $__timeTo GROUP BY time ORDER BY time",
+          "format": "time_series"
+        }
+      ]
+    },
+    {
+      "title": "Consumer Group Lag",
+      "type": "bargauge",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "datasource": { "uid": "${DS_STREAMLINE}" },
+      "targets": [
+        {
+          "queryText": "SELECT group_id, SUM(lag) as total_lag FROM consumer_group_offsets GROUP BY group_id ORDER BY total_lag DESC LIMIT 20",
+          "format": "table"
+        }
+      ]
+    },
+    {
+      "title": "Topic Throughput (Top 10)",
+      "type": "barchart",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "datasource": { "uid": "${DS_STREAMLINE}" },
+      "targets": [
+        {
+          "queryText": "SELECT topic, COUNT(*) as message_count FROM messages WHERE timestamp > NOW() - INTERVAL '5 minutes' GROUP BY topic ORDER BY message_count DESC LIMIT 10",
+          "format": "table"
+        }
+      ]
+    },
+    {
+      "title": "Produce Latency (p50/p99)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "datasource": { "uid": "${DS_STREAMLINE}" },
+      "targets": [
+        {
+          "queryText": "SELECT $__timeGroup(timestamp, $__interval) as time, PERCENTILE_CONT(0.50) WITHIN GROUP (ORDER BY latency_ms) as p50, PERCENTILE_CONT(0.99) WITHIN GROUP (ORDER BY latency_ms) as p99 FROM produce_latency WHERE timestamp BETWEEN $__timeFrom AND $__timeTo GROUP BY time ORDER BY time",
+          "format": "time_series"
+        }
+      ]
+    },
+    {
+      "title": "Active Connections",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 16 },
+      "datasource": { "uid": "${DS_STREAMLINE}" },
+      "targets": [
+        {
+          "queryText": "SELECT COUNT(*) as connections FROM active_connections",
+          "format": "table"
+        }
+      ]
+    },
+    {
+      "title": "Topic Count",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 16 },
+      "datasource": { "uid": "${DS_STREAMLINE}" },
+      "targets": [
+        {
+          "queryText": "SELECT COUNT(DISTINCT topic) as topics FROM topic_metadata",
+          "format": "table"
+        }
+      ]
+    },
+    {
+      "title": "Anomaly Alerts",
+      "type": "table",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 24 },
+      "datasource": { "uid": "${DS_STREAMLINE}" },
+      "targets": [
+        {
+          "queryText": "SELECT timestamp, anomaly_type, severity, resource, description FROM anomaly_events ORDER BY timestamp DESC LIMIT 50",
+          "format": "table"
+        }
+      ]
+    }
+  ]
+}

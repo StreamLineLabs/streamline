@@ -1,0 +1,25 @@
+{
+  "name": "streamlinelabs-streamql-datasource",
+  "version": "0.2.0",
+  "description": "Grafana datasource plugin for Streamline StreamQL",
+  "scripts": {
+    "dev": "webpack -w -c ./.config/webpack/webpack.config.ts --env development",
+    "build": "webpack -c ./.config/webpack/webpack.config.ts --env production",
+    "test": "jest --passWithNoTests",
+    "lint": "eslint --cache --ext .js,.jsx,.ts,.tsx src/",
+    "typecheck": "tsc --noEmit"
+  },
+  "author": "StreamlineLabs",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/streamlinelabs/streamline"
+  },
+  "devDependencies": {
+    "@grafana/data": "^10.0.0",
+    "@grafana/runtime": "^10.0.0",
+    "@grafana/ui": "^10.0.0",
+    "react": "^18.0.0",
+    "typescript": "^5.0.0"
+  }
+}

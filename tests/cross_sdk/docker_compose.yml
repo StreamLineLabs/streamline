@@ -13,7 +13,7 @@
 services:
   # Streamline server
   streamline:
-    image: streamlinelabs/streamline:latest
+    image: ghcr.io/streamlinelabs/streamline:0.2.0
     build:
       context: ../../
       dockerfile: ../streamline-deploy/Dockerfile

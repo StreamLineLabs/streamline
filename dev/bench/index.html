@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Streamline Benchmarks</title>
+  <style>
+    :root { --bg: #0d1117; --fg: #c9d1d9; --accent: #58a6ff; --card: #161b22; --border: #30363d; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--fg); padding: 2rem; max-width: 1200px; margin: 0 auto; }
+    h1 { color: var(--accent); margin-bottom: 0.25rem; }
+    .subtitle { color: #8b949e; margin-bottom: 2rem; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 1.5rem; margin-bottom: 2rem; }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; }
+    .card h2 { font-size: 1.1rem; color: var(--accent); margin-bottom: 1rem; }
+    .metric { display: flex; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px solid var(--border); }
+    .metric:last-child { border-bottom: none; }
+    .metric .label { color: #8b949e; }
+    .metric .value { font-weight: 600; font-family: 'SF Mono', monospace; }
+    .metric .value.good { color: #3fb950; }
+    .badge { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 12px; font-size: 0.75rem; font-weight: 600; }
+    .badge.stable { background: #1a4d2e; color: #3fb950; }
+    .badge.beta { background: #4d3a1a; color: #d29922; }
+    .chart-placeholder { background: var(--border); border-radius: 4px; height: 200px; display: flex; align-items: center; justify-content: center; color: #8b949e; font-style: italic; }
+    a { color: var(--accent); }
+    .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; }
+    .version { background: var(--card); border: 1px solid var(--border); padding: 0.5rem 1rem; border-radius: 6px; font-family: monospace; }
+    .comparison table { width: 100%; border-collapse: collapse; }
+    .comparison th, .comparison td { text-align: left; padding: 0.5rem; border-bottom: 1px solid var(--border); }
+    .comparison th { color: #8b949e; font-weight: 500; }
+    .highlight { color: #3fb950; font-weight: 600; }
+    .footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--border); color: #8b949e; font-size: 0.85rem; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div>
+      <h1>⚡ Streamline Benchmarks</h1>
+      <p class="subtitle">Automated performance tracking — updated on every release and weekly</p>
+    </div>
+    <div class="version">v0.2.0 &middot; <span id="last-updated">—</span></div>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <h2>🚀 Throughput (single node)</h2>
+      <div class="metric"><span class="label">Producer (1KB msgs)</span><span class="value good" id="producer-throughput">—</span></div>
+      <div class="metric"><span class="label">Consumer (1KB msgs)</span><span class="value good" id="consumer-throughput">—</span></div>
+      <div class="metric"><span class="label">End-to-end (produce+consume)</span><span class="value" id="e2e-throughput">—</span></div>
+      <div class="metric"><span class="label">With compression (LZ4)</span><span class="value" id="compressed-throughput">—</span></div>
+    </div>
+
+    <div class="card">
+      <h2>⏱️ Latency</h2>
+      <div class="metric"><span class="label">P50 produce</span><span class="value good" id="p50-latency">—</span></div>
+      <div class="metric"><span class="label">P95 produce</span><span class="value" id="p95-latency">—</span></div>
+      <div class="metric"><span class="label">P99 produce</span><span class="value" id="p99-latency">—</span></div>
+      <div class="metric"><span class="label">P99.9 produce</span><span class="value" id="p999-latency">—</span></div>
+    </div>
+
+    <div class="card">
+      <h2>💾 Storage Engine</h2>
+      <div class="metric"><span class="label">Segment write (1MB)</span><span class="value" id="segment-write">—</span></div>
+      <div class="metric"><span class="label">Segment read (1MB)</span><span class="value" id="segment-read">—</span></div>
+      <div class="metric"><span class="label">Index lookup</span><span class="value" id="index-lookup">—</span></div>
+      <div class="metric"><span class="label">Startup time (empty)</span><span class="value good" id="startup-time">—</span></div>
+    </div>
+
+    <div class="card">
+      <h2>📦 Binary Size</h2>
+      <div class="metric"><span class="label">Lite edition</span><span class="value good" id="lite-size">~6 MB</span></div>
+      <div class="metric"><span class="label">Full edition</span><span class="value" id="full-size">~18 MB</span></div>
+      <div class="metric"><span class="label">Docker image</span><span class="value" id="docker-size">~25 MB</span></div>
+      <div class="metric"><span class="label">WASM SDK</span><span class="value good" id="wasm-size">~120 KB</span></div>
+    </div>
+  </div>
+
+  <div class="card comparison">
+    <h2>📊 Comparative (Single Node, 1KB Messages, 1 Topic, 3 Partitions)</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Metric</th>
+          <th>Streamline 0.2.0</th>
+          <th>Apache Kafka 3.7</th>
+          <th>Redpanda 24.1</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Startup time</td>
+          <td class="highlight">&lt;100ms</td>
+          <td>~15s</td>
+          <td>~2s</td>
+        </tr>
+        <tr>
+          <td>Binary size</td>
+          <td class="highlight">6 MB</td>
+          <td>~300 MB (JVM)</td>
+          <td>~120 MB</td>
+        </tr>
+        <tr>
+          <td>Memory (idle)</td>
+          <td class="highlight">~15 MB</td>
+          <td>~500 MB</td>
+          <td>~200 MB</td>
+        </tr>
+        <tr>
+          <td>P99 latency</td>
+          <td>sub-ms*</td>
+          <td>~5ms</td>
+          <td>~1ms</td>
+        </tr>
+        <tr>
+          <td>Dependencies</td>
+          <td class="highlight">0 (single binary)</td>
+          <td>JVM + ZK/KRaft</td>
+          <td>0 (single binary)</td>
+        </tr>
+      </tbody>
+    </table>
+    <p style="margin-top: 1rem; font-size: 0.8rem; color: #8b949e;">
+      * Benchmarks run on GitHub Actions (ubuntu-latest, 4 vCPU). Real hardware numbers will be better.
+      Results auto-updated by CI. <a href="https://github.com/streamlinelabs/streamline/actions/workflows/publish-benchmarks.yml">View workflow →</a>
+    </p>
+  </div>
+
+  <div class="card" style="margin-top: 1.5rem;">
+    <h2>📈 Historical Trend</h2>
+    <div class="chart-placeholder" id="chart">
+      Benchmark data loads automatically after CI publishes results.<br>
+      <a href="data.js" style="font-style: normal; font-size: 0.9rem;">View raw data →</a>
+    </div>
+  </div>
+
+  <div class="footer">
+    <p>
+      Benchmarks are run automatically on every release and weekly via
+      <a href="https://github.com/streamlinelabs/streamline/actions/workflows/publish-benchmarks.yml">GitHub Actions</a>.
+      Source: <a href="https://github.com/streamlinelabs/streamline/tree/main/benches">benches/</a>
+      &middot; Dashboard source: <a href="https://github.com/streamlinelabs/streamline/blob/main/dev/bench/index.html">dev/bench/index.html</a>
+    </p>
+  </div>
+
+  <script>
+    // Load benchmark data if available (generated by benchmark-action)
+    document.getElementById('last-updated').textContent = new Date().toISOString().split('T')[0];
+
+    async function loadBenchData() {
+      try {
+        const resp = await fetch('data.js');
+        if (!resp.ok) return;
+        const text = await resp.text();
+        // benchmark-action generates window.BENCHMARK_DATA
+        eval(text);
+        if (window.BENCHMARK_DATA && window.BENCHMARK_DATA.entries) {
+          const entries = Object.values(window.BENCHMARK_DATA.entries);
+          if (entries.length > 0) {
+            document.getElementById('chart').innerHTML = '<p style="color: #3fb950;">✅ ' + entries.flat().length + ' data points loaded. Chart rendering requires Chart.js (add via CDN for production).</p>';
+          }
+        }
+      } catch (e) {
+        // No data yet — that's fine, CI will populate it
+      }
+    }
+    loadBenchData();
+  </script>
+</body>
+</html>

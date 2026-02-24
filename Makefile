@@ -109,6 +109,9 @@ fmt-check:
 clippy:
 	cargo clippy --all-targets --all-features -- -D warnings
 
+## Run all linters (fmt check + clippy)
+lint: fmt-check clippy
+
 ## Verify version consistency (Cargo.toml, CHANGELOG.md, DOCS.md)
 version-check:
 	./scripts/check-version-sync.sh

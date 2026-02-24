@@ -39,7 +39,7 @@ services:
   # Streamline - The Redis of Streaming
   # ============================================================
   streamline:
-    image: josedab/streamline:latest
+    image: ghcr.io/streamlinelabs/streamline:0.2.0
     build:
       context: ../..
       dockerfile: Dockerfile

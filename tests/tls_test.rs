@@ -88,6 +88,9 @@ fn default_test_args(data_dir: PathBuf) -> ServerArgs {
         simple_addr: "0.0.0.0:9095".to_string(),
         // Playground mode
         playground: false,
+            ephemeral: None,
+            ephemeral_idle_timeout_secs: None,
+            ephemeral_auto_topics: None,
         // Encryption at rest
         encryption_enabled: false,
         encryption_key_file: None,

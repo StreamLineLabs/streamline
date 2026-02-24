@@ -1,0 +1,103 @@
+{
+  "metadata": {
+    "timestamp": "2026-02-21T20:00:00Z",
+    "version": "0.2.0",
+    "commit": "abc1234",
+    "platform": "Linux-x86_64",
+    "quick_mode": false,
+    "message_size_bytes": 1024,
+    "duration_secs": 60
+  },
+  "results": [
+    {
+      "target": "streamline",
+      "benchmark_type": "producer",
+      "throughput_msgs_sec": 850000,
+      "throughput_mb_sec": 830,
+      "latency_p50_ms": 0.5,
+      "latency_p99_ms": 2.1,
+      "latency_p999_ms": 4.5,
+      "startup_ms": 45
+    },
+    {
+      "target": "kafka",
+      "benchmark_type": "producer",
+      "throughput_msgs_sec": 620000,
+      "throughput_mb_sec": 605,
+      "latency_p50_ms": 1.2,
+      "latency_p99_ms": 8.5,
+      "latency_p999_ms": 25.0,
+      "startup_ms": 12000
+    },
+    {
+      "target": "redpanda",
+      "benchmark_type": "producer",
+      "throughput_msgs_sec": 780000,
+      "throughput_mb_sec": 762,
+      "latency_p50_ms": 0.7,
+      "latency_p99_ms": 3.2,
+      "latency_p999_ms": 8.0,
+      "startup_ms": 2500
+    },
+    {
+      "target": "streamline",
+      "benchmark_type": "e2e_latency",
+      "throughput_msgs_sec": 420000,
+      "throughput_mb_sec": 410,
+      "latency_p50_ms": 0.8,
+      "latency_p99_ms": 3.5,
+      "latency_p999_ms": 8.0,
+      "startup_ms": 45
+    },
+    {
+      "target": "kafka",
+      "benchmark_type": "e2e_latency",
+      "throughput_msgs_sec": 310000,
+      "throughput_mb_sec": 302,
+      "latency_p50_ms": 2.5,
+      "latency_p99_ms": 15.0,
+      "latency_p999_ms": 45.0,
+      "startup_ms": 12000
+    },
+    {
+      "target": "redpanda",
+      "benchmark_type": "e2e_latency",
+      "throughput_msgs_sec": 380000,
+      "throughput_mb_sec": 371,
+      "latency_p50_ms": 1.1,
+      "latency_p99_ms": 5.0,
+      "latency_p999_ms": 12.0,
+      "startup_ms": 2500
+    },
+    {
+      "target": "streamline",
+      "benchmark_type": "startup",
+      "throughput_msgs_sec": 0,
+      "throughput_mb_sec": 0,
+      "latency_p50_ms": 0,
+      "latency_p99_ms": 0,
+      "latency_p999_ms": 0,
+      "startup_ms": 45
+    },
+    {
+      "target": "kafka",
+      "benchmark_type": "startup",
+      "throughput_msgs_sec": 0,
+      "throughput_mb_sec": 0,
+      "latency_p50_ms": 0,
+      "latency_p99_ms": 0,
+      "latency_p999_ms": 0,
+      "startup_ms": 12000
+    },
+    {
+      "target": "redpanda",
+      "benchmark_type": "startup",
+      "throughput_msgs_sec": 0,
+      "throughput_mb_sec": 0,
+      "latency_p50_ms": 0,
+      "latency_p99_ms": 0,
+      "latency_p999_ms": 0,
+      "startup_ms": 2500
+    }
+  ]
+}

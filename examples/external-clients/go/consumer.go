@@ -5,14 +5,19 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
 	"time"
 
 	"github.com/twmb/franz-go/pkg/kgo"
 )
 
 func main() {
+	brokers := os.Getenv("KAFKA_BOOTSTRAP_SERVERS")
+	if brokers == "" {
+		brokers = "localhost:9092"
+	}
 	client, err := kgo.NewClient(
-		kgo.SeedBrokers("localhost:9092"),
+		kgo.SeedBrokers(brokers),
 		kgo.ConsumeTopics("demo"),
 		kgo.ConsumeResetOffset(kgo.NewOffset().AtStart()),
 	)

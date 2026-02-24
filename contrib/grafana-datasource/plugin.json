@@ -1,0 +1,34 @@
+{
+  "type": "datasource",
+  "name": "Streamline StreamQL",
+  "id": "streamlinelabs-streamql-datasource",
+  "info": {
+    "description": "Execute StreamQL queries against Streamline servers. Supports streaming results, time-series data, and table format.",
+    "author": {
+      "name": "StreamlineLabs",
+      "url": "https://streamlinelabs.dev"
+    },
+    "logos": {
+      "small": "img/logo.svg",
+      "large": "img/logo.svg"
+    },
+    "links": [
+      { "name": "GitHub", "url": "https://github.com/streamlinelabs/streamline" },
+      { "name": "Docs", "url": "https://streamlinelabs.dev/docs/operations/grafana" },
+      { "name": "StreamQL Reference", "url": "https://streamlinelabs.dev/docs/api/streamql" }
+    ],
+    "keywords": ["streamline", "streaming", "kafka", "streamql", "sql"],
+    "version": "0.2.0"
+  },
+  "dependencies": {
+    "grafanaDependency": ">=10.0.0",
+    "plugins": []
+  },
+  "backend": true,
+  "executable": "gpx_streamql_datasource",
+  "alerting": true,
+  "annotations": true,
+  "metrics": true,
+  "logs": false,
+  "streaming": true
+}
