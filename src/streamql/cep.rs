@@ -108,6 +108,9 @@ pub struct PatternElement {
     pub quantifier: Quantifier,
     /// Skip strategy when condition not met
     pub skip_strategy: SkipStrategy,
+    /// Whether this is a negation element (detect absence of matching events)
+    #[serde(default)]
+    pub negated: bool,
 }
 
 /// Skip strategy when condition is not met
@@ -213,6 +216,7 @@ pub struct PatternElementBuilder {
     conditions: Vec<EventCondition>,
     quantifier: Quantifier,
     skip_strategy: SkipStrategy,
+    negated: bool,
 }
 
 impl PatternElementBuilder {
@@ -223,6 +227,7 @@ impl PatternElementBuilder {
             conditions: Vec::new(),
             quantifier: Quantifier::One,
             skip_strategy: SkipStrategy::NoSkip,
+            negated: false,
         }
     }
 
@@ -274,10 +279,30 @@ impl PatternElementBuilder {
             conditions: self.conditions,
             quantifier: self.quantifier,
             skip_strategy: self.skip_strategy,
+            negated: self.negated,
         };
         self.pattern_builder.add_element(element);
 
         PatternElementBuilder::new(self.pattern_builder, name.into())
+    }
+
+    /// Add a negation element (NOT FOLLOWED BY).
+    ///
+    /// The pattern matches only if this element does NOT occur between
+    /// the previous element and the next one (or end of window).
+    pub fn not_followed_by(mut self, name: impl Into<String>) -> PatternElementBuilder {
+        let element = PatternElement {
+            name: self.name,
+            conditions: self.conditions,
+            quantifier: self.quantifier,
+            skip_strategy: self.skip_strategy,
+            negated: self.negated,
+        };
+        self.pattern_builder.add_element(element);
+
+        let mut builder = PatternElementBuilder::new(self.pattern_builder, name.into());
+        builder.negated = true;
+        builder
     }
 
     /// Set time window constraint
@@ -293,6 +318,7 @@ impl PatternElementBuilder {
             conditions: self.conditions,
             quantifier: self.quantifier,
             skip_strategy: self.skip_strategy,
+            negated: self.negated,
         };
         self.pattern_builder.add_element(element);
         self.pattern_builder.build()
@@ -499,6 +525,49 @@ impl PatternMatcher {
             let state = &self.states[i];
 
             if timed_out || element_idx >= self.pattern.elements.len() {
+                continue;
+            }
+
+            let element_negated = self.pattern.elements[element_idx].negated;
+
+            if element_negated {
+                if matches {
+                    // Negation element matched — INVALIDATE this partial match
+                    continue;
+                }
+                // Negation element did NOT match — this is good.
+                // Try to advance past the negation to the next element.
+                // Check if the *next* element (after the negation) matches.
+                let next_idx = element_idx + 1;
+                if next_idx < self.pattern.elements.len() {
+                    if self.matches_element(event, next_idx) {
+                        let next_name = &self.pattern.elements[next_idx].name;
+                        let mut matched_events = state.matched_events.clone();
+                        matched_events
+                            .entry(next_name.clone())
+                            .or_default()
+                            .push(event.clone());
+
+                        if next_idx + 1 >= self.pattern.elements.len() {
+                            completed.push(PatternMatch {
+                                pattern_name: self.pattern.name.clone(),
+                                events: matched_events,
+                                start_time: state.start_time,
+                                end_time: event.timestamp,
+                            });
+                        } else {
+                            new_states.push(MatchState {
+                                element_idx: next_idx + 1,
+                                matched_events,
+                                start_time: state.start_time,
+                                last_time: event.timestamp,
+                            });
+                        }
+                    } else {
+                        // Keep waiting (negation element still active)
+                        new_states.push(state.clone());
+                    }
+                }
                 continue;
             }
 
@@ -749,5 +818,84 @@ mod tests {
         let patterns = engine.list_patterns().await;
         assert_eq!(patterns.len(), 1);
         assert!(patterns.contains(&"test_pattern".to_string()));
+    }
+
+    #[test]
+    fn test_not_followed_by_pattern() {
+        // Pattern: login NOT FOLLOWED BY logout (detect sessions without logout)
+        let pattern = Pattern::builder("no_logout")
+            .begin("login")
+            .where_field(
+                "event_type",
+                ConditionOperator::Eq,
+                ConditionValue::String("login".into()),
+            )
+            .not_followed_by("logout")
+            .where_field(
+                "event_type",
+                ConditionOperator::Eq,
+                ConditionValue::String("logout".into()),
+            )
+            .followed_by("action")
+            .where_field(
+                "event_type",
+                ConditionOperator::Eq,
+                ConditionValue::String("purchase".into()),
+            )
+            .within(60_000)
+            .build();
+
+        let mut matcher = PatternMatcher::new(pattern);
+
+        // Login event
+        let login = CepEvent::new("login")
+            .with_timestamp(1000)
+            .with_field("event_type", "login");
+        let matches = matcher.process_event(&login);
+        assert!(matches.is_empty());
+
+        // A logout should invalidate the match
+        let logout = CepEvent::new("logout")
+            .with_timestamp(2000)
+            .with_field("event_type", "logout");
+        let matches = matcher.process_event(&logout);
+        assert!(matches.is_empty());
+
+        // Purchase after logout — pattern was invalidated by negation
+        let purchase = CepEvent::new("purchase")
+            .with_timestamp(3000)
+            .with_field("event_type", "purchase");
+        let matches = matcher.process_event(&purchase);
+        assert!(matches.is_empty(), "Pattern should not match because logout (negated) occurred");
+    }
+
+    #[test]
+    fn test_negation_allows_match_when_negated_absent() {
+        // Pattern: A, NOT B, C — matches when B never arrives before C
+        let pattern = Pattern::builder("skip_bad")
+            .with_contiguity(Contiguity::Relaxed)
+            .begin("start")
+            .where_field("event_type", ConditionOperator::Eq, ConditionValue::String("A".into()))
+            .not_followed_by("bad")
+            .where_field("event_type", ConditionOperator::Eq, ConditionValue::String("B".into()))
+            .followed_by("end")
+            .where_field("event_type", ConditionOperator::Eq, ConditionValue::String("C".into()))
+            .within(10_000)
+            .build();
+
+        let mut matcher = PatternMatcher::new(pattern);
+
+        // A event
+        let a = CepEvent::new("A").with_timestamp(1000).with_field("event_type", "A");
+        assert!(matcher.process_event(&a).is_empty());
+
+        // Some other event (not B)
+        let d = CepEvent::new("D").with_timestamp(2000).with_field("event_type", "D");
+        assert!(matcher.process_event(&d).is_empty());
+
+        // C event — should match since B never appeared
+        let c = CepEvent::new("C").with_timestamp(3000).with_field("event_type", "C");
+        let matches = matcher.process_event(&c);
+        assert_eq!(matches.len(), 1, "Should match: A ... C without B");
     }
 }

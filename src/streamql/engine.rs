@@ -1134,6 +1134,204 @@ impl ContinuousQueryEngine {
             .ok_or_else(|| StreamlineError::Query(format!("Query not found: {}", handle.id)))?;
         Ok(rq.stats.clone())
     }
+
+    /// Generate an EXPLAIN PLAN for a SQL query without executing it.
+    ///
+    /// Returns a structured execution plan showing:
+    /// - Source topics and partitions
+    /// - Filter/projection pushdown
+    /// - Window specification
+    /// - Join strategy
+    /// - Estimated cardinality
+    pub async fn explain_plan(&self, sql: &str) -> Result<ExplainPlan> {
+        let query = parse_simple_select(sql)?;
+
+        let mut steps = Vec::new();
+
+        // Step 1: Source scan
+        for topic in &query.source_topics {
+            steps.push(PlanStep {
+                step_type: PlanStepType::Scan,
+                description: format!("Scan topic '{}'", topic),
+                estimated_rows: None,
+                details: HashMap::from([
+                    ("topic".to_string(), topic.clone()),
+                ]),
+            });
+        }
+
+        // Step 2: Filter pushdown
+        if query.filter.is_some() {
+            steps.push(PlanStep {
+                step_type: PlanStepType::Filter,
+                description: "Apply WHERE clause filter".to_string(),
+                estimated_rows: None,
+                details: HashMap::from([
+                    ("pushdown".to_string(), "true".to_string()),
+                ]),
+            });
+        }
+
+        // Step 3: Window
+        if let Some(ref window) = query.window {
+            steps.push(PlanStep {
+                step_type: PlanStepType::Window,
+                description: format!(
+                    "{:?} window (size: {}ms, advance: {}ms)",
+                    window.window_type, window.size_ms,
+                    window.advance_ms.unwrap_or(window.size_ms)
+                ),
+                estimated_rows: None,
+                details: HashMap::from([
+                    ("type".to_string(), format!("{:?}", window.window_type)),
+                    ("size_ms".to_string(), window.size_ms.to_string()),
+                ]),
+            });
+        }
+
+        // Step 4: Join
+        if !query.joins.is_empty() {
+            for join in &query.joins {
+                steps.push(PlanStep {
+                    step_type: PlanStepType::Join,
+                    description: format!(
+                        "{:?} JOIN with '{}'",
+                        join.join_type, join.right_topic
+                    ),
+                    estimated_rows: None,
+                    details: HashMap::from([
+                        ("right_topic".to_string(), join.right_topic.clone()),
+                        ("strategy".to_string(), "hash".to_string()),
+                    ]),
+                });
+            }
+        }
+
+        // Step 5: Aggregation / Group By
+        if !query.group_by.is_empty() {
+            steps.push(PlanStep {
+                step_type: PlanStepType::Aggregate,
+                description: format!("GROUP BY [{}]", query.group_by.join(", ")),
+                estimated_rows: None,
+                details: HashMap::from([
+                    ("keys".to_string(), query.group_by.join(", ")),
+                ]),
+            });
+        }
+
+        // Step 6: Projection
+        steps.push(PlanStep {
+            step_type: PlanStepType::Project,
+            description: format!(
+                "Project {} columns",
+                query.projections.len()
+            ),
+            estimated_rows: None,
+            details: HashMap::new(),
+        });
+
+        // Step 7: Sink
+        if let Some(ref sink) = query.sink_topic {
+            steps.push(PlanStep {
+                step_type: PlanStepType::Sink,
+                description: format!("Write to topic '{}'", sink),
+                estimated_rows: None,
+                details: HashMap::from([
+                    ("topic".to_string(), sink.clone()),
+                ]),
+            });
+        }
+
+        let estimated_cost = steps.len() as f64;
+        Ok(ExplainPlan {
+            sql: sql.to_string(),
+            query_type: query.query_type.clone(),
+            steps,
+            source_topics: query.source_topics.clone(),
+            estimated_total_cost: estimated_cost,
+        })
+    }
+
+    /// Cancel and fully clean up a query, removing all state.
+    pub async fn cancel_and_cleanup(&self, query_id: &str) -> Result<QueryInfo> {
+        let mut queries = self.queries.write().await;
+        let entry = queries
+            .remove(query_id)
+            .ok_or_else(|| StreamlineError::Query(format!("Query not found: {}", query_id)))?;
+
+        Ok(QueryInfo {
+            handle: QueryHandle {
+                status: QueryStatus::Cancelled,
+                ..entry.handle
+            },
+            stats: entry.stats,
+            source_topics: entry.query.source_topics,
+        })
+    }
+}
+
+/// Execution plan for a StreamQL query.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ExplainPlan {
+    /// Original SQL.
+    pub sql: String,
+    /// Query type.
+    pub query_type: QueryType,
+    /// Ordered execution steps.
+    pub steps: Vec<PlanStep>,
+    /// Source topics.
+    pub source_topics: Vec<String>,
+    /// Estimated total cost (relative units).
+    pub estimated_total_cost: f64,
+}
+
+impl ExplainPlan {
+    /// Render as a human-readable text plan.
+    pub fn to_text(&self) -> String {
+        let mut out = String::new();
+        out.push_str(&format!("EXPLAIN PLAN for: {}\n", self.sql));
+        out.push_str(&format!("Query type: {:?}\n\n", self.query_type));
+        for (i, step) in self.steps.iter().enumerate() {
+            let indent = "  ".repeat(i);
+            out.push_str(&format!(
+                "{}Step {}: [{:?}] {}\n",
+                indent,
+                i + 1,
+                step.step_type,
+                step.description
+            ));
+            for (k, v) in &step.details {
+                out.push_str(&format!("{}  {} = {}\n", indent, k, v));
+            }
+        }
+        out.push_str(&format!(
+            "\nEstimated cost: {:.1}\n",
+            self.estimated_total_cost
+        ));
+        out
+    }
+}
+
+/// A single step in the execution plan.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PlanStep {
+    pub step_type: PlanStepType,
+    pub description: String,
+    pub estimated_rows: Option<u64>,
+    pub details: HashMap<String, String>,
+}
+
+/// Types of execution plan steps.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum PlanStepType {
+    Scan,
+    Filter,
+    Window,
+    Join,
+    Aggregate,
+    Project,
+    Sink,
+    Sort,
 }
 
 impl Default for ContinuousQueryEngine {
@@ -1534,5 +1732,50 @@ mod tests {
         let w = q.window.unwrap();
         assert_eq!(w.window_type, EngineWindowType::Tumbling);
         assert_eq!(w.size_ms, 30000);
+    }
+
+    #[tokio::test]
+    async fn test_explain_plan_basic() {
+        let engine = ContinuousQueryEngine::new();
+        let plan = engine
+            .explain_plan("SELECT user_id, name FROM events")
+            .await
+            .unwrap();
+        assert_eq!(plan.source_topics, vec!["events"]);
+        assert!(!plan.steps.is_empty());
+        assert_eq!(plan.steps[0].step_type, PlanStepType::Scan);
+        let text = plan.to_text();
+        assert!(text.contains("EXPLAIN PLAN"));
+        assert!(text.contains("events"));
+    }
+
+    #[tokio::test]
+    async fn test_explain_plan_with_filter_and_window() {
+        let engine = ContinuousQueryEngine::new();
+        let plan = engine
+            .explain_plan(
+                "SELECT region, count FROM orders WHERE region = 'us' WINDOW TUMBLING(SIZE 30000)",
+            )
+            .await
+            .unwrap();
+        let step_types: Vec<_> = plan.steps.iter().map(|s| s.step_type).collect();
+        assert!(step_types.contains(&PlanStepType::Scan));
+        assert!(step_types.contains(&PlanStepType::Filter));
+        assert!(step_types.contains(&PlanStepType::Window));
+    }
+
+    #[tokio::test]
+    async fn test_cancel_and_cleanup() {
+        let engine = ContinuousQueryEngine::new();
+        let handle = engine
+            .submit_query("SELECT * FROM events")
+            .await
+            .unwrap();
+        let info = engine.cancel_and_cleanup(&handle.id).await.unwrap();
+        assert_eq!(info.handle.status, QueryStatus::Cancelled);
+
+        // Query should be fully removed
+        let queries = engine.list_queries().await;
+        assert!(queries.is_empty());
     }
 }

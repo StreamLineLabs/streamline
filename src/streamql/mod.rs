@@ -41,6 +41,8 @@
 
 pub mod ast;
 pub mod cep;
+pub mod checkpoint;
+pub mod continuous;
 pub mod engine;
 pub mod executor;
 pub mod functions;
