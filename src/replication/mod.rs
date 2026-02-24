@@ -52,6 +52,7 @@ pub mod geo;
 pub mod isr;
 pub mod multi_dc;
 pub mod sender;
+pub mod wan_batch;
 pub mod watermark;
 
 // Public API types

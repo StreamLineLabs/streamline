@@ -208,6 +208,9 @@ pub struct ReplicaSender {
 
     /// Follower states by (topic, partition) -> replica_id -> state
     follower_states: Arc<RwLock<FollowerStatesMap>>,
+
+    /// Optional WAN batch accumulator for cross-region replication
+    wan_batch: Option<Arc<RwLock<super::wan_batch::WanBatchAccumulator>>>,
 }
 
 impl ReplicaSender {
@@ -217,6 +220,78 @@ impl ReplicaSender {
             node_id,
             config,
             follower_states: Arc::new(RwLock::new(HashMap::new())),
+            wan_batch: None,
+        }
+    }
+
+    /// Create a replica sender with WAN batching for cross-region transfers
+    pub fn with_wan_batching(
+        node_id: NodeId,
+        config: SenderConfig,
+        wan_config: super::wan_batch::WanBatchConfig,
+        source_region: &str,
+        target_region: &str,
+    ) -> Self {
+        let accumulator = super::wan_batch::WanBatchAccumulator::new(
+            wan_config,
+            source_region,
+            target_region,
+        );
+        Self {
+            node_id,
+            config,
+            follower_states: Arc::new(RwLock::new(HashMap::new())),
+            wan_batch: Some(Arc::new(RwLock::new(accumulator))),
+        }
+    }
+
+    /// Queue a record for WAN-batched replication.
+    ///
+    /// Returns Some(batch) when the batch is ready to flush over the WAN link.
+    pub async fn queue_for_wan_replication(
+        &self,
+        topic: &str,
+        partition: i32,
+        offset: i64,
+        key: Option<Vec<u8>>,
+        value: Vec<u8>,
+        timestamp: i64,
+    ) -> Option<super::wan_batch::WanBatch> {
+        if let Some(ref batch) = self.wan_batch {
+            let record = super::wan_batch::WanRecord {
+                topic: topic.to_string(),
+                partition,
+                offset,
+                key,
+                value,
+                timestamp,
+            };
+            batch.write().await.add(record)
+        } else {
+            None
+        }
+    }
+
+    /// Force-flush the WAN batch (e.g., on timer expiry or shutdown).
+    pub async fn flush_wan_batch(&self) -> Option<super::wan_batch::WanBatch> {
+        if let Some(ref batch) = self.wan_batch {
+            let mut acc = batch.write().await;
+            if acc.has_pending() {
+                Some(acc.flush())
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    }
+
+    /// Get WAN replication metrics.
+    pub async fn wan_metrics(&self) -> Option<super::wan_batch::WanBatchMetrics> {
+        if let Some(ref batch) = self.wan_batch {
+            Some(batch.read().await.metrics())
+        } else {
+            None
         }
     }
 

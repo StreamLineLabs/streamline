@@ -359,6 +359,65 @@ impl GeoReplicationManager {
             bytes_received: self.stats.bytes_received.load(Ordering::Relaxed),
         }
     }
+
+    /// Run cross-region health diagnostics.
+    ///
+    /// Returns a per-region health report including replication lag,
+    /// connection status, and conflict rates.
+    pub async fn diagnose(&self) -> Vec<RegionHealthReport> {
+        let regions = self.regions.read().await;
+        let stats = self.stats();
+
+        regions
+            .values()
+            .map(|r| {
+                let conflict_rate = if stats.records_replicated > 0 {
+                    stats.conflicts_detected as f64 / stats.records_replicated as f64
+                } else {
+                    0.0
+                };
+
+                let health = if r.status == RegionStatus::Unreachable || r.status == RegionStatus::Offline {
+                    RegionHealth::Unhealthy
+                } else if r.replication_lag_ms > 5000 {
+                    RegionHealth::Degraded
+                } else {
+                    RegionHealth::Healthy
+                };
+
+                RegionHealthReport {
+                    region_id: r.region_id.clone(),
+                    status: r.status,
+                    health,
+                    replication_lag_ms: r.replication_lag_ms,
+                    conflict_rate,
+                    last_heartbeat: Some(r.last_heartbeat),
+                }
+            })
+            .collect()
+    }
+}
+
+/// Health assessment for a region.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum RegionHealth {
+    /// Replication lag < 5s, connected
+    Healthy,
+    /// Connected but lag > 5s
+    Degraded,
+    /// Disconnected or unreachable
+    Unhealthy,
+}
+
+/// Per-region health report from diagnostics.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RegionHealthReport {
+    pub region_id: String,
+    pub status: RegionStatus,
+    pub health: RegionHealth,
+    pub replication_lag_ms: u64,
+    pub conflict_rate: f64,
+    pub last_heartbeat: Option<DateTime<Utc>>,
 }
 
 /// Geo-replication configuration
