@@ -506,8 +506,76 @@ impl EventTransformer {
                 column,
                 target_type,
             } => {
-                // Type casting would be implemented here
-                debug!("Casting {} to {}", column, target_type);
+                // Cast column values to the target type
+                fn cast_value(
+                    value: &Option<serde_json::Value>,
+                    target: &str,
+                ) -> Option<serde_json::Value> {
+                    let v = match value {
+                        Some(v) => v,
+                        None => return None,
+                    };
+                    match target {
+                        "string" | "text" | "varchar" => Some(serde_json::Value::String(match v {
+                            serde_json::Value::String(s) => s.clone(),
+                            other => other.to_string(),
+                        })),
+                        "int" | "integer" | "int32" | "int64" | "bigint" => {
+                            let n = match v {
+                                serde_json::Value::Number(n) => n.as_i64(),
+                                serde_json::Value::String(s) => s.parse::<i64>().ok(),
+                                serde_json::Value::Bool(b) => Some(if *b { 1 } else { 0 }),
+                                _ => None,
+                            };
+                            n.map(|n| serde_json::Value::Number(n.into()))
+                        }
+                        "float" | "double" | "decimal" | "numeric" => {
+                            let n = match v {
+                                serde_json::Value::Number(n) => n.as_f64(),
+                                serde_json::Value::String(s) => s.parse::<f64>().ok(),
+                                _ => None,
+                            };
+                            n.and_then(|n| {
+                                serde_json::Number::from_f64(n)
+                                    .map(serde_json::Value::Number)
+                            })
+                        }
+                        "bool" | "boolean" => {
+                            let b = match v {
+                                serde_json::Value::Bool(b) => Some(*b),
+                                serde_json::Value::Number(n) => Some(n.as_i64() != Some(0)),
+                                serde_json::Value::String(s) => match s.to_lowercase().as_str() {
+                                    "true" | "1" | "yes" => Some(true),
+                                    "false" | "0" | "no" => Some(false),
+                                    _ => None,
+                                },
+                                _ => None,
+                            };
+                            b.map(serde_json::Value::Bool)
+                        }
+                        _ => {
+                            debug!(target_type = target, "Unsupported cast target type; keeping original");
+                            value.clone()
+                        }
+                    }
+                }
+
+                if let Some(ref mut after) = event.after {
+                    for col in after.iter_mut() {
+                        if col.name == *column {
+                            col.value = cast_value(&col.value, target_type);
+                            col.data_type = target_type.clone();
+                        }
+                    }
+                }
+                if let Some(ref mut before) = event.before {
+                    for col in before.iter_mut() {
+                        if col.name == *column {
+                            col.value = cast_value(&col.value, target_type);
+                            col.data_type = target_type.clone();
+                        }
+                    }
+                }
             }
             TransformType::Mask {
                 column,
@@ -521,12 +589,138 @@ impl EventTransformer {
                     }
                 }
             }
-            TransformType::Filter { condition: _ } => {
-                // Filter would be evaluated here
+            TransformType::Filter { condition } => {
+                // Evaluate simple filter conditions of the form:
+                //   "column = value"  |  "column != value"
+                //   "column > value"  |  "column < value"
+                //   "column IS NULL"  |  "column IS NOT NULL"
+                //
+                // Returns a "filtered" event (empty after/before) to signal
+                // downstream that this event should be dropped.
+                let should_keep = evaluate_filter_condition(condition, &event);
+                if !should_keep {
+                    // Clear payload to signal this event is filtered out
+                    event.after = None;
+                    event.before = None;
+                    event.metadata.insert("_filtered".to_string(), "true".to_string());
+                }
             }
         }
         Ok(event)
     }
+}
+
+/// Evaluate a simple filter condition against a CDC event.
+///
+/// Supported syntax:
+///   - `column = value`  (equality)
+///   - `column != value` (inequality)
+///   - `column > value`  (greater than, numeric only)
+///   - `column < value`  (less than, numeric only)
+///   - `column >= value` (greater or equal)
+///   - `column <= value` (less or equal)
+///   - `column IS NULL`
+///   - `column IS NOT NULL`
+///
+/// Evaluates against `event.after` (if present), falling back to `event.before`.
+fn evaluate_filter_condition(condition: &str, event: &CdcEvent) -> bool {
+    let condition = condition.trim();
+
+    // IS NULL / IS NOT NULL
+    let upper = condition.to_uppercase();
+    if upper.ends_with("IS NOT NULL") {
+        let col_name = condition[..condition.len() - 11].trim();
+        return get_column_value(event, col_name)
+            .map(|v| v.is_some())
+            .unwrap_or(false);
+    }
+    if upper.ends_with("IS NULL") {
+        let col_name = condition[..condition.len() - 7].trim();
+        return get_column_value(event, col_name)
+            .map(|v| v.is_none())
+            .unwrap_or(true);
+    }
+
+    // Comparison operators (ordered to match longest first)
+    let operators = ["!=", ">=", "<=", "=", ">", "<"];
+    for op in &operators {
+        if let Some(pos) = condition.find(op) {
+            let col_name = condition[..pos].trim();
+            let raw_value = condition[pos + op.len()..].trim().trim_matches('\'').trim_matches('"');
+
+            let col_val = match get_column_value(event, col_name) {
+                Some(Some(v)) => v,
+                Some(None) => return false,
+                None => return false,
+            };
+
+            return match *op {
+                "=" => json_equals(&col_val, raw_value),
+                "!=" => !json_equals(&col_val, raw_value),
+                ">" | ">=" | "<" | "<=" => {
+                    json_compare(&col_val, raw_value)
+                        .map(|ord| match *op {
+                            ">" => ord == std::cmp::Ordering::Greater,
+                            ">=" => ord != std::cmp::Ordering::Less,
+                            "<" => ord == std::cmp::Ordering::Less,
+                            "<=" => ord != std::cmp::Ordering::Greater,
+                            _ => false,
+                        })
+                        .unwrap_or(false)
+                }
+                _ => false,
+            };
+        }
+    }
+
+    // Unparseable condition — pass through
+    true
+}
+
+/// Look up a column value in the event (prefer `after`, fallback to `before`).
+fn get_column_value(
+    event: &CdcEvent,
+    col_name: &str,
+) -> Option<Option<serde_json::Value>> {
+    let search = |cols: &[super::CdcColumnValue]| -> Option<Option<serde_json::Value>> {
+        cols.iter()
+            .find(|c| c.name == col_name)
+            .map(|c| c.value.clone())
+    };
+
+    if let Some(ref after) = event.after {
+        if let Some(v) = search(after) {
+            return Some(v);
+        }
+    }
+    if let Some(ref before) = event.before {
+        if let Some(v) = search(before) {
+            return Some(v);
+        }
+    }
+    None
+}
+
+/// Check if a JSON value equals a string representation.
+fn json_equals(val: &serde_json::Value, raw: &str) -> bool {
+    match val {
+        serde_json::Value::String(s) => s == raw,
+        serde_json::Value::Number(n) => n.to_string() == raw,
+        serde_json::Value::Bool(b) => b.to_string() == raw,
+        serde_json::Value::Null => raw == "null" || raw.is_empty(),
+        _ => val.to_string() == raw,
+    }
+}
+
+/// Compare a JSON value to a raw string numerically.
+fn json_compare(val: &serde_json::Value, raw: &str) -> Option<std::cmp::Ordering> {
+    let lhs = match val {
+        serde_json::Value::Number(n) => n.as_f64()?,
+        serde_json::Value::String(s) => s.parse::<f64>().ok()?,
+        _ => return None,
+    };
+    let rhs = raw.parse::<f64>().ok()?;
+    lhs.partial_cmp(&rhs)
 }
 
 /// Transform configuration
@@ -899,5 +1093,171 @@ mod tests {
         assert_eq!(migration.column_mappings.len(), 1);
         assert_eq!(migration.drop_columns.len(), 1);
         assert_eq!(migration.add_columns.len(), 1);
+    }
+
+    // --- Transform tests ---
+
+    fn make_test_event(cols: Vec<(&str, &str, serde_json::Value)>) -> CdcEvent {
+        let after: Vec<super::super::CdcColumnValue> = cols
+            .into_iter()
+            .map(|(name, dtype, val)| super::super::CdcColumnValue {
+                name: name.to_string(),
+                data_type: dtype.to_string(),
+                value: if val.is_null() { None } else { Some(val) },
+            })
+            .collect();
+        CdcEvent {
+            database: "db".to_string(),
+            schema: "public".to_string(),
+            table: "t".to_string(),
+            operation: CdcOperation::Insert,
+            position: "0".to_string(),
+            transaction_id: None,
+            timestamp: Utc::now(),
+            before: None,
+            after: Some(after),
+            primary_key: vec![],
+            metadata: HashMap::new(),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_cast_transform_string_to_int() {
+        let transformer = EventTransformer::new(vec![TransformConfig {
+            name: "cast_age".to_string(),
+            tables: None,
+            transform_type: TransformType::Cast {
+                column: "age".to_string(),
+                target_type: "integer".to_string(),
+            },
+        }]);
+
+        let event = make_test_event(vec![
+            ("name", "string", serde_json::json!("Alice")),
+            ("age", "string", serde_json::json!("30")),
+        ]);
+
+        let result = transformer.transform(event).await.unwrap();
+        let after = result.after.unwrap();
+        let age_col = after.iter().find(|c| c.name == "age").unwrap();
+        assert_eq!(age_col.value, Some(serde_json::json!(30)));
+        assert_eq!(age_col.data_type, "integer");
+    }
+
+    #[tokio::test]
+    async fn test_cast_transform_int_to_string() {
+        let transformer = EventTransformer::new(vec![TransformConfig {
+            name: "cast_id".to_string(),
+            tables: None,
+            transform_type: TransformType::Cast {
+                column: "id".to_string(),
+                target_type: "string".to_string(),
+            },
+        }]);
+
+        let event = make_test_event(vec![("id", "int", serde_json::json!(42))]);
+        let result = transformer.transform(event).await.unwrap();
+        let after = result.after.unwrap();
+        let id_col = after.iter().find(|c| c.name == "id").unwrap();
+        assert_eq!(id_col.value, Some(serde_json::json!("42")));
+    }
+
+    #[tokio::test]
+    async fn test_cast_transform_to_bool() {
+        let transformer = EventTransformer::new(vec![TransformConfig {
+            name: "cast_active".to_string(),
+            tables: None,
+            transform_type: TransformType::Cast {
+                column: "active".to_string(),
+                target_type: "boolean".to_string(),
+            },
+        }]);
+
+        let event = make_test_event(vec![("active", "string", serde_json::json!("true"))]);
+        let result = transformer.transform(event).await.unwrap();
+        let after = result.after.unwrap();
+        let col = after.iter().find(|c| c.name == "active").unwrap();
+        assert_eq!(col.value, Some(serde_json::json!(true)));
+    }
+
+    #[tokio::test]
+    async fn test_filter_transform_equality_pass() {
+        let transformer = EventTransformer::new(vec![TransformConfig {
+            name: "filter_status".to_string(),
+            tables: None,
+            transform_type: TransformType::Filter {
+                condition: "status = active".to_string(),
+            },
+        }]);
+
+        let event = make_test_event(vec![("status", "string", serde_json::json!("active"))]);
+        let result = transformer.transform(event).await.unwrap();
+        assert!(result.after.is_some(), "Event should pass filter");
+        assert!(!result.metadata.contains_key("_filtered"));
+    }
+
+    #[tokio::test]
+    async fn test_filter_transform_equality_fail() {
+        let transformer = EventTransformer::new(vec![TransformConfig {
+            name: "filter_status".to_string(),
+            tables: None,
+            transform_type: TransformType::Filter {
+                condition: "status = active".to_string(),
+            },
+        }]);
+
+        let event = make_test_event(vec![("status", "string", serde_json::json!("inactive"))]);
+        let result = transformer.transform(event).await.unwrap();
+        assert!(result.after.is_none(), "Event should be filtered out");
+        assert_eq!(result.metadata.get("_filtered"), Some(&"true".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_filter_transform_numeric_comparison() {
+        let transformer = EventTransformer::new(vec![TransformConfig {
+            name: "filter_age".to_string(),
+            tables: None,
+            transform_type: TransformType::Filter {
+                condition: "age > 18".to_string(),
+            },
+        }]);
+
+        let event = make_test_event(vec![("age", "int", serde_json::json!(25))]);
+        let result = transformer.transform(event).await.unwrap();
+        assert!(result.after.is_some(), "age=25 should pass > 18");
+
+        let event2 = make_test_event(vec![("age", "int", serde_json::json!(10))]);
+        let result2 = transformer.transform(event2).await.unwrap();
+        assert!(result2.after.is_none(), "age=10 should fail > 18");
+    }
+
+    #[tokio::test]
+    async fn test_filter_transform_is_null() {
+        let transformer = EventTransformer::new(vec![TransformConfig {
+            name: "filter_null".to_string(),
+            tables: None,
+            transform_type: TransformType::Filter {
+                condition: "deleted_at IS NULL".to_string(),
+            },
+        }]);
+
+        let event = make_test_event(vec![("deleted_at", "timestamp", serde_json::json!(null))]);
+        let result = transformer.transform(event).await.unwrap();
+        assert!(result.after.is_some(), "NULL deleted_at should pass IS NULL");
+    }
+
+    #[tokio::test]
+    async fn test_filter_transform_is_not_null() {
+        let transformer = EventTransformer::new(vec![TransformConfig {
+            name: "filter_not_null".to_string(),
+            tables: None,
+            transform_type: TransformType::Filter {
+                condition: "email IS NOT NULL".to_string(),
+            },
+        }]);
+
+        let event = make_test_event(vec![("email", "string", serde_json::json!("a@b.com"))]);
+        let result = transformer.transform(event).await.unwrap();
+        assert!(result.after.is_some(), "Non-null email should pass IS NOT NULL");
     }
 }
