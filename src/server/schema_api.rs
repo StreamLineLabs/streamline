@@ -1642,4 +1642,203 @@ mod tests {
 
         assert_eq!(response.status(), StatusCode::OK);
     }
+
+    // ── Confluent Schema Registry Compatibility Tests ────────────────────────
+
+    #[tokio::test]
+    async fn test_confluent_compat_schema_types_endpoint() {
+        let state = create_test_state();
+        let app = create_schema_api_router(state);
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/schemas/types")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body: Vec<String> = serde_json::from_slice(
+            &axum::body::to_bytes(response.into_body(), 10_000)
+                .await
+                .unwrap(),
+        )
+        .unwrap();
+        assert!(body.contains(&"AVRO".to_string()));
+        assert!(body.contains(&"JSON".to_string()));
+        assert!(body.contains(&"PROTOBUF".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_confluent_compat_register_and_lookup_by_id() {
+        let state = create_test_state();
+        let app = create_schema_api_router(state);
+
+        // Register a schema
+        let register_body = serde_json::json!({
+            "schema": r#"{"type":"record","name":"Test","fields":[{"name":"f1","type":"string"}]}"#,
+            "schemaType": "AVRO"
+        });
+
+        let resp = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/subjects/test-value/versions")
+                    .header("content-type", "application/json")
+                    .body(Body::from(serde_json::to_string(&register_body).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body: serde_json::Value = serde_json::from_slice(
+            &axum::body::to_bytes(resp.into_body(), 10_000)
+                .await
+                .unwrap(),
+        )
+        .unwrap();
+        let schema_id = body["id"].as_i64().unwrap();
+
+        // Lookup by ID
+        let resp = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri(format!("/schemas/ids/{}", schema_id))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        // Lookup subjects for ID
+        let resp = app
+            .oneshot(
+                Request::builder()
+                    .uri(format!("/schemas/ids/{}/subjects", schema_id))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn test_confluent_compat_check_subject_exists() {
+        let state = create_test_state();
+        let app = create_schema_api_router(state);
+
+        // Register
+        let schema = serde_json::json!({
+            "schema": r#"{"type":"record","name":"User","fields":[{"name":"name","type":"string"}]}"#,
+            "schemaType": "AVRO"
+        });
+        app.clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/subjects/user-value/versions")
+                    .header("content-type", "application/json")
+                    .body(Body::from(serde_json::to_string(&schema).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        // POST to /subjects/{subject} should check if schema already exists
+        let resp = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/subjects/user-value")
+                    .header("content-type", "application/json")
+                    .body(Body::from(serde_json::to_string(&schema).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn test_confluent_compat_compatibility_check() {
+        let state = create_test_state();
+        let app = create_schema_api_router(state);
+
+        // Register v1
+        let schema_v1 = serde_json::json!({
+            "schema": r#"{"type":"record","name":"Event","fields":[{"name":"id","type":"string"}]}"#,
+            "schemaType": "AVRO"
+        });
+        app.clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/subjects/event-value/versions")
+                    .header("content-type", "application/json")
+                    .body(Body::from(serde_json::to_string(&schema_v1).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        // Check compatibility of v2 against latest
+        let schema_v2 = serde_json::json!({
+            "schema": r#"{"type":"record","name":"Event","fields":[{"name":"id","type":"string"},{"name":"ts","type":["null","long"],"default":null}]}"#,
+            "schemaType": "AVRO"
+        });
+        let resp = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/compatibility/subjects/event-value/versions/latest")
+                    .header("content-type", "application/json")
+                    .body(Body::from(serde_json::to_string(&schema_v2).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn test_confluent_compat_global_config() {
+        let state = create_test_state();
+        let app = create_schema_api_router(state);
+
+        // GET /config
+        let resp = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/config")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        // PUT /config
+        let config = serde_json::json!({"compatibility": "FULL"});
+        let resp = app
+            .oneshot(
+                Request::builder()
+                    .method("PUT")
+                    .uri("/config")
+                    .header("content-type", "application/json")
+                    .body(Body::from(serde_json::to_string(&config).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+    }
 }

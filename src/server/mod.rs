@@ -19,6 +19,8 @@ pub mod connector_mgmt_api;
 pub mod console_api;
 pub mod consumer_api;
 pub mod dashboard_api;
+pub mod kafka_connect_api;
+pub mod streamql_api;
 #[cfg(feature = "clustering")]
 pub mod failover_api;
 #[cfg(feature = "clustering")]
@@ -27,6 +29,8 @@ pub mod raft_cluster_api;
 pub mod featurestore_api;
 pub mod gitops_api;
 pub mod governor_api;
+#[cfg(feature = "edge")]
+pub mod fleet_api;
 pub mod http;
 pub mod limits;
 pub mod log_buffer;
@@ -78,11 +82,14 @@ mod audit_stub {
     pub struct AuditLogger;
 
     impl AuditLogger {
+        /// Create a new no-op audit logger (auth feature disabled).
         pub fn new(_config: AuditLoggerConfig) -> Self {
             Self
         }
 
+        /// Record a client connection event (no-op without auth feature).
         pub fn log_connect(&self, _addr: &SocketAddr, _tls: bool) {}
+        /// Record a client disconnection event (no-op without auth feature).
         pub fn log_disconnect(&self, _addr: &SocketAddr, _tls: bool) {}
     }
 
@@ -90,6 +97,7 @@ mod audit_stub {
     pub struct AuditLoggerConfig;
 
     impl AuditLoggerConfig {
+        /// Create a default audit logger configuration.
         pub fn new() -> Self {
             Self
         }
@@ -120,6 +128,15 @@ use tokio::signal;
 use tokio::time::interval;
 use tokio_rustls::TlsAcceptor;
 use tracing::{debug, error, info, warn};
+
+/// Handles for background tasks spawned by the server.
+/// Used to cleanly abort or await them during shutdown.
+struct BackgroundTasks {
+    sync_handle: Option<tokio::task::JoinHandle<()>>,
+    uptime_task: tokio::task::JoinHandle<()>,
+    metrics_task: tokio::task::JoinHandle<()>,
+    retention_task: tokio::task::JoinHandle<()>,
+}
 
 /// Streamline server
 pub struct Server {
@@ -173,10 +190,89 @@ impl Server {
         config: ServerConfig,
         sharded_runtime: Option<Arc<ShardedRuntime>>,
     ) -> Result<Self> {
-        // Initialize metrics (only with metrics feature)
         #[cfg(feature = "metrics")]
         let metrics_handle = metrics::init_metrics();
 
+        let (topic_manager, group_coordinator, transaction_coordinator) =
+            Self::init_storage(&config)?;
+
+        // Initialize cluster manager BEFORE kafka_handler finalization (requires clustering feature)
+        // This is required to wire the replication manager to the protocol handler
+        #[cfg(feature = "clustering")]
+        let cluster_manager = if let Some(ref cluster_config) = config.cluster {
+            info!(
+                node_id = cluster_config.node_id,
+                "Initializing cluster mode"
+            );
+
+            let cluster_data_dir = config.data_dir.join("raft");
+            let manager = ClusterManager::new(cluster_config.clone(), cluster_data_dir).await?;
+            let manager = Arc::new(manager);
+
+            // Wire up the topic manager for inter-broker replication
+            // This enables the RPC handler to serve ReplicaFetch requests from followers
+            manager.set_topic_manager(topic_manager.clone()).await;
+            info!("TopicManager wired to cluster manager for replica fetching");
+
+            Some(manager)
+        } else {
+            None
+        };
+
+        let kafka_handler = Self::init_kafka_handler(
+            &config,
+            &topic_manager,
+            &group_coordinator,
+            &transaction_coordinator,
+            &sharded_runtime,
+        )?;
+
+        // Wire up cluster manager and replication manager if cluster mode is enabled (requires clustering feature)
+        #[cfg(feature = "clustering")]
+        let kafka_handler = if let Some(ref cluster_mgr) = cluster_manager {
+            info!("Wiring cluster manager and replication manager to Kafka handler");
+            let replication_mgr = cluster_mgr.replication();
+            kafka_handler
+                .with_cluster_manager(cluster_mgr.clone())
+                .with_replication_manager(replication_mgr)
+        } else {
+            kafka_handler
+        };
+
+        let kafka_handler = Arc::new(kafka_handler);
+
+        let (tls_acceptor, audit_logger) = Self::init_security(&config)?;
+
+        let shutdown_coordinator =
+            Arc::new(ShutdownCoordinator::with_config(config.shutdown.clone()));
+
+        Ok(Self {
+            config,
+            topic_manager,
+            group_coordinator,
+            kafka_handler,
+            tls_acceptor,
+            #[cfg(feature = "metrics")]
+            metrics_handle,
+            start_time: Instant::now(),
+            #[cfg(feature = "clustering")]
+            cluster_manager,
+            audit_logger,
+            shutdown_coordinator,
+            log_buffer: None,
+            transaction_coordinator,
+            sharded_runtime,
+        })
+    }
+
+    /// Initialize storage components: topic manager, group coordinator, and transaction coordinator.
+    fn init_storage(
+        config: &ServerConfig,
+    ) -> Result<(
+        Arc<TopicManager>,
+        Arc<GroupCoordinator>,
+        Option<Arc<TransactionCoordinator>>,
+    )> {
         // Initialize topic manager based on storage mode
         let topic_manager = if config.storage.in_memory {
             info!("Starting in in-memory mode - no data will be persisted");
@@ -232,6 +328,18 @@ impl Server {
             None
         };
 
+        Ok((topic_manager, group_coordinator, transaction_coordinator))
+    }
+
+    /// Initialize the Kafka protocol handler with auth, quotas, limits, transactions,
+    /// response cache, and sharded runtime wiring.
+    fn init_kafka_handler(
+        config: &ServerConfig,
+        topic_manager: &Arc<TopicManager>,
+        group_coordinator: &Arc<GroupCoordinator>,
+        transaction_coordinator: &Option<Arc<TransactionCoordinator>>,
+        sharded_runtime: &Option<Arc<ShardedRuntime>>,
+    ) -> Result<KafkaHandler> {
         // Initialize Kafka handler
         #[cfg(feature = "auth")]
         let kafka_handler = if config.auth.enabled || config.acl.enabled {
@@ -272,29 +380,6 @@ impl Server {
             .with_auto_create_topics(config.auto_create_topics)
             .with_zerocopy_config(config.storage.zerocopy.clone());
 
-        // Initialize cluster manager BEFORE kafka_handler finalization (requires clustering feature)
-        // This is required to wire the replication manager to the protocol handler
-        #[cfg(feature = "clustering")]
-        let cluster_manager = if let Some(ref cluster_config) = config.cluster {
-            info!(
-                node_id = cluster_config.node_id,
-                "Initializing cluster mode"
-            );
-
-            let cluster_data_dir = config.data_dir.join("raft");
-            let manager = ClusterManager::new(cluster_config.clone(), cluster_data_dir).await?;
-            let manager = Arc::new(manager);
-
-            // Wire up the topic manager for inter-broker replication
-            // This enables the RPC handler to serve ReplicaFetch requests from followers
-            manager.set_topic_manager(topic_manager.clone()).await;
-            info!("TopicManager wired to cluster manager for replica fetching");
-
-            Some(manager)
-        } else {
-            None
-        };
-
         // Wire up quota manager if quotas are enabled
         let kafka_handler = if config.quotas.enabled {
             info!(
@@ -317,18 +402,6 @@ impl Server {
             );
             let resource_limiter = Arc::new(ResourceLimiter::new(config.limits.clone()));
             kafka_handler.with_resource_limiter(resource_limiter)
-        } else {
-            kafka_handler
-        };
-
-        // Wire up cluster manager and replication manager if cluster mode is enabled (requires clustering feature)
-        #[cfg(feature = "clustering")]
-        let kafka_handler = if let Some(ref cluster_mgr) = cluster_manager {
-            info!("Wiring cluster manager and replication manager to Kafka handler");
-            let replication_mgr = cluster_mgr.replication();
-            kafka_handler
-                .with_cluster_manager(cluster_mgr.clone())
-                .with_replication_manager(replication_mgr)
         } else {
             kafka_handler
         };
@@ -372,9 +445,11 @@ impl Server {
             kafka_handler
         };
 
-        // Wrap kafka_handler in Arc after all builder methods are applied
-        let kafka_handler = Arc::new(kafka_handler);
+        Ok(kafka_handler)
+    }
 
+    /// Initialize TLS acceptor and audit logger.
+    fn init_security(config: &ServerConfig) -> Result<(Option<TlsAcceptor>, Arc<AuditLogger>)> {
         // Initialize TLS if enabled
         let tls_acceptor = if config.tls.enabled {
             info!("TLS is enabled, loading TLS configuration");
@@ -413,27 +488,7 @@ impl Server {
         #[cfg(not(feature = "auth"))]
         let audit_logger = Arc::new(AuditLogger::new(audit_stub::AuditLoggerConfig::new()));
 
-        // Initialize shutdown coordinator with configured timeout
-        let shutdown_coordinator =
-            Arc::new(ShutdownCoordinator::with_config(config.shutdown.clone()));
-
-        Ok(Self {
-            config,
-            topic_manager,
-            group_coordinator,
-            kafka_handler,
-            tls_acceptor,
-            #[cfg(feature = "metrics")]
-            metrics_handle,
-            start_time: Instant::now(),
-            #[cfg(feature = "clustering")]
-            cluster_manager,
-            audit_logger,
-            shutdown_coordinator,
-            log_buffer: None,
-            transaction_coordinator,
-            sharded_runtime,
-        })
+        Ok((tls_acceptor, audit_logger))
     }
 
     /// Set the log buffer for real-time log viewing.
@@ -596,103 +651,9 @@ impl Server {
             }
         }
 
-        // Shutdown flag
+        // Spawn background tasks (WAL sync, metrics, session timeouts, retention)
         let shutdown = Arc::new(AtomicBool::new(false));
-
-        // Start WAL sync task if WAL is enabled and sync mode is interval
-        let sync_handle = if self.topic_manager.is_wal_enabled()
-            && self.config.storage.wal.sync_mode == "interval"
-        {
-            let topic_manager = self.topic_manager.clone();
-            let sync_interval = Duration::from_millis(self.config.storage.wal.sync_interval_ms);
-            let shutdown_flag = shutdown.clone();
-
-            Some(tokio::spawn(async move {
-                let mut ticker = interval(sync_interval);
-                loop {
-                    ticker.tick().await;
-
-                    if shutdown_flag.load(Ordering::Relaxed) {
-                        break;
-                    }
-
-                    if let Err(e) = topic_manager.sync_wal() {
-                        error!(
-                            error = %e,
-                            "WAL sync failed - data durability may be compromised. \
-                            Check storage health and available disk space."
-                        );
-                    } else {
-                        debug!("WAL synced");
-                    }
-                }
-            }))
-        } else {
-            None
-        };
-
-        // Start uptime update task
-        let start_time = self.start_time;
-        let uptime_task = tokio::spawn(async move {
-            loop {
-                let uptime = start_time.elapsed().as_secs_f64();
-                metrics::record_uptime(uptime);
-                tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
-            }
-        });
-
-        // Start metrics update task
-        let topic_manager_metrics = self.topic_manager.clone();
-        let metrics_task = tokio::spawn(async move {
-            loop {
-                if let Err(e) = topic_manager_metrics.update_all_metrics() {
-                    tracing::warn!(error = %e, "Failed to update metrics");
-                }
-                tokio::time::sleep(tokio::time::Duration::from_secs(30)).await;
-            }
-        });
-
-        // Start session timeout checker task
-        let group_coordinator = self.group_coordinator.clone();
-        let shutdown_flag = shutdown.clone();
-        let _session_timeout_task = tokio::spawn(async move {
-            let mut ticker = interval(Duration::from_secs(5));
-            loop {
-                ticker.tick().await;
-
-                if shutdown_flag.load(Ordering::Relaxed) {
-                    break;
-                }
-
-                group_coordinator.check_session_timeouts().await;
-            }
-        });
-
-        // Start transaction timeout checker task if transaction coordinator is enabled
-        if let Some(ref txn_coordinator) = self.transaction_coordinator {
-            txn_coordinator.start_timeout_checker();
-            info!("Transaction timeout checker started");
-        }
-
-        // Start retention enforcement task
-        // Note: This task is aborted during shutdown since it has a long interval (5 min)
-        let topic_manager_retention = self.topic_manager.clone();
-        let retention_task = tokio::spawn(async move {
-            use crate::storage::RetentionEnforcer;
-
-            let enforcer = RetentionEnforcer::new();
-            let interval_duration = enforcer.interval();
-
-            loop {
-                tokio::time::sleep(interval_duration).await;
-
-                if let Err(e) = enforcer.enforce(&topic_manager_retention).await {
-                    error!(error = %e, "Retention enforcement failed");
-                } else {
-                    debug!("Retention enforcement completed");
-                }
-            }
-        });
+        let bg = self.spawn_background_tasks(shutdown.clone());
 
         // Main event loop
         loop {
@@ -837,7 +798,7 @@ impl Server {
         }
 
         // Wait for background tasks to finish gracefully (with timeout)
-        if let Some(handle) = sync_handle {
+        if let Some(handle) = bg.sync_handle {
             // Give WAL sync task a short time to finish current operation
             match tokio::time::timeout(Duration::from_secs(2), handle).await {
                 Ok(_) => debug!("WAL sync task completed"),
@@ -846,17 +807,116 @@ impl Server {
         }
 
         // Abort retention task - it's not critical and can take up to 5 minutes to wake
-        retention_task.abort();
+        bg.retention_task.abort();
 
         // Cleanup remaining tasks
         http_server.abort();
         if let Some(simple) = simple_server {
             simple.abort();
         }
-        uptime_task.abort();
-        metrics_task.abort();
+        bg.uptime_task.abort();
+        bg.metrics_task.abort();
 
         self.shutdown().await
+    }
+
+    /// Spawn all periodic background tasks (WAL sync, metrics, retention, session timeouts).
+    fn spawn_background_tasks(&self, shutdown: Arc<AtomicBool>) -> BackgroundTasks {
+        // WAL sync task
+        let sync_handle = if self.topic_manager.is_wal_enabled()
+            && self.config.storage.wal.sync_mode == "interval"
+        {
+            let topic_manager = self.topic_manager.clone();
+            let sync_interval = Duration::from_millis(self.config.storage.wal.sync_interval_ms);
+            let shutdown_flag = shutdown.clone();
+
+            Some(tokio::spawn(async move {
+                let mut ticker = interval(sync_interval);
+                loop {
+                    ticker.tick().await;
+                    if shutdown_flag.load(Ordering::Relaxed) {
+                        break;
+                    }
+                    if let Err(e) = topic_manager.sync_wal() {
+                        error!(
+                            error = %e,
+                            "WAL sync failed - data durability may be compromised. \
+                            Check storage health and available disk space."
+                        );
+                    } else {
+                        debug!("WAL synced");
+                    }
+                }
+            }))
+        } else {
+            None
+        };
+
+        // Uptime update task
+        let start_time = self.start_time;
+        let uptime_task = tokio::spawn(async move {
+            loop {
+                let uptime = start_time.elapsed().as_secs_f64();
+                metrics::record_uptime(uptime);
+                tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
+            }
+        });
+
+        // Metrics update task
+        let topic_manager_metrics = self.topic_manager.clone();
+        let metrics_task = tokio::spawn(async move {
+            loop {
+                if let Err(e) = topic_manager_metrics.update_all_metrics() {
+                    tracing::warn!(error = %e, "Failed to update metrics");
+                }
+                tokio::time::sleep(tokio::time::Duration::from_secs(30)).await;
+            }
+        });
+
+        // Session timeout checker
+        let group_coordinator = self.group_coordinator.clone();
+        let shutdown_flag = shutdown.clone();
+        let _session_timeout_task = tokio::spawn(async move {
+            let mut ticker = interval(Duration::from_secs(5));
+            loop {
+                ticker.tick().await;
+                if shutdown_flag.load(Ordering::Relaxed) {
+                    break;
+                }
+                group_coordinator.check_session_timeouts().await;
+            }
+        });
+
+        // Transaction timeout checker
+        if let Some(ref txn_coordinator) = self.transaction_coordinator {
+            txn_coordinator.start_timeout_checker();
+            info!("Transaction timeout checker started");
+        }
+
+        // Retention enforcement task
+        let topic_manager_retention = self.topic_manager.clone();
+        let retention_task = tokio::spawn(async move {
+            use crate::storage::RetentionEnforcer;
+
+            let enforcer = RetentionEnforcer::new();
+            let interval_duration = enforcer.interval();
+
+            loop {
+                tokio::time::sleep(interval_duration).await;
+                if let Err(e) = enforcer.enforce(&topic_manager_retention).await {
+                    error!(error = %e, "Retention enforcement failed");
+                } else {
+                    debug!("Retention enforcement completed");
+                }
+            }
+        });
+
+        BackgroundTasks {
+            sync_handle,
+            uptime_task,
+            metrics_task,
+            retention_task,
+        }
     }
 
     /// Graceful shutdown - flush state and cleanup resources
@@ -902,6 +962,9 @@ impl Server {
             "disabled".to_string()
         };
 
+        // Startup banner uses println! intentionally — ASCII art goes to stdout, not structured logs.
+        #[allow(clippy::print_stdout)]
+        {
         println!();
         println!("  ╔═══════════════════════════════════════════════════════╗");
         println!("  ║                                                       ║");
@@ -969,9 +1032,11 @@ impl Server {
         println!();
         println!("  Ready to accept connections. Press Ctrl+C to stop.");
         println!();
+        } // end #[allow(clippy::print_stdout)]
     }
 
-    /// Get server info
+    /// Returns server metadata including version, addresses, uptime, and feature status.
+    /// Used by the `/info` HTTP endpoint and CLI `doctor` command.
     pub fn info(&self) -> ServerInfo {
         ServerInfo {
             version: env!("CARGO_PKG_VERSION").to_string(),

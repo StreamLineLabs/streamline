@@ -317,6 +317,9 @@ mod tests {
             runtime: crate::config::RuntimeConfig::default(),
             telemetry: crate::telemetry::TelemetryConfig::default(),
             playground: false,
+            ephemeral: false,
+            ephemeral_idle_timeout_secs: 30,
+            ephemeral_auto_topics: Vec::new(),
             #[cfg(feature = "edge")]
             edge: crate::config::EdgeDeploymentConfig::default(),
         };

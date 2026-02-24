@@ -37,7 +37,7 @@ impl Default for LimitsConfig {
             max_connections: 10000,            // 10k total connections
             max_connections_per_ip: 100,       // 100 connections per IP
             max_request_size: 104857600,       // 100 MB max request
-            produce_rate_limit_bytes: 50_000_000, // 50 MB/s rate limit
+            produce_rate_limit_bytes: 0,               // unlimited (opt-in via config)
             connection_idle_timeout_secs: 600, // 10 minute idle timeout
         }
     }
@@ -784,7 +784,7 @@ mod tests {
         assert_eq!(config.max_connections, 10000);
         assert_eq!(config.max_connections_per_ip, 100);
         assert_eq!(config.max_request_size, 104857600);
-        assert_eq!(config.produce_rate_limit_bytes, 50_000_000);
+        assert_eq!(config.produce_rate_limit_bytes, 0);
         assert_eq!(config.connection_idle_timeout_secs, 600);
     }
 
