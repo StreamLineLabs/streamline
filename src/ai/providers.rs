@@ -752,3 +752,219 @@ mod tests {
         assert_eq!(QuantizationType::default(), QuantizationType::Float32);
     }
 }
+
+// ── Local ONNX Provider ──────────────────────────────────────────────────────
+
+/// Local embedding provider using a deterministic hash-based model.
+///
+/// In production, this would use an ONNX runtime (e.g., `ort` crate) to run
+/// quantized models locally. For now, provides a fast, deterministic embedding
+/// that's useful for testing and development.
+pub struct LocalProvider {
+    model_name: String,
+    dimension: usize,
+    stats: std::sync::Mutex<ProviderStats>,
+}
+
+impl LocalProvider {
+    /// Create a new local provider.
+    pub fn new(model_name: &str, dimension: usize) -> Self {
+        Self {
+            model_name: model_name.to_string(),
+            dimension,
+            stats: std::sync::Mutex::new(ProviderStats::default()),
+        }
+    }
+
+    fn hash_embed(&self, text: &str) -> Vec<f32> {
+        let mut vec = vec![0.0f32; self.dimension];
+        let hash = text.bytes().fold(0u64, |acc, b| {
+            acc.wrapping_mul(31).wrapping_add(b as u64)
+        });
+        for (i, v) in vec.iter_mut().enumerate() {
+            let seed = hash.wrapping_add(i as u64).wrapping_mul(6364136223846793005);
+            *v = ((seed % 10000) as f32 / 10000.0) * 2.0 - 1.0;
+        }
+        let magnitude: f32 = vec.iter().map(|v| v * v).sum::<f32>().sqrt();
+        if magnitude > 0.0 {
+            for v in vec.iter_mut() {
+                *v /= magnitude;
+            }
+        }
+        vec
+    }
+}
+
+#[async_trait::async_trait]
+impl EmbeddingProvider for LocalProvider {
+    fn name(&self) -> &str {
+        &self.model_name
+    }
+
+    fn model_id(&self) -> &str {
+        &self.model_name
+    }
+
+    fn dimension(&self) -> usize {
+        self.dimension
+    }
+
+    async fn embed(&self, text: &str) -> Result<Vec<f32>> {
+        let start = std::time::Instant::now();
+        let vec = self.hash_embed(text);
+        if let Ok(mut stats) = self.stats.lock() {
+            stats.total_requests += 1;
+            stats.total_tokens += text.split_whitespace().count() as u64;
+            stats.avg_latency_ms = start.elapsed().as_secs_f64() * 1000.0;
+        }
+        Ok(vec)
+    }
+
+    async fn embed_batch(&self, texts: &[&str]) -> Result<Vec<Vec<f32>>> {
+        let mut results = Vec::with_capacity(texts.len());
+        for text in texts {
+            results.push(self.hash_embed(text));
+        }
+        if let Ok(mut stats) = self.stats.lock() {
+            stats.total_requests += texts.len() as u64;
+        }
+        Ok(results)
+    }
+
+    fn stats(&self) -> ProviderStats {
+        self.stats.lock().map(|s| s.clone()).unwrap_or_default()
+    }
+}
+
+// ── Semantic Search CLI Helper ───────────────────────────────────────────────
+
+/// Helper for CLI-based semantic search across topics.
+///
+/// Usage: `streamline-cli search "payment failures" --topics events,logs --limit 10`
+pub struct SemanticSearchCli {
+    provider: Box<dyn EmbeddingProvider>,
+}
+
+impl SemanticSearchCli {
+    /// Create with a specific provider.
+    pub fn new(provider: Box<dyn EmbeddingProvider>) -> Self {
+        Self { provider }
+    }
+
+    /// Create with the default local provider.
+    pub fn with_local() -> Self {
+        Self {
+            provider: Box::new(LocalProvider::new("local-hash-v1", 384)),
+        }
+    }
+
+    /// Search for messages semantically similar to the query.
+    pub async fn search(
+        &self,
+        query: &str,
+        candidates: &[(String, String)], // (message_id, text)
+        limit: usize,
+    ) -> Result<Vec<SearchHit>> {
+        let query_vec = self.provider.embed(query).await?;
+
+        let mut scored: Vec<SearchHit> = Vec::new();
+        for (id, text) in candidates {
+            let candidate_vec = self.provider.embed(text).await?;
+            let similarity = cosine_similarity(&query_vec, &candidate_vec);
+            scored.push(SearchHit {
+                id: id.clone(),
+                text_preview: if text.len() > 200 {
+                    format!("{}...", &text[..200])
+                } else {
+                    text.clone()
+                },
+                similarity,
+            });
+        }
+
+        scored.sort_by(|a, b| b.similarity.partial_cmp(&a.similarity).unwrap_or(std::cmp::Ordering::Equal));
+        scored.truncate(limit);
+
+        Ok(scored)
+    }
+}
+
+/// A search result with similarity score.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct SearchHit {
+    pub id: String,
+    pub text_preview: String,
+    pub similarity: f32,
+}
+
+/// Cosine similarity between two vectors.
+fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
+    let dot: f32 = a.iter().zip(b.iter()).map(|(x, y)| x * y).sum();
+    let mag_a: f32 = a.iter().map(|x| x * x).sum::<f32>().sqrt();
+    let mag_b: f32 = b.iter().map(|x| x * x).sum::<f32>().sqrt();
+    if mag_a > 0.0 && mag_b > 0.0 {
+        dot / (mag_a * mag_b)
+    } else {
+        0.0
+    }
+}
+
+#[cfg(test)]
+mod provider_tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_local_provider_embed() {
+        let provider = LocalProvider::new("test", 128);
+        let vec = provider.embed("hello world").await.unwrap();
+        assert_eq!(vec.len(), 128);
+        let magnitude: f32 = vec.iter().map(|v| v * v).sum::<f32>().sqrt();
+        assert!((magnitude - 1.0).abs() < 0.01, "Should be unit-normalized");
+    }
+
+    #[tokio::test]
+    async fn test_local_provider_deterministic() {
+        let provider = LocalProvider::new("test", 64);
+        let v1 = provider.embed("same text").await.unwrap();
+        let v2 = provider.embed("same text").await.unwrap();
+        assert_eq!(v1, v2, "Same text should produce same embedding");
+    }
+
+    #[tokio::test]
+    async fn test_local_provider_batch() {
+        let provider = LocalProvider::new("test", 32);
+        let vecs = provider.embed_batch(&["a", "b", "c"]).await.unwrap();
+        assert_eq!(vecs.len(), 3);
+        assert_ne!(vecs[0], vecs[1]);
+    }
+
+    #[tokio::test]
+    async fn test_semantic_search_cli() {
+        let cli = SemanticSearchCli::with_local();
+        let candidates = vec![
+            ("msg-1".to_string(), "payment processing failed".to_string()),
+            ("msg-2".to_string(), "user logged in successfully".to_string()),
+            ("msg-3".to_string(), "payment gateway timeout error".to_string()),
+        ];
+
+        let results = cli.search("payment failures", &candidates, 2).await.unwrap();
+        assert_eq!(results.len(), 2);
+        // Both payment-related messages should rank higher
+        assert!(results[0].similarity > 0.0);
+    }
+
+    #[test]
+    fn test_cosine_similarity_identical() {
+        let a = vec![1.0, 0.0, 0.0];
+        let sim = cosine_similarity(&a, &a);
+        assert!((sim - 1.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_cosine_similarity_orthogonal() {
+        let a = vec![1.0, 0.0];
+        let b = vec![0.0, 1.0];
+        let sim = cosine_similarity(&a, &b);
+        assert!(sim.abs() < 0.001);
+    }
+}

@@ -28,6 +28,7 @@
 //! ```
 
 pub mod anomaly;
+pub mod auto_embed;
 pub mod config;
 pub mod embedding;
 pub mod embeddings;
