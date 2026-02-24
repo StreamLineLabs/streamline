@@ -276,6 +276,14 @@ pub struct KafkaHandler {
     /// Optional sharded runtime for thread-per-core execution
     /// When set, partition work is routed to the shard owning the partition
     sharded_runtime: Option<Arc<ShardedRuntime>>,
+
+    /// Optional schema validator for produce-path message validation
+    #[cfg(feature = "schema-registry")]
+    schema_validator: Option<Arc<crate::schema::store::ProduceSchemaValidator>>,
+
+    /// Optional auto-embedding interceptor for AI-native streaming
+    #[cfg(feature = "ai")]
+    auto_embed_interceptor: Option<Arc<crate::ai::auto_embed::AutoEmbedInterceptor>>,
 }
 
 /// A cloneable handle to the Kafka handler for use in spawned tasks
@@ -411,6 +419,10 @@ impl KafkaHandler {
             resource_limiter: None,
             kip848_engine: Arc::new(ReconciliationEngine::new_default()),
             sharded_runtime: None,
+            #[cfg(feature = "schema-registry")]
+            schema_validator: None,
+            #[cfg(feature = "ai")]
+            auto_embed_interceptor: None,
         })
     }
 
@@ -456,6 +468,10 @@ impl KafkaHandler {
             resource_limiter: None,
             kip848_engine: Arc::new(ReconciliationEngine::new_default()),
             sharded_runtime: None,
+            #[cfg(feature = "schema-registry")]
+            schema_validator: None,
+            #[cfg(feature = "ai")]
+            auto_embed_interceptor: None,
         }
     }
 
@@ -504,6 +520,10 @@ impl KafkaHandler {
             resource_limiter: None,
             kip848_engine: Arc::new(ReconciliationEngine::new_default()),
             sharded_runtime: None,
+            #[cfg(feature = "schema-registry")]
+            schema_validator: None,
+            #[cfg(feature = "ai")]
+            auto_embed_interceptor: None,
         })
     }
 
@@ -572,6 +592,10 @@ impl KafkaHandler {
             response_cache: None,
             resource_limiter: None,
             sharded_runtime: None,
+            #[cfg(feature = "schema-registry")]
+            schema_validator: None,
+            #[cfg(feature = "ai")]
+            auto_embed_interceptor: None,
         })
     }
 
@@ -712,6 +736,26 @@ impl KafkaHandler {
         self
     }
 
+    /// Set the schema validator for produce-path message validation
+    #[cfg(feature = "schema-registry")]
+    pub fn with_schema_validator(
+        mut self,
+        validator: Arc<crate::schema::store::ProduceSchemaValidator>,
+    ) -> Self {
+        self.schema_validator = Some(validator);
+        self
+    }
+
+    /// Set the auto-embedding interceptor for AI-native streaming
+    #[cfg(feature = "ai")]
+    pub fn with_auto_embed_interceptor(
+        mut self,
+        interceptor: Arc<crate::ai::auto_embed::AutoEmbedInterceptor>,
+    ) -> Self {
+        self.auto_embed_interceptor = Some(interceptor);
+        self
+    }
+
 
     /// Create a cloneable handle for use in spawned tasks
     fn clone_for_task(&self) -> KafkaHandlerHandle {
@@ -746,6 +790,10 @@ impl KafkaHandler {
                 response_cache: self.response_cache.clone(),
                 resource_limiter: self.resource_limiter.clone(),
                 sharded_runtime: self.sharded_runtime.clone(),
+                #[cfg(feature = "schema-registry")]
+                schema_validator: self.schema_validator.clone(),
+                #[cfg(feature = "ai")]
+                auto_embed_interceptor: self.auto_embed_interceptor.clone(),
             },
         }
     }

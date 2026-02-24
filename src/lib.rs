@@ -279,6 +279,11 @@ pub mod autotuning;
 #[allow(dead_code)]
 pub(crate) mod edge;
 
+// Functions-as-a-Service runtime (optional - requires faas feature)
+#[cfg(feature = "faas")]
+#[allow(dead_code)]
+pub(crate) mod faas;
+
 // CRDT (Conflict-free Replicated Data Types) for edge computing
 #[doc(hidden)]
 pub mod crdt;

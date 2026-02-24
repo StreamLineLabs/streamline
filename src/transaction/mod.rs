@@ -17,12 +17,16 @@
 
 mod coordinator;
 pub mod eos;
+pub mod jepsen;
 pub mod log;
+pub mod saga;
 mod state;
 
 pub use coordinator::{
     AbortedTransaction, TransactionCoordinator, TransactionTimeoutConfig, TransactionTimeoutStats,
 };
 pub use eos::{EosManager, SequenceValidation};
+pub use jepsen::{EosChecker, TestResult as JepsenTestResult};
 pub use log::TransactionLog;
+pub use saga::{SagaBuilder, SagaDefinition, SagaExecution, SagaOrchestrator, SagaState};
 pub use state::{Transaction, TransactionPartition, TransactionState};

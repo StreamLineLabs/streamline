@@ -158,6 +158,17 @@ pub struct ServerConfig {
     /// Enable playground mode with web UI and demo topics
     pub playground: bool,
 
+    /// Enable ephemeral mode for testing: in-memory, auto-cleanup, fast startup.
+    /// When enabled, data is never persisted and the server exits when all clients disconnect
+    /// (after `ephemeral_idle_timeout_secs` seconds with zero connections).
+    pub ephemeral: bool,
+
+    /// Idle timeout in seconds before ephemeral server auto-shuts down (default: 30).
+    pub ephemeral_idle_timeout_secs: u64,
+
+    /// Auto-create topics from this list on startup in ephemeral mode (format: "name:partitions").
+    pub ephemeral_auto_topics: Vec<String>,
+
     /// Edge deployment configuration (requires `edge` feature)
     #[cfg(feature = "edge")]
     pub edge: EdgeDeploymentConfig,
@@ -692,6 +703,9 @@ impl ServerConfig {
             auto_create_topics: args.auto_create_topics,
             telemetry: telemetry_config,
             playground: args.playground,
+            ephemeral: args.ephemeral.unwrap_or(false),
+            ephemeral_idle_timeout_secs: args.ephemeral_idle_timeout_secs.unwrap_or(30),
+            ephemeral_auto_topics: args.ephemeral_auto_topics.clone().unwrap_or_default(),
             #[cfg(feature = "edge")]
             edge: EdgeDeploymentConfig {
                 enabled: args.edge_mode,
@@ -735,6 +749,9 @@ impl Default for ServerConfig {
             auto_create_topics: DEFAULT_AUTO_CREATE_TOPICS,
             telemetry: crate::telemetry::TelemetryConfig::default(),
             playground: false,
+            ephemeral: false,
+            ephemeral_idle_timeout_secs: 30,
+            ephemeral_auto_topics: Vec::new(),
             #[cfg(feature = "edge")]
             edge: EdgeDeploymentConfig::default(),
         }
@@ -1257,6 +1274,9 @@ mod tests {
             simple_enabled: false,
             simple_addr: "0.0.0.0:9095".to_string(),
             playground: false,
+            ephemeral: None,
+            ephemeral_idle_timeout_secs: None,
+            ephemeral_auto_topics: None,
             encryption_enabled: false,
             encryption_key_file: None,
             encryption_key_env_var: None,
@@ -1409,6 +1429,9 @@ mod tests {
             simple_enabled: false,
             simple_addr: "0.0.0.0:9095".to_string(),
             playground: false,
+            ephemeral: None,
+            ephemeral_idle_timeout_secs: None,
+            ephemeral_auto_topics: None,
             encryption_enabled: false,
             encryption_key_file: None,
             encryption_key_env_var: None,
@@ -1540,6 +1563,9 @@ mod tests {
             simple_enabled: false,
             simple_addr: "0.0.0.0:9095".to_string(),
             playground: false,
+            ephemeral: None,
+            ephemeral_idle_timeout_secs: None,
+            ephemeral_auto_topics: None,
             encryption_enabled: false,
             encryption_key_file: None,
             encryption_key_env_var: None,
@@ -1672,6 +1698,9 @@ mod tests {
             simple_enabled: false,
             simple_addr: "0.0.0.0:9095".to_string(),
             playground: false,
+            ephemeral: None,
+            ephemeral_idle_timeout_secs: None,
+            ephemeral_auto_topics: None,
             encryption_enabled: false,
             encryption_key_file: None,
             encryption_key_env_var: None,

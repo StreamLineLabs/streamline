@@ -1054,12 +1054,12 @@ impl ErrorHint for StreamlineError {
     fn hint(&self) -> Option<String> {
         match self {
             StreamlineError::TopicNotFound(topic) => Some(format!(
-                "Topic '{}' does not exist. Create it with: `streamline-cli topics create {} --partitions 3`",
+                "Topic '{}' does not exist. List available topics with: `streamline-cli topics list` or create it with: `streamline-cli topics create {} --partitions 3`",
                 topic, topic
             )),
             StreamlineError::PartitionNotFound(topic, partition) => Some(format!(
-                "Partition {} does not exist for topic '{}'. Check available partitions with: `streamline-cli topics describe {}`",
-                partition, topic, topic
+                "Partition {} does not exist for topic '{}' (topic may have fewer than {} partitions). Check available partitions with: `streamline-cli topics describe {}`",
+                partition, topic, partition + 1, topic
             )),
             StreamlineError::TopicAlreadyExists(topic) => Some(format!(
                 "Topic '{}' already exists. Inspect it with: `streamline-cli topics describe {}` or delete with: `streamline-cli topics delete {}`",
@@ -1083,7 +1083,7 @@ impl ErrorHint for StreamlineError {
                 "Invalid credentials. Reset with: `streamline-cli auth configure` or check `~/.streamline/config.toml`".into()
             ),
             StreamlineError::MessageTooLarge(size, max) => Some(format!(
-                "Message size {} exceeds limit of {}. Reduce message size or increase `max_message_bytes` in server config: `streamline-cli config set max_message_bytes {}`",
+                "Message size {} exceeds limit of {}. Reduce message size or increase `max.message.bytes` in server config: `streamline-cli config set max.message.bytes {}`",
                 size, max, size
             )),
             StreamlineError::InvalidOffset(offset) => Some(format!(

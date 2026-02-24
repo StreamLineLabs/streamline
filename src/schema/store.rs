@@ -833,6 +833,104 @@ impl SchemaRegistry {
     }
 }
 
+/// Schema validation interceptor for the produce path.
+///
+/// Sits between the Kafka protocol handler and storage layer to validate
+/// that produced messages conform to their registered schemas.
+pub struct ProduceSchemaValidator {
+    store: Arc<SchemaStore>,
+    enabled: bool,
+    auto_register: bool,
+}
+
+impl ProduceSchemaValidator {
+    /// Create a new produce validator.
+    pub fn new(store: Arc<SchemaStore>, enabled: bool, auto_register: bool) -> Self {
+        Self {
+            store,
+            enabled,
+            auto_register,
+        }
+    }
+
+    /// Validate a message before it is written to storage.
+    ///
+    /// If the topic has a registered schema (subject = "{topic}-value"),
+    /// validates the message payload against the latest schema version.
+    ///
+    /// Returns Ok(()) if validation passes or is not required.
+    pub async fn validate_produce(
+        &self,
+        topic: &str,
+        key: Option<&[u8]>,
+        value: &[u8],
+    ) -> Result<(), SchemaError> {
+        if !self.enabled {
+            return Ok(());
+        }
+
+        // Check for value schema
+        let value_subject = format!("{}-value", topic);
+        if let Ok(schema) = self.store.get_latest_schema(&value_subject) {
+            // Try to extract schema ID from Confluent wire format (magic byte + 4-byte ID)
+            if value.len() > 5 && value[0] == 0 {
+                let schema_id = i32::from_be_bytes([value[1], value[2], value[3], value[4]]);
+                self.store.validate_data(schema_id, &value[5..])?;
+            } else {
+                // Validate raw payload against latest schema
+                self.store
+                    .checker
+                    .validate_data(&schema.schema, schema.schema_type, value)?;
+            }
+        } else if self.auto_register && !value.is_empty() {
+            // Auto-register: try to infer schema from the first message
+            if let Ok(inferred) = serde_json::from_slice::<serde_json::Value>(value) {
+                let schema_str = crate::schema::inference::infer_json_schema(&inferred);
+                let _ = self
+                    .store
+                    .register_schema(
+                        &value_subject,
+                        &schema_str,
+                        SchemaType::Json,
+                        vec![],
+                    )
+                    .await;
+            }
+        }
+
+        // Check for key schema (optional)
+        if let Some(key_data) = key {
+            let key_subject = format!("{}-key", topic);
+            if let Ok(schema) = self.store.get_latest_schema(&key_subject) {
+                if key_data.len() > 5 && key_data[0] == 0 {
+                    let schema_id =
+                        i32::from_be_bytes([key_data[1], key_data[2], key_data[3], key_data[4]]);
+                    self.store.validate_data(schema_id, &key_data[5..])?;
+                } else {
+                    self.store
+                        .checker
+                        .validate_data(&schema.schema, schema.schema_type, key_data)?;
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Check if a subject has a registered schema.
+    pub fn has_schema(&self, subject: &str) -> bool {
+        self.store.get_latest_schema(subject).is_ok()
+    }
+
+    /// Get the schema ID for a subject's latest version.
+    pub fn latest_schema_id(&self, subject: &str) -> Option<i32> {
+        self.store
+            .get_latest_schema(subject)
+            .ok()
+            .map(|s| s.id)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1212,5 +1310,80 @@ message Test {
             .await
             .unwrap();
         assert_eq!(id4, 4);
+    }
+
+    #[tokio::test]
+    async fn test_produce_validator_disabled() {
+        let store = Arc::new(SchemaStore::new(test_config()));
+        let validator = ProduceSchemaValidator::new(store, false, false);
+        let result = validator
+            .validate_produce("test-topic", None, b"any data")
+            .await;
+        assert!(result.is_ok(), "Should pass when validator is disabled");
+    }
+
+    #[tokio::test]
+    async fn test_produce_validator_no_schema() {
+        let store = Arc::new(SchemaStore::new(test_config()));
+        let validator = ProduceSchemaValidator::new(store, true, false);
+        let result = validator
+            .validate_produce("unregistered-topic", None, b"any data")
+            .await;
+        assert!(result.is_ok(), "Should pass when no schema is registered");
+    }
+
+    #[tokio::test]
+    async fn test_produce_validator_auto_register() {
+        let store = Arc::new(SchemaStore::new(test_config()));
+        let validator = ProduceSchemaValidator::new(Arc::clone(&store), true, true);
+
+        let json_msg = br#"{"name": "Alice", "age": 30}"#;
+        let result = validator
+            .validate_produce("users", None, json_msg)
+            .await;
+        assert!(result.is_ok());
+
+        // Schema should have been auto-registered
+        assert!(validator.has_schema("users-value"));
+    }
+
+    #[tokio::test]
+    async fn test_produce_validator_with_registered_schema() {
+        let store = Arc::new(SchemaStore::new(test_config()));
+
+        // Register a JSON schema
+        let schema = r#"{"type":"object","properties":{"name":{"type":"string"}},"required":["name"]}"#;
+        store
+            .register_schema("events-value", schema, SchemaType::Json, vec![])
+            .await
+            .unwrap();
+
+        let validator = ProduceSchemaValidator::new(Arc::clone(&store), true, false);
+
+        // Valid message
+        let valid = br#"{"name": "test"}"#;
+        assert!(validator.validate_produce("events", None, valid).await.is_ok());
+    }
+
+    #[test]
+    fn test_latest_schema_id() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let store = Arc::new(SchemaStore::new(test_config()));
+
+        rt.block_on(async {
+            store
+                .register_schema(
+                    "topic-value",
+                    r#"{"type":"object"}"#,
+                    SchemaType::Json,
+                    vec![],
+                )
+                .await
+                .unwrap();
+        });
+
+        let validator = ProduceSchemaValidator::new(Arc::clone(&store), true, false);
+        assert!(validator.latest_schema_id("topic-value").is_some());
+        assert!(validator.latest_schema_id("nonexistent").is_none());
     }
 }

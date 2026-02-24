@@ -298,6 +298,31 @@ impl KafkaHandler {
                         }
                     }
 
+                    // ── Schema Validation (if enabled) ───────────────────────
+                    #[cfg(feature = "schema-registry")]
+                    if let Some(ref validator) = self.schema_validator {
+                        if let Err(e) = validator
+                            .validate_produce(&topic_name, None, &batch_bytes)
+                            .await
+                        {
+                            debug!(
+                                topic = %topic_name,
+                                partition = partition_index,
+                                error = %e,
+                                "Schema validation failed on produce"
+                            );
+                            // Return INVALID_RECORD error for this partition
+                            let partition_response = PartitionProduceResponse::default()
+                                .with_index(partition_index)
+                                .with_error_code(87) // INVALID_RECORD
+                                .with_base_offset(-1)
+                                .with_log_append_time_ms(-1)
+                                .with_log_start_offset(0);
+                            partition_responses.push(partition_response);
+                            continue;
+                        }
+                    }
+
                     // Append the Kafka record batch using append_batch
                     // This method:
                     // 1. Atomically reserves `record_count` offsets
@@ -305,6 +330,10 @@ impl KafkaHandler {
                     // 3. Stores the batch with correct offset tracking
                     // Reuse batch_bytes (already cloned from records) - avoids third copy
                     let effective_record_count = if record_count > 0 { record_count } else { 1 };
+
+                    // Clone batch bytes for post-append embedding (if AI feature enabled)
+                    #[cfg(feature = "ai")]
+                    let batch_bytes_for_embed = batch_bytes.clone();
 
                     // Route append to owning shard for thread-per-core locality
                     // This achieves cache affinity: partition data is always processed by the same CPU
@@ -376,6 +405,20 @@ impl KafkaHandler {
                                 replication_manager
                                     .set_log_end_offset(&topic_name, partition_index, new_leo)
                                     .await;
+                            }
+                            // ── AI Auto-Embedding (if enabled) ───────────────
+                            #[cfg(feature = "ai")]
+                            if let Some(ref embed) = self.auto_embed_interceptor {
+                                let ts = chrono::Utc::now().timestamp_millis();
+                                // Fire-and-forget: embedding is async, don't block produce
+                                let embed = embed.clone();
+                                let topic = topic_name.clone();
+                                let data = batch_bytes_for_embed.clone();
+                                tokio::spawn(async move {
+                                    let _ = embed
+                                        .on_produce(&topic, partition_index, base_offset, &data, ts)
+                                        .await;
+                                });
                             }
                             (base_offset, NONE)
                         }

@@ -431,6 +431,19 @@ pub struct ServerArgs {
     #[arg(long, env = "STREAMLINE_PLAYGROUND")]
     pub playground: bool,
 
+    /// Start in ephemeral mode for testing: in-memory, auto-cleanup, fast startup.
+    /// Server exits after idle timeout with no active connections.
+    #[arg(long, env = "STREAMLINE_EPHEMERAL")]
+    pub ephemeral: Option<bool>,
+
+    /// Seconds of zero connections before ephemeral server auto-shuts down (default: 30)
+    #[arg(long, env = "STREAMLINE_EPHEMERAL_IDLE_TIMEOUT")]
+    pub ephemeral_idle_timeout_secs: Option<u64>,
+
+    /// Auto-create topics on startup in ephemeral mode (format: "name:partitions,name2:partitions2")
+    #[arg(long, env = "STREAMLINE_EPHEMERAL_AUTO_TOPICS", value_delimiter = ',')]
+    pub ephemeral_auto_topics: Option<Vec<String>>,
+
     // ===== Encryption at Rest Options =====
     /// Enable encryption at rest for segment data
     #[arg(long, env = "STREAMLINE_ENCRYPTION_ENABLED")]

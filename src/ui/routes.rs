@@ -229,6 +229,29 @@ pub fn create_router(state: WebUiState) -> Router {
         // System settings and plugins
         .route("/settings", get(settings_page))
         .route("/settings/plugins", get(plugins_page))
+        // StreamQL Query Editor
+        .route("/streamql", get(streamql_editor_page))
+        .route("/streamql/history", get(streamql_history_page))
+        .route("/api/v1/streamql/execute", post(api_execute_streamql))
+        .route("/api/v1/streamql/validate", post(api_validate_streamql))
+        .route("/api/v1/streamql/history", get(api_get_streamql_history))
+        .route("/api/v1/streamql/views", get(api_list_materialized_views))
+        // Message Inspector (deep-dive into individual messages)
+        .route("/messages/inspect", get(message_inspector_page))
+        .route("/api/v1/messages/decode", post(api_decode_message))
+        .route("/api/v1/messages/search", get(api_search_messages))
+        // Connector Management UI
+        .route("/connectors", get(connectors_page))
+        .route("/connectors/:name", get(connector_details_page))
+        .route("/api/v1/connectors", get(api_list_connectors_ui).post(api_create_connector_ui))
+        .route("/api/v1/connectors/:name", get(api_get_connector_ui).delete(api_delete_connector_ui))
+        .route("/api/v1/connectors/:name/restart", post(api_restart_connector_ui))
+        // SPA shell for client-side routing (returns the same HTML for all /app/* paths)
+        .route("/app", get(spa_shell_page))
+        .route("/app/*path", get(spa_shell_page))
+        // Canvas-based lag heatmap data API
+        .route("/api/v1/lag-heatmap/data", get(api_lag_heatmap_data))
+        .route("/api/v1/topology", get(api_cluster_topology))
         // Static assets
         .route("/static/css/main.css", get(static_css))
         .route("/static/js/main.js", get(static_js))
@@ -3153,6 +3176,303 @@ async fn api_get_pipeline_metrics(
         "latency_p99_ms": 45,
         "error_rate": 0.0001,
         "uptime_seconds": 86400
+    }))
+}
+
+// ── StreamQL Editor ──────────────────────────────────────────────────────────
+
+async fn streamql_editor_page(State(state): State<WebUiState>) -> impl IntoResponse {
+    let content = r#"<div class="page-header"><h1>📊 StreamQL Editor</h1>
+        <p>Execute SQL queries on streaming data with real-time results.</p></div>
+        <div class="card">
+        <textarea id="query-input" class="form-control" rows="5" placeholder="SELECT * FROM streamline_topic('events') LIMIT 10"
+            style="font-family: monospace; width: 100%;"></textarea>
+        <div style="margin-top: 8px;">
+            <button id="run-btn" class="btn btn-primary" onclick="runQuery()">▶ Run Query</button>
+            <button class="btn btn-secondary" onclick="validateQuery()">✓ Validate</button>
+            <span id="query-status" style="margin-left: 12px;"></span>
+        </div>
+        <div id="query-results" style="margin-top: 16px;"></div>
+        </div>
+        <script>
+        async function runQuery() {
+            const sql = document.getElementById('query-input').value;
+            document.getElementById('query-status').textContent = 'Executing...';
+            try {
+                const res = await fetch('/api/v1/streamql/execute', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({query: sql})});
+                const data = await res.json();
+                document.getElementById('query-status').textContent = data.error ? '❌ ' + data.error : '✅ ' + (data.row_count || 0) + ' rows';
+                if (data.columns && data.rows) {
+                    let html = '<table class="table"><thead><tr>' + data.columns.map(c => '<th>'+c+'</th>').join('') + '</tr></thead><tbody>' +
+                        data.rows.map(r => '<tr>' + r.map(v => '<td>'+v+'</td>').join('') + '</tr>').join('') + '</tbody></table>';
+                    document.getElementById('query-results').innerHTML = html;
+                }
+            } catch(e) { document.getElementById('query-status').textContent = '❌ ' + e.message; }
+        }
+        async function validateQuery() {
+            const sql = document.getElementById('query-input').value;
+            const res = await fetch('/api/v1/streamql/validate', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({query: sql})});
+            const data = await res.json();
+            document.getElementById('query-status').textContent = data.valid ? '✅ Valid query' : '❌ ' + data.error;
+        }
+        </script>"#;
+    Html(state.templates.layout("StreamQL Editor", content, "streamql"))
+}
+
+async fn streamql_history_page(State(state): State<WebUiState>) -> impl IntoResponse {
+    let content = r#"<div class="page-header"><h1>📋 Query History</h1></div>
+        <div id="history" class="card"><p>Loading...</p></div>
+        <script>
+        fetch('/api/v1/streamql/history').then(r => r.json()).then(data => {
+            const el = document.getElementById('history');
+            if (data.queries && data.queries.length > 0) {
+                el.innerHTML = '<table class="table"><thead><tr><th>Time</th><th>Query</th><th>Duration</th><th>Rows</th></tr></thead><tbody>' +
+                    data.queries.map(q => `<tr><td>${q.executed_at}</td><td><code>${q.query}</code></td><td>${q.duration_ms}ms</td><td>${q.row_count}</td></tr>`).join('') +
+                    '</tbody></table>';
+            } else { el.innerHTML = '<p class="text-muted">No queries executed yet.</p>'; }
+        });
+        </script>"#;
+    Html(state.templates.layout("Query History", content, "streamql"))
+}
+
+async fn api_execute_streamql(
+    Json(payload): Json<serde_json::Value>,
+) -> Json<serde_json::Value> {
+    let query = payload
+        .get("query")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    Json(serde_json::json!({
+        "query": query,
+        "columns": ["placeholder"],
+        "rows": [],
+        "row_count": 0,
+        "duration_ms": 0,
+        "error": null
+    }))
+}
+
+async fn api_validate_streamql(
+    Json(payload): Json<serde_json::Value>,
+) -> Json<serde_json::Value> {
+    let query = payload
+        .get("query")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let valid = !query.trim().is_empty();
+    Json(serde_json::json!({
+        "valid": valid,
+        "error": if valid { serde_json::Value::Null } else { serde_json::json!("Empty query") }
+    }))
+}
+
+async fn api_get_streamql_history() -> Json<serde_json::Value> {
+    Json(serde_json::json!({"queries": []}))
+}
+
+async fn api_list_materialized_views() -> Json<serde_json::Value> {
+    Json(serde_json::json!({"views": []}))
+}
+
+// ── Message Inspector ────────────────────────────────────────────────────────
+
+async fn message_inspector_page(State(state): State<WebUiState>) -> impl IntoResponse {
+    let content = r#"<div class="page-header"><h1>🔍 Message Inspector</h1>
+        <p>Deep-dive into individual messages: decode, search, and analyze.</p></div>
+        <div class="card">
+        <div class="form-group">
+            <label>Topic:</label>
+            <input type="text" id="inspect-topic" class="form-control" placeholder="topic-name" />
+            <label>Partition:</label>
+            <input type="number" id="inspect-partition" class="form-control" value="0" />
+            <label>Offset:</label>
+            <input type="number" id="inspect-offset" class="form-control" value="0" />
+            <button class="btn btn-primary" onclick="inspectMessage()" style="margin-top:8px;">Inspect</button>
+        </div>
+        <div id="inspect-result" style="margin-top:16px;"></div>
+        </div>"#;
+    Html(state.templates.layout("Message Inspector", content, "messages"))
+}
+
+async fn api_decode_message(
+    Json(payload): Json<serde_json::Value>,
+) -> Json<serde_json::Value> {
+    let value = payload
+        .get("value")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    // Try JSON parsing
+    let decoded = serde_json::from_str::<serde_json::Value>(value)
+        .map(|v| serde_json::json!({"format": "json", "decoded": v}))
+        .unwrap_or_else(|_| serde_json::json!({"format": "raw", "decoded": value}));
+    Json(decoded)
+}
+
+async fn api_search_messages(
+    axum::extract::Query(params): axum::extract::Query<HashMap<String, String>>,
+) -> Json<serde_json::Value> {
+    let topic = params.get("topic").cloned().unwrap_or_default();
+    let query = params.get("q").cloned().unwrap_or_default();
+    Json(serde_json::json!({
+        "topic": topic,
+        "query": query,
+        "matches": [],
+        "total": 0
+    }))
+}
+
+// ── Connector Management UI ─────────────────────────────────────────────────
+
+async fn connectors_page(State(state): State<WebUiState>) -> impl IntoResponse {
+    let content = r#"<div class="page-header"><h1>🔌 Connectors</h1>
+        <p>Manage Kafka Connect-compatible connectors.</p></div>
+        <div class="card">
+        <div id="connectors-list"><p>Loading connectors...</p></div>
+        <script>
+        fetch('/api/v1/connectors').then(r => r.json()).then(data => {
+            const el = document.getElementById('connectors-list');
+            if (data.connectors && data.connectors.length > 0) {
+                el.innerHTML = '<table class="table"><thead><tr><th>Name</th><th>Type</th><th>State</th><th>Tasks</th><th>Actions</th></tr></thead><tbody>' +
+                    data.connectors.map(c => `<tr><td><a href="/connectors/${c.name}">${c.name}</a></td><td>${c.type}</td><td>${c.state}</td><td>${c.tasks}</td><td><button class="btn btn-sm btn-danger" onclick="deleteConnector('${c.name}')">Delete</button></td></tr>`).join('') +
+                    '</tbody></table>';
+            } else { el.innerHTML = '<p>No connectors configured. <a href="#" onclick="showCreateForm()">Create one</a>.</p>'; }
+        });
+        </script></div>"#;
+    Html(state.templates.layout("Connectors", content, "connectors"))
+}
+
+async fn connector_details_page(
+    State(state): State<WebUiState>,
+    Path(name): Path<String>,
+) -> impl IntoResponse {
+    let content = format!(
+        r#"<div class="page-header"><h1>🔌 Connector: {name}</h1></div>
+        <div class="grid grid-cols-2 gap-4">
+            <div class="card"><h3>Status</h3><div id="status">Loading...</div></div>
+            <div class="card"><h3>Configuration</h3><pre id="config">Loading...</pre></div>
+        </div>
+        <script>
+        fetch('/api/v1/connectors/{name}').then(r => r.json()).then(data => {{
+            document.getElementById('status').innerHTML = '<span class="badge">' + data.state + '</span>';
+            document.getElementById('config').textContent = JSON.stringify(data.config, null, 2);
+        }});
+        </script>"#
+    );
+    Html(state.templates.layout(&format!("Connector: {}", name), &content, "connectors"))
+}
+
+async fn api_list_connectors_ui() -> Json<serde_json::Value> {
+    Json(serde_json::json!({"connectors": []}))
+}
+
+async fn api_create_connector_ui(
+    Json(payload): Json<serde_json::Value>,
+) -> (StatusCode, Json<serde_json::Value>) {
+    (StatusCode::CREATED, Json(payload))
+}
+
+async fn api_get_connector_ui(Path(name): Path<String>) -> Json<serde_json::Value> {
+    Json(serde_json::json!({
+        "name": name,
+        "state": "RUNNING",
+        "config": {},
+        "tasks": []
+    }))
+}
+
+async fn api_delete_connector_ui(Path(name): Path<String>) -> StatusCode {
+    StatusCode::NO_CONTENT
+}
+
+async fn api_restart_connector_ui(Path(name): Path<String>) -> StatusCode {
+    StatusCode::NO_CONTENT
+}
+
+// ── SPA Shell ────────────────────────────────────────────────────────────────
+
+async fn spa_shell_page(State(state): State<WebUiState>) -> impl IntoResponse {
+    let content = r#"<div id="spa-root">
+        <nav class="spa-nav">
+            <a href="/app/topics" class="nav-link" data-route="topics">Topics</a>
+            <a href="/app/groups" class="nav-link" data-route="groups">Consumer Groups</a>
+            <a href="/app/streamql" class="nav-link" data-route="streamql">StreamQL</a>
+            <a href="/app/connectors" class="nav-link" data-route="connectors">Connectors</a>
+            <a href="/app/schemas" class="nav-link" data-route="schemas">Schemas</a>
+            <a href="/app/lag" class="nav-link" data-route="lag">Lag Heatmap</a>
+        </nav>
+        <main id="spa-content"><p>Loading...</p></main>
+    </div>
+    <script>
+    // Minimal SPA router — intercepts nav clicks and loads content via API
+    document.querySelectorAll('.nav-link').forEach(link => {
+        link.addEventListener('click', e => {
+            e.preventDefault();
+            const route = link.dataset.route;
+            history.pushState({route}, '', link.href);
+            loadRoute(route);
+        });
+    });
+    window.onpopstate = e => { if (e.state) loadRoute(e.state.route); };
+    async function loadRoute(route) {
+        const el = document.getElementById('spa-content');
+        el.innerHTML = '<p>Loading ' + route + '...</p>';
+        try {
+            const endpoints = {
+                topics: '/api/topics', groups: '/api/consumer-groups',
+                streamql: '/api/v1/streamql/views', connectors: '/api/v1/connectors',
+                schemas: '/api/schemas', lag: '/api/v1/lag-heatmap/data',
+            };
+            const res = await fetch(endpoints[route] || '/api/topics');
+            const data = await res.json();
+            el.innerHTML = '<pre>' + JSON.stringify(data, null, 2) + '</pre>';
+        } catch(err) { el.innerHTML = '<p class="error">' + err.message + '</p>'; }
+    }
+    // Load initial route from URL
+    const initial = window.location.pathname.replace('/app/', '') || 'topics';
+    loadRoute(initial);
+    </script>"#;
+    Html(state.templates.layout("Streamline Dashboard", content, "app"))
+}
+
+// ── Canvas Lag Heatmap API ───────────────────────────────────────────────────
+
+async fn api_lag_heatmap_data() -> Json<serde_json::Value> {
+    // Returns structured data for a canvas-based heatmap renderer
+    Json(serde_json::json!({
+        "groups": [],
+        "topics": [],
+        "cells": [],
+        "meta": {
+            "severity_thresholds": {
+                "low": 100,
+                "medium": 1000,
+                "high": 10000,
+                "critical": 100000
+            },
+            "colors": {
+                "low": "#22c55e",
+                "medium": "#eab308",
+                "high": "#f97316",
+                "critical": "#ef4444",
+                "empty": "#374151"
+            }
+        }
+    }))
+}
+
+async fn api_cluster_topology() -> Json<serde_json::Value> {
+    Json(serde_json::json!({
+        "nodes": [{
+            "id": 0,
+            "host": "localhost",
+            "port": 9092,
+            "role": "leader",
+            "status": "online",
+            "partitions_led": 0,
+            "partitions_followed": 0,
+        }],
+        "topics": [],
+        "connections": 0,
     }))
 }
 
