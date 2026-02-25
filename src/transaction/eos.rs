@@ -28,7 +28,11 @@ use std::time::Instant;
 use tracing::{debug, warn};
 
 /// Maximum number of in-flight batches tracked per producer-partition
-const MAX_SEQUENCE_WINDOW: usize = 5;
+///
+/// Increased from 5 to 20 to handle higher-throughput producers with
+/// larger retry windows. This prevents sequence window overflow for
+/// producers that batch aggressively.
+const MAX_SEQUENCE_WINDOW: usize = 20;
 
 /// Result of sequence validation
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -307,6 +311,131 @@ impl EosManager {
     pub fn tracked_producer_count(&self) -> usize {
         self.sequences.iter().map(|e| e.value().len()).sum()
     }
+
+    /// Serialize all sequence state to a snapshot for crash recovery.
+    ///
+    /// Returns a map of (topic, partition) → (producer_id → state)
+    /// that can be persisted to disk and restored with `restore_snapshot`.
+    pub fn create_snapshot(&self) -> HashMap<(String, i32), HashMap<ProducerId, ProducerSequenceState>> {
+        let mut snapshot = HashMap::new();
+        for entry in self.sequences.iter() {
+            let key = entry.key();
+            snapshot.insert(
+                (key.topic.clone(), key.partition),
+                entry.value().clone(),
+            );
+        }
+        snapshot
+    }
+
+    /// Restore sequence state from a previously saved snapshot.
+    ///
+    /// This is called during server startup to recover idempotent
+    /// producer state from the last checkpoint, preventing false
+    /// duplicate rejections after restart.
+    pub fn restore_snapshot(
+        &self,
+        snapshot: HashMap<(String, i32), HashMap<ProducerId, ProducerSequenceState>>,
+    ) {
+        let mut count = 0;
+        for ((topic, partition), producers) in snapshot {
+            let key = PartitionKey { topic, partition };
+            count += producers.len();
+            self.sequences.insert(key, producers);
+        }
+        debug!(producers = count, "EOS: Restored sequence state from snapshot");
+    }
+
+    /// Save sequence state to a file for crash recovery
+    pub fn save_to_file(&self, path: &std::path::Path) -> crate::error::Result<()> {
+        let snapshot = self.create_snapshot();
+        let serializable: HashMap<String, HashMap<String, ProducerSequenceState>> = snapshot
+            .into_iter()
+            .map(|((topic, partition), producers)| {
+                let key = format!("{}:{}", topic, partition);
+                let prods: HashMap<String, ProducerSequenceState> = producers
+                    .into_iter()
+                    .map(|(pid, state)| (pid.to_string(), state))
+                    .collect();
+                (key, prods)
+            })
+            .collect();
+
+        let json = serde_json::to_string(&serializable).map_err(|e| {
+            crate::error::StreamlineError::Storage(format!(
+                "Failed to serialize EOS state: {}", e
+            ))
+        })?;
+
+        let temp_path = path.with_extension("tmp");
+        std::fs::write(&temp_path, &json).map_err(|e| {
+            crate::error::StreamlineError::Storage(format!(
+                "Failed to write EOS snapshot: {}", e
+            ))
+        })?;
+        // Atomic rename for crash safety
+        std::fs::rename(&temp_path, path).map_err(|e| {
+            crate::error::StreamlineError::Storage(format!(
+                "Failed to finalize EOS snapshot: {}", e
+            ))
+        })?;
+
+        debug!(
+            producers = self.tracked_producer_count(),
+            "EOS: Saved sequence state to file"
+        );
+        Ok(())
+    }
+
+    /// Load sequence state from a previously saved file
+    pub fn load_from_file(&self, path: &std::path::Path) -> crate::error::Result<()> {
+        if !path.exists() {
+            debug!("No EOS snapshot found, starting fresh");
+            return Ok(());
+        }
+
+        let json = std::fs::read_to_string(path).map_err(|e| {
+            crate::error::StreamlineError::Storage(format!(
+                "Failed to read EOS snapshot: {}", e
+            ))
+        })?;
+
+        let serializable: HashMap<String, HashMap<String, ProducerSequenceState>> =
+            serde_json::from_str(&json).map_err(|e| {
+                crate::error::StreamlineError::Storage(format!(
+                    "Failed to parse EOS snapshot: {}", e
+                ))
+            })?;
+
+        let mut count = 0;
+        for (key_str, producers) in serializable {
+            let parts: Vec<&str> = key_str.rsplitn(2, ':').collect();
+            if parts.len() != 2 {
+                warn!(key = %key_str, "EOS: Skipping malformed partition key in snapshot");
+                continue;
+            }
+            let partition: i32 = match parts[0].parse() {
+                Ok(p) => p,
+                Err(_) => continue,
+            };
+            let topic = parts[1].to_string();
+
+            let producer_map: HashMap<ProducerId, ProducerSequenceState> = producers
+                .into_iter()
+                .filter_map(|(pid_str, state)| {
+                    pid_str.parse::<ProducerId>().ok().map(|pid| (pid, state))
+                })
+                .collect();
+            count += producer_map.len();
+            self.sequences.insert(
+                PartitionKey { topic, partition },
+                producer_map,
+            );
+        }
+
+        debug!(producers = count, "EOS: Loaded sequence state from file");
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -459,5 +588,157 @@ mod tests {
         let s1 = mgr.get_sequence_state("topic-1", 1, 1000).unwrap();
         assert_eq!(s0.next_sequence, 5);
         assert_eq!(s1.next_sequence, 5);
+    }
+
+    // ========== Snapshot Persistence Tests ==========
+
+    #[test]
+    fn test_create_and_restore_snapshot() {
+        let mgr = EosManager::new(true);
+
+        // Record some sequence state
+        mgr.record_produce("topic-1", 0, 1000, 0, 0, 4, 0);
+        mgr.record_produce("topic-1", 0, 1000, 0, 5, 9, 100);
+        mgr.record_produce("topic-2", 0, 2000, 0, 0, 2, 200);
+
+        // Create snapshot
+        let snapshot = mgr.create_snapshot();
+        assert_eq!(snapshot.len(), 2); // two partition keys
+
+        // Restore into a new manager
+        let mgr2 = EosManager::new(true);
+        mgr2.restore_snapshot(snapshot);
+
+        // Verify restored state
+        let s1 = mgr2.get_sequence_state("topic-1", 0, 1000).unwrap();
+        assert_eq!(s1.next_sequence, 10);
+        assert_eq!(s1.epoch, 0);
+
+        let s2 = mgr2.get_sequence_state("topic-2", 0, 2000).unwrap();
+        assert_eq!(s2.next_sequence, 3);
+
+        assert_eq!(mgr2.tracked_producer_count(), 2);
+    }
+
+    #[test]
+    fn test_save_and_load_from_file() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let file_path = tmp.path().join("eos_snapshot.json");
+
+        // Create and populate manager
+        let mgr = EosManager::new(true);
+        mgr.record_produce("orders", 0, 100, 0, 0, 9, 0);
+        mgr.record_produce("orders", 1, 100, 0, 0, 4, 50);
+        mgr.record_produce("events", 0, 200, 1, 0, 0, 0);
+
+        // Save to file
+        mgr.save_to_file(&file_path).unwrap();
+        assert!(file_path.exists());
+
+        // Load into a new manager
+        let mgr2 = EosManager::new(true);
+        mgr2.load_from_file(&file_path).unwrap();
+
+        // Verify loaded state
+        assert_eq!(mgr2.tracked_producer_count(), 3);
+
+        let s = mgr2.get_sequence_state("orders", 0, 100).unwrap();
+        assert_eq!(s.next_sequence, 10);
+
+        let s = mgr2.get_sequence_state("orders", 1, 100).unwrap();
+        assert_eq!(s.next_sequence, 5);
+
+        let s = mgr2.get_sequence_state("events", 0, 200).unwrap();
+        assert_eq!(s.next_sequence, 1);
+        assert_eq!(s.epoch, 1);
+    }
+
+    #[test]
+    fn test_load_from_nonexistent_file() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let file_path = tmp.path().join("nonexistent.json");
+
+        let mgr = EosManager::new(true);
+        // Should succeed gracefully — no file means fresh state
+        mgr.load_from_file(&file_path).unwrap();
+        assert_eq!(mgr.tracked_producer_count(), 0);
+    }
+
+    #[test]
+    fn test_crash_recovery_preserves_dedup() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let file_path = tmp.path().join("eos_crash.json");
+
+        // Simulate pre-crash state
+        let mgr = EosManager::new(true);
+        mgr.record_produce("topic", 0, 1000, 0, 0, 4, 0);
+        mgr.record_produce("topic", 0, 1000, 0, 5, 9, 100);
+        mgr.save_to_file(&file_path).unwrap();
+
+        // Simulate crash and recovery
+        let recovered = EosManager::new(true);
+        recovered.load_from_file(&file_path).unwrap();
+
+        // Replayed batch should be detected as duplicate
+        let result = recovered.validate_produce("topic", 0, 1000, 0, 5, 9);
+        assert_eq!(
+            result,
+            SequenceValidation::Duplicate {
+                existing_offset: 100
+            }
+        );
+
+        // Next batch should be valid
+        let result = recovered.validate_produce("topic", 0, 1000, 0, 10, 14);
+        assert_eq!(result, SequenceValidation::Valid);
+    }
+
+    #[test]
+    fn test_snapshot_with_multiple_epochs() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let file_path = tmp.path().join("eos_epochs.json");
+
+        let mgr = EosManager::new(true);
+
+        // Epoch 0
+        mgr.record_produce("t", 0, 1, 0, 0, 4, 0);
+        // Fence to epoch 1
+        mgr.fence_producer("t", 0, 1, 1);
+        // Epoch 1
+        mgr.record_produce("t", 0, 1, 1, 0, 2, 50);
+
+        mgr.save_to_file(&file_path).unwrap();
+
+        let mgr2 = EosManager::new(true);
+        mgr2.load_from_file(&file_path).unwrap();
+
+        // Old epoch should still be fenced
+        let result = mgr2.validate_produce("t", 0, 1, 0, 5, 9);
+        assert_eq!(result, SequenceValidation::EpochFenced { current_epoch: 1 });
+
+        // Current epoch should work
+        let result = mgr2.validate_produce("t", 0, 1, 1, 3, 5);
+        assert_eq!(result, SequenceValidation::Valid);
+    }
+
+    #[test]
+    fn test_atomic_file_write_no_corruption() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let file_path = tmp.path().join("eos_atomic.json");
+
+        let mgr = EosManager::new(true);
+        for i in 0..50 {
+            mgr.record_produce(&format!("topic-{}", i % 10), i % 3, i as i64, 0, 0, 4, i as i64 * 100);
+        }
+
+        // Save multiple times (simulates periodic checkpointing)
+        for _ in 0..5 {
+            mgr.save_to_file(&file_path).unwrap();
+        }
+
+        // Verify the file is valid JSON
+        let mgr2 = EosManager::new(true);
+        mgr2.load_from_file(&file_path).unwrap();
+        assert_eq!(mgr2.tracked_producer_count(), mgr.tracked_producer_count());
     }
 }

@@ -10,6 +10,7 @@
 pub mod autoscaler;
 pub mod config;
 pub mod failover;
+pub mod health;
 pub mod leadership;
 pub mod membership;
 pub mod node;
@@ -17,6 +18,7 @@ pub mod partition_lease;
 pub mod partition_split;
 pub mod rack;
 pub mod raft;
+pub mod rebalancer;
 pub mod tls;
 pub mod upgrade;
 pub mod version;
@@ -27,12 +29,16 @@ pub use autoscaler::{
 };
 pub use config::{ClusterConfig, InterBrokerTlsConfig};
 pub use failover::{FailoverConfig, FailoverEvent, FailoverHandler};
+pub use health::{ClusterHealthMonitor, ClusterHealthReport, ClusterHealthStatus, ClusterStats};
 pub use membership::MembershipManager;
 pub use node::{BrokerInfo, NodeId, NodeState};
 pub use rack::RackAwareAssigner;
 pub use raft::{
     ClusterCommand, ClusterMetadata, ClusterResponse, PartitionAssignment, StreamlineRaft,
     TopicAssignment,
+};
+pub use rebalancer::{
+    PartitionMovement, PartitionRebalancer, RebalanceStrategy, RebalancePlan, RebalancerConfig,
 };
 pub use tls::InterBrokerTls;
 
@@ -80,6 +86,12 @@ pub struct ClusterManager {
 
     /// Inter-broker TLS context (if enabled)
     inter_broker_tls: Option<InterBrokerTls>,
+
+    /// Partition rebalancer for automatic load distribution
+    rebalancer: PartitionRebalancer,
+
+    /// Cluster health monitor
+    health_monitor: Arc<RwLock<ClusterHealthMonitor>>,
 }
 
 impl ClusterManager {
@@ -136,7 +148,7 @@ impl ClusterManager {
 
         Ok(Self {
             node_id,
-            config,
+            config: config.clone(),
             raft,
             store,
             rpc_handler,
@@ -146,6 +158,13 @@ impl ClusterManager {
             fetcher_cmd_rx: Arc::new(RwLock::new(Some(fetcher_cmd_rx))),
             initialized: Arc::new(RwLock::new(false)),
             inter_broker_tls,
+            rebalancer: PartitionRebalancer::new(RebalancerConfig {
+                rack_aware: config.rack_aware_assignment,
+                ..Default::default()
+            }),
+            health_monitor: Arc::new(RwLock::new(ClusterHealthMonitor::new(
+                config.min_insync_replicas as usize,
+            ))),
         })
     }
 
@@ -599,6 +618,141 @@ impl ClusterManager {
 
         self.propose_command(cmd).await?;
         Ok(())
+    }
+
+    /// Run a cluster health check and return a health report
+    pub async fn health_check(&self) -> ClusterHealthReport {
+        let metadata = self.metadata().await;
+        let mut monitor = self.health_monitor.write().await;
+        monitor.evaluate(&metadata)
+    }
+
+    /// Plan a partition rebalance based on current cluster state
+    pub async fn plan_rebalance(
+        &self,
+        strategy: RebalanceStrategy,
+    ) -> RebalancePlan {
+        let metadata = self.metadata().await;
+        self.rebalancer.plan_rebalance(&metadata, strategy)
+    }
+
+    /// Execute a rebalance plan by applying partition movements via Raft
+    pub async fn execute_rebalance(&self, plan: &RebalancePlan) -> Result<usize> {
+        if plan.movements.is_empty() {
+            return Ok(0);
+        }
+
+        info!(
+            movements = plan.movements.len(),
+            "Executing partition rebalance"
+        );
+
+        let mut applied = 0;
+        for movement in &plan.movements {
+            // Update replicas via ISR update
+            let cmd = ClusterCommand::UpdateIsr {
+                topic: movement.topic.clone(),
+                partition: movement.partition_id,
+                isr: movement.new_replicas.clone(),
+            };
+
+            match self.propose_command(cmd).await {
+                Ok(_) => {
+                    // Update leader
+                    let epoch = self.metadata().await
+                        .get_partition(&movement.topic, movement.partition_id)
+                        .map(|p| p.leader_epoch + 1)
+                        .unwrap_or(1);
+
+                    if let Err(e) = self
+                        .update_partition_leader(
+                            &movement.topic,
+                            movement.partition_id,
+                            movement.new_leader,
+                            epoch,
+                        )
+                        .await
+                    {
+                        warn!(
+                            topic = movement.topic,
+                            partition = movement.partition_id,
+                            error = %e,
+                            "Failed to update leader during rebalance"
+                        );
+                    }
+                    applied += 1;
+                }
+                Err(e) => {
+                    warn!(
+                        topic = movement.topic,
+                        partition = movement.partition_id,
+                        error = %e,
+                        "Failed to apply rebalance movement"
+                    );
+                }
+            }
+        }
+
+        info!(
+            applied,
+            total = plan.movements.len(),
+            "Rebalance execution complete"
+        );
+        Ok(applied)
+    }
+
+    /// Handle a node failure: trigger rebalance for affected partitions
+    pub async fn handle_node_failure(&self, failed_node: NodeId) -> Result<usize> {
+        info!(
+            node_id = self.node_id,
+            failed_node,
+            "Handling node failure, planning rebalance"
+        );
+
+        // Mark the node as dead
+        self.propose_command(ClusterCommand::UpdateBrokerState {
+            node_id: failed_node,
+            state: NodeState::Dead,
+        })
+        .await?;
+
+        // Plan and execute rebalance to repair affected partitions
+        let plan = self
+            .plan_rebalance(rebalancer::RebalanceStrategy::RepairOnly)
+            .await;
+
+        if plan.movements.is_empty() {
+            info!(failed_node, "No partition movements needed after node failure");
+            return Ok(0);
+        }
+
+        self.execute_rebalance(&plan).await
+    }
+
+    /// Handle a new node joining: optionally rebalance for even distribution
+    pub async fn handle_node_join(&self, new_node: NodeId) -> Result<usize> {
+        info!(
+            node_id = self.node_id,
+            new_node,
+            "New node joined, checking if rebalance is needed"
+        );
+
+        let plan = self
+            .plan_rebalance(rebalancer::RebalanceStrategy::MinimalMovement)
+            .await;
+
+        if plan.movements.is_empty() {
+            info!(new_node, "Cluster is balanced, no movements needed");
+            return Ok(0);
+        }
+
+        self.execute_rebalance(&plan).await
+    }
+
+    /// Get cluster statistics from the health monitor
+    pub async fn cluster_stats(&self) -> ClusterStats {
+        let report = self.health_check().await;
+        report.stats
     }
 
     /// Start the inter-broker listener for Raft RPC

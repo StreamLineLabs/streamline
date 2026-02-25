@@ -12,6 +12,7 @@
 //! - Configuration validation
 
 use super::{ConnectorState, TaskState};
+use crate::connect::offset_store::{ConnectorOffsetStore, OffsetStoreConfig};
 use crate::error::{Result, StreamlineError};
 use crate::storage::TopicManager;
 use chrono::{DateTime, Utc};
@@ -30,8 +31,10 @@ pub struct ConnectorRuntime {
     plugins: Arc<RwLock<HashMap<String, ConnectorPlugin>>>,
     topic_manager: Arc<TopicManager>,
     stats: Arc<RuntimeStats>,
-    /// Offset store for source connectors
+    /// Offset store for source connectors (topic-based)
     offset_store: Arc<RwLock<HashMap<String, HashMap<String, String>>>>,
+    /// File-backed offset store (secondary persistence)
+    file_offset_store: Option<Arc<ConnectorOffsetStore>>,
     /// Dead letter queue entries
     dlq_entries: Arc<RwLock<Vec<DlqEntry>>>,
     /// Task cancellation handles
@@ -41,6 +44,15 @@ pub struct ConnectorRuntime {
 impl ConnectorRuntime {
     /// Create a new connector runtime
     pub fn new(config: RuntimeConfig, topic_manager: Arc<TopicManager>) -> Self {
+        // Initialize file-backed offset store
+        let file_offset_store = match ConnectorOffsetStore::new(OffsetStoreConfig::default()) {
+            Ok(store) => Some(Arc::new(store)),
+            Err(e) => {
+                tracing::warn!(error = %e, "Failed to init file offset store, using topic-only");
+                None
+            }
+        };
+
         Self {
             config,
             connectors: Arc::new(RwLock::new(HashMap::new())),
@@ -48,6 +60,7 @@ impl ConnectorRuntime {
             topic_manager,
             stats: Arc::new(RuntimeStats::default()),
             offset_store: Arc::new(RwLock::new(HashMap::new())),
+            file_offset_store,
             dlq_entries: Arc::new(RwLock::new(Vec::new())),
             task_handles: Arc::new(RwLock::new(HashMap::new())),
         }
@@ -805,10 +818,31 @@ impl ConnectorRuntime {
                         connector_offsets.insert(entry.key, entry.value);
                     }
                 }
-                info!("Loaded {} connector offset entries", store.len());
+                info!("Loaded {} connector offset entries from topic", store.len());
             }
             Err(_) => {
-                debug!("No offsets topic found, starting fresh");
+                debug!("No offsets topic found, trying file-backed store");
+                // Fall back to file-based offset store
+                if let Some(ref file_store) = self.file_offset_store {
+                    let connectors = self.connectors.read().await;
+                    let mut store = self.offset_store.write().await;
+                    for name in connectors.keys() {
+                        let offsets = file_store.load_all_offsets(name).await;
+                        if !offsets.is_empty() {
+                            let connector_offsets = store.entry(name.clone()).or_default();
+                            for (key, value) in offsets {
+                                connector_offsets
+                                    .insert(key, value.as_str().unwrap_or("").to_string());
+                            }
+                        }
+                    }
+                    if !store.is_empty() {
+                        info!(
+                            "Loaded {} connector offset entries from file store",
+                            store.len()
+                        );
+                    }
+                }
             }
         }
         Ok(())
@@ -839,6 +873,21 @@ impl ConnectorRuntime {
                     Some(bytes::Bytes::from(connector.clone())),
                     bytes::Bytes::from(data),
                 )?;
+            }
+
+            // Also flush to file-backed store as secondary persistence
+            if let Some(ref file_store) = self.file_offset_store {
+                for (key, value) in offsets {
+                    let json_val = serde_json::Value::String(value.clone());
+                    file_store.save_offset(connector, key, json_val).await;
+                }
+            }
+        }
+
+        // Flush file store to disk
+        if let Some(ref file_store) = self.file_offset_store {
+            if let Err(e) = file_store.flush().await {
+                tracing::warn!(error = %e, "Failed to flush file offset store");
             }
         }
 

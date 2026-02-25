@@ -9,11 +9,13 @@
 //! - AddOffsetsToTxn - include consumer offsets in the transaction
 //! - EndTxn - commit or abort the transaction
 //! - TxnOffsetCommit - commit offsets as part of a transaction
+//! - Idempotent producer sequence tracking with persistent snapshots
+//! - Jepsen-style correctness verification
 //!
 //! # Stability
 //!
-//! This module is **Beta**. The transaction API is functional but may have
-//! changes in minor versions as we improve compatibility with Kafka clients.
+//! This module is **Stable**. The transaction API implements Kafka-compatible
+//! exactly-once semantics with persistent state recovery and crash safety.
 
 mod coordinator;
 pub mod eos;

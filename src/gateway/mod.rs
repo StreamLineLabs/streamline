@@ -27,9 +27,14 @@
 pub mod amqp;
 pub mod grpc;
 pub mod mqtt;
+pub mod mqtt_handler;
 pub mod router;
 
 pub use amqp::{AmqpAdapter, AmqpConfig};
 pub use grpc::{GrpcAdapter, GrpcConfig};
 pub use mqtt::{MqttAdapter, MqttConfig};
+pub use mqtt_handler::{
+    ConnAckCode, MqttConnectData, MqttHandlerStatsSnapshot, MqttPacketType, MqttPublishData,
+    MqttSession, MqttSessionManager, MqttSubscription, mqtt_topic_matches,
+};
 pub use router::{GatewayConfig, GatewayStats, ProtocolGateway, ProtocolMapping};

@@ -63,6 +63,8 @@ use crate::server::shutdown::ShutdownCoordinator;
 use crate::server::sqlite_routes::{create_sqlite_api_router, SqliteApiState};
 #[cfg(feature = "sqlite-queries")]
 use crate::sqlite::SQLiteQueryEngine;
+use crate::server::faas_api::{create_faas_api_router, FaasApiState};
+use crate::server::streamql_api::{streamql_router, StreamqlApiState};
 use crate::server::wasm_api::{create_wasm_api_router, WasmApiState};
 use crate::server::websocket::{create_websocket_router, WebSocketState};
 use crate::server::websocket_streaming::{create_streaming_router, StreamingState};
@@ -417,6 +419,18 @@ fn build_http_router(state: &HttpServerState, bootstrap: &HttpBootstrap) -> Rout
     let wasm_state = WasmApiState::new();
     let wasm_router = create_wasm_api_router(wasm_state);
     app = app.merge(wasm_router);
+
+    // Add StreamQL API for ksqlDB-compatible stream processing (SQL over streams)
+    let streamql_state = StreamqlApiState::default();
+    let streamql_api_router = streamql_router().with_state(streamql_state);
+    app = app.merge(streamql_api_router);
+    tracing::info!("StreamQL API enabled at /sql, /api/v1/streams, /api/v1/queries");
+
+    // Add FaaS API for serverless WASM function management
+    let faas_state = FaasApiState::new();
+    let faas_router = create_faas_api_router(faas_state);
+    app = app.merge(faas_router);
+    tracing::info!("FaaS API enabled at /api/v1/functions");
 
     // Add WASM Transform Marketplace API (registry, install, list)
     #[cfg(feature = "kafka-connect")]

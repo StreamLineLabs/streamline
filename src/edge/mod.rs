@@ -65,6 +65,7 @@ pub mod config;
 pub mod conflict;
 pub mod discovery;
 pub mod federation;
+pub mod http_sync;
 pub mod mesh;
 pub mod multicloud;
 pub mod optimizations;

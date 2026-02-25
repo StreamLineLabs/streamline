@@ -169,26 +169,65 @@ async fn execute_sql(
             },
         ]))
     } else if sql_upper.starts_with("SELECT") {
-        // Forward to analytics engine (stub — real implementation delegates to DuckDB)
-        Ok(Json(vec![
-            KsqlResponse::Status {
-                statement_text: sql.to_string(),
-                command_status: CommandStatus {
-                    status: "SUCCESS".to_string(),
-                    message: format!("Query executed on Streamline {}", state.version),
-                },
-            },
-        ]))
+        // Route through the StreamQL engine for query parsing
+        match state.engine.execute_statement(sql).await {
+            Ok(result) => {
+                let message = match result {
+                    crate::streamql::KsqlStatementResult::Success(msg) => msg,
+                    crate::streamql::KsqlStatementResult::QueryStarted(id) => {
+                        format!("Continuous query started: {}", id)
+                    }
+                    crate::streamql::KsqlStatementResult::Listing(items) => {
+                        format!("{} results", items.len())
+                    }
+                };
+                Ok(Json(vec![KsqlResponse::Status {
+                    statement_text: sql.to_string(),
+                    command_status: CommandStatus {
+                        status: "SUCCESS".to_string(),
+                        message: format!(
+                            "Query executed on Streamline {}: {}",
+                            state.version, message
+                        ),
+                    },
+                }]))
+            }
+            Err(e) => Err((
+                StatusCode::BAD_REQUEST,
+                Json(vec![KsqlResponse::Error {
+                    error_code: 40002,
+                    message: format!("Query execution failed: {}", e),
+                }]),
+            )),
+        }
     } else if sql_upper.starts_with("CREATE STREAM") || sql_upper.starts_with("CREATE TABLE") {
-        Ok(Json(vec![
-            KsqlResponse::Status {
-                statement_text: sql.to_string(),
-                command_status: CommandStatus {
-                    status: "SUCCESS".to_string(),
-                    message: "Stream/table created".to_string(),
-                },
-            },
-        ]))
+        match state.engine.execute_statement(sql).await {
+            Ok(result) => {
+                let message = match result {
+                    crate::streamql::KsqlStatementResult::Success(msg) => msg,
+                    crate::streamql::KsqlStatementResult::QueryStarted(id) => {
+                        format!("Continuous query started: {}", id)
+                    }
+                    crate::streamql::KsqlStatementResult::Listing(items) => {
+                        format!("{} items", items.len())
+                    }
+                };
+                Ok(Json(vec![KsqlResponse::Status {
+                    statement_text: sql.to_string(),
+                    command_status: CommandStatus {
+                        status: "SUCCESS".to_string(),
+                        message,
+                    },
+                }]))
+            }
+            Err(e) => Err((
+                StatusCode::BAD_REQUEST,
+                Json(vec![KsqlResponse::Error {
+                    error_code: 40003,
+                    message: format!("Stream/table creation failed: {}", e),
+                }]),
+            )),
+        }
     } else if sql_upper.starts_with("CREATE MATERIALIZED VIEW") {
         // Parse: CREATE MATERIALIZED VIEW <name> AS <query>
         let parts: Vec<&str> = sql.splitn(6, ' ').collect();
@@ -412,6 +451,142 @@ mod tests {
         let app = test_app();
         let resp = app
             .oneshot(Request::get("/api/v1/views").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn test_create_stream_through_engine() {
+        let app = test_app();
+        let resp = app
+            .oneshot(
+                Request::post("/sql")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        r#"{"ksql": "CREATE STREAM user_events (user_id VARCHAR, action VARCHAR) WITH (KAFKA_TOPIC='events', VALUE_FORMAT='JSON');"}"#,
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn test_create_table_through_engine() {
+        let app = test_app();
+        let resp = app
+            .oneshot(
+                Request::post("/sql")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        r#"{"ksql": "CREATE TABLE user_counts AS SELECT user_id, COUNT(*) FROM events GROUP BY user_id;"}"#,
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn test_show_streams() {
+        let app = test_app();
+        let resp = app
+            .oneshot(
+                Request::post("/sql")
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"ksql": "SHOW STREAMS;"}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn test_show_views() {
+        let app = test_app();
+        let resp = app
+            .oneshot(
+                Request::post("/sql")
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"ksql": "SHOW VIEWS;"}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn test_drop_resource() {
+        let app = test_app();
+        let resp = app
+            .oneshot(
+                Request::post("/sql")
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"ksql": "DROP STREAM user_events;"}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn test_unsupported_statement() {
+        let app = test_app();
+        let resp = app
+            .oneshot(
+                Request::post("/sql")
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"ksql": "ALTER SYSTEM SET something=true;"}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn test_list_streams_endpoint() {
+        let app = test_app();
+        let resp = app
+            .oneshot(
+                Request::get("/api/v1/streams")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn test_list_tables_endpoint() {
+        let app = test_app();
+        let resp = app
+            .oneshot(
+                Request::get("/api/v1/tables")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn test_list_queries_endpoint() {
+        let app = test_app();
+        let resp = app
+            .oneshot(
+                Request::get("/api/v1/queries")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
             .await
             .unwrap();
         assert_eq!(resp.status(), StatusCode::OK);

@@ -37,6 +37,7 @@ pub mod hnsw;
 pub mod llm;
 pub mod llm_streaming;
 pub mod pattern;
+pub mod persistent_store;
 pub mod pipeline;
 pub mod providers;
 pub mod rag;
@@ -110,12 +111,16 @@ pub use vector_streaming::{
     TopicVectorStore, VectorEncoding, VectorIndexConfig, VectorIndexType, VectorSearchResult,
     VectorStoreStats, DEFAULT_VECTOR_DIM, MAX_VECTOR_DIM, MIN_VECTOR_DIM,
 };
+pub use persistent_store::{
+    PersistentVectorStore, PersistentVectorStoreConfig, PersistentVectorStoreStats, StoredVector,
+};
 pub use gateway::{
     AIGateway, CostSnapshot, CostTracker, GatewayConfig, InferenceResult, InvocationCost,
     ProviderCostSummary, ProviderEntry, ProviderKind,
 };
 
 use crate::error::{Result, StreamlineError};
+use std::path::PathBuf;
 use std::sync::Arc;
 
 /// AI Manager - coordinates all AI operations
@@ -136,6 +141,8 @@ pub struct AIManager {
     pub patterns: Arc<PatternRecognizer>,
     /// Stream summarizer
     pub summarizer: Arc<StreamSummarizer>,
+    /// Persistent vector store for durable embedding storage
+    pub vector_store: Option<Arc<PersistentVectorStore>>,
 }
 
 impl AIManager {
@@ -164,7 +171,49 @@ impl AIManager {
             anomaly,
             patterns,
             summarizer,
+            vector_store: None,
         })
+    }
+
+    /// Create a new AI manager with persistent vector storage
+    pub fn with_vector_store(config: AIConfig, data_dir: PathBuf) -> Result<Self> {
+        let mut manager = Self::new(config)?;
+
+        let store_config = PersistentVectorStoreConfig {
+            data_dir,
+            flush_threshold: 500,
+            load_on_startup: true,
+            ..Default::default()
+        };
+
+        let store = PersistentVectorStore::new(store_config)?;
+        manager.vector_store = Some(Arc::new(store));
+
+        Ok(manager)
+    }
+
+    /// Load persisted vectors from disk (call on startup)
+    pub async fn load_vector_store(&self) -> Result<usize> {
+        match &self.vector_store {
+            Some(store) => store.load().await,
+            None => Ok(0),
+        }
+    }
+
+    /// Flush pending vectors to disk (call on shutdown)
+    pub async fn flush_vector_store(&self) -> Result<()> {
+        if let Some(store) = &self.vector_store {
+            store.flush().await?;
+        }
+        Ok(())
+    }
+
+    /// Save a full vector store snapshot
+    pub async fn snapshot_vector_store(&self) -> Result<()> {
+        if let Some(store) = &self.vector_store {
+            store.snapshot().await?;
+        }
+        Ok(())
     }
 
     /// Get AI configuration
@@ -190,6 +239,22 @@ impl AIManager {
         if self.config.embedding.enabled {
             match self.embeddings.embed_text(&text).await {
                 Ok(embedding) => {
+                    // Persist embedding to vector store if available
+                    if let Some(store) = &self.vector_store {
+                        let id = uuid::Uuid::new_v4().to_string();
+                        let vector: Vec<f32> = embedding.vector.iter().map(|&v| v as f32).collect();
+                        let preview = if text.len() > 200 {
+                            Some(text[..200].to_string())
+                        } else {
+                            Some(text.to_string())
+                        };
+                        if let Err(e) = store
+                            .put(id, vector, Some(topic.to_string()), preview)
+                            .await
+                        {
+                            tracing::warn!(error = %e, "Failed to persist embedding to vector store");
+                        }
+                    }
                     result.embedding = Some(embedding);
                 }
                 Err(e) => {
@@ -260,6 +325,48 @@ impl AIManager {
         }
 
         self.search.search(query, limit).await
+    }
+
+    /// Search the persistent vector store by embedding similarity
+    pub async fn vector_search(
+        &self,
+        query_text: &str,
+        limit: usize,
+    ) -> Result<Vec<(String, f32)>> {
+        let store = self.vector_store.as_ref().ok_or_else(|| {
+            StreamlineError::Config("Persistent vector store not configured".into())
+        })?;
+
+        // Generate query embedding
+        let embedding = self.embeddings.embed_text(query_text).await?;
+        let query_vec: Vec<f32> = embedding.vector.iter().map(|&v| v as f32).collect();
+
+        Ok(store.search_nearest(&query_vec, limit).await)
+    }
+
+    /// Search vectors within a specific topic
+    pub async fn vector_search_in_topic(
+        &self,
+        topic: &str,
+        query_text: &str,
+        limit: usize,
+    ) -> Result<Vec<(String, f32)>> {
+        let store = self.vector_store.as_ref().ok_or_else(|| {
+            StreamlineError::Config("Persistent vector store not configured".into())
+        })?;
+
+        let embedding = self.embeddings.embed_text(query_text).await?;
+        let query_vec: Vec<f32> = embedding.vector.iter().map(|&v| v as f32).collect();
+
+        Ok(store.search_in_topic(topic, &query_vec, limit).await)
+    }
+
+    /// Get vector store statistics
+    pub async fn vector_store_stats(&self) -> Option<PersistentVectorStoreStats> {
+        match &self.vector_store {
+            Some(store) => Some(store.stats().await),
+            None => None,
+        }
     }
 }
 

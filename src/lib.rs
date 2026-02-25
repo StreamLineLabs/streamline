@@ -247,7 +247,7 @@ pub mod ui;
 
 // StreamlineQL - SQL-like stream processing engine
 #[allow(dead_code)]
-pub(crate) mod streamql;
+pub mod streamql;
 
 // Change Data Capture (CDC) - Universal CDC Hub
 #[cfg(any(
@@ -282,7 +282,7 @@ pub(crate) mod edge;
 // Functions-as-a-Service runtime (optional - requires faas feature)
 #[cfg(feature = "faas")]
 #[allow(dead_code)]
-pub(crate) mod faas;
+pub mod faas;
 
 // CRDT (Conflict-free Replicated Data Types) for edge computing
 #[doc(hidden)]
@@ -343,7 +343,7 @@ pub(crate) mod outbox;
 // Real-Time ML Feature Store (optional - featurestore feature)
 #[cfg(feature = "featurestore")]
 #[allow(dead_code)]
-pub(crate) mod featurestore;
+pub mod featurestore;
 
 // MCP (Model Context Protocol) Server for AI Agents
 #[allow(dead_code)]

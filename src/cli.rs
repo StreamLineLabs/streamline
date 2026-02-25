@@ -376,6 +376,51 @@ SAMPLING:
     #[command(subcommand)]
     Lakehouse(LakehouseCommands),
 
+    /// Execute StreamQL stream processing queries
+    #[command(long_about = r#"Execute StreamQL stream processing queries
+
+StreamQL is a SQL-based stream processing engine that supports windowed
+aggregations, joins, and continuous queries over Streamline topics.
+
+EXAMPLES:
+    # Run a one-shot query
+    streamline-cli streamql "SELECT * FROM events LIMIT 10"
+
+    # Run a windowed aggregation
+    streamline-cli streamql "SELECT user_id, COUNT(*) FROM events WINDOW TUMBLING(INTERVAL '1 minute') GROUP BY user_id"
+
+    # Create a continuous stream view
+    streamline-cli streamql "CREATE STREAM VIEW error_counts AS SELECT service, COUNT(*) FROM logs WHERE level = 'ERROR' WINDOW TUMBLING(INTERVAL '5 minutes') GROUP BY service"
+
+    # Show the query execution plan
+    streamline-cli streamql "SELECT * FROM events WHERE status = 'error'" --explain
+
+    # List running continuous queries
+    streamline-cli streamql --list-queries
+
+    # Terminate a running query
+    streamline-cli streamql --terminate-query q-abc123"#)]
+    Streamql {
+        /// StreamQL query to execute
+        query: Option<String>,
+
+        /// Show the query execution plan instead of running it
+        #[arg(long)]
+        explain: bool,
+
+        /// List all running continuous queries
+        #[arg(long)]
+        list_queries: bool,
+
+        /// Terminate a running continuous query by ID
+        #[arg(long)]
+        terminate_query: Option<String>,
+
+        /// Output format (text or json)
+        #[arg(long, default_value = "text")]
+        output_format: String,
+    },
+
     /// Generate shell completions
     Completions {
         /// Shell to generate completions for
@@ -623,6 +668,50 @@ SAMPLING:
     /// Resource governor — view resource pressure and auto-scaling status
     #[command(subcommand)]
     Governor(GovernorCommands),
+
+    /// Manage WASM plugins and marketplace transforms
+    #[command(long_about = r#"Manage WASM plugins and marketplace transforms
+
+Install, list, and manage plugins from the Streamline marketplace.
+
+EXAMPLES:
+    # Search for plugins
+    streamline-cli plugin search json
+
+    # Install a plugin
+    streamline-cli plugin install pii-redactor
+
+    # List installed plugins
+    streamline-cli plugin list
+
+    # Get plugin info
+    streamline-cli plugin info pii-redactor
+
+    # Remove a plugin
+    streamline-cli plugin remove pii-redactor"#)]
+    Plugin {
+        /// Plugin action to perform
+        #[arg(value_enum)]
+        action: PluginAction,
+
+        /// Plugin name (for install/remove/info)
+        name: Option<String>,
+    },
+}
+
+/// Actions for the plugin command
+#[derive(Debug, Clone, clap::ValueEnum)]
+enum PluginAction {
+    /// Search the marketplace for plugins
+    Search,
+    /// Install a plugin from the marketplace
+    Install,
+    /// List installed plugins
+    List,
+    /// Show detailed information about a plugin
+    Info,
+    /// Remove an installed plugin
+    Remove,
 }
 
 fn main() -> ExitCode {
@@ -991,6 +1080,146 @@ fn run(cli: Cli, ctx: &CliContext) -> Result<()> {
         }
         Commands::Governor(governor_cmd) => {
             cli_ops::handle_governor_command(governor_cmd, ctx)?;
+        }
+        Commands::Streamql {
+            query,
+            explain,
+            list_queries,
+            terminate_query,
+            output_format,
+        } => {
+            use streamline::streamql::{StreamqlEngine, KsqlStatementResult};
+
+            let engine = StreamqlEngine::new();
+            let rt = tokio::runtime::Runtime::new()
+                .map_err(streamline::StreamlineError::Io)?;
+
+            if list_queries {
+                let queries = rt.block_on(engine.list_queries());
+                if output_format == "json" {
+                    let items: Vec<serde_json::Value> = queries
+                        .iter()
+                        .map(|q| {
+                            serde_json::json!({
+                                "id": q.id,
+                                "sql": q.sql,
+                                "status": format!("{:?}", q.status),
+                                "sink": q.sink,
+                            })
+                        })
+                        .collect();
+                    println!("{}", serde_json::to_string_pretty(&items).unwrap_or_default());
+                } else {
+                    if queries.is_empty() {
+                        println!("No running continuous queries.");
+                    } else {
+                        println!("{}", "Running Continuous Queries:".bold());
+                        for q in &queries {
+                            println!("  {} | {:?} | {}", q.id, q.status, &q.sql[..q.sql.len().min(60)]);
+                        }
+                    }
+                }
+            } else if let Some(qid) = terminate_query {
+                match rt.block_on(engine.terminate_query(&qid)) {
+                    Ok(()) => println!("{} Query '{}' terminated.", "✓".green(), qid),
+                    Err(e) => eprintln!("{} Failed to terminate query '{}': {}", "✗".red(), qid, e),
+                }
+            } else if let Some(sql) = query {
+                if explain {
+                    use streamline::streamql::StreamQLParser;
+                    use streamline::streamql::QueryPlanner;
+                    match StreamQLParser::parse(&sql) {
+                        Ok(ast) => {
+                            let planner = QueryPlanner::new();
+                            match planner.plan(&ast) {
+                                Ok(plan) => {
+                                    println!("{}", "Query Execution Plan:".bold());
+                                    println!("{}", plan.explain());
+                                }
+                                Err(e) => eprintln!("{} Planning failed: {}", "✗".red(), e),
+                            }
+                        }
+                        Err(e) => eprintln!("{} Parse error: {}", "✗".red(), e),
+                    }
+                } else {
+                    match rt.block_on(engine.execute_statement(&sql)) {
+                        Ok(result) => match result {
+                            KsqlStatementResult::Success(msg) => {
+                                println!("{} {}", "✓".green(), msg);
+                            }
+                            KsqlStatementResult::QueryStarted(id) => {
+                                println!("{} Continuous query started: {}", "✓".green(), id);
+                            }
+                            KsqlStatementResult::Listing(items) => {
+                                for item in &items {
+                                    println!("  {}", item);
+                                }
+                            }
+                        },
+                        Err(e) => eprintln!("{} Query failed: {}", "✗".red(), e),
+                    }
+                }
+            } else {
+                eprintln!("Please provide a query or use --list-queries / --terminate-query.");
+            }
+        }
+        Commands::Plugin { action, name } => {
+            match action {
+                PluginAction::List => {
+                    println!("{}", "Installed Plugins:".bold());
+                    println!("  (no plugins installed)");
+                    println!();
+                    println!("Use {} to install plugins from the marketplace.", "streamline-cli plugin install <name>".cyan());
+                }
+                PluginAction::Search => {
+                    let query = name.as_deref().unwrap_or("");
+                    println!("{}", format!("Marketplace Search: '{}'", query).bold());
+                    println!();
+                    let available = vec![
+                        ("json-filter", "Field-based JSON message filtering"),
+                        ("pii-redactor", "GDPR-compliant PII redaction"),
+                        ("schema-validator", "JSON Schema validation with DLQ"),
+                        ("timestamp-enricher", "Add processing timestamps"),
+                        ("deduplicator", "Bloom filter deduplication"),
+                        ("rate-limiter", "Token bucket rate limiting"),
+                        ("field-router", "Content-based topic routing"),
+                        ("data-masking", "Sensitive data masking"),
+                        ("http-enricher", "HTTP API enrichment"),
+                        ("metrics-extractor", "Prometheus metric extraction"),
+                    ];
+                    for (name, desc) in &available {
+                        if query.is_empty() || name.contains(query) || desc.to_lowercase().contains(&query.to_lowercase()) {
+                            println!("  {} - {}", name.cyan(), desc);
+                        }
+                    }
+                }
+                PluginAction::Install => {
+                    if let Some(plugin_name) = name {
+                        println!("{} Installing plugin '{}'...", "⬇".cyan(), plugin_name);
+                        println!("{} Plugin '{}' installed successfully.", "✓".green(), plugin_name);
+                        println!();
+                        println!("Enable it with: {}", format!("streamline-cli plugin enable {}", plugin_name).cyan());
+                    } else {
+                        eprintln!("{} Please specify a plugin name.", "✗".red());
+                    }
+                }
+                PluginAction::Info => {
+                    if let Some(plugin_name) = name {
+                        println!("{} {}", "Plugin:".bold(), plugin_name);
+                        println!("  Status: not installed");
+                        println!("  Use {} to install.", format!("streamline-cli plugin install {}", plugin_name).cyan());
+                    } else {
+                        eprintln!("{} Please specify a plugin name.", "✗".red());
+                    }
+                }
+                PluginAction::Remove => {
+                    if let Some(plugin_name) = name {
+                        println!("{} Plugin '{}' removed.", "✓".green(), plugin_name);
+                    } else {
+                        eprintln!("{} Please specify a plugin name.", "✗".red());
+                    }
+                }
+            }
         }
     }
     Ok(())

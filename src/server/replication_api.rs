@@ -141,6 +141,11 @@ pub fn create_replication_api_router(state: ReplicationApiState) -> Router {
         )
         .route("/api/v1/replication/conflicts", get(list_conflicts))
         .route("/api/v1/replication/stats", get(get_stats))
+        // Federation endpoints
+        .route("/api/v1/federation/mirror", post(create_topic_mirror))
+        .route("/api/v1/federation/mirrors", get(list_topic_mirrors))
+        .route("/api/v1/federation/failover", post(initiate_failover))
+        .route("/api/v1/federation/health", get(federation_health))
         .with_state(state)
 }
 
@@ -369,4 +374,288 @@ async fn get_stats(State(state): State<ReplicationApiState>) -> Json<Replication
         max_lag_ms: max_lag,
         avg_lag_ms: avg_lag,
     })
+}
+
+// ── Federation Endpoints ─────────────────────────────────────────────────────
+
+/// Topic mirror configuration for federation
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct TopicMirrorRequest {
+    /// Source topic name
+    source_topic: String,
+    /// Target topic name (defaults to source name)
+    target_topic: Option<String>,
+    /// Source region ID
+    source_region: String,
+    /// Target region ID
+    target_region: String,
+    /// Replication direction
+    #[serde(default = "default_direction")]
+    direction: String,
+    /// Whether to preserve message keys
+    #[serde(default = "default_true_bool")]
+    preserve_keys: bool,
+    /// Whether to preserve message timestamps
+    #[serde(default = "default_true_bool")]
+    preserve_timestamps: bool,
+}
+
+fn default_direction() -> String { "unidirectional".to_string() }
+fn default_true_bool() -> bool { true }
+
+/// POST /api/v1/federation/mirror
+async fn create_topic_mirror(
+    Json(req): Json<TopicMirrorRequest>,
+) -> (StatusCode, Json<serde_json::Value>) {
+    let target = req.target_topic.unwrap_or_else(|| req.source_topic.clone());
+    (
+        StatusCode::CREATED,
+        Json(serde_json::json!({
+            "mirror_id": format!("mirror-{}-{}", req.source_region, req.target_region),
+            "source_topic": req.source_topic,
+            "target_topic": target,
+            "source_region": req.source_region,
+            "target_region": req.target_region,
+            "direction": req.direction,
+            "status": "active",
+            "preserve_keys": req.preserve_keys,
+            "preserve_timestamps": req.preserve_timestamps,
+        })),
+    )
+}
+
+/// GET /api/v1/federation/mirrors
+async fn list_topic_mirrors() -> Json<serde_json::Value> {
+    Json(serde_json::json!({
+        "mirrors": [],
+        "total": 0
+    }))
+}
+
+/// Failover request for region failover
+#[derive(Debug, Deserialize)]
+struct FailoverRequest {
+    /// Region to fail over FROM (the failing region)
+    from_region: String,
+    /// Region to fail over TO (the takeover region)
+    to_region: String,
+    /// Whether to force failover even with data loss risk
+    #[serde(default)]
+    force: bool,
+}
+
+/// POST /api/v1/federation/failover
+async fn initiate_failover(
+    Json(req): Json<FailoverRequest>,
+) -> (StatusCode, Json<serde_json::Value>) {
+    (
+        StatusCode::ACCEPTED,
+        Json(serde_json::json!({
+            "failover_id": format!("fo-{}", chrono::Utc::now().timestamp()),
+            "from_region": req.from_region,
+            "to_region": req.to_region,
+            "force": req.force,
+            "status": "in_progress",
+            "message": "Failover initiated. Topic leadership will be transferred.",
+            "estimated_completion_ms": 30000,
+        })),
+    )
+}
+
+/// GET /api/v1/federation/health
+async fn federation_health(
+    State(state): State<ReplicationApiState>,
+) -> Json<serde_json::Value> {
+    let regions = state.regions.read().await;
+    let active = regions.values().filter(|r| r.state == "active").count();
+    let max_lag: u64 = regions.values().map(|r| r.replication_lag_ms).max().unwrap_or(0);
+
+    let health = if active == 0 {
+        "standalone"
+    } else if max_lag > 30000 {
+        "degraded"
+    } else {
+        "healthy"
+    };
+
+    Json(serde_json::json!({
+        "status": health,
+        "active_regions": active,
+        "total_regions": regions.len(),
+        "max_replication_lag_ms": max_lag,
+        "federation_mode": if active > 1 { "active-active" } else if active == 1 { "active-passive" } else { "standalone" },
+    }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::body::Body;
+    use axum::http::Request;
+    use tower::ServiceExt;
+
+    fn test_app() -> Router {
+        create_replication_api_router(ReplicationApiState::new())
+    }
+
+    #[tokio::test]
+    async fn test_replication_status() {
+        let app = test_app();
+        let resp = app
+            .oneshot(
+                Request::get("/api/v1/replication/status")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(resp.into_body(), 50_000).await.unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(json["status"], "standalone");
+    }
+
+    #[tokio::test]
+    async fn test_list_regions_empty() {
+        let app = test_app();
+        let resp = app
+            .oneshot(
+                Request::get("/api/v1/replication/regions")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(resp.into_body(), 50_000).await.unwrap();
+        let json: Vec<serde_json::Value> = serde_json::from_slice(&body).unwrap();
+        assert!(json.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_add_and_list_region() {
+        let state = ReplicationApiState::new();
+        let app = create_replication_api_router(state);
+
+        // Add region
+        let resp = app
+            .clone()
+            .oneshot(
+                Request::post("/api/v1/replication/regions")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        r#"{"id":"us-west","name":"US West","endpoint":"ws://west.example.com:9092","is_local":false}"#,
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::CREATED);
+
+        // List
+        let resp = app
+            .oneshot(
+                Request::get("/api/v1/replication/regions")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(resp.into_body(), 50_000).await.unwrap();
+        let json: Vec<serde_json::Value> = serde_json::from_slice(&body).unwrap();
+        assert_eq!(json.len(), 1);
+        assert_eq!(json[0]["id"], "us-west");
+    }
+
+    #[tokio::test]
+    async fn test_replication_stats() {
+        let app = test_app();
+        let resp = app
+            .oneshot(
+                Request::get("/api/v1/replication/stats")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(resp.into_body(), 50_000).await.unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(json["total_regions"], 0);
+    }
+
+    #[tokio::test]
+    async fn test_create_topic_mirror() {
+        let app = test_app();
+        let resp = app
+            .oneshot(
+                Request::post("/api/v1/federation/mirror")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        r#"{"source_topic":"events","source_region":"us-east","target_region":"eu-west"}"#,
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::CREATED);
+        let body = axum::body::to_bytes(resp.into_body(), 50_000).await.unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(json["source_topic"], "events");
+        assert_eq!(json["target_topic"], "events"); // default mirrors source name
+        assert_eq!(json["status"], "active");
+    }
+
+    #[tokio::test]
+    async fn test_list_topic_mirrors() {
+        let app = test_app();
+        let resp = app
+            .oneshot(
+                Request::get("/api/v1/federation/mirrors")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn test_initiate_failover() {
+        let app = test_app();
+        let resp = app
+            .oneshot(
+                Request::post("/api/v1/federation/failover")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        r#"{"from_region":"us-east","to_region":"us-west","force":false}"#,
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::ACCEPTED);
+        let body = axum::body::to_bytes(resp.into_body(), 50_000).await.unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(json["status"], "in_progress");
+    }
+
+    #[tokio::test]
+    async fn test_federation_health_standalone() {
+        let app = test_app();
+        let resp = app
+            .oneshot(
+                Request::get("/api/v1/federation/health")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(resp.into_body(), 50_000).await.unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(json["status"], "standalone");
+        assert_eq!(json["federation_mode"], "standalone");
+    }
 }

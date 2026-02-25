@@ -36,6 +36,7 @@ pub mod autoscaler;
 pub mod engine;
 pub mod function;
 pub mod registry;
+pub mod sandbox;
 pub mod trigger;
 
 pub use engine::{ChainErrorPolicy, ChainStep, FaasEngine, FunctionChain};
@@ -44,6 +45,10 @@ pub use function::{
 };
 pub use registry::FunctionRegistry;
 pub use trigger::{TriggerBinding, TriggerConfig, TriggerType};
+pub use sandbox::{
+    ExecutionMetricsSnapshot, FunctionPool, SandboxConfig, WasmSandbox,
+    ResourceLimits as SandboxResourceLimits,
+};
 pub use autoscaler::{
     AutoScaler, ColdStartPool, ColdStartPoolConfig, ColdStartPoolStats, FunctionMetricsSnapshot,
     FunctionUsageAggregate, FunctionVersion, InvocationMeter, InvocationRecord, ScalingDecision,

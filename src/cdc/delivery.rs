@@ -152,6 +152,43 @@ impl DeliveryTracker {
         *self.committed.write().await = positions;
         Ok(())
     }
+
+    /// Save checkpoint to a file with atomic write for crash safety
+    pub async fn save_to_file(&self, path: &std::path::Path) -> Result<()> {
+        let data = self.checkpoint().await?;
+        let temp_path = path.with_extension("tmp");
+        std::fs::write(&temp_path, &data).map_err(|e| {
+            StreamlineError::storage_msg(format!("Failed to write CDC checkpoint: {}", e))
+        })?;
+        // fsync the temp file before rename
+        let f = std::fs::File::open(&temp_path).map_err(|e| {
+            StreamlineError::storage_msg(format!("Failed to open CDC checkpoint for sync: {}", e))
+        })?;
+        f.sync_all().map_err(|e| {
+            StreamlineError::storage_msg(format!("Failed to sync CDC checkpoint: {}", e))
+        })?;
+        drop(f);
+        std::fs::rename(&temp_path, path).map_err(|e| {
+            StreamlineError::storage_msg(format!("Failed to finalize CDC checkpoint: {}", e))
+        })?;
+        Ok(())
+    }
+
+    /// Load checkpoint from a file
+    pub async fn load_from_file(&self, path: &std::path::Path) -> Result<()> {
+        if !path.exists() {
+            return Ok(());
+        }
+        let data = std::fs::read(path).map_err(|e| {
+            StreamlineError::storage_msg(format!("Failed to read CDC checkpoint: {}", e))
+        })?;
+        self.restore(&data).await
+    }
+
+    /// Get all committed positions (for monitoring/debugging)
+    pub async fn get_all_positions(&self) -> HashMap<String, HashMap<String, CommittedPosition>> {
+        self.committed.read().await.clone()
+    }
 }
 
 impl Default for DeliveryTracker {

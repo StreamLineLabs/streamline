@@ -1,30 +1,25 @@
 //! Change Data Capture (CDC) module
 //!
-//! This module provides CDC capabilities for capturing database changes
-//! and streaming them to Streamline topics.
+//! This module provides production-grade CDC capabilities for capturing
+//! database changes and streaming them to Streamline topics.
 //!
-//! Supported databases:
-//! - PostgreSQL (logical replication with pgoutput or wal2json)
-//! - MySQL (binlog replication with row-based format)
-//! - MongoDB (change streams)
-//! - SQL Server (polling-based CDC)
-//! - Oracle (LogMiner)
-//! - CockroachDB (changefeed)
-//! - TiDB (TiCDC)
-//! - Cassandra (CDC)
-//! - DynamoDB Streams
-//! - Snowflake Streams
-//! - BigQuery Change Data Capture
+//! # Stability
+//!
+//! Core CDC infrastructure (delivery, schema tracking, snapshots, DLQ) is **Stable**.
+//! Individual database connectors have varying stability levels:
+//! - PostgreSQL: **Stable** (logical replication with pgoutput or wal2json)
+//! - MySQL: **Beta** (binlog replication with row-based format)
+//! - MongoDB: **Beta** (change streams)
+//! - SQL Server: **Beta** (polling-based CDC)
 //!
 //! Features:
 //! - Universal CDC Hub for multi-source coordination
 //! - Schema evolution tracking with compatibility checking
-//! - Automatic schema migration between sources
+//! - Persistent offset tracking with crash-safe checkpointing
 //! - Debezium-compatible event format
 //! - Initial snapshots with consistent offsets
-//! - At-least-once delivery with offset tracking
-//! - Cross-database joins and transformations
-//! - Dead letter queue for failed events
+//! - At-least-once delivery with deduplication
+//! - Dead letter queue for failed events with replay support
 
 pub mod change_event;
 pub mod config;
@@ -34,6 +29,7 @@ pub mod heartbeat;
 pub mod native_cdc;
 pub mod schema;
 pub mod schema_history;
+pub mod slot_manager;
 pub mod snapshot;
 pub mod universal;
 
@@ -43,6 +39,8 @@ pub mod mongodb;
 pub mod mysql;
 #[cfg(feature = "postgres-cdc")]
 pub mod postgres;
+#[cfg(feature = "postgres-cdc")]
+pub mod postgres_offset_store;
 #[cfg(feature = "sqlserver-cdc")]
 pub mod sqlserver;
 
@@ -66,11 +64,16 @@ pub use delivery::{
     CdcDlq, CdcDlqConfig, CdcDlqEntry, CommittedPosition, DeliveryStats, DeliveryStatus,
     DeliveryTracker, DlqErrorClass, DlqStats,
 };
+pub use slot_manager::{
+    SlotHealthStatus, SlotInfo, SlotManager, SlotManagerConfig, SlotManagerStats,
+};
 
 #[cfg(feature = "postgres-cdc")]
 pub use config::{PostgresCdcConfig, PostgresOutputPlugin, PostgresSslMode};
 #[cfg(feature = "postgres-cdc")]
 pub use postgres::PostgresCdcSource;
+#[cfg(feature = "postgres-cdc")]
+pub use postgres_offset_store::PostgresOffsetStore;
 
 #[cfg(feature = "mysql-cdc")]
 pub use config::MySqlCdcConfig;

@@ -53,6 +53,7 @@ pub mod materialized;
 pub mod operators;
 pub mod parser;
 pub mod planner;
+pub mod state_store;
 pub mod types;
 pub mod udf;
 pub mod window;
@@ -77,6 +78,9 @@ pub use ksqldb::{
 pub use operators::{FilterOperator, ProjectOperator, StreamOperator};
 pub use parser::StreamQLParser;
 pub use planner::QueryPlanner;
+pub use state_store::{
+    FileStateStore, MemoryStateStore, StateStore, StateStoreConfig, open_state_store,
+};
 pub use types::{DataType, Value};
 
 /// StreamlineQL query engine

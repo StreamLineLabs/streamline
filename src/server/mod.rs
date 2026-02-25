@@ -23,6 +23,7 @@ pub mod dashboard_api;
 pub mod inspector_api;
 pub mod kafka_connect_api;
 pub mod streamql_api;
+pub mod faas_api;
 #[cfg(feature = "clustering")]
 pub mod failover_api;
 #[cfg(feature = "clustering")]

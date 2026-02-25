@@ -45,6 +45,7 @@ pub mod conformance;
 pub mod health;
 pub mod marketplace;
 pub mod native;
+pub mod offset_store;
 pub mod plugins;
 pub mod runtime;
 pub mod transforms;

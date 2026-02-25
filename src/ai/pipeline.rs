@@ -183,7 +183,87 @@ pub enum PipelineStage {
         #[serde(default = "default_enrichment_field")]
         output_field: String,
     },
+
+    /// RAG (Retrieval-Augmented Generation) data ingestion
+    ///
+    /// Chunks text, generates embeddings, and stores in a vector index
+    /// for retrieval by RAG-enabled LLM applications.
+    RagIngest {
+        /// Chunking strategy
+        #[serde(default)]
+        chunking: ChunkingStrategy,
+        /// Maximum chunk size in tokens
+        #[serde(default = "default_chunk_size")]
+        chunk_size: usize,
+        /// Overlap between chunks in tokens
+        #[serde(default = "default_chunk_overlap")]
+        chunk_overlap: usize,
+        /// Embedding model for vector generation
+        #[serde(default = "default_rag_model")]
+        model: String,
+        /// Vector index name to store embeddings
+        index_name: String,
+        /// Metadata fields to preserve from the source message
+        #[serde(default)]
+        metadata_fields: Vec<String>,
+    },
+
+    /// Real-time feature computation for ML model serving
+    ///
+    /// Computes features from streaming data and writes them to
+    /// the feature store for online inference.
+    FeatureCompute {
+        /// Feature group name
+        feature_group: String,
+        /// Entity key field (e.g., "user_id", "session_id")
+        entity_key: String,
+        /// Feature definitions: field → aggregation
+        features: HashMap<String, FeatureAggregation>,
+        /// Window size for time-based features
+        #[serde(default = "default_feature_window")]
+        window_ms: u64,
+    },
 }
+
+/// Chunking strategy for RAG ingestion
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ChunkingStrategy {
+    /// Fixed-size chunks with overlap
+    #[default]
+    FixedSize,
+    /// Split on sentence boundaries
+    Sentence,
+    /// Split on paragraph boundaries
+    Paragraph,
+    /// Recursive splitting (try paragraphs, then sentences, then fixed)
+    Recursive,
+}
+
+/// Feature aggregation type for ML feature computation
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FeatureAggregation {
+    /// Count of events
+    Count,
+    /// Sum of values
+    Sum,
+    /// Average of values
+    Average,
+    /// Minimum value
+    Min,
+    /// Maximum value
+    Max,
+    /// Most recent value
+    LastValue,
+    /// Distinct count
+    DistinctCount,
+}
+
+fn default_chunk_size() -> usize { 512 }
+fn default_chunk_overlap() -> usize { 64 }
+fn default_rag_model() -> String { "text-embedding-3-small".to_string() }
+fn default_feature_window() -> u64 { 300_000 } // 5 minutes
 
 fn default_content_field() -> String {
     "content".to_string()
