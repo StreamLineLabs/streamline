@@ -68,6 +68,7 @@ pub mod federation;
 pub mod mesh;
 pub mod multicloud;
 pub mod optimizations;
+pub mod power;
 pub mod resource_monitor;
 pub mod routing;
 pub mod service_mesh;
@@ -104,6 +105,10 @@ pub use optimizations::{
 };
 pub use store_forward::{
     StoreForwardConfig, StoreForwardEngine, StoreForwardStatus, SyncStrategy, SyncWatermark,
+};
+pub use power::{
+    BatteryStatus, EdgeOperation, PowerConfig, PowerManager, PowerProfile,
+    PowerSource, PowerThresholds, ProfileChange,
 };
 
 use crate::error::{Result, StreamlineError};

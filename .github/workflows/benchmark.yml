@@ -119,6 +119,18 @@ jobs:
           path: benchmark-results/
           retention-days: 7
 
+      - name: Store benchmark results for trend tracking
+        uses: benchmark-action/github-action-benchmark@v1
+        continue-on-error: true
+        with:
+          tool: 'cargo'
+          output-file-path: benchmark-results/pr/raw.json
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          auto-push: false
+          alert-threshold: '110%'
+          comment-on-alert: false
+          save-data-file: true
+
       - name: Check for regressions
         if: steps.compare.outputs.regression == 'true' && !contains(github.event.pull_request.labels.*.name, 'perf-regression-acknowledged')
         run: |

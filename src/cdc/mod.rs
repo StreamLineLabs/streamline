@@ -29,6 +29,7 @@
 pub mod change_event;
 pub mod config;
 pub mod debezium;
+pub mod delivery;
 pub mod heartbeat;
 pub mod native_cdc;
 pub mod schema;
@@ -61,6 +62,10 @@ pub use debezium::{
 pub use heartbeat::{CdcHeartbeat, HeartbeatConfig, HeartbeatMessage};
 pub use schema_history::{DdlType, SchemaChange, SchemaHistoryStore};
 pub use snapshot::{SnapshotManager, SnapshotProgress, SnapshotState, SnapshotStrategy};
+pub use delivery::{
+    CdcDlq, CdcDlqConfig, CdcDlqEntry, CommittedPosition, DeliveryStats, DeliveryStatus,
+    DeliveryTracker, DlqErrorClass, DlqStats,
+};
 
 #[cfg(feature = "postgres-cdc")]
 pub use config::{PostgresCdcConfig, PostgresOutputPlugin, PostgresSslMode};

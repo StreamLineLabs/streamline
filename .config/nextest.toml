@@ -1,0 +1,36 @@
+# nextest configuration for Streamline
+# See: https://nexte.st/book/configuration.html
+
+[profile.default]
+# Default timeout for all tests: 5 minutes
+# Prevents hung tests from blocking CI indefinitely
+slow-timeout = { period = "60s", terminate-after = 2 }
+fail-fast = true
+
+[profile.default.overrides]
+# Integration tests get longer timeout (may start servers, docker containers)
+[[profile.default.overrides]]
+filter = 'test(integration)'
+slow-timeout = { period = "120s", terminate-after = 2 }
+
+# Load and stress tests get extended timeout
+[[profile.default.overrides]]
+filter = 'test(load_test) | test(stress) | test(chaos)'
+slow-timeout = { period = "300s", terminate-after = 2 }
+
+# Sink tests may wait for external services
+[[profile.default.overrides]]
+filter = 'test(iceberg) | test(delta)'
+slow-timeout = { period = "180s", terminate-after = 2 }
+
+[profile.ci]
+# CI profile: stricter timeouts, retries for flaky tests
+slow-timeout = { period = "60s", terminate-after = 2 }
+retries = 1
+fail-fast = true
+
+[profile.ci.overrides]
+[[profile.ci.overrides]]
+filter = 'test(integration) | test(load_test) | test(stress) | test(chaos)'
+slow-timeout = { period = "300s", terminate-after = 2 }
+retries = 2

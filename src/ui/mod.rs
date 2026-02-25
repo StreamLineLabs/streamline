@@ -26,6 +26,7 @@
 //! ```
 
 mod client;
+mod query_editor;
 mod routes;
 mod sse;
 mod templates;
@@ -34,6 +35,10 @@ pub use client::{StreamlineClient, StreamlineClientConfig};
 pub use routes::create_router;
 pub use sse::{SseEvent, SseManager};
 pub use templates::Templates;
+pub use query_editor::{
+    ClusterHealthSummary, ClusterTopology, QueryEditorRequest, QueryEditorResult,
+    QuerySuggestions, TopicSchemaInfo, TopologyNode,
+};
 
 use axum::Router;
 use std::net::SocketAddr;

@@ -3324,7 +3324,7 @@ async fn api_search_messages(
 // ── Connector Management UI ─────────────────────────────────────────────────
 
 async fn connectors_page(State(state): State<WebUiState>) -> impl IntoResponse {
-    let content = r#"<div class="page-header"><h1>🔌 Connectors</h1>
+    let content = r##"<div class="page-header"><h1>🔌 Connectors</h1>
         <p>Manage Kafka Connect-compatible connectors.</p></div>
         <div class="card">
         <div id="connectors-list"><p>Loading connectors...</p></div>
@@ -3337,7 +3337,7 @@ async fn connectors_page(State(state): State<WebUiState>) -> impl IntoResponse {
                     '</tbody></table>';
             } else { el.innerHTML = '<p>No connectors configured. <a href="#" onclick="showCreateForm()">Create one</a>.</p>'; }
         });
-        </script></div>"#;
+        </script></div>"##;
     Html(state.templates.layout("Connectors", content, "connectors"))
 }
 

@@ -975,3 +975,4 @@ mod tests {
         let events = source.read_next_change_events().await.unwrap();
         assert!(events.is_empty(), "Should return empty when no driver linked");
     }
+}

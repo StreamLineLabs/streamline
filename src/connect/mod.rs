@@ -48,6 +48,7 @@ pub mod native;
 pub mod plugins;
 pub mod runtime;
 pub mod transforms;
+pub mod watcher;
 
 use crate::storage::{TopicConfig, TopicManager};
 use crate::StreamlineError;
