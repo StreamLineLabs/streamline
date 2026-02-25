@@ -127,6 +127,13 @@ fn run() -> Result<()> {
 
     // In playground mode, enable in-memory mode by default
     if is_playground {
+        if args.data_dir != std::path::Path::new("./data") && !args.in_memory {
+            warn!(
+                "Playground mode overrides --data-dir to use in-memory storage. \
+                 Specified data directory '{}' will not be used for persistence.",
+                args.data_dir.display()
+            );
+        }
         args.in_memory = true;
     }
 

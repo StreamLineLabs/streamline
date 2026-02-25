@@ -32,6 +32,7 @@
 //!
 //! This module is **Experimental**. The API may change without notice.
 
+pub mod autoscaler;
 pub mod engine;
 pub mod function;
 pub mod registry;
@@ -43,3 +44,8 @@ pub use function::{
 };
 pub use registry::FunctionRegistry;
 pub use trigger::{TriggerBinding, TriggerConfig, TriggerType};
+pub use autoscaler::{
+    AutoScaler, ColdStartPool, ColdStartPoolConfig, ColdStartPoolStats, FunctionMetricsSnapshot,
+    FunctionUsageAggregate, FunctionVersion, InvocationMeter, InvocationRecord, ScalingDecision,
+    ScalingPolicy, ScalingReason, VersionRouter,
+};

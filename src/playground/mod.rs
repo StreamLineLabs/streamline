@@ -11,12 +11,17 @@
 //! - Web dashboard for browser-based exploration
 
 pub mod dashboard;
+pub mod progress;
 pub mod sample_data;
 pub mod scenario;
 pub mod tutorial;
 
 pub use scenario::{PlaygroundConfig, PlaygroundManager, PlaygroundStats};
 pub use tutorial::{Tutorial, TutorialEngine};
+pub use progress::{
+    Badge, CurriculumItem, CurriculumLevel, ProgressState, ProgressTracker,
+    default_curriculum,
+};
 
 use crate::error::Result;
 use crate::storage::TopicManager;
