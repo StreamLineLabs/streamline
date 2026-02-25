@@ -158,6 +158,23 @@ impl TenantManager {
         Ok(tenant.namespace_topic(topic))
     }
 
+    /// Map an external consumer group to internal namespaced group
+    pub fn namespace_group(&self, tenant_id: &str, group_id: &str) -> Result<String, String> {
+        if !self.enabled {
+            return Ok(group_id.to_string());
+        }
+
+        let tenant = self
+            .get_tenant(tenant_id)
+            .ok_or_else(|| format!("Tenant '{}' not found", tenant_id))?;
+
+        if !tenant.is_active() {
+            return Err(format!("Tenant '{}' is {}", tenant_id, tenant.state));
+        }
+
+        Ok(tenant.namespace_group(group_id))
+    }
+
     /// Get tenant count
     pub fn tenant_count(&self) -> usize {
         self.tenants.len()

@@ -101,6 +101,7 @@ pub struct KsqlServerInfo {
 pub(crate) struct StreamqlApiState {
     pub version: String,
     pub cluster_id: String,
+    pub engine: Arc<crate::streamql::StreamqlEngine>,
 }
 
 impl Default for StreamqlApiState {
@@ -108,6 +109,7 @@ impl Default for StreamqlApiState {
         Self {
             version: "0.2.0".to_string(),
             cluster_id: "streamline-local".to_string(),
+            engine: Arc::new(crate::streamql::StreamqlEngine::new()),
         }
     }
 }
@@ -120,6 +122,9 @@ pub fn streamql_router() -> Router<StreamqlApiState> {
         .route("/info", get(server_info))
         .route("/healthcheck", get(health_check))
         .route("/api/v1/views", get(list_views))
+        .route("/api/v1/streams", get(list_streams))
+        .route("/api/v1/tables", get(list_tables))
+        .route("/api/v1/queries", get(list_continuous_queries))
 }
 
 // -- Handlers --
@@ -264,6 +269,50 @@ async fn list_views() -> Json<serde_json::Value> {
     Json(serde_json::json!({
         "views": [],
         "total": 0
+    }))
+}
+
+/// GET /api/v1/streams - List all registered streams
+async fn list_streams(State(state): State<StreamqlApiState>) -> Json<serde_json::Value> {
+    let streams = state.engine.list_streams().await;
+    Json(serde_json::json!({
+        "streams": streams.iter().map(|s| serde_json::json!({
+            "name": s.name,
+            "topic": s.topic,
+            "format": format!("{}", s.value_format),
+            "columns": s.columns.len(),
+        })).collect::<Vec<_>>(),
+        "total": streams.len()
+    }))
+}
+
+/// GET /api/v1/tables - List all registered tables
+async fn list_tables(State(state): State<StreamqlApiState>) -> Json<serde_json::Value> {
+    let tables = state.engine.list_tables().await;
+    Json(serde_json::json!({
+        "tables": tables.iter().map(|t| serde_json::json!({
+            "name": t.name,
+            "source": t.source,
+            "columns": t.columns.len(),
+            "materializing": t.materializing,
+        })).collect::<Vec<_>>(),
+        "total": tables.len()
+    }))
+}
+
+/// GET /api/v1/queries - List all running continuous queries
+async fn list_continuous_queries(
+    State(state): State<StreamqlApiState>,
+) -> Json<serde_json::Value> {
+    let queries = state.engine.list_queries().await;
+    Json(serde_json::json!({
+        "queries": queries.iter().map(|q| serde_json::json!({
+            "id": q.id,
+            "sql": q.sql,
+            "state": format!("{:?}", q.status),
+            "sink": q.sink,
+        })).collect::<Vec<_>>(),
+        "total": queries.len()
     }))
 }
 

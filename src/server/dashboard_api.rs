@@ -56,6 +56,8 @@ pub struct DashboardApiState {
     pub metrics_history: Option<Arc<MetricsHistory>>,
     /// Alert store for integrated alert monitoring
     pub alert_store: Option<Arc<crate::server::alerts::AlertStore>>,
+    /// Consumer group coordinator (optional, for consumer group monitoring)
+    pub group_coordinator: Option<Arc<crate::consumer::GroupCoordinator>>,
 }
 
 // ============================================================================
@@ -449,6 +451,15 @@ pub fn create_dashboard_api_router(state: DashboardApiState) -> Router {
         .route(
             "/api/v1/dashboard/topics/:topic/activity",
             get(topic_activity_handler),
+        )
+        // Consumer groups
+        .route(
+            "/api/v1/dashboard/groups",
+            get(consumer_groups_handler),
+        )
+        .route(
+            "/api/v1/dashboard/groups/:group_id",
+            get(consumer_group_detail_handler),
         )
         // System statistics
         .route("/api/v1/dashboard/system", get(system_stats_handler))
@@ -1128,6 +1139,188 @@ fn build_alerts_summary(state: &DashboardApiState) -> AlertsSummary {
     }
 }
 
+// ============================================================================
+// Consumer Group Handlers
+// ============================================================================
+
+/// Consumer group summary for the dashboard
+#[derive(Debug, Serialize)]
+pub struct ConsumerGroupSummary {
+    pub group_id: String,
+    pub state: String,
+    pub members: usize,
+    pub subscribed_topics: Vec<String>,
+    pub total_lag: i64,
+}
+
+/// Consumer group detail with per-partition information
+#[derive(Debug, Serialize)]
+pub struct ConsumerGroupDetail {
+    pub group_id: String,
+    pub state: String,
+    pub protocol_type: String,
+    pub members: Vec<GroupMemberInfo>,
+    pub offsets: Vec<GroupOffsetInfo>,
+    pub total_lag: i64,
+}
+
+/// Member info in a consumer group
+#[derive(Debug, Serialize)]
+pub struct GroupMemberInfo {
+    pub member_id: String,
+    pub client_id: String,
+    pub host: String,
+    pub assignment: Vec<String>,
+}
+
+/// Offset info per partition in a consumer group
+#[derive(Debug, Serialize)]
+pub struct GroupOffsetInfo {
+    pub topic: String,
+    pub partition: i32,
+    pub committed_offset: i64,
+    pub log_end_offset: i64,
+    pub lag: i64,
+}
+
+/// GET /api/v1/dashboard/groups - List all consumer groups with summary
+async fn consumer_groups_handler(State(state): State<DashboardApiState>) -> Response {
+    let coordinator = match &state.group_coordinator {
+        Some(c) => c,
+        None => {
+            return Json(Vec::<ConsumerGroupSummary>::new()).into_response();
+        }
+    };
+
+    let group_ids = match coordinator.list_groups() {
+        Ok(ids) => ids,
+        Err(e) => {
+            error!("Failed to list groups: {}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": e.to_string()})),
+            )
+                .into_response();
+        }
+    };
+
+    let mut summaries: Vec<ConsumerGroupSummary> = Vec::new();
+    for group_id in &group_ids {
+        if let Ok(Some(group)) = coordinator.get_group(group_id) {
+            let topics: Vec<String> = group
+                .members
+                .values()
+                .flat_map(|m| m.subscriptions.iter().cloned())
+                .collect::<std::collections::HashSet<_>>()
+                .into_iter()
+                .collect();
+
+            let total_lag = compute_group_lag(&state.topic_manager, &group);
+
+            summaries.push(ConsumerGroupSummary {
+                group_id: group_id.clone(),
+                state: format!("{:?}", group.state),
+                members: group.members.len(),
+                subscribed_topics: topics,
+                total_lag,
+            });
+        }
+    }
+
+    summaries.sort_by(|a, b| b.total_lag.cmp(&a.total_lag));
+    Json(summaries).into_response()
+}
+
+/// GET /api/v1/dashboard/groups/:group_id - Get consumer group detail
+async fn consumer_group_detail_handler(
+    State(state): State<DashboardApiState>,
+    Path(group_id): Path<String>,
+) -> Response {
+    let coordinator = match &state.group_coordinator {
+        Some(c) => c,
+        None => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(serde_json::json!({"error": "Consumer groups not available"})),
+            )
+                .into_response();
+        }
+    };
+
+    let group = match coordinator.get_group(&group_id) {
+        Ok(Some(g)) => g,
+        _ => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(serde_json::json!({"error": "Consumer group not found"})),
+            )
+                .into_response();
+        }
+    };
+
+    let members: Vec<GroupMemberInfo> = group
+        .members
+        .values()
+        .map(|m| GroupMemberInfo {
+            member_id: m.member_id.clone(),
+            client_id: m.client_id.clone(),
+            host: m.client_host.clone(),
+            assignment: m
+                .assignment
+                .iter()
+                .map(|(topic, partition)| format!("{}-{}", topic, partition))
+                .collect(),
+        })
+        .collect();
+
+    let offsets: Vec<GroupOffsetInfo> = group
+        .offsets
+        .iter()
+        .map(|((topic, partition), committed)| {
+            let leo = state
+                .topic_manager
+                .latest_offset(topic, *partition)
+                .unwrap_or(0);
+            let lag = if leo > committed.offset {
+                leo - committed.offset
+            } else {
+                0
+            };
+            GroupOffsetInfo {
+                topic: topic.clone(),
+                partition: *partition,
+                committed_offset: committed.offset,
+                log_end_offset: leo,
+                lag,
+            }
+        })
+        .collect();
+
+    let total_lag: i64 = offsets.iter().map(|o| o.lag).sum();
+
+    let detail = ConsumerGroupDetail {
+        group_id: group_id.clone(),
+        state: format!("{:?}", group.state),
+        protocol_type: group.protocol_type.clone(),
+        members,
+        offsets,
+        total_lag,
+    };
+
+    Json(detail).into_response()
+}
+
+fn compute_group_lag(topic_manager: &Arc<TopicManager>, group: &crate::consumer::ConsumerGroup) -> i64 {
+    let mut total_lag: i64 = 0;
+    for ((topic, partition), committed) in &group.offsets {
+        let leo = topic_manager.latest_offset(topic, *partition).unwrap_or(0);
+        if leo > committed.offset {
+            total_lag += leo - committed.offset;
+        }
+    }
+    total_lag
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1177,6 +1370,7 @@ mod tests {
             metadata_cache,
             metrics_history: None,
             alert_store: Some(Arc::new(crate::server::alerts::AlertStore::new())),
+            group_coordinator: None,
         };
 
         (state, temp_dir)

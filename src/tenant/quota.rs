@@ -70,6 +70,13 @@ impl ResourceUsage {
 pub enum QuotaCheckResult {
     /// Within quota
     Allowed,
+    /// Approaching quota threshold (soft warning at 80%)
+    Warning {
+        resource: String,
+        limit: u64,
+        current: u64,
+        percent_used: u8,
+    },
     /// Quota exceeded
     Exceeded {
         resource: String,
@@ -78,6 +85,32 @@ pub enum QuotaCheckResult {
     },
     /// Tenant not found
     TenantNotFound,
+}
+
+impl QuotaCheckResult {
+    /// Returns true if the operation should be allowed
+    pub fn is_allowed(&self) -> bool {
+        matches!(self, QuotaCheckResult::Allowed | QuotaCheckResult::Warning { .. })
+    }
+}
+
+/// Summary of a tenant's resource usage for monitoring
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct UsageSummary {
+    pub tenant_id: String,
+    pub topics: UsageMetric,
+    pub partitions: UsageMetric,
+    pub storage_bytes: UsageMetric,
+    pub producer_bytes_per_sec: UsageMetric,
+    pub consumer_bytes_per_sec: UsageMetric,
+}
+
+/// A single resource usage metric with limit
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct UsageMetric {
+    pub current: u64,
+    pub limit: u64,
+    pub percent_used: f64,
 }
 
 /// Manages resource quotas across all tenants
@@ -138,6 +171,21 @@ impl QuotaManager {
                         resource: "partitions".to_string(),
                         limit: max_partitions as u64,
                         current: current_partitions,
+                    };
+                }
+
+                // Soft warning at 80% capacity
+                let topic_pct = if max_topics > 0 {
+                    ((current_topics + 1) * 100 / max_topics as u64) as u8
+                } else {
+                    0
+                };
+                if topic_pct >= 80 {
+                    return QuotaCheckResult::Warning {
+                        resource: "topics".to_string(),
+                        limit: max_topics as u64,
+                        current: current_topics + 1,
+                        percent_used: topic_pct,
                     };
                 }
 
@@ -282,6 +330,59 @@ impl QuotaManager {
     pub fn tenant_count(&self) -> usize {
         self.usage.len()
     }
+
+    /// Get a usage summary for a tenant for monitoring/observability
+    pub fn get_usage_summary(
+        &self,
+        tenant_id: &str,
+        config: &super::types::TenantConfig,
+    ) -> Option<UsageSummary> {
+        let usage = self.usage.get(tenant_id)?;
+        usage.maybe_reset_window(self.config.window_size);
+
+        let topics_current = usage.topic_count.load(Ordering::Relaxed);
+        let partitions_current = usage.partition_count.load(Ordering::Relaxed);
+        let storage_current = usage.storage_bytes.load(Ordering::Relaxed);
+        let producer_current = usage.producer_bytes_window.load(Ordering::Relaxed);
+        let consumer_current = usage.consumer_bytes_window.load(Ordering::Relaxed);
+
+        let pct = |current: u64, limit: u64| -> f64 {
+            if limit == 0 {
+                0.0
+            } else {
+                (current as f64 / limit as f64) * 100.0
+            }
+        };
+
+        Some(UsageSummary {
+            tenant_id: tenant_id.to_string(),
+            topics: UsageMetric {
+                current: topics_current,
+                limit: config.max_topics as u64,
+                percent_used: pct(topics_current, config.max_topics as u64),
+            },
+            partitions: UsageMetric {
+                current: partitions_current,
+                limit: config.max_partitions as u64,
+                percent_used: pct(partitions_current, config.max_partitions as u64),
+            },
+            storage_bytes: UsageMetric {
+                current: storage_current,
+                limit: config.max_storage_bytes,
+                percent_used: pct(storage_current, config.max_storage_bytes),
+            },
+            producer_bytes_per_sec: UsageMetric {
+                current: producer_current,
+                limit: config.max_producer_bytes_per_sec,
+                percent_used: pct(producer_current, config.max_producer_bytes_per_sec),
+            },
+            consumer_bytes_per_sec: UsageMetric {
+                current: consumer_current,
+                limit: config.max_consumer_bytes_per_sec,
+                percent_used: pct(consumer_current, config.max_consumer_bytes_per_sec),
+            },
+        })
+    }
 }
 
 #[cfg(test)]
@@ -294,7 +395,7 @@ mod tests {
         mgr.register_tenant("t1");
 
         let result = mgr.check_topic_creation("t1", 100, 3, 500);
-        assert_eq!(result, QuotaCheckResult::Allowed);
+        assert!(result.is_allowed());
     }
 
     #[test]

@@ -20,5 +20,5 @@ pub mod quota;
 pub mod types;
 
 pub use manager::TenantManager;
-pub use quota::{QuotaConfig, QuotaManager, ResourceUsage};
+pub use quota::{QuotaCheckResult, QuotaConfig, QuotaManager, ResourceUsage, UsageMetric, UsageSummary};
 pub use types::{Tenant, TenantConfig, TenantId, TenantState};

@@ -64,6 +64,8 @@ pub(crate) fn create_failover_api_router(state: FailoverApiState) -> Router {
         .route("/api/v1/failover/trigger", post(trigger_failover))
         .route("/api/v1/failover/split-brain", get(check_split_brain))
         .route("/api/v1/failover/routing", get(get_routing))
+        .route("/api/v1/failover/fencing-token", get(get_fencing_token).post(issue_fencing_token))
+        .route("/api/v1/failover/auto-check", post(run_automated_failover_check))
         .with_state(state)
 }
 
@@ -151,6 +153,45 @@ async fn get_routing(State(state): State<FailoverApiState>) -> Json<serde_json::
             "endpoint": r.endpoint,
         })).collect::<Vec<_>>(),
     }))
+}
+
+/// GET /api/v1/failover/fencing-token - Get the current fencing epoch
+async fn get_fencing_token(State(state): State<FailoverApiState>) -> Json<serde_json::Value> {
+    let epoch = state.orchestrator.current_epoch();
+    Json(serde_json::json!({
+        "epoch": epoch,
+        "local_region": state.orchestrator.local_region(),
+    }))
+}
+
+/// POST /api/v1/failover/fencing-token - Issue a new fencing token
+async fn issue_fencing_token(State(state): State<FailoverApiState>) -> Json<serde_json::Value> {
+    let new_epoch = state.orchestrator.issue_fencing_token().await;
+    Json(serde_json::json!({
+        "epoch": new_epoch,
+        "message": "New fencing token issued. Stale leaders will be fenced.",
+    }))
+}
+
+/// POST /api/v1/failover/auto-check - Run automated failover detection
+async fn run_automated_failover_check(
+    State(state): State<FailoverApiState>,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
+    match state.orchestrator.check_automated_failover().await {
+        Ok(events) => Ok(Json(serde_json::json!({
+            "events_triggered": events.len(),
+            "events": events.iter().map(|e| serde_json::json!({
+                "from_region": e.from_region,
+                "to_region": e.to_region,
+                "reason": format!("{:?}", e.reason),
+                "timestamp": e.timestamp.to_rfc3339(),
+            })).collect::<Vec<_>>(),
+        }))),
+        Err(e) => Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({"error": e.to_string()})),
+        )),
+    }
 }
 
 #[cfg(test)]

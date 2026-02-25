@@ -31,6 +31,7 @@ use crate::server::connector_mgmt_api::{create_connector_mgmt_api_router, Connec
 use crate::server::console_api::{create_console_api_router, ConsoleApiState};
 use crate::server::consumer_api::{create_consumer_api_router, ConsumerApiState};
 use crate::server::dashboard_api::{create_dashboard_api_router, DashboardApiState};
+use crate::server::inspector_api;
 #[cfg(feature = "graphql")]
 use crate::server::graphql_routes::{create_graphql_router, GraphQLState};
 #[cfg(feature = "kafka-connect")]
@@ -272,9 +273,21 @@ fn build_http_router(state: &HttpServerState, bootstrap: &HttpBootstrap) -> Rout
         metadata_cache: bootstrap.metadata_cache.clone(),
         metrics_history: Some(bootstrap.metrics_history.clone()),
         alert_store: Some(bootstrap.alert_store.clone()),
+        group_coordinator: state.group_coordinator.clone(),
     };
     let dashboard_router = create_dashboard_api_router(dashboard_state);
     app = app.merge(dashboard_router);
+
+    // Add message inspector API for dev mode and web console
+    let inspector_state = inspector_api::InspectorState {
+        topic_manager: state.topic_manager.clone(),
+    };
+    let inspector_router = inspector_api::create_inspector_router(inspector_state);
+    app = app.merge(inspector_router);
+
+    // Add embedded web console at /console
+    let console_router = crate::server::console_page::create_console_page_router();
+    app = app.merge(console_router);
 
     // Add consumer groups API if coordinator is available
     if let Some(coordinator) = state.group_coordinator.clone() {

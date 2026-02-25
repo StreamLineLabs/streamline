@@ -16,9 +16,11 @@ pub mod cloud_api;
 pub mod cluster_api;
 pub mod connections_api;
 pub mod connector_mgmt_api;
+pub mod console_page;
 pub mod console_api;
 pub mod consumer_api;
 pub mod dashboard_api;
+pub mod inspector_api;
 pub mod kafka_connect_api;
 pub mod streamql_api;
 #[cfg(feature = "clustering")]

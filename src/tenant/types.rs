@@ -112,10 +112,21 @@ impl Tenant {
         format!("{}.{}", self.id, topic)
     }
 
+    /// Map an external consumer group ID to the internal namespaced group
+    pub fn namespace_group(&self, group_id: &str) -> String {
+        format!("{}.{}", self.id, group_id)
+    }
+
     /// Strip the namespace prefix from an internal topic name
     pub fn strip_namespace<'a>(&self, internal_topic: &'a str) -> Option<&'a str> {
         let prefix = format!("{}.", self.id);
         internal_topic.strip_prefix(&prefix)
+    }
+
+    /// Strip the namespace prefix from an internal consumer group ID
+    pub fn strip_group_namespace<'a>(&self, internal_group: &'a str) -> Option<&'a str> {
+        let prefix = format!("{}.", self.id);
+        internal_group.strip_prefix(&prefix)
     }
 }
 
