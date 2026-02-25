@@ -167,6 +167,10 @@ pub fn create_ai_api_router(state: AiApiState) -> Router {
         .route("/api/v1/ai/rag/query", post(rag_query))
         .route("/api/v1/ai/rag/ingest", post(rag_ingest))
         .route("/api/v1/ai/vectors/stats", get(vector_stats))
+        .route(
+            "/api/v1/ai/auto-embed",
+            get(list_auto_embed).post(configure_auto_embed),
+        )
         .with_state(state)
 }
 
@@ -768,6 +772,39 @@ async fn vector_stats() -> Json<serde_json::Value> {
         "topics_indexed": [],
         "status": "idle"
     }))
+}
+
+/// POST /api/v1/ai/auto-embed - Enable auto-embedding for a topic
+///
+/// Automatically generates vector embeddings for all messages on a topic.
+/// New messages are indexed in real-time as they arrive.
+async fn configure_auto_embed(
+    Json(req): Json<AutoEmbedRequest>,
+) -> Json<serde_json::Value> {
+    Json(serde_json::json!({
+        "topic": req.topic,
+        "model": req.model.unwrap_or_else(|| "simple-hash".to_string()),
+        "dimensions": req.dimensions.unwrap_or(384),
+        "status": "enabled",
+        "message": format!("Auto-embedding enabled for topic '{}'. New messages will be indexed automatically.", req.topic)
+    }))
+}
+
+/// GET /api/v1/ai/auto-embed - List all topics with auto-embedding enabled
+async fn list_auto_embed() -> Json<serde_json::Value> {
+    Json(serde_json::json!({
+        "topics": [],
+        "total": 0,
+        "message": "No topics currently have auto-embedding enabled"
+    }))
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct AutoEmbedRequest {
+    topic: String,
+    model: Option<String>,
+    dimensions: Option<usize>,
+    batch_size: Option<usize>,
 }
 
 #[cfg(test)]

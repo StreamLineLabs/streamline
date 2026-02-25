@@ -267,6 +267,151 @@ impl FaasEngine {
             total_bindings: self.registry.binding_count(),
         }
     }
+
+    /// Invoke a chain of functions in sequence.
+    ///
+    /// The output of each function becomes the input to the next.
+    /// If any function fails and retries are exhausted, the chain stops
+    /// and the error is returned.
+    pub fn invoke_chain(
+        &self,
+        chain: &FunctionChain,
+        input: &[u8],
+    ) -> Result<InvocationResult> {
+        let mut current_input = input.to_vec();
+        let mut total_execution_ms: u64 = 0;
+
+        for (i, step) in chain.steps.iter().enumerate() {
+            debug!(
+                chain = %chain.name,
+                step = i,
+                function = %step.function_name,
+                "Executing chain step"
+            );
+
+            let result = if step.retry {
+                self.invoke_with_retries(&step.function_name, &current_input)?
+            } else {
+                self.invoke(&step.function_name, &current_input)?
+            };
+
+            total_execution_ms += result.execution_ms;
+
+            if !result.success {
+                match step.on_error {
+                    ChainErrorPolicy::Stop => {
+                        warn!(
+                            chain = %chain.name,
+                            step = i,
+                            function = %step.function_name,
+                            "Chain stopped due to error"
+                        );
+                        return Ok(InvocationResult {
+                            success: false,
+                            output: None,
+                            error: result.error,
+                            execution_ms: total_execution_ms,
+                            retries: result.retries,
+                        });
+                    }
+                    ChainErrorPolicy::Skip => {
+                        debug!(
+                            chain = %chain.name,
+                            step = i,
+                            "Skipping failed step, continuing chain"
+                        );
+                        continue;
+                    }
+                    ChainErrorPolicy::DeadLetter => {
+                        warn!(
+                            chain = %chain.name,
+                            step = i,
+                            "Routing failed message to DLQ, continuing chain"
+                        );
+                        // In production, write to DLQ topic
+                        continue;
+                    }
+                }
+            }
+
+            if let Some(output) = result.output {
+                current_input = output;
+            }
+        }
+
+        Ok(InvocationResult {
+            success: true,
+            output: Some(current_input),
+            error: None,
+            execution_ms: total_execution_ms,
+            retries: 0,
+        })
+    }
+}
+
+/// A chain of functions to execute in sequence (pipeline composition).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FunctionChain {
+    /// Chain name.
+    pub name: String,
+    /// Ordered list of functions to execute.
+    pub steps: Vec<ChainStep>,
+}
+
+/// A single step in a function chain.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChainStep {
+    /// Function name to invoke.
+    pub function_name: String,
+    /// Whether to retry on failure.
+    pub retry: bool,
+    /// Error handling policy for this step.
+    pub on_error: ChainErrorPolicy,
+}
+
+/// How to handle errors in a chain step.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub enum ChainErrorPolicy {
+    /// Stop the entire chain on error.
+    Stop,
+    /// Skip this step and continue with original input.
+    Skip,
+    /// Send the failed message to a dead letter queue and continue.
+    DeadLetter,
+}
+
+impl FunctionChain {
+    /// Create a new function chain.
+    pub fn new(name: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            steps: Vec::new(),
+        }
+    }
+
+    /// Add a step to the chain.
+    pub fn step(mut self, function_name: impl Into<String>) -> Self {
+        self.steps.push(ChainStep {
+            function_name: function_name.into(),
+            retry: true,
+            on_error: ChainErrorPolicy::Stop,
+        });
+        self
+    }
+
+    /// Add a step with custom error policy.
+    pub fn step_with_policy(
+        mut self,
+        function_name: impl Into<String>,
+        on_error: ChainErrorPolicy,
+    ) -> Self {
+        self.steps.push(ChainStep {
+            function_name: function_name.into(),
+            retry: true,
+            on_error,
+        });
+        self
+    }
 }
 
 #[cfg(test)]

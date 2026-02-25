@@ -10,6 +10,7 @@ pub mod catalog;
 pub mod connector_sdk;
 pub mod declarative;
 pub mod registry;
+pub mod web_registry;
 
 pub use catalog::{
     ConnectorCatalogEntry, ConnectorCategory, ConnectorMetadata, MarketplaceCatalog,

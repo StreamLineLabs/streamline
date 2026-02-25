@@ -187,6 +187,24 @@ impl SchemaCache {
             .collect()
     }
 
+    /// Delete all schemas for a subject
+    pub fn delete_subject(&self, subject: &str) {
+        if let Some((_, versions)) = self.by_subject.remove(subject) {
+            for (_, entry) in versions {
+                self.by_id.remove(&entry.value.id);
+            }
+        }
+    }
+
+    /// Delete a specific version from a subject
+    pub fn delete_version(&self, subject: &str, version: i32) {
+        if let Some(mut versions) = self.by_subject.get_mut(subject) {
+            if let Some(entry) = versions.remove(&version) {
+                self.by_id.remove(&entry.value.id);
+            }
+        }
+    }
+
     /// Get all subjects that reference a given schema ID
     pub fn get_subjects_for_id(&self, id: i32) -> Vec<String> {
         let mut subjects = Vec::new();
@@ -420,6 +438,11 @@ impl SchemaStore {
     ) -> Result<i32, SchemaError> {
         // Validate the schema
         self.checker.validate(schema, schema_type)?;
+
+        // Validate references resolve to existing schemas
+        if !references.is_empty() {
+            self.validate_references(&references)?;
+        }
 
         // Check if schema already exists
         let existing_schemas = self.cache.get_all_for_subject(subject);
@@ -755,26 +778,26 @@ impl SchemaStore {
         for event in events {
             match event {
                 SchemaStoreEvent::SchemaRegistered(schema) => {
-                    // Update next_id if needed
                     let current_max = self.next_id.load(Ordering::SeqCst);
                     if schema.id >= current_max {
                         self.next_id.store(schema.id + 1, Ordering::SeqCst);
                     }
                     self.cache.put(schema);
                 }
-                SchemaStoreEvent::SubjectDeleted { subject } => {
-                    // Soft delete - mark subject as deleted
-                    // In production, this would be more sophisticated
-                    warn!(
-                        subject = subject,
-                        "Subject deletion replay not fully implemented"
-                    );
+                SchemaStoreEvent::SubjectDeleted { ref subject } => {
+                    self.cache.delete_subject(subject);
+                    self.cache.delete_subject_compatibility(subject);
+                    debug!(subject = subject, "Subject deletion replayed");
                 }
-                SchemaStoreEvent::VersionDeleted { subject, version } => {
-                    warn!(
+                SchemaStoreEvent::VersionDeleted {
+                    ref subject,
+                    version,
+                } => {
+                    self.cache.delete_version(subject, version);
+                    debug!(
                         subject = subject,
                         version = version,
-                        "Version deletion replay not fully implemented"
+                        "Version deletion replayed"
                     );
                 }
                 SchemaStoreEvent::CompatibilitySet { subject, level } => {
@@ -786,6 +809,83 @@ impl SchemaStore {
                 }
             }
         }
+    }
+
+    /// Validate that all schema references resolve to existing registered schemas.
+    pub fn validate_references(&self, references: &[SchemaReference]) -> Result<(), SchemaError> {
+        for reference in references {
+            let schema = self
+                .cache
+                .get_by_subject_version(&reference.subject, reference.version);
+            if schema.is_none() {
+                return Err(SchemaError::InvalidSchema(format!(
+                    "Unresolved reference: subject='{}' version={}",
+                    reference.subject, reference.version
+                )));
+            }
+        }
+        // Check for circular references
+        let mut visited = std::collections::HashSet::new();
+        for reference in references {
+            self.detect_circular_refs(&reference.subject, reference.version, &mut visited)?;
+        }
+        Ok(())
+    }
+
+    fn detect_circular_refs(
+        &self,
+        subject: &str,
+        version: i32,
+        visited: &mut std::collections::HashSet<(String, i32)>,
+    ) -> Result<(), SchemaError> {
+        let key = (subject.to_string(), version);
+        if !visited.insert(key.clone()) {
+            return Err(SchemaError::InvalidSchema(format!(
+                "Circular schema reference detected: subject='{}' version={}",
+                subject, version
+            )));
+        }
+        if let Some(schema) = self.cache.get_by_subject_version(subject, version) {
+            for reference in &schema.references {
+                self.detect_circular_refs(
+                    &reference.subject,
+                    reference.version,
+                    visited,
+                )?;
+            }
+        }
+        visited.remove(&key);
+        Ok(())
+    }
+
+    /// Search schemas by subject prefix or schema content substring.
+    pub fn search_schemas(
+        &self,
+        query: &str,
+        schema_type_filter: Option<SchemaType>,
+        limit: usize,
+    ) -> Vec<RegisteredSchema> {
+        let query_lower = query.to_lowercase();
+        let mut results = Vec::new();
+
+        for subject in self.cache.get_subjects() {
+            for schema in self.cache.get_all_for_subject(&subject) {
+                if let Some(filter) = schema_type_filter {
+                    if schema.schema_type != filter {
+                        continue;
+                    }
+                }
+                let subject_match = schema.subject.to_lowercase().contains(&query_lower);
+                let content_match = schema.schema.to_lowercase().contains(&query_lower);
+                if subject_match || content_match {
+                    results.push(schema);
+                    if results.len() >= limit {
+                        return results;
+                    }
+                }
+            }
+        }
+        results
     }
 }
 

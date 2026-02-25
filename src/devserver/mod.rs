@@ -213,6 +213,80 @@ impl DevServer {
     pub fn manifest(&self) -> Option<&DevManifest> {
         self.manifest.as_ref()
     }
+
+    /// Print the dev mode welcome banner with quick-start instructions
+    pub fn print_welcome_banner(&self) {
+        let kafka_addr = format!("localhost:{}", self.config.kafka_port);
+        let http_addr = format!("localhost:{}", self.config.http_port);
+
+        println!();
+        println!("  ╔══════════════════════════════════════════════════════════╗");
+        println!("  ║          🚀  Streamline Dev Mode                        ║");
+        println!("  ║          The Redis of Streaming — zero config            ║");
+        println!("  ╚══════════════════════════════════════════════════════════╝");
+        println!();
+        println!("  Kafka protocol:  {}", kafka_addr);
+        println!("  HTTP API:        http://{}", http_addr);
+        println!("  Dashboard:       http://{}/api/v1/dashboard", http_addr);
+        if self.config.playground {
+            println!("  Mode:            🎮 Playground (sample data loaded)");
+        } else {
+            println!("  Mode:            🔧 Development");
+        }
+        println!();
+        println!("  Quick Start:");
+        println!("  ─────────────────────────────────────────────────────────");
+        println!("  # Create a topic");
+        println!("  streamline-cli topics create my-topic --partitions 3");
+        println!();
+        println!("  # Produce a message");
+        println!("  streamline-cli produce my-topic -m '{{\"hello\": \"world\"}}'");
+        println!();
+        println!("  # Consume messages");
+        println!("  streamline-cli consume my-topic --from-beginning");
+        println!();
+        println!("  # Query with SQL");
+        println!("  streamline-cli query \"SELECT * FROM streamline_topic('my-topic') LIMIT 10\"");
+        println!();
+        println!("  # Interactive shell");
+        println!("  streamline-cli shell");
+        println!();
+        println!("  Press Ctrl+C to stop");
+        println!();
+    }
+
+    /// Get a summary of the current dev server state for the HTTP API
+    pub fn status_summary(&self) -> DevServerStatus {
+        DevServerStatus {
+            mode: if self.config.playground {
+                "playground".to_string()
+            } else {
+                "development".to_string()
+            },
+            kafka_port: self.config.kafka_port,
+            http_port: self.config.http_port,
+            in_memory: self.config.in_memory,
+            hot_reload: self.config.hot_reload,
+            manifest_loaded: self.manifest.is_some(),
+            topic_count: self
+                .manifest
+                .as_ref()
+                .map(|m| m.topics.len())
+                .unwrap_or(0),
+        }
+    }
+}
+
+/// Status response for the dev server HTTP endpoint
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DevServerStatus {
+    pub mode: String,
+    pub kafka_port: u16,
+    pub http_port: u16,
+    pub in_memory: bool,
+    pub hot_reload: bool,
+    pub manifest_loaded: bool,
+    pub topic_count: usize,
 }
 
 // ─── Result Types ───────────────────────────────────────────────────

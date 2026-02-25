@@ -171,6 +171,7 @@ pub struct FailoverOrchestrator {
     regions: Arc<RwLock<HashMap<String, RegionFailoverState>>>,
     events: Arc<RwLock<Vec<FailoverEvent>>>,
     routing: Arc<RwLock<RoutingPreference>>,
+    fencing_epoch: std::sync::atomic::AtomicU64,
 }
 
 impl FailoverOrchestrator {
@@ -181,6 +182,7 @@ impl FailoverOrchestrator {
             regions: Arc::new(RwLock::new(HashMap::new())),
             events: Arc::new(RwLock::new(Vec::new())),
             routing: Arc::new(RwLock::new(RoutingPreference::LocalFirst)),
+            fencing_epoch: std::sync::atomic::AtomicU64::new(0),
         }
     }
 
@@ -409,6 +411,54 @@ impl FailoverOrchestrator {
     /// Get the local region ID
     pub fn local_region(&self) -> &str {
         &self.local_region
+    }
+
+    /// Issue a fencing token to prevent stale leaders from accepting writes.
+    ///
+    /// Returns a monotonically increasing epoch number that must be included
+    /// in all write requests. A leader with a stale epoch will be fenced out.
+    pub async fn issue_fencing_token(&self) -> u64 {
+        let new_epoch = self.fencing_epoch.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;
+        info!(epoch = new_epoch, "Issued new fencing token");
+        new_epoch
+    }
+
+    /// Validate a fencing token against the current epoch.
+    ///
+    /// Returns true if the token is valid (>= current epoch).
+    pub fn validate_fencing_token(&self, token: u64) -> bool {
+        token >= self.fencing_epoch.load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    /// Get the current fencing epoch.
+    pub fn current_epoch(&self) -> u64 {
+        self.fencing_epoch.load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    /// Check all regions for automated failover based on heartbeat timeouts.
+    ///
+    /// Scans regions for missed heartbeats exceeding the configured timeout.
+    /// Returns any failover events triggered.
+    pub async fn check_automated_failover(&self) -> Result<Vec<FailoverEvent>> {
+        let mut triggered_events = Vec::new();
+        let regions: Vec<RegionFailoverState> = self.regions.read().await.values().cloned().collect();
+
+        for region in &regions {
+            if region.role == RegionRole::Active && region.health == RegionHealth::Unhealthy {
+                if let Some(event) = self.record_failure(&region.region_id).await? {
+                    triggered_events.push(event);
+                }
+            }
+        }
+
+        if !triggered_events.is_empty() {
+            info!(
+                events = triggered_events.len(),
+                "Automated failover triggered"
+            );
+        }
+
+        Ok(triggered_events)
     }
 }
 

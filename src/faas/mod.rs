@@ -37,7 +37,7 @@ pub mod function;
 pub mod registry;
 pub mod trigger;
 
-pub use engine::FaasEngine;
+pub use engine::{ChainErrorPolicy, ChainStep, FaasEngine, FunctionChain};
 pub use function::{
     FaasFunction, FunctionConfig, FunctionMetrics, FunctionState, InvocationResult,
 };

@@ -1316,6 +1316,130 @@ impl ConnectorRuntime {
             })
             .collect()
     }
+
+    /// Rebalance tasks across available workers.
+    ///
+    /// Redistributes connector tasks to maintain even load distribution.
+    /// Called automatically when workers join/leave or connectors are added/removed.
+    pub async fn rebalance_tasks(&self, available_workers: &[String]) -> Result<RebalanceResult> {
+        if available_workers.is_empty() {
+            return Err(StreamlineError::Config(
+                "No workers available for rebalancing".to_string(),
+            ));
+        }
+
+        let mut connectors = self.connectors.write().await;
+        let mut reassigned = 0usize;
+
+        // Round-robin assignment of tasks to workers
+        let mut worker_idx = 0;
+        for connector in connectors.values_mut() {
+            if connector.state != ConnectorState::Running {
+                continue;
+            }
+            for task in &mut connector.tasks {
+                let target_worker = &available_workers[worker_idx % available_workers.len()];
+                if task.worker_id != *target_worker {
+                    debug!(
+                        connector = %connector.name,
+                        task_id = task.id,
+                        from = %task.worker_id,
+                        to = %target_worker,
+                        "Reassigning task"
+                    );
+                    task.worker_id = target_worker.clone();
+                    reassigned += 1;
+                }
+                worker_idx += 1;
+            }
+        }
+
+        info!(
+            workers = available_workers.len(),
+            reassigned,
+            "Task rebalance completed"
+        );
+
+        Ok(RebalanceResult {
+            workers: available_workers.len(),
+            tasks_reassigned: reassigned,
+        })
+    }
+
+    /// Gracefully shut down the connector runtime.
+    ///
+    /// Stops all running connectors, flushes offsets, and cancels task handles.
+    pub async fn graceful_shutdown(&self) -> Result<()> {
+        info!("Shutting down connector runtime gracefully");
+
+        let connector_names: Vec<String> = {
+            let connectors = self.connectors.read().await;
+            connectors.keys().cloned().collect()
+        };
+
+        for name in &connector_names {
+            if let Err(e) = self.stop_connector(name).await {
+                debug!(connector = %name, error = %e, "Error stopping connector during shutdown");
+            }
+        }
+
+        // Flush all offsets
+        self.flush_offsets().await?;
+
+        // Cancel all task handles
+        let mut handles = self.task_handles.write().await;
+        for (name, handle_list) in handles.drain() {
+            for handle in handle_list {
+                handle.abort();
+            }
+            debug!(connector = %name, "Task handles cancelled");
+        }
+
+        info!("Connector runtime shutdown complete");
+        Ok(())
+    }
+
+    /// Health check across all connectors, returning unhealthy ones.
+    pub async fn health_check(&self) -> Vec<ConnectorHealthReport> {
+        let connectors = self.connectors.read().await;
+        connectors
+            .values()
+            .map(|c| {
+                let failed_tasks = c
+                    .tasks
+                    .iter()
+                    .filter(|t| t.state == TaskState::Failed)
+                    .count();
+
+                ConnectorHealthReport {
+                    name: c.name.clone(),
+                    state: c.state.clone(),
+                    healthy: c.state == ConnectorState::Running && failed_tasks == 0,
+                    failed_tasks,
+                    total_tasks: c.tasks.len(),
+                    error: c.error_message.clone(),
+                }
+            })
+            .collect()
+    }
+}
+
+/// Result of a task rebalance operation.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RebalanceResult {
+    pub workers: usize,
+    pub tasks_reassigned: usize,
+}
+
+/// Health report for a single connector.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConnectorHealthReport {
+    pub name: String,
+    pub state: ConnectorState,
+    pub healthy: bool,
+    pub failed_tasks: usize,
+    pub total_tasks: usize,
+    pub error: Option<String>,
 }
 
 #[cfg(test)]
