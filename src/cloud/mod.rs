@@ -107,6 +107,10 @@ pub struct CloudConfig {
     pub provisioner: ProvisionerConfig,
     /// Enable billing
     pub billing_enabled: bool,
+    /// Free tier configuration
+    pub free_tier: FreeTierConfig,
+    /// Available regions for multi-region deployment
+    pub available_regions: Vec<RegionConfig>,
 }
 
 impl Default for CloudConfig {
@@ -121,8 +125,90 @@ impl Default for CloudConfig {
             auto_scaler: AutoScalerConfig::default(),
             provisioner: ProvisionerConfig::default(),
             billing_enabled: true,
+            free_tier: FreeTierConfig::default(),
+            available_regions: vec![
+                RegionConfig { id: "us-east-1".into(), name: "US East (Virginia)".into(), available: true },
+                RegionConfig { id: "eu-west-1".into(), name: "EU West (Ireland)".into(), available: true },
+                RegionConfig { id: "ap-southeast-1".into(), name: "Asia Pacific (Singapore)".into(), available: true },
+            ],
         }
     }
+}
+
+/// Free tier configuration for Streamline Cloud
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FreeTierConfig {
+    /// Whether free tier is enabled
+    pub enabled: bool,
+    /// Maximum messages per day on free tier
+    pub max_messages_per_day: u64,
+    /// Maximum storage in bytes on free tier
+    pub max_storage_bytes: u64,
+    /// Maximum topics on free tier
+    pub max_topics: u32,
+    /// Maximum partitions per topic on free tier
+    pub max_partitions_per_topic: u32,
+    /// Maximum retention in milliseconds on free tier
+    pub max_retention_ms: i64,
+    /// Maximum producer throughput (bytes/sec) on free tier
+    pub max_producer_bytes_per_sec: u64,
+    /// Maximum consumer throughput (bytes/sec) on free tier
+    pub max_consumer_bytes_per_sec: u64,
+}
+
+impl Default for FreeTierConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            max_messages_per_day: 1_000_000,             // 1M msgs/day
+            max_storage_bytes: 1_073_741_824,             // 1 GB
+            max_topics: 10,
+            max_partitions_per_topic: 3,
+            max_retention_ms: 24 * 60 * 60 * 1000,       // 24 hours
+            max_producer_bytes_per_sec: 1_048_576,        // 1 MB/s
+            max_consumer_bytes_per_sec: 5_242_880,        // 5 MB/s
+        }
+    }
+}
+
+/// Region configuration for multi-region cloud deployment
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RegionConfig {
+    pub id: String,
+    pub name: String,
+    pub available: bool,
+}
+
+/// Self-service signup request
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SignupRequest {
+    pub email: String,
+    pub organization_name: String,
+    pub plan: SignupPlan,
+    pub region: String,
+}
+
+/// Plan selection during signup
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub enum SignupPlan {
+    /// Free tier: 1M msgs/day, 1GB storage, 10 topics
+    Free,
+    /// Pro tier: 50M msgs/day, 100GB storage, unlimited topics
+    Pro,
+    /// Enterprise: custom limits, SLA, dedicated support
+    Enterprise,
+}
+
+/// Signup response
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SignupResponse {
+    pub tenant_id: String,
+    pub api_key: String,
+    pub bootstrap_servers: String,
+    pub http_endpoint: String,
+    pub plan: SignupPlan,
+    pub region: String,
+    pub limits: FreeTierConfig,
 }
 
 /// Cluster size options
@@ -507,6 +593,62 @@ impl StreamlineCloud {
 
         Ok(())
     }
+
+    /// Check SLA compliance for a tenant's clusters.
+    ///
+    /// Evaluates cluster health status against SLA targets.
+    /// Default SLA target is 99.95% uptime.
+    pub async fn check_sla_compliance(
+        &self,
+        tenant_id: &str,
+    ) -> Result<SlaComplianceReport> {
+        let clusters = self.cluster_manager.list(tenant_id).await;
+        let mut reports = Vec::new();
+
+        let sla_target = 99.95;
+
+        for cluster in &clusters {
+            let healthy = cluster.is_healthy();
+            // Simplified uptime: based on current state
+            let uptime_pct = if healthy { 100.0 } else { 0.0 };
+
+            reports.push(ClusterSlaStatus {
+                cluster_id: cluster.id.clone(),
+                uptime_percentage: uptime_pct,
+                sla_target,
+                compliant: healthy,
+                violations: if healthy { 0 } else { 1 },
+            });
+        }
+
+        let all_compliant = reports.iter().all(|r| r.compliant);
+
+        Ok(SlaComplianceReport {
+            tenant_id: tenant_id.to_string(),
+            overall_compliant: all_compliant,
+            clusters: reports,
+            checked_at: chrono::Utc::now(),
+        })
+    }
+}
+
+/// SLA compliance report for a tenant
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SlaComplianceReport {
+    pub tenant_id: String,
+    pub overall_compliant: bool,
+    pub clusters: Vec<ClusterSlaStatus>,
+    pub checked_at: chrono::DateTime<chrono::Utc>,
+}
+
+/// SLA status for a single cluster
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ClusterSlaStatus {
+    pub cluster_id: String,
+    pub uptime_percentage: f64,
+    pub sla_target: f64,
+    pub compliant: bool,
+    pub violations: u32,
 }
 
 #[cfg(test)]

@@ -32,7 +32,7 @@ pub mod topic_source;
 
 pub use duckdb::{
     CacheStats, DuckDBEngine, ExplainResult, MaterializedView, QueryOptions, QueryResult,
-    QueryResultRow, StreamTable,
+    QueryResultRow, RefreshMode, StreamTable, WindowSpec, WindowType,
 };
 pub use error::{AnalyticsError, Result};
 pub use topic_source::{AnalyticsRecord, TopicDataSource};

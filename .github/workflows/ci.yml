@@ -119,3 +119,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: ./scripts/docs-consistency-check.sh
+
+  conformance:
+    name: Protocol Conformance
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test --test conformance_test
+
+  eos:
+    name: EOS Certification
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test --test eos_certification_test

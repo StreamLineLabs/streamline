@@ -371,6 +371,55 @@ impl VectorStore {
     pub fn is_empty(&self) -> bool {
         self.vectors.is_empty()
     }
+
+    /// Remove a vector by ID
+    pub fn remove(&mut self, id: &str) -> bool {
+        if let Some(pos) = self.vectors.iter().position(|v| v.id == id) {
+            self.vectors.swap_remove(pos);
+            self.index.remove(id);
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Batch add vectors for bulk ingestion
+    pub fn add_batch(&mut self, entries: Vec<(String, Vec<f32>, Option<serde_json::Value>)>) {
+        for (id, vector, metadata) in entries {
+            self.add(id, vector, metadata);
+        }
+    }
+
+    /// Search with minimum similarity threshold
+    pub fn search_with_threshold(
+        &self,
+        query: &[f32],
+        k: usize,
+        min_score: f32,
+    ) -> Vec<SearchHit> {
+        self.search(query, k)
+            .into_iter()
+            .filter(|hit| hit.score >= min_score)
+            .collect()
+    }
+
+    /// Get statistics about the vector store
+    pub fn stats(&self) -> VectorStoreMetrics {
+        VectorStoreMetrics {
+            total_vectors: self.vectors.len(),
+            dimension: self.index.dimension,
+            memory_bytes_estimate: self.vectors.len()
+                * (std::mem::size_of::<StoredVector>() + self.index.dimension * 4),
+        }
+    }
+}
+
+/// Metrics for a vector store instance
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VectorStoreMetrics {
+    pub total_vectors: usize,
+    pub dimension: usize,
+    pub memory_bytes_estimate: usize,
 }
 
 /// Stored vector with metadata
@@ -406,6 +455,11 @@ impl VectorIndex {
     pub fn add(&mut self, id: &str, _vector: &[f32]) {
         let pos = self.positions.len();
         self.positions.insert(id.to_string(), pos);
+    }
+
+    /// Remove a vector from the index
+    pub fn remove(&mut self, id: &str) {
+        self.positions.remove(id);
     }
 
     /// Search for nearest neighbors (brute force for now)

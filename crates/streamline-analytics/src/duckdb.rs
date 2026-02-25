@@ -177,6 +177,57 @@ pub struct MaterializedView {
 
     /// Unix timestamp (seconds) of the last refresh.
     pub last_refreshed: i64,
+
+    /// Refresh mode: full recomputation or incremental.
+    pub refresh_mode: RefreshMode,
+
+    /// Last consumed offset per (topic, partition) for incremental refresh.
+    pub watermarks: std::collections::HashMap<(String, i32), i64>,
+
+    /// Window type for windowed aggregations (optional).
+    pub window: Option<WindowSpec>,
+
+    /// Whether this view is enabled for automatic refresh.
+    pub enabled: bool,
+}
+
+/// How a materialized view is refreshed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum RefreshMode {
+    /// Full recomputation from scratch on each refresh.
+    Full,
+    /// Incremental: only process new records since last watermark.
+    Incremental,
+}
+
+impl Default for RefreshMode {
+    fn default() -> Self {
+        RefreshMode::Full
+    }
+}
+
+/// Window specification for windowed materialized views.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WindowSpec {
+    /// Window type.
+    pub window_type: WindowType,
+    /// Window size in seconds.
+    pub size_seconds: u64,
+    /// Slide interval in seconds (for sliding windows).
+    pub slide_seconds: Option<u64>,
+    /// Allowed late data in seconds.
+    pub late_data_seconds: u64,
+}
+
+/// Type of time window for aggregations.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub enum WindowType {
+    /// Fixed-size, non-overlapping windows.
+    Tumbling,
+    /// Fixed-size, overlapping windows with a slide interval.
+    Sliding,
+    /// Variable-size windows based on inactivity gaps.
+    Session,
 }
 
 /// Virtual table handle for exposing Streamline topics to DuckDB.
@@ -650,6 +701,10 @@ impl DuckDBEngine {
             query: query.to_string(),
             refresh_interval_seconds,
             last_refreshed: chrono::Utc::now().timestamp(),
+            refresh_mode: RefreshMode::Full,
+            watermarks: std::collections::HashMap::new(),
+            window: None,
+            enabled: true,
         };
 
         let conn = self.connection.lock();

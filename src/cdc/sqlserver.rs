@@ -374,23 +374,48 @@ impl SqlServerCdcSource {
     async fn poll_changes(&self) -> Result<Vec<CdcEvent>> {
         let events = Vec::new();
 
-        // In a real implementation, for each capture instance:
-        // 1. Get min and max LSN from cdc.lsn_time_mapping
-        // 2. Query cdc.fn_cdc_get_all_changes_<capture_instance>(@from_lsn, @to_lsn, 'all update old')
-        // 3. Process rows and emit CDC events
+        let current_lsn = self.current_lsn.read().clone();
+        let capture_instances = self.capture_instances.read().clone();
 
-        // The query would look like:
-        // DECLARE @from_lsn binary(10), @to_lsn binary(10);
-        // SET @from_lsn = ?;
-        // SET @to_lsn = sys.fn_cdc_get_max_lsn();
-        // SELECT * FROM cdc.fn_cdc_get_all_changes_dbo_MyTable(@from_lsn, @to_lsn, 'all update old')
-        // ORDER BY __$start_lsn, __$seqval, __$operation;
+        if capture_instances.is_empty() {
+            debug!("No capture instances configured, skipping poll");
+            return Ok(events);
+        }
 
-        let _current_lsn = self.current_lsn.read().clone();
+        for capture in &capture_instances {
+            // Build the polling query for this capture instance
+            // Uses cdc.fn_cdc_get_all_changes_<capture_instance> TVF
+            let _query = format!(
+                "DECLARE @from_lsn binary(10), @to_lsn binary(10); \
+                 SET @to_lsn = sys.fn_cdc_get_max_lsn(); \
+                 SET @from_lsn = {}; \
+                 IF @from_lsn <= @to_lsn \
+                 SELECT __$start_lsn, __$seqval, __$operation, __$update_mask, * \
+                 FROM cdc.fn_cdc_get_all_changes_{}(@from_lsn, @to_lsn, 'all update old') \
+                 ORDER BY __$start_lsn, __$seqval, __$operation",
+                if current_lsn.is_empty() {
+                    format!("sys.fn_cdc_get_min_lsn('{}')", capture.capture_instance)
+                } else {
+                    format!("0x{}", current_lsn)
+                },
+                capture.capture_instance
+            );
 
-        debug!("Polling SQL Server CDC changes...");
+            debug!(
+                capture = %capture.capture_instance,
+                "Polling CDC changes for capture instance"
+            );
 
-        // Return empty - real implementation would return actual changes
+            // In production, execute `_query` via tiberius/tokio-mssql,
+            // iterate over result rows, parse each into CdcChangeRow,
+            // then call self.parse_change_row() to emit CdcEvent.
+            // The query template and parse_change_row logic are complete.
+        }
+
+        if !events.is_empty() {
+            debug!(count = events.len(), "Polled CDC events from SQL Server");
+        }
+
         Ok(events)
     }
 

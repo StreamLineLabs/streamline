@@ -567,6 +567,45 @@ impl Default for CdcManager {
     }
 }
 
+/// Retry configuration for CDC source connections.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CdcRetryConfig {
+    /// Maximum number of retry attempts before giving up
+    pub max_retries: u32,
+    /// Initial backoff duration in milliseconds
+    pub initial_backoff_ms: u64,
+    /// Maximum backoff duration in milliseconds
+    pub max_backoff_ms: u64,
+    /// Backoff multiplier (e.g., 2.0 for exponential backoff)
+    pub backoff_multiplier: f64,
+}
+
+impl Default for CdcRetryConfig {
+    fn default() -> Self {
+        Self {
+            max_retries: 10,
+            initial_backoff_ms: 1000,
+            max_backoff_ms: 60_000,
+            backoff_multiplier: 2.0,
+        }
+    }
+}
+
+impl CdcRetryConfig {
+    /// Calculate the backoff duration for a given attempt number.
+    pub fn backoff_for_attempt(&self, attempt: u32) -> std::time::Duration {
+        let backoff_ms = (self.initial_backoff_ms as f64
+            * self.backoff_multiplier.powi(attempt as i32)) as u64;
+        let clamped = backoff_ms.min(self.max_backoff_ms);
+        std::time::Duration::from_millis(clamped)
+    }
+
+    /// Returns true if retries are exhausted.
+    pub fn is_exhausted(&self, attempt: u32) -> bool {
+        attempt >= self.max_retries
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

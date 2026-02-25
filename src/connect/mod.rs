@@ -41,6 +41,7 @@
 //! ```
 
 pub mod api;
+pub mod conformance;
 pub mod health;
 pub mod marketplace;
 pub mod native;
