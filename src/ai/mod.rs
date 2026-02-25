@@ -32,6 +32,7 @@ pub mod auto_embed;
 pub mod config;
 pub mod embedding;
 pub mod embeddings;
+pub mod gateway;
 pub mod hnsw;
 pub mod llm;
 pub mod llm_streaming;
@@ -108,6 +109,10 @@ pub use vector_streaming::{
     HnswParams, IvfParams, RagChunk, RagConfig, RagContext, RagPipeline, StreamVector,
     TopicVectorStore, VectorEncoding, VectorIndexConfig, VectorIndexType, VectorSearchResult,
     VectorStoreStats, DEFAULT_VECTOR_DIM, MAX_VECTOR_DIM, MIN_VECTOR_DIM,
+};
+pub use gateway::{
+    AIGateway, CostSnapshot, CostTracker, GatewayConfig, InferenceResult, InvocationCost,
+    ProviderCostSummary, ProviderEntry, ProviderKind,
 };
 
 use crate::error::{Result, StreamlineError};

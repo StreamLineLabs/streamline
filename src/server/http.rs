@@ -444,9 +444,15 @@ fn build_http_router(state: &HttpServerState, bootstrap: &HttpBootstrap) -> Rout
     // Add AI Pipeline API for ML/AI stream processing
     #[cfg(feature = "ai")]
     {
-        let ai_state = AiApiState::new();
-        let ai_router = create_ai_api_router(ai_state);
-        app = app.merge(ai_router);
+        match AiApiState::new() {
+            Ok(ai_state) => {
+                let ai_router = create_ai_api_router(ai_state);
+                app = app.merge(ai_router);
+            }
+            Err(e) => {
+                tracing::warn!("Failed to initialize AI API subsystem: {e}. AI endpoints will be unavailable.");
+            }
+        }
     }
 
     // Add Feature Store API for ML feature serving

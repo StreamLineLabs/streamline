@@ -42,25 +42,22 @@ pub struct AiApiState {
 
 impl Default for AiApiState {
     fn default() -> Self {
-        Self::new()
+        Self::new().expect("default AiApiState configuration should be valid")
     }
 }
 
 impl AiApiState {
-    pub fn new() -> Self {
-        let anomaly_detector = Arc::new(
-            AnomalyDetector::new(AnomalyConfig::default())
-                .expect("default anomaly config should be valid"),
-        );
+    pub fn new() -> Result<Self, Box<dyn std::error::Error>> {
+        let anomaly_detector = Arc::new(AnomalyDetector::new(AnomalyConfig::default())?);
         let pattern_recognizer = Arc::new(PatternRecognizer::new(PatternConfig::default()));
         let stream_summarizer = Arc::new(StreamSummarizer::new(SummarizationConfig::default()));
 
-        Self {
+        Ok(Self {
             pipeline_manager: PipelineManager::new_shared(),
             anomaly_detector,
             pattern_recognizer,
             stream_summarizer,
-        }
+        })
     }
 }
 
@@ -813,7 +810,7 @@ mod tests {
 
     #[test]
     fn test_ai_api_state_new() {
-        let state = AiApiState::new();
+        let state = AiApiState::new().unwrap();
         assert!(Arc::strong_count(&state.pipeline_manager) >= 1);
     }
 
