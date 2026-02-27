@@ -823,6 +823,16 @@ impl PipelineManager {
         Ok(pipeline.info())
     }
 
+    /// Stop a pipeline (sets state to Stopped without removing it)
+    pub async fn stop(&self, name: &str) -> Result<PipelineInfo> {
+        let mut pipelines = self.pipelines.write().await;
+        let pipeline = pipelines.get_mut(name).ok_or_else(|| {
+            StreamlineError::config("pipeline", format!("Pipeline '{}' not found", name))
+        })?;
+        pipeline.stop();
+        Ok(pipeline.info())
+    }
+
     /// Delete a pipeline
     pub async fn delete(&self, name: &str) -> Result<()> {
         let mut pipelines = self.pipelines.write().await;

@@ -7,15 +7,26 @@
 //! - `GET /api/v1/ai/pipelines/:name` - Get pipeline details
 //! - `DELETE /api/v1/ai/pipelines/:name` - Delete pipeline
 //! - `POST /api/v1/ai/pipelines/:name/start` - Start pipeline
+//! - `POST /api/v1/ai/pipelines/:name/stop` - Stop pipeline
 //! - `POST /api/v1/ai/pipelines/:name/pause` - Pause pipeline
-//! - `GET /api/v1/ai/status` - AI subsystem status
+//! - `GET /api/v1/ai/stats` - AI subsystem stats
+//! - `GET /api/v1/ai/status` - AI subsystem status (alias)
 //! - `POST /api/v1/ai/search` - Semantic search across topics
+//! - `POST /api/v1/ai/classify` - Classify text using LLM
+//! - `POST /api/v1/ai/enrich` - Enrich records with AI metadata
+//! - `POST /api/v1/ai/embed` - Generate embeddings for text
+//! - `POST /api/v1/ai/embeddings` - Generate embeddings (alias)
 //! - `GET /api/v1/ai/templates` - List pre-built pipeline templates
 //! - `POST /api/v1/ai/anomalies` - Configure anomaly detection on a topic
 //! - `GET /api/v1/ai/anomalies` - List all detected anomalies
 //! - `GET /api/v1/ai/anomalies/:topic` - Get anomalies for a specific topic
 //! - `POST /api/v1/ai/summarize` - Summarize a topic's recent data
 //! - `GET /api/v1/ai/patterns/:topic` - Get detected patterns for a topic
+//! - `POST /api/v1/ai/rag/query` - Query the RAG pipeline
+//! - `POST /api/v1/ai/rag/ingest` - Ingest documents for RAG
+//! - `GET /api/v1/ai/vectors/stats` - Vector store statistics
+//! - `POST /api/v1/ai/auto-embed` - Configure auto-embedding
+//! - `GET /api/v1/ai/auto-embed` - List auto-embed configs
 
 use crate::ai::anomaly::AnomalyDetector;
 use crate::ai::config::AnomalyConfig;
@@ -25,10 +36,11 @@ use crate::ai::summarization::{StreamSummarizer, SummarizationConfig};
 use axum::{
     extract::{Path, State},
     http::StatusCode,
-    routing::{get, post},
+    routing::{delete, get, post},
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::sync::Arc;
 
 /// Shared state for AI Pipeline API
@@ -123,6 +135,50 @@ pub struct SearchResult {
     pub value: String,
 }
 
+/// Classify request
+#[derive(Debug, Deserialize)]
+pub struct ClassifyRequest {
+    /// Text to classify
+    pub text: String,
+    /// Categories to classify into
+    pub categories: Vec<String>,
+}
+
+/// Classify response
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ClassifyResponse {
+    /// Predicted category
+    pub category: String,
+    /// Confidence score (0.0 - 1.0)
+    pub confidence: f32,
+    /// Scores for all categories
+    pub scores: HashMap<String, f32>,
+}
+
+/// Enrich request
+#[derive(Debug, Deserialize)]
+pub struct EnrichRequest {
+    /// Text to enrich with AI metadata
+    pub text: String,
+    /// Optional list of fields to extract
+    #[serde(default)]
+    pub fields: Option<Vec<String>>,
+}
+
+/// Enrich response
+#[derive(Debug, Serialize, Deserialize)]
+pub struct EnrichResponse {
+    /// Original text
+    pub text: String,
+    /// Extracted metadata fields
+    pub metadata: HashMap<String, serde_json::Value>,
+    /// Summary (if generated)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub summary: Option<String>,
+    /// Detected entities
+    pub entities: Vec<String>,
+}
+
 /// Pipeline template
 #[derive(Debug, Clone, Serialize)]
 pub struct PipelineTemplate {
@@ -143,17 +199,25 @@ pub struct AiErrorResponse {
 pub fn create_ai_api_router(state: AiApiState) -> Router {
     Router::new()
         .route("/api/v1/ai/status", get(ai_status))
+        .route("/api/v1/ai/stats", get(ai_status))
         .route(
             "/api/v1/ai/pipelines",
             get(list_pipelines).post(create_pipeline),
         )
-        .route("/api/v1/ai/pipelines/:name", get(get_pipeline))
+        .route(
+            "/api/v1/ai/pipelines/:name",
+            get(get_pipeline).delete(delete_pipeline),
+        )
         .route("/api/v1/ai/pipelines/:name/delete", post(delete_pipeline))
         .route("/api/v1/ai/pipelines/:name/start", post(start_pipeline))
+        .route("/api/v1/ai/pipelines/:name/stop", post(stop_pipeline))
         .route("/api/v1/ai/pipelines/:name/pause", post(pause_pipeline))
         .route("/api/v1/ai/search", post(semantic_search))
+        .route("/api/v1/ai/classify", post(classify_text))
+        .route("/api/v1/ai/enrich", post(enrich_text))
         .route("/api/v1/ai/templates", get(list_templates))
         .route("/api/v1/ai/embed", post(embed_text))
+        .route("/api/v1/ai/embeddings", post(embed_text))
         .route(
             "/api/v1/ai/anomalies",
             get(list_anomalies).post(configure_anomaly_detection),
@@ -342,6 +406,25 @@ async fn pause_pipeline(
         })
 }
 
+async fn stop_pipeline(
+    State(state): State<AiApiState>,
+    Path(name): Path<String>,
+) -> Result<Json<PipelineInfo>, (StatusCode, Json<AiErrorResponse>)> {
+    state
+        .pipeline_manager
+        .stop(&name)
+        .await
+        .map(Json)
+        .map_err(|e| {
+            (
+                StatusCode::BAD_REQUEST,
+                Json(AiErrorResponse {
+                    error: e.to_string(),
+                }),
+            )
+        })
+}
+
 async fn semantic_search(
     State(_state): State<AiApiState>,
     Json(req): Json<SearchRequest>,
@@ -356,6 +439,80 @@ async fn semantic_search(
         "total": 0,
         "message": "Semantic search requires embedding index. Produce messages through an AI pipeline with 'embed' stage first.",
     }))
+}
+
+/// POST /api/v1/ai/classify - Classify text using LLM
+async fn classify_text(
+    Json(req): Json<ClassifyRequest>,
+) -> Json<ClassifyResponse> {
+    // Generate stub classification scores based on text hashing
+    // Real implementation would delegate to LLMClient::classify
+    let mut scores = HashMap::new();
+    let text_hash = req.text.bytes().fold(0u32, |acc, b| acc.wrapping_add(b as u32));
+
+    let mut best_category = String::new();
+    let mut best_score: f32 = 0.0;
+
+    for (i, cat) in req.categories.iter().enumerate() {
+        let score = ((text_hash.wrapping_add(i as u32) % 100) as f32) / 100.0;
+        scores.insert(cat.clone(), score);
+        if score > best_score {
+            best_score = score;
+            best_category = cat.clone();
+        }
+    }
+
+    // Normalize so scores sum to 1.0
+    let total: f32 = scores.values().sum();
+    if total > 0.0 {
+        for v in scores.values_mut() {
+            *v /= total;
+        }
+        best_score = scores[&best_category];
+    }
+
+    Json(ClassifyResponse {
+        category: best_category,
+        confidence: best_score,
+        scores,
+    })
+}
+
+/// POST /api/v1/ai/enrich - Enrich records with AI metadata
+async fn enrich_text(
+    Json(req): Json<EnrichRequest>,
+) -> Json<EnrichResponse> {
+    // Stub enrichment — extract basic metadata from text
+    // Real implementation would delegate to LLMClient::enrich
+    let mut metadata = HashMap::new();
+    let word_count = req.text.split_whitespace().count();
+    let char_count = req.text.len();
+
+    metadata.insert("word_count".to_string(), serde_json::json!(word_count));
+    metadata.insert("char_count".to_string(), serde_json::json!(char_count));
+    metadata.insert("language".to_string(), serde_json::json!("en"));
+
+    if let Some(ref fields) = req.fields {
+        for field in fields {
+            if !metadata.contains_key(field) {
+                metadata.insert(field.clone(), serde_json::Value::Null);
+            }
+        }
+    }
+
+    let summary = if word_count > 10 {
+        let words: Vec<&str> = req.text.split_whitespace().take(10).collect();
+        Some(format!("{}...", words.join(" ")))
+    } else {
+        Some(req.text.clone())
+    };
+
+    Json(EnrichResponse {
+        text: req.text,
+        metadata,
+        summary,
+        entities: Vec::new(),
+    })
 }
 
 async fn list_templates() -> Json<serde_json::Value> {
@@ -629,7 +786,7 @@ fn default_model() -> String {
 }
 
 /// Embedding response
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct EmbedResponse {
     pub embeddings: Vec<Vec<f32>>,
     pub model: String,
@@ -637,7 +794,7 @@ pub struct EmbedResponse {
     pub usage: EmbedUsage,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct EmbedUsage {
     pub total_tokens: usize,
 }
@@ -807,6 +964,18 @@ struct AutoEmbedRequest {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use axum::body::Body;
+    use axum::http::Request;
+    use http_body_util::BodyExt;
+    use tower::ServiceExt;
+
+    fn test_state() -> AiApiState {
+        AiApiState::new().unwrap()
+    }
+
+    fn test_app() -> Router {
+        create_ai_api_router(test_state())
+    }
 
     #[test]
     fn test_ai_api_state_new() {
@@ -825,5 +994,539 @@ mod tests {
         };
         let templates = [template];
         assert_eq!(templates.len(), 1);
+    }
+
+    // -- classify endpoint --
+
+    #[tokio::test]
+    async fn test_classify_text() {
+        let app = test_app();
+        let resp = app
+            .oneshot(
+                Request::post("/api/v1/ai/classify")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        r#"{"text": "I love this product!", "categories": ["positive", "negative", "neutral"]}"#,
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body = resp.into_body().collect().await.unwrap().to_bytes();
+        let parsed: ClassifyResponse = serde_json::from_slice(&body).unwrap();
+        assert!(!parsed.category.is_empty());
+        assert!(parsed.confidence > 0.0);
+        assert_eq!(parsed.scores.len(), 3);
+        // Scores should sum to approximately 1.0
+        let total: f32 = parsed.scores.values().sum();
+        assert!((total - 1.0).abs() < 0.01);
+    }
+
+    #[tokio::test]
+    async fn test_classify_single_category() {
+        let app = test_app();
+        let resp = app
+            .oneshot(
+                Request::post("/api/v1/ai/classify")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        r#"{"text": "test", "categories": ["spam"]}"#,
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body = resp.into_body().collect().await.unwrap().to_bytes();
+        let parsed: ClassifyResponse = serde_json::from_slice(&body).unwrap();
+        assert_eq!(parsed.category, "spam");
+    }
+
+    // -- enrich endpoint --
+
+    #[tokio::test]
+    async fn test_enrich_text() {
+        let app = test_app();
+        let resp = app
+            .oneshot(
+                Request::post("/api/v1/ai/enrich")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        r#"{"text": "The quick brown fox jumps over the lazy dog and runs away fast"}"#,
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body = resp.into_body().collect().await.unwrap().to_bytes();
+        let parsed: EnrichResponse = serde_json::from_slice(&body).unwrap();
+        assert_eq!(parsed.metadata["word_count"], 13);
+        assert_eq!(parsed.metadata["language"], "en");
+        assert!(parsed.summary.is_some());
+        // Long text should get truncated summary
+        assert!(parsed.summary.unwrap().ends_with("..."));
+    }
+
+    #[tokio::test]
+    async fn test_enrich_short_text() {
+        let app = test_app();
+        let resp = app
+            .oneshot(
+                Request::post("/api/v1/ai/enrich")
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"text": "hello world"}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body = resp.into_body().collect().await.unwrap().to_bytes();
+        let parsed: EnrichResponse = serde_json::from_slice(&body).unwrap();
+        assert_eq!(parsed.text, "hello world");
+        assert_eq!(parsed.metadata["word_count"], 2);
+        // Short text should not be truncated
+        assert_eq!(parsed.summary.unwrap(), "hello world");
+    }
+
+    #[tokio::test]
+    async fn test_enrich_with_fields() {
+        let app = test_app();
+        let resp = app
+            .oneshot(
+                Request::post("/api/v1/ai/enrich")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        r#"{"text": "hello", "fields": ["sentiment", "language"]}"#,
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body = resp.into_body().collect().await.unwrap().to_bytes();
+        let parsed: EnrichResponse = serde_json::from_slice(&body).unwrap();
+        // language is auto-populated, sentiment should be null
+        assert!(parsed.metadata.contains_key("sentiment"));
+        assert!(parsed.metadata.contains_key("language"));
+    }
+
+    // -- embeddings endpoint --
+
+    #[tokio::test]
+    async fn test_embeddings_endpoint() {
+        let app = test_app();
+        let resp = app
+            .oneshot(
+                Request::post("/api/v1/ai/embeddings")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        r#"{"texts": ["hello world", "foo bar"], "model": "test-model"}"#,
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body = resp.into_body().collect().await.unwrap().to_bytes();
+        let parsed: EmbedResponse = serde_json::from_slice(&body).unwrap();
+        assert_eq!(parsed.embeddings.len(), 2);
+        assert_eq!(parsed.model, "test-model");
+        assert_eq!(parsed.dimensions, 384);
+    }
+
+    #[tokio::test]
+    async fn test_embed_endpoint() {
+        let app = test_app();
+        let resp = app
+            .oneshot(
+                Request::post("/api/v1/ai/embed")
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"texts": ["test"]}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body = resp.into_body().collect().await.unwrap().to_bytes();
+        let parsed: EmbedResponse = serde_json::from_slice(&body).unwrap();
+        assert_eq!(parsed.embeddings.len(), 1);
+        assert_eq!(parsed.dimensions, 384);
+        // Embeddings should be normalized (magnitude ~1.0)
+        let norm: f32 = parsed.embeddings[0].iter().map(|x| x * x).sum::<f32>().sqrt();
+        assert!((norm - 1.0).abs() < 0.01);
+    }
+
+    // -- stats / status endpoint --
+
+    #[tokio::test]
+    async fn test_stats_endpoint() {
+        let app = test_app();
+        let resp = app
+            .oneshot(
+                Request::get("/api/v1/ai/stats")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body = resp.into_body().collect().await.unwrap().to_bytes();
+        let parsed: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(parsed["status"], "active");
+        assert!(parsed["capabilities"]["embeddings"].as_bool().unwrap());
+        assert!(parsed["capabilities"]["classification"].as_bool().unwrap());
+    }
+
+    #[tokio::test]
+    async fn test_status_endpoint() {
+        let app = test_app();
+        let resp = app
+            .oneshot(
+                Request::get("/api/v1/ai/status")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+    }
+
+    // -- pipeline CRUD --
+
+    #[tokio::test]
+    async fn test_list_pipelines_empty() {
+        let app = test_app();
+        let resp = app
+            .oneshot(
+                Request::get("/api/v1/ai/pipelines")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body = resp.into_body().collect().await.unwrap().to_bytes();
+        let parsed: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(parsed["total"], 0);
+    }
+
+    #[tokio::test]
+    async fn test_create_pipeline() {
+        let state = test_state();
+        let app = create_ai_api_router(state);
+        let resp = app
+            .oneshot(
+                Request::post("/api/v1/ai/pipelines")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        r#"{
+                            "name": "test-pipeline",
+                            "source_topics": ["input"],
+                            "stages": [{"type": "embed"}]
+                        }"#,
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::CREATED);
+    }
+
+    #[tokio::test]
+    async fn test_create_and_get_pipeline() {
+        let state = test_state();
+        // Create
+        let app = create_ai_api_router(state.clone());
+        let resp = app
+            .oneshot(
+                Request::post("/api/v1/ai/pipelines")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        r#"{
+                            "name": "my-pipe",
+                            "source_topics": ["events"],
+                            "stages": [{"type": "classify", "categories": ["a", "b"]}]
+                        }"#,
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::CREATED);
+
+        // Get
+        let app = create_ai_api_router(state);
+        let resp = app
+            .oneshot(
+                Request::get("/api/v1/ai/pipelines/my-pipe")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn test_get_pipeline_not_found() {
+        let app = test_app();
+        let resp = app
+            .oneshot(
+                Request::get("/api/v1/ai/pipelines/nonexistent")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn test_delete_pipeline() {
+        let state = test_state();
+        // Create first
+        let app = create_ai_api_router(state.clone());
+        let _ = app
+            .oneshot(
+                Request::post("/api/v1/ai/pipelines")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        r#"{"name": "to-delete", "source_topics": ["t"], "stages": [{"type": "embed"}]}"#,
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        // Delete with proper HTTP DELETE method
+        let app = create_ai_api_router(state);
+        let resp = app
+            .oneshot(
+                Request::delete("/api/v1/ai/pipelines/to-delete")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::NO_CONTENT);
+    }
+
+    #[tokio::test]
+    async fn test_start_pipeline() {
+        let state = test_state();
+        let app = create_ai_api_router(state.clone());
+        let _ = app
+            .oneshot(
+                Request::post("/api/v1/ai/pipelines")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        r#"{"name": "start-me", "source_topics": ["t"], "stages": [{"type": "embed"}]}"#,
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        let app = create_ai_api_router(state);
+        let resp = app
+            .oneshot(
+                Request::post("/api/v1/ai/pipelines/start-me/start")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn test_stop_pipeline() {
+        let state = test_state();
+        // Create and start
+        let app = create_ai_api_router(state.clone());
+        let _ = app
+            .oneshot(
+                Request::post("/api/v1/ai/pipelines")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        r#"{"name": "stop-me", "source_topics": ["t"], "stages": [{"type": "embed"}]}"#,
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        let app = create_ai_api_router(state.clone());
+        let _ = app
+            .oneshot(
+                Request::post("/api/v1/ai/pipelines/stop-me/start")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        // Stop
+        let app = create_ai_api_router(state);
+        let resp = app
+            .oneshot(
+                Request::post("/api/v1/ai/pipelines/stop-me/stop")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn test_stop_pipeline_not_found() {
+        let app = test_app();
+        let resp = app
+            .oneshot(
+                Request::post("/api/v1/ai/pipelines/ghost/stop")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    }
+
+    // -- search endpoint --
+
+    #[tokio::test]
+    async fn test_semantic_search() {
+        let app = test_app();
+        let resp = app
+            .oneshot(
+                Request::post("/api/v1/ai/search")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        r#"{"query": "machine learning", "limit": 5}"#,
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body = resp.into_body().collect().await.unwrap().to_bytes();
+        let parsed: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(parsed["total"], 0);
+    }
+
+    // -- anomalies endpoint --
+
+    #[tokio::test]
+    async fn test_list_anomalies() {
+        let app = test_app();
+        let resp = app
+            .oneshot(
+                Request::get("/api/v1/ai/anomalies")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body = resp.into_body().collect().await.unwrap().to_bytes();
+        let parsed: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert!(parsed["total"].as_u64().is_some());
+    }
+
+    // -- templates endpoint --
+
+    #[tokio::test]
+    async fn test_list_templates() {
+        let app = test_app();
+        let resp = app
+            .oneshot(
+                Request::get("/api/v1/ai/templates")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body = resp.into_body().collect().await.unwrap().to_bytes();
+        let parsed: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert!(parsed["total"].as_u64().unwrap() > 0);
+    }
+
+    // -- pipeline with invalid stage --
+
+    #[tokio::test]
+    async fn test_create_pipeline_invalid_stage() {
+        let app = test_app();
+        let resp = app
+            .oneshot(
+                Request::post("/api/v1/ai/pipelines")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        r#"{"name": "bad", "source_topics": ["t"], "stages": [{"type": "invalid_stage"}]}"#,
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    }
+
+    // -- serde deserialization tests --
+
+    #[test]
+    fn test_classify_request_serde() {
+        let json = r#"{"text": "hello", "categories": ["a", "b"]}"#;
+        let req: ClassifyRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.text, "hello");
+        assert_eq!(req.categories.len(), 2);
+    }
+
+    #[test]
+    fn test_enrich_request_serde_minimal() {
+        let json = r#"{"text": "hello"}"#;
+        let req: EnrichRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.text, "hello");
+        assert!(req.fields.is_none());
+    }
+
+    #[test]
+    fn test_enrich_request_serde_with_fields() {
+        let json = r#"{"text": "hello", "fields": ["sentiment", "entities"]}"#;
+        let req: EnrichRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.fields.unwrap().len(), 2);
+    }
+
+    #[test]
+    fn test_classify_response_serde() {
+        let resp = ClassifyResponse {
+            category: "positive".to_string(),
+            confidence: 0.85,
+            scores: HashMap::from([
+                ("positive".to_string(), 0.85),
+                ("negative".to_string(), 0.15),
+            ]),
+        };
+        let json = serde_json::to_string(&resp).unwrap();
+        assert!(json.contains("positive"));
+        assert!(json.contains("0.85"));
+    }
+
+    #[test]
+    fn test_enrich_response_serde() {
+        let resp = EnrichResponse {
+            text: "hello".to_string(),
+            metadata: HashMap::from([
+                ("word_count".to_string(), serde_json::json!(1)),
+            ]),
+            summary: None,
+            entities: vec!["test".to_string()],
+        };
+        let json = serde_json::to_string(&resp).unwrap();
+        // summary should be omitted when None
+        assert!(!json.contains("summary"));
+        assert!(json.contains("word_count"));
     }
 }
