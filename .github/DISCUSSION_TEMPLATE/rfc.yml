@@ -1,0 +1,43 @@
+labels: ["rfc"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Request for Comments (RFC)
+        Use this template to propose significant changes to Streamline.
+        
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: One-paragraph summary of the proposal
+    validations:
+      required: true
+
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Motivation
+      description: Why should we do this? What problem does it solve?
+    validations:
+      required: true
+
+  - type: textarea
+    id: design
+    attributes:
+      label: Detailed Design
+      description: Technical design, API changes, architecture decisions
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+      description: What other approaches were considered and why were they rejected?
+
+  - type: textarea
+    id: risks
+    attributes:
+      label: Risks & Open Questions
+      description: What are the risks? What questions remain unanswered?

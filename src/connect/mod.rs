@@ -43,6 +43,7 @@
 pub mod api;
 pub mod conformance;
 pub mod health;
+pub mod kafka_connect_api;
 pub mod marketplace;
 pub mod native;
 pub mod offset_store;

@@ -42,9 +42,13 @@ pub mod segment;
 pub mod sendfile;
 pub mod state_store;
 pub mod storage_mode;
+pub mod deterministic_replay;
+pub mod replay_engine;
+pub mod timeseries;
 pub mod timetravel;
 pub mod topic;
 pub mod wal;
+pub mod hw_acceleration;
 pub mod zerocopy;
 
 // Cloud storage modules (require cloud-storage feature)
@@ -56,6 +60,8 @@ pub mod lifecycle;
 pub mod segment_s3;
 #[cfg(feature = "cloud-storage")]
 pub mod tiering;
+#[cfg(feature = "cloud-storage")]
+pub mod tiering_policy;
 #[cfg(feature = "cloud-storage")]
 pub mod wal_s3;
 
@@ -105,6 +111,18 @@ pub use topic::{
 };
 pub use wal::{WalEntry, WalEntryType, WalReader, WalWriter};
 
+// Replay engine re-exports
+pub use replay_engine::{
+    DivergenceSample, ReplayConfig, ReplayDiff, ReplayEngine, ReplayFilter, ReplayOutput,
+    ReplayProgress, ReplaySession, ReplayStats, ReplayStatsSnapshot, ReplayStatus,
+};
+
+// Deterministic replay debugger re-exports
+pub use deterministic_replay::{
+    BreakCondition, Breakpoint, DebugSession, DebugStats, DebugStatus,
+    DeterministicReplayEngine, ReplayDebugConfig, StateCapture, StepRecord,
+};
+
 // Time-travel re-exports
 pub use timetravel::{
     SnapshotMetadata, TimePoint, TimeTravelConfig, TimeTravelManager, TimeTravelStats,
@@ -134,6 +152,12 @@ pub use wal_s3::{LocalWalBackend, S3WalWriter};
 pub use columnar::{
     ColumnarCompression, ColumnarConfig, ColumnarReader, ColumnarStats, ColumnarStorage,
     ColumnarWriter, Projection,
+};
+
+// Hardware acceleration engine
+pub use hw_acceleration::{
+    BatchProcessResult, HwAccelConfig, HwAccelStats, HwAccelStatsSnapshot, HwAccelerationEngine,
+    HwCapabilities, ProcessMethod,
 };
 
 pub use zerocopy::{

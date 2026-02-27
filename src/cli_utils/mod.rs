@@ -28,6 +28,7 @@
 //! custom CLI tools built on top of Streamline.
 
 pub mod benchmark;
+pub mod benchmark_report;
 pub mod completions;
 pub mod context;
 pub mod doctor;
@@ -70,6 +71,7 @@ pub mod ai_commands;
 pub mod lakehouse_commands;
 
 pub mod autopilot;
+pub mod plugin_manager;
 #[cfg(feature = "repl")]
 pub mod repl;
 pub mod testcontainers;
@@ -105,6 +107,11 @@ pub use tune::{
 };
 pub use validator::{
     run_validation, CheckStatus, ValidationCheck, ValidationResult, ValidatorConfig,
+};
+
+pub use plugin_manager::{
+    CliPluginManager, CliPluginType, InstalledPlugin, PluginInvocation, PluginManifest,
+    PluginManagerConfig, PluginOutput,
 };
 
 #[cfg(feature = "iceberg")]

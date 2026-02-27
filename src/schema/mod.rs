@@ -40,9 +40,12 @@
 //! - `GET /schemas/types` - List supported schema types
 
 pub mod avro;
+pub mod catalog;
 pub mod compatibility;
+pub mod governance;
 pub mod inference;
 pub mod json_schema;
+pub mod migration;
 pub mod protobuf;
 pub mod store;
 

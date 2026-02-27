@@ -31,6 +31,7 @@
 //! ```
 
 pub mod config;
+pub mod iceberg_catalog;
 
 #[cfg(feature = "delta-lake")]
 pub mod delta;
@@ -56,6 +57,10 @@ use tokio::sync::RwLock;
 use tracing::{debug, error, info, warn};
 
 pub use config::{SinkConfig, SinkType};
+pub use iceberg_catalog::{
+    CatalogStats, CatalogStatsSnapshot, IcebergCatalog, IcebergCatalogConfig, IcebergField,
+    IcebergNamespace, IcebergSchema, IcebergSnapshot, IcebergTableMetadata, PartitionField,
+};
 
 /// Trait for sink connector implementations
 ///

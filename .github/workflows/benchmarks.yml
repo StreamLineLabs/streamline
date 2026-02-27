@@ -1,98 +1,94 @@
-# Streamline Benchmark Workflow
-#
-# Runs benchmarks on a schedule and on manual trigger.
-# Results are stored as artifacts.
-
 name: Benchmarks
 
 on:
-  # Run weekly on Sunday at midnight UTC
-  schedule:
-    - cron: '0 0 * * 0'
-
-  # Allow manual trigger with customization
+  release:
+    types: [published]
   workflow_dispatch:
     inputs:
-      benchmarks:
-        description: 'Benchmarks to run (comma-separated: producer,consumer,e2e,startup)'
-        required: false
-        default: 'producer,consumer,startup'
-      duration:
-        description: 'Benchmark duration in seconds'
-        required: false
-        default: '60'
-      message_size:
-        description: 'Message size in bytes'
-        required: false
-        default: '1024'
-
-  # Run on push to benchmark-related files
-  push:
-    branches:
-      - main
-    paths:
-      - 'benches/**'
-      - 'scripts/run_benchmarks.sh'
-      - '.github/workflows/benchmarks.yml'
+      compare_with:
+        description: 'Platforms to compare against'
+        default: 'streamline-only'
+        type: choice
+        options:
+          - streamline-only
+          - all-platforms
 
 env:
   CARGO_TERM_COLOR: always
-  RUST_BACKTRACE: 1
 
 jobs:
   benchmark:
     name: Run Benchmarks
     runs-on: ubuntu-latest
-    timeout-minutes: 60
-
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
 
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-action@stable
-        with:
-          toolchain: stable
-          components: rustfmt, clippy
-
-      - name: Cache Cargo registry
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-cargo-bench-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-bench-
-            ${{ runner.os }}-cargo-
-
-      - name: Build Streamline (release)
+      - name: Build release binary
         run: cargo build --release
 
-      - name: Create benchmark results directory
-        run: mkdir -p benchmark-results
+      - name: Run quick benchmark
+        run: cargo run --release --bin streamline-cli -- benchmark --profile quick --format json > benchmark-results.json
 
-      - name: Run Streamline benchmarks
+      - name: Run throughput benchmark
+        run: cargo run --release --bin streamline-cli -- benchmark --profile throughput --format json >> benchmark-results.json
+
+      - name: Run latency benchmark
+        run: cargo run --release --bin streamline-cli -- benchmark --profile latency --format json >> benchmark-results.json
+
+      - name: Measure binary size
         run: |
-          # Start Streamline
-          ./target/release/streamline \
-            --data-dir ./benchmark-results/streamline-data \
-            --listen-addr 127.0.0.1:9092 \
-            --http-addr 127.0.0.1:9095 \
-            --log-level warn &
-          STREAMLINE_PID=$!
-          sleep 5
+          echo "Binary sizes:" > binary-size.txt
+          ls -la target/release/streamline >> binary-size.txt
+          du -sh target/release/streamline >> binary-size.txt
 
-          # Run benchmarks
-          cargo bench --bench comparative_benchmarks -- --noplot 2>&1 | tee benchmark-results/streamline-bench.log
+      - name: Measure startup time
+        run: |
+          timeout 5 target/release/streamline --in-memory &
+          sleep 2
+          curl -s http://localhost:9094/health || true
+          kill %1 2>/dev/null || true
 
-          # Stop Streamline
-          kill $STREAMLINE_PID || true
-
-      - name: Upload benchmark results
+      - name: Upload results
         uses: actions/upload-artifact@v4
         with:
-          name: benchmark-results-${{ github.run_number }}
-          path: benchmark-results/
-          retention-days: 90
+          name: benchmark-results-${{ github.sha }}
+          path: |
+            benchmark-results.json
+            binary-size.txt
+
+  compare:
+    name: Generate Report
+    needs: benchmark
+    runs-on: ubuntu-latest
+    if: github.event_name == 'release'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download results
+        uses: actions/download-artifact@v4
+        with:
+          name: benchmark-results-${{ github.sha }}
+
+      - name: Generate markdown report
+        run: |
+          echo "# Streamline Benchmark Results" > benchmark-report.md
+          echo "" >> benchmark-report.md
+          echo "**Version:** ${{ github.ref_name }}" >> benchmark-report.md
+          echo "**Date:** $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> benchmark-report.md
+          echo "**Runner:** ubuntu-latest" >> benchmark-report.md
+          echo "" >> benchmark-report.md
+          echo "## Binary Size" >> benchmark-report.md
+          cat binary-size.txt >> benchmark-report.md
+          echo "" >> benchmark-report.md
+          echo "## Results" >> benchmark-report.md
+          echo '```json' >> benchmark-report.md
+          cat benchmark-results.json >> benchmark-report.md
+          echo '```' >> benchmark-report.md
+
+      - name: Upload report
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-report-${{ github.ref_name }}
+          path: benchmark-report.md

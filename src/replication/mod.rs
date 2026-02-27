@@ -47,6 +47,8 @@ pub mod acks;
 #[cfg(feature = "geo-replication")]
 pub mod active_active;
 pub mod failover;
+#[cfg(feature = "geo-replication")]
+pub mod region_coordinator;
 pub mod fetcher;
 pub mod geo;
 pub mod isr;

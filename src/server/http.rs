@@ -24,7 +24,7 @@ use crate::server::benchmark_api::{
     create_benchmark_api_router, BenchmarkApiState, BenchmarkStore,
 };
 use crate::server::browser_client::{create_browser_client_router, BrowserClientState};
-use crate::server::cdc_api::{create_cdc_api_router, CdcApiState};
+use crate::server::cdc_api::{create_cdc_router_with_state, CdcApiState};
 use crate::server::cluster_api::{create_cluster_api_router, ClusterApiState};
 use crate::server::connections_api::{create_connections_api_router, ConnectionsApiState};
 use crate::server::connector_mgmt_api::{create_connector_mgmt_api_router, ConnectorMgmtApiState};
@@ -64,6 +64,13 @@ use crate::server::sqlite_routes::{create_sqlite_api_router, SqliteApiState};
 #[cfg(feature = "sqlite-queries")]
 use crate::sqlite::SQLiteQueryEngine;
 use crate::server::faas_api::{create_faas_api_router, FaasApiState};
+use crate::server::scaling_metrics::{
+    create_scaling_metrics_router, ScalingMetricsApiState, ScalingMetricsCollector,
+    ScalingMetricsConfig,
+};
+use crate::server::tenant_api::{create_tenant_api_router, TenantApiState};
+#[cfg(feature = "cloud-storage")]
+use crate::server::tiering_api::{create_tiering_api_router, TieringApiState};
 use crate::server::streamql_api::{streamql_router, StreamqlApiState};
 use crate::server::wasm_api::{create_wasm_api_router, WasmApiState};
 use crate::server::websocket::{create_websocket_router, WebSocketState};
@@ -421,7 +428,10 @@ fn build_http_router(state: &HttpServerState, bootstrap: &HttpBootstrap) -> Rout
     app = app.merge(wasm_router);
 
     // Add StreamQL API for ksqlDB-compatible stream processing (SQL over streams)
-    let streamql_state = StreamqlApiState::default();
+    let streamql_state = StreamqlApiState {
+        streamql: Arc::new(crate::streamql::StreamQL::new(state.topic_manager.clone())),
+        view_manager: Arc::new(crate::streamql::materialized::MaterializedViewManager::new()),
+    };
     let streamql_api_router = streamql_router().with_state(streamql_state);
     app = app.merge(streamql_api_router);
     tracing::info!("StreamQL API enabled at /sql, /api/v1/streams, /api/v1/queries");
@@ -494,9 +504,40 @@ fn build_http_router(state: &HttpServerState, bootstrap: &HttpBootstrap) -> Rout
     app = app.merge(plugin_router);
 
     // Add CDC API for Change Data Capture management
-    let cdc_state = CdcApiState::new();
-    let cdc_router = create_cdc_api_router(cdc_state);
+    let cdc_state = CdcApiState::with_topic_manager(state.topic_manager.clone());
+    let cdc_router = create_cdc_router_with_state(cdc_state);
     app = app.merge(cdc_router);
+
+    // Add Scaling Metrics API for auto-scaling decisions (HPA/KEDA)
+    let scaling_collector = Arc::new(ScalingMetricsCollector::new(ScalingMetricsConfig::default()));
+    let scaling_state = ScalingMetricsApiState {
+        collector: scaling_collector,
+    };
+    let scaling_router = create_scaling_metrics_router(scaling_state);
+    app = app.merge(scaling_router);
+
+    // Add Multi-Tenant Management API
+    let tenant_state = TenantApiState::new();
+    let tenant_router = create_tenant_api_router(tenant_state);
+    app = app.merge(tenant_router);
+
+    // Add Kafka Connect compatible REST API
+    #[cfg(feature = "kafka-connect")]
+    {
+        use crate::server::kafka_connect_api::{kafka_connect_router, KafkaConnectState};
+        let kc_state = KafkaConnectState::default();
+        let kc_router = kafka_connect_router().with_state(kc_state);
+        app = app.merge(kc_router);
+        tracing::info!("Kafka Connect REST API enabled at /connectors");
+    }
+
+    // Add Tiered Storage Policy Management API
+    #[cfg(feature = "cloud-storage")]
+    {
+        let tiering_state = TieringApiState::new();
+        let tiering_router = create_tiering_api_router(tiering_state);
+        app = app.merge(tiering_router);
+    }
 
     // Add Geo-Replication API for cross-region replication management
     let replication_state = ReplicationApiState::new();

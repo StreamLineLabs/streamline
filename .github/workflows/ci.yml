@@ -1,12 +1,15 @@
-name: CI (PR)
+name: CI
 
 on:
+  push:
+    branches: [main]
   pull_request:
     branches: [main]
   workflow_dispatch:
 
 env:
   CARGO_TERM_COLOR: always
+  RUSTFLAGS: -Dwarnings
   RUST_BACKTRACE: 1
 
 jobs:
@@ -18,13 +21,16 @@ jobs:
       - run: bash scripts/check-version-sync.sh
 
   check:
-    name: Check (lite)
+    name: Check
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        features: ["", "--all-features"]
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - run: cargo check --all-targets
+      - run: cargo check --all-targets ${{ matrix.features }}
 
   fmt:
     name: Format
@@ -37,24 +43,54 @@ jobs:
       - run: cargo fmt --all -- --check
 
   clippy:
-    name: Clippy (lite)
+    name: Clippy
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        features: ["", "--all-features"]
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
       - uses: Swatinem/rust-cache@v2
-      - run: cargo clippy --all-targets -- -D warnings
+      - run: cargo clippy --all-targets ${{ matrix.features }} -- -D warnings
 
   test:
-    name: Test (lite)
+    name: Test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - run: cargo test
+      - name: Run tests (default features)
+        run: cargo test
+      - name: Run tests (all features)
+        run: cargo test --all-features
+
+  test-new-features:
+    name: Test New Features
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Test StreamQL watermark
+        run: cargo test streamql::watermark
+      - name: Test schema governance
+        run: cargo test schema::governance
+      - name: Test edge offline WAL
+        run: cargo test edge::offline_wal
+      - name: Test scaling metrics
+        run: cargo test server::scaling_metrics
+      - name: Test StreamQL API
+        run: cargo test server::streamql_api
+      - name: Test observability API
+        run: cargo test server::observability_api
+      - name: Test CDC API
+        run: cargo test server::cdc_api
+      - name: Test geo-replication coordinator
+        run: cargo test --features geo-replication replication::region_coordinator
 
   nextest:
     name: Nextest (lite)

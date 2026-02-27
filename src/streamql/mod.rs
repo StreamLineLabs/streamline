@@ -41,10 +41,13 @@
 
 pub mod ast;
 pub mod cep;
+#[cfg(feature = "ai")]
+pub mod natural_language;
 pub mod checkpoint;
 pub mod continuous;
 pub mod engine;
 pub mod executor;
+pub mod federation;
 pub mod functions;
 pub mod join;
 pub mod ksqldb;
@@ -56,6 +59,7 @@ pub mod planner;
 pub mod state_store;
 pub mod types;
 pub mod udf;
+pub mod watermark;
 pub mod window;
 
 use crate::error::Result;

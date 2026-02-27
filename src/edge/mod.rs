@@ -68,6 +68,7 @@ pub mod federation;
 pub mod http_sync;
 pub mod mesh;
 pub mod multicloud;
+pub mod offline_wal;
 pub mod optimizations;
 pub mod power;
 pub mod resource_monitor;

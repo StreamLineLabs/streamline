@@ -4,7 +4,10 @@
 //! appropriate protocol handlers.
 
 #[cfg(feature = "ai")]
+pub mod agent_api;
+#[cfg(feature = "ai")]
 pub mod ai_api;
+pub mod autopilot;
 pub mod alerts;
 pub mod alerts_api;
 pub mod analytics_api;
@@ -12,14 +15,20 @@ pub mod api;
 pub mod benchmark_api;
 pub mod browser_client;
 pub mod cdc_api;
+pub mod chaos_engine;
 pub mod cloud_api;
 pub mod cluster_api;
+pub mod collaboration;
+pub mod compliance_api;
+pub mod connection_pool;
+pub mod contracts_ci;
 pub mod connections_api;
 pub mod connector_mgmt_api;
 pub mod console_page;
 pub mod console_api;
 pub mod consumer_api;
 pub mod dashboard_api;
+pub mod data_mesh_api;
 pub mod inspector_api;
 pub mod kafka_connect_api;
 pub mod streamql_api;
@@ -30,21 +39,34 @@ pub mod failover_api;
 pub mod raft_cluster_api;
 #[cfg(feature = "featurestore")]
 pub mod featurestore_api;
+pub mod feature_store_api;
+pub mod functions_api;
+pub mod gateway_api;
 pub mod gitops_api;
+pub mod gitops_engine;
 pub mod governor_api;
 #[cfg(feature = "edge")]
 pub mod fleet_api;
 pub mod http;
 pub mod limits;
+#[cfg(feature = "schema-registry")]
+pub mod lineage_api;
 pub mod log_buffer;
 pub mod log_layer;
 pub mod logs_api;
 pub mod memory;
+pub mod mesh_api;
 pub mod metadata_cache;
+pub mod multicloud_api;
+pub mod notebooks_api;
 pub mod observability_api;
+pub mod performance_advisor;
 pub mod playground_api;
+pub mod playground_cloud_api;
 pub mod plugin_api;
+pub mod rate_limiter;
 pub mod replication_api;
+pub mod scaling_metrics;
 #[cfg(feature = "schema-registry")]
 pub mod schema_api;
 #[cfg(feature = "schema-registry")]
@@ -53,16 +75,26 @@ pub mod schema_ui;
 pub mod schema_ui_templates;
 pub mod shutdown;
 pub mod sqlite_routes;
+pub mod tenant_api;
+#[cfg(feature = "cloud-storage")]
+pub mod tiering_api;
 mod tls;
 pub mod wasm_api;
+pub mod wasm_stream_api;
 pub mod websocket;
 pub mod websocket_streaming;
 
 #[cfg(feature = "graphql")]
 pub mod graphql_routes;
+#[cfg(feature = "graphql")]
+pub mod graphql_subscriptions;
 
 #[cfg(feature = "edge")]
 pub mod edge_api;
+pub mod extensions_api;
+
+#[cfg(feature = "quic")]
+pub mod quic_transport;
 
 // Re-export QuotaManager and ResourceLimiter for client quotas and limits
 pub use limits::{QuotaConfig, QuotaManager, ResourceLimiter};

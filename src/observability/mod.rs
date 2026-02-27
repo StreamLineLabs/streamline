@@ -12,7 +12,9 @@
 
 pub mod alerting;
 pub mod dashboard;
+pub mod ebpf_metrics;
 pub mod metrics;
+pub mod otel_exporter;
 pub mod system;
 
 #[cfg(target_os = "linux")]
