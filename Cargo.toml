@@ -243,10 +243,10 @@ lakehouse = ["columnar"]
 ai = ["dep:reqwest"]  # AI-native streaming: embeddings, semantic search, LLM integration, anomaly detection
 wasm-transforms = ["dep:wasmtime", "streamline-wasm/wasm-runtime"]
 postgres-cdc = ["dep:tokio-postgres", "dep:postgres-types", "dep:postgres-protocol"]
-mysql-cdc = []  # MySQL CDC: binlog replication with row-based format
-mongodb-cdc = []  # MongoDB CDC: change streams
-sqlserver-cdc = []  # SQL Server CDC: polling-based CDC
-cdc = ["postgres-cdc", "mysql-cdc", "mongodb-cdc", "sqlserver-cdc"]  # All CDC sources
+mysql-cdc = []  # MySQL CDC: binlog replication with row-based format [BETA - limited testing]
+mongodb-cdc = []  # MongoDB CDC: change streams [BETA - limited testing]
+sqlserver-cdc = []  # SQL Server CDC: polling-based CDC [BETA - limited testing]
+cdc = ["postgres-cdc", "mysql-cdc", "mongodb-cdc", "sqlserver-cdc"]  # All CDC sources (postgres=Stable, mysql/mongodb/sqlserver=Beta)
 edge = []  # Edge-first architecture: offline-first, sync-when-connected, conflict resolution
 quic = ["dep:quinn", "dep:rcgen", "dep:webpki-roots"]
 graphql = ["dep:async-graphql", "dep:tokio-stream"]
@@ -277,6 +277,11 @@ proptest = "1.4"
 serial_test = "3.1"
 http-body-util = "0.1"
 insta = { version = "1.41", features = ["yaml", "json"] }
+
+[lib]
+name = "streamline"
+path = "src/lib.rs"
+crate-type = ["lib", "cdylib"]
 
 [[bin]]
 name = "streamline"

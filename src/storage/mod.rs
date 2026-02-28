@@ -28,6 +28,7 @@ pub mod compaction;
 pub mod compression;
 pub mod cross_topic_buffer;
 pub mod encryption;
+pub mod key_rotation;
 pub mod index;
 pub mod io_backend;
 pub mod mmap;

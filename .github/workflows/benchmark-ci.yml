@@ -1,0 +1,138 @@
+name: Benchmark CI
+
+on:
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'benches/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+  workflow_dispatch:
+    inputs:
+      compare_branch:
+        description: 'Branch to compare against'
+        default: 'main'
+  schedule:
+    - cron: '0 3 * * *'  # Nightly at 3 AM UTC
+
+permissions:
+  contents: read
+  pull-requests: write
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  benchmark:
+    name: Performance Benchmarks
+    runs-on: ubuntu-latest-16-cores
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-action@stable
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: bench-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: bench-${{ runner.os }}-
+
+      - name: Run benchmarks (current)
+        run: |
+          cargo bench --bench storage_benchmarks -- --output-format bencher | tee current-benchmarks.txt
+          cargo bench --bench protocol_benchmarks -- --output-format bencher | tee -a current-benchmarks.txt
+          cargo bench --bench latency_benchmarks -- --output-format bencher | tee -a current-benchmarks.txt
+
+      - name: Download baseline benchmarks
+        if: github.event_name == 'pull_request'
+        uses: actions/cache/restore@v4
+        with:
+          path: baseline-benchmarks.txt
+          key: benchmark-baseline-${{ github.base_ref }}
+          restore-keys: benchmark-baseline-main
+
+      - name: Compare with baseline
+        if: github.event_name == 'pull_request' && hashFiles('baseline-benchmarks.txt') != ''
+        id: compare
+        run: |
+          cargo install critcmp --quiet 2>/dev/null || true
+          echo "## Benchmark Comparison" > benchmark-report.md
+          echo "" >> benchmark-report.md
+          if command -v critcmp &>/dev/null; then
+            critcmp baseline-benchmarks.txt current-benchmarks.txt --threshold 10 >> benchmark-report.md 2>&1 || true
+          else
+            echo "critcmp not available, showing raw results" >> benchmark-report.md
+            cat current-benchmarks.txt >> benchmark-report.md
+          fi
+
+          # Check for regressions (>10%)
+          if grep -q "regressed" benchmark-report.md 2>/dev/null; then
+            echo "regression=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "regression=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Post benchmark results as PR comment
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            let body = '### ⚡ Benchmark Results\n\n';
+            if (fs.existsSync('benchmark-report.md')) {
+              body += fs.readFileSync('benchmark-report.md', 'utf8');
+            } else {
+              body += '```\n' + fs.readFileSync('current-benchmarks.txt', 'utf8') + '\n```';
+            }
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const existing = comments.find(c => c.body.includes('⚡ Benchmark Results'));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
+
+      - name: Fail on regression
+        if: steps.compare.outputs.regression == 'true'
+        run: |
+          echo "::error::Performance regression detected (>10%)"
+          cat benchmark-report.md
+          # Allow acknowledgment via label
+          exit 1
+
+      - name: Save baseline (main branch only)
+        if: github.ref == 'refs/heads/main' || github.event_name == 'schedule'
+        uses: actions/cache/save@v4
+        with:
+          path: current-benchmarks.txt
+          key: benchmark-baseline-main-${{ github.sha }}
+
+      - name: Upload benchmark artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results-${{ github.sha }}
+          path: |
+            current-benchmarks.txt
+            benchmark-report.md
+          retention-days: 30

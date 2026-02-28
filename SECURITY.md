@@ -129,6 +129,41 @@ When a security vulnerability is reported:
 4. Security fixes will be released as patch versions
 5. Public disclosure will occur after the fix is available
 
+## Vulnerability Response Process
+
+### Disclosure Timeline
+- **Acknowledgment:** Within 48 hours of report
+- **Initial Assessment:** Within 5 business days
+- **Fix Development:** Based on severity (see below)
+- **Public Disclosure:** 90 days after report, or when fix is released (whichever is first)
+
+### Severity Classification and Patch SLA
+| Severity | CVSS Score | Patch SLA | Example |
+|----------|-----------|-----------|---------|
+| Critical | 9.0-10.0 | 48 hours | Remote code execution, auth bypass |
+| High | 7.0-8.9 | 7 days | Privilege escalation, data exposure |
+| Medium | 4.0-6.9 | 30 days | DoS, information disclosure |
+| Low | 0.1-3.9 | Next release | Minor info leak, non-default config |
+
+### Reporting
+- **Email:** security@streamline.dev
+- **PGP Key:** Available at https://streamline.dev/.well-known/security.txt
+- **Bug Bounty:** Not currently offered
+
+### Process
+1. Reporter submits vulnerability to security@streamline.dev
+2. Team acknowledges within 48 hours with tracking ID
+3. Team assesses severity and impact within 5 business days
+4. Team develops and tests fix per SLA
+5. Fix is released as a security patch
+6. CVE is filed (if applicable)
+7. Advisory is published on GitHub Security Advisories
+8. Reporter is credited (unless they prefer anonymity)
+
 ## Contact
 
 For security-related inquiries, please email **security@streamline.dev**.
+
+## Security Audit
+
+For details on our security audit scope and methodology, see [Security Audit Scope](docs/SECURITY_AUDIT_SCOPE.md).

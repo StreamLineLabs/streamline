@@ -42,13 +42,18 @@
 
 pub mod api;
 pub mod conformance;
+pub mod converters;
+pub mod declarative;
 pub mod health;
 pub mod kafka_connect_api;
 pub mod marketplace;
 pub mod native;
 pub mod offset_store;
 pub mod plugins;
+pub mod rest_api;
 pub mod runtime;
+pub mod smt;
+pub mod task_manager;
 pub mod transforms;
 pub mod watcher;
 

@@ -3,6 +3,8 @@
 //! This module provides comprehensive audit logging for security-critical operations
 //! including authentication attempts, authorization decisions, and administrative actions.
 
+pub mod events;
+
 use chrono::Utc;
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};

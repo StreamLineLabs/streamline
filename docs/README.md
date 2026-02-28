@@ -22,7 +22,18 @@
 - [**DEAD_CODE_AUDIT.md**](DEAD_CODE_AUDIT.md) — Tracking unused code annotations
 - [**STORAGE_REFACTORING.md**](STORAGE_REFACTORING.md) — Plan for decomposing large storage files
 
+## Operations & Deployment
+- [Clustering Operations](CLUSTERING_OPERATIONS.md) — failure modes, rolling upgrades, autoscaling
+
+## Compliance & Security
+- [Compliance & Security](COMPLIANCE.md) — SOC2 gap analysis, security posture
+- [GDPR Compliance](GDPR.md) — data residency, right-to-erasure, encryption
+
+## Integrations
+- [Kafka Connect Compatibility](KAFKA_CONNECT_COMPATIBILITY.md) — REST API, connector testing matrix
+
 ## Domain-Specific
 - [analytics.md](analytics.md) — DuckDB analytics engine
 - [clustering.md](clustering.md) — Raft-based clustering
+- [pubsub.md](pubsub.md) — Redis-compatible pub/sub messaging
 - [transactions.md](transactions.md) — Exactly-once semantics

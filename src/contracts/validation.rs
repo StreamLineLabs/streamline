@@ -316,7 +316,7 @@ impl ContractValidator {
         let type_matches = match field.field_type {
             FieldType::String => value.is_string(),
             FieldType::Integer => value.is_i64() || value.is_u64(),
-            FieldType::Float => value.is_f64(),
+            FieldType::Float => value.is_f64() || value.is_i64() || value.is_u64(),
             FieldType::Boolean => value.is_boolean(),
             FieldType::Array => value.is_array(),
             FieldType::Object => value.is_object(),

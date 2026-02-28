@@ -467,29 +467,44 @@ pub fn parse_create_stream_view(sql: &str) -> Result<(String, String, Vec<String
 
     // Extract view name: CREATE STREAM VIEW <name> AS ...
     let after_csview = sql.trim()["CREATE STREAM VIEW".len()..].trim();
-    let as_pos = after_csview
-        .to_uppercase()
-        .find(" AS ")
-        .ok_or("Expected AS keyword after view name")?;
+    // Find the AS keyword that separates the view name from the SELECT
+    // We look for the first word that is exactly "AS" (case-insensitive)
+    let mut as_pos = None;
+    let mut pos = 0;
+    for word in after_csview.split_whitespace() {
+        if word.eq_ignore_ascii_case("AS") {
+            as_pos = Some(pos);
+            break;
+        }
+        // Advance past the word and any whitespace
+        if let Some(found) = after_csview[pos..].find(word) {
+            pos += found + word.len();
+        }
+    }
+    let as_byte_pos = as_pos.ok_or("Expected AS keyword after view name")?;
 
-    let view_name = after_csview[..as_pos].trim().to_string();
-    let select_sql = after_csview[as_pos + 4..].trim().to_string();
+    let view_name = after_csview[..as_byte_pos].trim().to_string();
+    let after_as = after_csview[as_byte_pos..].trim_start();
+    let select_sql = if after_as.len() >= 2 && after_as[..2].eq_ignore_ascii_case("AS") {
+        after_as[2..].trim().to_string()
+    } else {
+        after_as.to_string()
+    };
 
     // Extract source topics from FROM clause
     let from_upper = select_sql.to_uppercase();
     let from_pos = from_upper.find("FROM ").ok_or("Expected FROM clause")?;
     let after_from = &select_sql[from_pos + 5..];
 
-    let end_pos = after_from
-        .find(|c: char| c.is_whitespace() && !c.is_ascii())
-        .or_else(|| {
-            let next_keyword = ["WHERE", "WINDOW", "GROUP", "HAVING", "ORDER", "LIMIT"];
-            next_keyword
-                .iter()
-                .filter_map(|kw| after_from.to_uppercase().find(kw))
-                .min()
-        })
-        .unwrap_or(after_from.len());
+    let end_pos = {
+        let next_keyword = ["\nWHERE", "\nWINDOW", "\nGROUP", "\nHAVING", "\nORDER", "\nLIMIT",
+                            " WHERE ", " WINDOW ", " GROUP ", " HAVING ", " ORDER ", " LIMIT "];
+        next_keyword
+            .iter()
+            .filter_map(|kw| after_from.to_uppercase().find(&kw.to_uppercase()))
+            .min()
+            .unwrap_or(after_from.len())
+    };
 
     let topics_str = after_from[..end_pos].trim();
     let source_topics: Vec<String> = topics_str
@@ -510,13 +525,23 @@ pub fn parse_create_alert(sql: &str) -> Result<(String, String, Vec<String>, Str
     }
 
     let after_ca = sql.trim()["CREATE ALERT".len()..].trim();
-    let as_pos = after_ca
-        .to_uppercase()
-        .find(" AS ")
-        .ok_or("Expected AS keyword after alert name")?;
+    let mut alert_as_pos = None;
+    let mut apos = 0;
+    for word in after_ca.split_whitespace() {
+        if word.eq_ignore_ascii_case("AS") {
+            alert_as_pos = Some(apos);
+            break;
+        }
+        if let Some(found) = after_ca[apos..].find(word) {
+            apos += found + word.len();
+        }
+    }
+    let as_pos = alert_as_pos.ok_or("Expected AS keyword after alert name")?;
 
     let alert_name = after_ca[..as_pos].trim().to_string();
-    let rest = after_ca[as_pos + 4..].trim();
+    let rest = after_ca[as_pos..].trim_start()
+        .strip_prefix("AS").or_else(|| after_ca[as_pos..].trim_start().strip_prefix("as"))
+        .unwrap_or("").trim();
 
     // Extract NOTIFY clause
     let notify_endpoint = if let Some(notify_pos) = rest.to_uppercase().find("NOTIFY") {

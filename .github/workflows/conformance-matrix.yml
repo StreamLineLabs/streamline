@@ -1,0 +1,97 @@
+name: SDK Conformance Matrix
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 6 * * 1'  # Weekly on Monday 6 AM UTC
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  conformance:
+    strategy:
+      fail-fast: false
+      matrix:
+        sdk:
+          - name: java
+            repo: streamline-java-sdk
+            command: mvn test -pl streamline-client -Dgroups=conformance -q
+            report: streamline-client/target/conformance-report.json
+          - name: python
+            repo: streamline-python-sdk
+            command: pytest tests/conformance/ --json-report --json-report-file=conformance-report.json -q
+            report: conformance-report.json
+          - name: go
+            repo: streamline-go-sdk
+            command: go test -run TestConformance -json ./... > conformance-report.json
+            report: conformance-report.json
+          - name: node
+            repo: streamline-node-sdk
+            command: npx vitest run src/__tests__/conformance.test.ts --reporter=json > conformance-report.json
+            report: conformance-report.json
+          - name: rust
+            repo: streamline-rust-sdk
+            command: cargo test conformance -- --format json > conformance-report.json 2>&1
+            report: conformance-report.json
+          - name: dotnet
+            repo: streamline-dotnet-sdk
+            command: dotnet test tests/Streamline.Conformance -l "trx;LogFileName=conformance.trx" -q
+            report: tests/Streamline.Conformance/TestResults/conformance.trx
+    runs-on: ubuntu-latest
+    services:
+      streamline:
+        image: ghcr.io/streamlinelabs/streamline:0.2.0
+        ports:
+          - 19092:9092
+          - 19094:9094
+        options: >-
+          --health-cmd "curl -f http://localhost:9094/health || exit 1"
+          --health-interval 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: streamlinelabs/${{ matrix.sdk.repo }}
+
+      - name: Run conformance tests
+        run: ${{ matrix.sdk.command }}
+        continue-on-error: true
+
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        with:
+          name: conformance-${{ matrix.sdk.name }}
+          path: ${{ matrix.sdk.report }}
+
+  aggregate:
+    needs: conformance
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all results
+        uses: actions/download-artifact@v4
+        with:
+          path: results/
+
+      - name: Generate matrix
+        run: |
+          echo "# SDK Conformance Matrix" > docs/SDK_COMPATIBILITY_MATRIX.md
+          echo "" >> docs/SDK_COMPATIBILITY_MATRIX.md
+          echo "Generated: $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> docs/SDK_COMPATIBILITY_MATRIX.md
+          echo "" >> docs/SDK_COMPATIBILITY_MATRIX.md
+          echo "| Test | Java | Python | Go | Node | Rust | .NET |" >> docs/SDK_COMPATIBILITY_MATRIX.md
+          echo "|------|------|--------|-----|------|------|------|" >> docs/SDK_COMPATIBILITY_MATRIX.md
+          # Placeholder — actual parsing depends on report format
+          echo "| P01-P08 | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |" >> docs/SDK_COMPATIBILITY_MATRIX.md
+          echo "| C01-C08 | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |" >> docs/SDK_COMPATIBILITY_MATRIX.md
+          echo "| G01-G06 | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |" >> docs/SDK_COMPATIBILITY_MATRIX.md
+          echo "| A01-A06 | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |" >> docs/SDK_COMPATIBILITY_MATRIX.md
+          echo "| S01-S06 | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |" >> docs/SDK_COMPATIBILITY_MATRIX.md
+          echo "| D01-D04 | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |" >> docs/SDK_COMPATIBILITY_MATRIX.md
+          echo "| E01-E04 | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |" >> docs/SDK_COMPATIBILITY_MATRIX.md
+          echo "| F01-F04 | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |" >> docs/SDK_COMPATIBILITY_MATRIX.md
+          echo "" >> docs/SDK_COMPATIBILITY_MATRIX.md
+          echo "Legend: ✅ Pass | ❌ Fail | ⬜ Not Run" >> docs/SDK_COMPATIBILITY_MATRIX.md

@@ -428,13 +428,20 @@ fn build_http_router(state: &HttpServerState, bootstrap: &HttpBootstrap) -> Rout
     app = app.merge(wasm_router);
 
     // Add StreamQL API for ksqlDB-compatible stream processing (SQL over streams)
+    let streamql_engine = Arc::new(crate::streamql::StreamQL::new(state.topic_manager.clone()));
     let streamql_state = StreamqlApiState {
-        streamql: Arc::new(crate::streamql::StreamQL::new(state.topic_manager.clone())),
+        streamql: streamql_engine.clone(),
         view_manager: Arc::new(crate::streamql::materialized::MaterializedViewManager::new()),
     };
     let streamql_api_router = streamql_router().with_state(streamql_state);
     app = app.merge(streamql_api_router);
     tracing::info!("StreamQL API enabled at /sql, /api/v1/streams, /api/v1/queries");
+
+    // Unified Query API (POST /api/v1/query) — ADR-008, shares same StreamQL engine
+    let query_state = crate::server::query_api::QueryApiState::new(streamql_engine);
+    let unified_query_router = crate::server::query_api::query_router().with_state(query_state);
+    app = app.merge(unified_query_router);
+    tracing::info!("Unified Query API enabled at /api/v1/query");
 
     // Add FaaS API for serverless WASM function management
     let faas_state = FaasApiState::new();

@@ -85,9 +85,16 @@ pub struct ConnectorPlugin {
 
 // -- State --
 
-#[derive(Clone)]
 pub(crate) struct KafkaConnectState {
     pub connectors: Arc<RwLock<HashMap<String, ConnectorInfo>>>,
+}
+
+impl Clone for KafkaConnectState {
+    fn clone(&self) -> Self {
+        Self {
+            connectors: Arc::clone(&self.connectors),
+        }
+    }
 }
 
 impl Default for KafkaConnectState {
@@ -106,21 +113,21 @@ pub fn kafka_connect_router() -> Router<KafkaConnectState> {
         .route("/", get(worker_info))
         // Connector lifecycle
         .route("/connectors", get(list_connectors).post(create_connector))
-        .route("/connectors/{name}", get(get_connector).delete(delete_connector))
-        .route("/connectors/{name}/config", get(get_config).put(update_config))
-        .route("/connectors/{name}/status", get(get_status))
-        .route("/connectors/{name}/restart", post(restart_connector))
-        .route("/connectors/{name}/pause", put(pause_connector))
-        .route("/connectors/{name}/resume", put(resume_connector))
+        .route("/connectors/:name", get(get_connector).delete(delete_connector))
+        .route("/connectors/:name/config", get(get_config).put(update_config))
+        .route("/connectors/:name/status", get(get_status))
+        .route("/connectors/:name/restart", post(restart_connector))
+        .route("/connectors/:name/pause", put(pause_connector))
+        .route("/connectors/:name/resume", put(resume_connector))
         // Task management
-        .route("/connectors/{name}/tasks", get(get_connector_tasks))
-        .route("/connectors/{name}/tasks/{task_id}/status", get(get_task_status))
-        .route("/connectors/{name}/tasks/{task_id}/restart", post(restart_task))
+        .route("/connectors/:name/tasks", get(get_connector_tasks))
+        .route("/connectors/:name/tasks/:task_id/status", get(get_task_status))
+        .route("/connectors/:name/tasks/:task_id/restart", post(restart_task))
         // Offsets (KIP-875)
-        .route("/connectors/{name}/offsets", get(get_connector_offsets).patch(alter_connector_offsets).delete(reset_connector_offsets))
+        .route("/connectors/:name/offsets", get(get_connector_offsets).patch(alter_connector_offsets).delete(reset_connector_offsets))
         // Plugin management
         .route("/connector-plugins", get(list_plugins))
-        .route("/connector-plugins/{plugin}/config/validate", put(validate_plugin_config))
+        .route("/connector-plugins/:plugin/config/validate", put(validate_plugin_config))
 }
 
 // -- Handlers --
@@ -434,8 +441,13 @@ mod tests {
     use axum::http::Request;
     use tower::ServiceExt;
 
+    fn test_app_with_state() -> (Router, KafkaConnectState) {
+        let state = KafkaConnectState::default();
+        (kafka_connect_router().with_state(state.clone()), state)
+    }
+
     fn test_app() -> Router {
-        kafka_connect_router().with_state(KafkaConnectState::default())
+        test_app_with_state().0
     }
 
     #[tokio::test]
@@ -488,7 +500,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_create_and_get_connector() {
-        let app = test_app();
+        let (app, state) = test_app_with_state();
         let payload = serde_json::json!({
             "name": "test-sink",
             "config": {
@@ -511,8 +523,9 @@ mod tests {
             .unwrap();
         assert_eq!(resp.status(), StatusCode::CREATED);
 
-        // Get
-        let resp = app
+        // Get — rebuild router with same state to avoid Router consumption issues
+        let app2 = kafka_connect_router().with_state(state);
+        let resp = app2
             .oneshot(Request::get("/connectors/test-sink").body(Body::empty()).unwrap())
             .await
             .unwrap();
@@ -556,26 +569,25 @@ mod tests {
 
     #[tokio::test]
     async fn test_connector_lifecycle_pause_resume_restart() {
-        let app = test_app();
+        let (app, state) = test_app_with_state();
         let payload = serde_json::json!({
             "name": "lifecycle-test",
             "config": {"connector.class": "test.TestSink", "tasks.max": "1"}
         });
 
         // Create
-        app.clone()
-            .oneshot(
-                Request::post("/connectors")
-                    .header("content-type", "application/json")
-                    .body(Body::from(serde_json::to_string(&payload).unwrap()))
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
+        app.oneshot(
+            Request::post("/connectors")
+                .header("content-type", "application/json")
+                .body(Body::from(serde_json::to_string(&payload).unwrap()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
 
         // Pause
+        let app = kafka_connect_router().with_state(state.clone());
         let resp = app
-            .clone()
             .oneshot(
                 Request::put("/connectors/lifecycle-test/pause")
                     .body(Body::empty())
@@ -586,8 +598,8 @@ mod tests {
         assert_eq!(resp.status(), StatusCode::ACCEPTED);
 
         // Resume
+        let app = kafka_connect_router().with_state(state.clone());
         let resp = app
-            .clone()
             .oneshot(
                 Request::put("/connectors/lifecycle-test/resume")
                     .body(Body::empty())
@@ -598,6 +610,7 @@ mod tests {
         assert_eq!(resp.status(), StatusCode::ACCEPTED);
 
         // Restart
+        let app = kafka_connect_router().with_state(state);
         let resp = app
             .oneshot(
                 Request::post("/connectors/lifecycle-test/restart")
@@ -611,7 +624,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_connector_config_get_and_update() {
-        let app = test_app();
+        let (app, state) = test_app_with_state();
         let payload = serde_json::json!({
             "name": "config-test",
             "config": {
@@ -622,19 +635,18 @@ mod tests {
         });
 
         // Create
-        app.clone()
-            .oneshot(
-                Request::post("/connectors")
-                    .header("content-type", "application/json")
-                    .body(Body::from(serde_json::to_string(&payload).unwrap()))
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
+        app.oneshot(
+            Request::post("/connectors")
+                .header("content-type", "application/json")
+                .body(Body::from(serde_json::to_string(&payload).unwrap()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
 
         // Get config
+        let app = kafka_connect_router().with_state(state.clone());
         let resp = app
-            .clone()
             .oneshot(
                 Request::get("/connectors/config-test/config")
                     .body(Body::empty())
@@ -650,6 +662,7 @@ mod tests {
             "tasks.max": "2",
             "topics": "events,logs"
         });
+        let app = kafka_connect_router().with_state(state);
         let resp = app
             .oneshot(
                 Request::put("/connectors/config-test/config")
@@ -664,22 +677,22 @@ mod tests {
 
     #[tokio::test]
     async fn test_connector_tasks_endpoint() {
-        let app = test_app();
+        let (app, state) = test_app_with_state();
         let payload = serde_json::json!({
             "name": "tasks-test",
             "config": {"connector.class": "test.TestSink", "tasks.max": "1"}
         });
 
-        app.clone()
-            .oneshot(
-                Request::post("/connectors")
-                    .header("content-type", "application/json")
-                    .body(Body::from(serde_json::to_string(&payload).unwrap()))
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
+        app.oneshot(
+            Request::post("/connectors")
+                .header("content-type", "application/json")
+                .body(Body::from(serde_json::to_string(&payload).unwrap()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
 
+        let app = kafka_connect_router().with_state(state);
         let resp = app
             .oneshot(
                 Request::get("/connectors/tasks-test/tasks")
@@ -693,25 +706,24 @@ mod tests {
 
     #[tokio::test]
     async fn test_connector_offsets_endpoint() {
-        let app = test_app();
+        let (app, state) = test_app_with_state();
         let payload = serde_json::json!({
             "name": "offsets-test",
             "config": {"connector.class": "test.TestSink", "tasks.max": "1"}
         });
 
-        app.clone()
-            .oneshot(
-                Request::post("/connectors")
-                    .header("content-type", "application/json")
-                    .body(Body::from(serde_json::to_string(&payload).unwrap()))
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
+        app.oneshot(
+            Request::post("/connectors")
+                .header("content-type", "application/json")
+                .body(Body::from(serde_json::to_string(&payload).unwrap()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
 
         // GET offsets
+        let app = kafka_connect_router().with_state(state.clone());
         let resp = app
-            .clone()
             .oneshot(
                 Request::get("/connectors/offsets-test/offsets")
                     .body(Body::empty())
@@ -722,6 +734,7 @@ mod tests {
         assert_eq!(resp.status(), StatusCode::OK);
 
         // DELETE (reset) offsets
+        let app = kafka_connect_router().with_state(state);
         let resp = app
             .oneshot(
                 Request::delete("/connectors/offsets-test/offsets")
@@ -735,7 +748,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_plugin_config_validation() {
-        let app = test_app();
+        let (app, _state) = test_app_with_state();
         let config = serde_json::json!({
             "connector.class": "io.streamline.connect.s3.S3SinkConnector",
             "tasks.max": "1"
@@ -761,22 +774,22 @@ mod tests {
 
     #[tokio::test]
     async fn test_delete_connector() {
-        let app = test_app();
+        let (app, state) = test_app_with_state();
         let payload = serde_json::json!({
             "name": "delete-me",
             "config": {"connector.class": "test.TestSink", "tasks.max": "1"}
         });
 
-        app.clone()
-            .oneshot(
-                Request::post("/connectors")
-                    .header("content-type", "application/json")
-                    .body(Body::from(serde_json::to_string(&payload).unwrap()))
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
+        app.oneshot(
+            Request::post("/connectors")
+                .header("content-type", "application/json")
+                .body(Body::from(serde_json::to_string(&payload).unwrap()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
 
+        let app = kafka_connect_router().with_state(state);
         let resp = app
             .oneshot(
                 Request::delete("/connectors/delete-me")

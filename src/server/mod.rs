@@ -62,6 +62,7 @@ pub mod notebooks_api;
 pub mod observability_api;
 pub mod performance_advisor;
 pub mod playground_api;
+pub mod query_api;
 pub mod playground_cloud_api;
 pub mod plugin_api;
 pub mod rate_limiter;

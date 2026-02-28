@@ -1,0 +1,50 @@
+# Comparative benchmark environment
+version: "3.8"
+
+services:
+  streamline:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    ports:
+      - "9092:9092"
+    command: streamline --listen-addr 0.0.0.0:9092 --in-memory
+    deploy:
+      resources:
+        limits:
+          cpus: "4"
+          memory: 8G
+
+  kafka:
+    image: confluentinc/cp-kafka:7.6.0
+    ports:
+      - "9093:9093"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9093,CONTROLLER://0.0.0.0:9094
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9093
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9094
+      CLUSTER_ID: benchmark-cluster-001
+    deploy:
+      resources:
+        limits:
+          cpus: "4"
+          memory: 8G
+
+  redpanda:
+    image: redpandadata/redpanda:v24.1.1
+    ports:
+      - "9095:9095"
+    command: >
+      redpanda start
+        --kafka-addr 0.0.0.0:9095
+        --smp 4
+        --memory 4G
+        --overprovisioned
+    deploy:
+      resources:
+        limits:
+          cpus: "4"
+          memory: 8G

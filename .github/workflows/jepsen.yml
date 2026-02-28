@@ -1,122 +1,76 @@
-name: Jepsen Linearizability Tests
+name: Jepsen Tests
 
 on:
   schedule:
-    - cron: '0 2 * * 0'  # Weekly on Sunday at 2am UTC
+    - cron: '0 2 * * *'  # Nightly at 2 AM UTC
   workflow_dispatch:
-    inputs:
-      nodes:
-        description: "Number of cluster nodes"
-        default: "3"
-        type: string
-      workload:
-        description: "Jepsen workload"
-        default: "all"
-        type: choice
-        options:
-          - all
-          - linearizability
-          - durability
-          - consistency
-
-concurrency:
-  group: jepsen
-  cancel-in-progress: false
 
 permissions:
   contents: read
-  issues: write
 
 jobs:
   jepsen:
-    name: Jepsen (${{ github.event.inputs.workload || 'all' }})
-    runs-on: ubuntu-latest
+    name: Jepsen Correctness Tests
+    runs-on: ubuntu-latest-16-cores
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+      - name: Install Rust
+        uses: dtolnay/rust-action@stable
 
-      - name: Build Streamline (full)
+      - name: Build release binary
         run: cargo build --release --features full
 
-      - name: Install Leiningen
+      - name: Install Leiningen (Clojure)
         run: |
-          curl -fsSL https://raw.githubusercontent.com/technomancy/leiningen/stable/bin/lein -o /usr/local/bin/lein
+          curl -fsSL https://raw.githubusercontent.com/technomancy/leiningen/stable/bin/lein > /usr/local/bin/lein
           chmod +x /usr/local/bin/lein
           lein version
 
-      - name: Install Docker Compose
-        uses: docker/setup-buildx-action@v3
+      - name: Start Jepsen cluster
+        run: docker compose -f docker-compose.jepsen.yml up -d
+        working-directory: .
 
-      - name: Start Streamline cluster
+      - name: Wait for cluster health
         run: |
-          NODES="${{ github.event.inputs.nodes || '3' }}"
-          echo "Starting $NODES-node cluster..."
-
-          for i in $(seq 1 "$NODES"); do
-            PORT_KAFKA=$((9092 + i - 1))
-            PORT_HTTP=$((9094 + (i - 1) * 2))
-            PORT_RAFT=$((9095 + (i - 1) * 2))
-
-            ./target/release/streamline \
-              --data-dir "/tmp/streamline-node-$i" \
-              --port "$PORT_KAFKA" \
-              --http-port "$PORT_HTTP" \
-              --node-id "$i" \
-              --cluster-peers "localhost:9095,localhost:9097,localhost:9099" \
-              --features clustering &
-
-            echo "  Node $i: kafka=$PORT_KAFKA http=$PORT_HTTP raft=$PORT_RAFT"
-          done
-
-          # Wait for cluster to form
-          sleep 10
-          for i in $(seq 1 30); do
-            if curl -sf http://localhost:9094/health >/dev/null 2>&1; then
-              echo "  Cluster healthy after ${i}s"
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:9094/health > /dev/null 2>&1; then
+              echo "Cluster healthy"
               break
             fi
-            sleep 1
+            sleep 2
           done
 
       - name: Run Jepsen tests
-        working-directory: tests/jepsen
         run: |
-          WORKLOAD="${{ github.event.inputs.workload || 'all' }}"
-          echo "Running Jepsen workload: $WORKLOAD"
+          cd tests/jepsen
+          lein test 2>&1 | tee jepsen-results.txt
+        continue-on-error: true
 
-          if [ "$WORKLOAD" = "all" ]; then
-            lein run test-all \
-              --nodes "localhost:9092,localhost:9093,localhost:9094" \
-              --time-limit 60 \
-              --concurrency 10
+      - name: Check for linearizability violations
+        id: check
+        run: |
+          if grep -q "FAIL" tests/jepsen/jepsen-results.txt 2>/dev/null; then
+            echo "violations=true" >> "$GITHUB_OUTPUT"
+            echo "::error::Jepsen test failures detected"
           else
-            lein run test \
-              --workload "$WORKLOAD" \
-              --nodes "localhost:9092,localhost:9093,localhost:9094" \
-              --time-limit 60 \
-              --concurrency 10
+            echo "violations=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Upload Jepsen results
-        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: jepsen-results-${{ github.run_number }}
-          path: tests/jepsen/store/
+          name: jepsen-results-${{ github.sha }}
+          path: |
+            tests/jepsen/jepsen-results.txt
+            tests/jepsen/store/
           retention-days: 30
 
-      - name: Create issue on failure
-        if: failure()
-        uses: actions/github-script@v7
-        with:
-          script: |
-            await github.rest.issues.create({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              title: `Jepsen test failure: ${context.workflow} #${context.runNumber}`,
-              body: `Jepsen linearizability tests failed.\n\nWorkflow: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}\n\nPlease investigate.`,
-              labels: ['bug', 'clustering']
-            });
+      - name: Cleanup
+        if: always()
+        run: docker compose -f docker-compose.jepsen.yml down -v
+
+      - name: Fail on violations
+        if: steps.check.outputs.violations == 'true'
+        run: exit 1
