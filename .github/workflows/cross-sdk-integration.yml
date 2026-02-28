@@ -56,7 +56,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Download server binary
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: streamline-binary
           path: /tmp/server
@@ -100,7 +100,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Download server binary
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: streamline-binary
           path: /tmp/server
@@ -141,7 +141,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Download server binary
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: streamline-binary
           path: /tmp/server
@@ -179,7 +179,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Download server binary
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: streamline-binary
           path: /tmp/server
@@ -218,7 +218,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Download server binary
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: streamline-binary
           path: /tmp/server
@@ -256,7 +256,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Download server binary
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: streamline-binary
           path: /tmp/server
