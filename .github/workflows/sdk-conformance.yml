@@ -176,9 +176,52 @@ jobs:
           name: conformance-rust
           path: conformance-rust.json
 
+  conformance-kotlin:
+    name: Kotlin SDK Conformance
+    needs: build-server
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: streamlinelabs/streamline-kotlin-sdk
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Test
+        run: ./gradlew test || gradle test
+      - name: Generate conformance report
+        if: always()
+        run: echo '{"sdk": "streamline-kotlin-sdk", "status": "${{ job.status }}"}' > conformance-kotlin.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: conformance-kotlin
+          path: conformance-kotlin.json
+
+  conformance-swift:
+    name: Swift SDK Conformance
+    needs: build-server
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: streamlinelabs/streamline-swift-sdk
+      - name: Test
+        run: swift test
+      - name: Generate conformance report
+        if: always()
+        run: echo '{"sdk": "streamline-swift-sdk", "status": "${{ job.status }}"}' > conformance-swift.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: conformance-swift
+          path: conformance-swift.json
+
   summary:
     name: Certification Summary
-    needs: [conformance-java, conformance-python, conformance-go, conformance-node, conformance-dotnet, conformance-rust]
+    needs: [conformance-java, conformance-python, conformance-go, conformance-node, conformance-dotnet, conformance-rust, conformance-kotlin, conformance-swift]
     if: always()
     runs-on: ubuntu-latest
     steps:
