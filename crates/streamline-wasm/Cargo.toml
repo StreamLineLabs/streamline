@@ -16,7 +16,7 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 
 # Async
-tokio = { version = "1.41", features = ["sync", "time", "fs"] }
+tokio = { version = "1.49", features = ["sync", "time", "fs"] }
 async-trait = "0.1"
 
 # Concurrency
@@ -30,7 +30,7 @@ tracing = "0.1"
 axum = { version = "0.7" }
 
 # UUID for identifiers
-uuid = { version = "1.11", features = ["v4"] }
+uuid = { version = "1.21", features = ["v4"] }
 chrono = { version = "0.4", features = ["serde"] }
 
 # Base64 encoding
@@ -48,4 +48,4 @@ wasm-runtime = ["dep:wasmtime"]
 
 [dev-dependencies]
 tokio-test = "0.4"
-tempfile = "3.14"
+tempfile = "3.26"
