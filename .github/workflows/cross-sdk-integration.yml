@@ -296,7 +296,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Generate compatibility matrix
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             const sdks = [
