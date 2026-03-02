@@ -619,3 +619,4 @@ mod tests {
         assert!(mgr.pause("test-connector").await.is_err());
     }
 }
+
