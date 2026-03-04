@@ -569,3 +569,4 @@ mod tests {
         assert_eq!(json["uri"], "streamline://topics/events");
     }
 }
+
