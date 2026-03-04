@@ -595,3 +595,4 @@ mod tests {
         assert!(shard.numa_allocator().is_some());
     }
 }
+
