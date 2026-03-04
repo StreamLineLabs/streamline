@@ -291,3 +291,4 @@ mod tests {
         assert_eq!(Operation::Read.to_string(), "r");
     }
 }
+
