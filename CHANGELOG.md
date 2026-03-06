@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - test: add protocol conformance tests (2026-03-06)
 
 - refactor: optimize segment compaction pipeline (2026-03-06)
+
+- fix: resolve partition rebalance race condition (2026-03-06)
 ## [Unreleased]
 
 ## [0.2.0] - 2026-02-28
