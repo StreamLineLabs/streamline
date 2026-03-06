@@ -617,6 +617,9 @@ pub async fn start_http_server(
     let bootstrap = init_http_bootstrap(&state);
     let app = build_http_router(&state, &bootstrap);
 
+    // Add version headers to all HTTP responses
+    let app = app.layer(axum::middleware::from_fn(version_headers_middleware));
+
     info!(addr = %addr, "Starting HTTP API server (metrics, health, REST API, WebSocket, Schema Registry, Consumer Groups, Dashboard, Logs, Connections, Alerts, Benchmark, Analytics, Connect)");
 
     let listener = tokio::net::TcpListener::bind(addr).await.map_err(|e| {
@@ -636,6 +639,24 @@ pub async fn start_http_server(
     axum::serve(listener, app).await?;
 
     Ok(())
+}
+
+/// Middleware that adds Streamline version headers to all HTTP responses
+async fn version_headers_middleware(
+    request: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> Response {
+    let mut response = next.run(request).await;
+    let headers = response.headers_mut();
+    headers.insert(
+        "X-Streamline-Version",
+        axum::http::HeaderValue::from_static(env!("CARGO_PKG_VERSION")),
+    );
+    headers.insert(
+        "X-API-Version",
+        axum::http::HeaderValue::from_static("v1"),
+    );
+    response
 }
 
 /// Metrics endpoint handler (Prometheus format)

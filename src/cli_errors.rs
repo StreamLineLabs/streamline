@@ -310,6 +310,197 @@ pub(crate) fn print_error_hint(e: &StreamlineError, data_dir: &Path) {
             docs: None,
         }),
 
+        StreamlineError::Analytics(ref msg) => Some(ErrorInfo {
+            what: "Analytics query error".into(),
+            why: Some(format!("Query execution failed: {}", msg)),
+            fix: vec![
+                "streamline-cli query --validate '<your-sql>'".into(),
+                "Check that the target topic exists and has data".into(),
+            ],
+            docs: Some("/docs/features/analytics"),
+        }),
+
+        StreamlineError::Query(ref msg) => Some(ErrorInfo {
+            what: "Query execution error".into(),
+            why: Some(format!("Query failed: {}", msg)),
+            fix: vec![
+                "Verify SQL syntax and column names".into(),
+                "streamline-cli query --validate '<your-sql>'".into(),
+            ],
+            docs: Some("/docs/features/analytics"),
+        }),
+
+        StreamlineError::Sink(_) => Some(ErrorInfo {
+            what: "Sink operation failed".into(),
+            why: Some("The data sink could not process the message.".into()),
+            fix: vec![
+                "streamline-cli connectors status".into(),
+                "Check that the destination system is reachable".into(),
+            ],
+            docs: Some("/docs/features/cdc"),
+        }),
+
+        StreamlineError::Cdc(_) => Some(ErrorInfo {
+            what: "CDC connector error".into(),
+            why: Some("Change Data Capture pipeline encountered an error.".into()),
+            fix: vec![
+                "streamline-cli connectors status".into(),
+                "Verify source database connectivity and permissions".into(),
+                "Check CDC connector logs for details".into(),
+            ],
+            docs: Some("/docs/features/cdc"),
+        }),
+
+        StreamlineError::Connector(_) => Some(ErrorInfo {
+            what: "Connector error".into(),
+            why: Some("A connector failed during operation.".into()),
+            fix: vec![
+                "streamline-cli connectors list".into(),
+                "streamline-cli connectors logs <name>".into(),
+            ],
+            docs: Some("/docs/features/cdc"),
+        }),
+
+        StreamlineError::Pipeline(_) => Some(ErrorInfo {
+            what: "Pipeline processing error".into(),
+            why: Some("A pipeline stage failed during execution.".into()),
+            fix: vec![
+                "streamline-cli pipelines status".into(),
+                "Check pipeline configuration for all stages".into(),
+            ],
+            docs: Some("/docs/features/transforms"),
+        }),
+
+        StreamlineError::Wasm(_) => Some(ErrorInfo {
+            what: "WASM transform error".into(),
+            why: Some("A WebAssembly transform failed during execution.".into()),
+            fix: vec![
+                "streamline-cli transforms validate <path>".into(),
+                "streamline-cli transforms logs <name>".into(),
+            ],
+            docs: Some("/docs/features/transforms"),
+        }),
+
+        StreamlineError::Tenant(_) => Some(ErrorInfo {
+            what: "Tenant operation failed".into(),
+            why: Some("The tenant operation could not be completed.".into()),
+            fix: vec![
+                "streamline-cli tenants list".into(),
+                "streamline-cli tenants describe <id>".into(),
+            ],
+            docs: Some("/docs/operations/multi-tenancy"),
+        }),
+
+        StreamlineError::Namespace(_) => Some(ErrorInfo {
+            what: "Namespace error".into(),
+            why: Some("The namespace does not exist or is misconfigured.".into()),
+            fix: vec![
+                "streamline-cli namespaces list".into(),
+                "streamline-cli namespaces create <name>".into(),
+            ],
+            docs: Some("/docs/operations/multi-tenancy"),
+        }),
+
+        StreamlineError::QuotaExceeded(_) => Some(ErrorInfo {
+            what: "Quota exceeded".into(),
+            why: Some("The tenant or client quota has been exceeded.".into()),
+            fix: vec![
+                "streamline-cli quotas describe".into(),
+                "Request a quota increase from your administrator".into(),
+            ],
+            docs: Some("/docs/operations/multi-tenancy"),
+        }),
+
+        StreamlineError::Rebalance(_) => Some(ErrorInfo {
+            what: "Consumer group rebalance error".into(),
+            why: Some("Consumer group rebalancing encountered an issue.".into()),
+            fix: vec![
+                "This is usually transient — consumers will rejoin automatically".into(),
+                "streamline-cli groups describe <group-id>".into(),
+            ],
+            docs: Some("/docs/concepts/consumer-groups"),
+        }),
+
+        StreamlineError::Marketplace(_) => Some(ErrorInfo {
+            what: "Marketplace error".into(),
+            why: Some("Marketplace operation could not be completed.".into()),
+            fix: vec![
+                "streamline-cli marketplace status".into(),
+                "Verify your authentication token is valid".into(),
+            ],
+            docs: Some("/docs/features/marketplace"),
+        }),
+
+        StreamlineError::Gateway(_) => Some(ErrorInfo {
+            what: "Gateway error".into(),
+            why: Some("The API gateway encountered an error.".into()),
+            fix: vec![
+                "streamline-cli gateway status".into(),
+                "Verify the upstream service is healthy".into(),
+            ],
+            docs: Some("/docs/reference/grpc-api"),
+        }),
+
+        StreamlineError::Network(_) => Some(ErrorInfo {
+            what: "Network error".into(),
+            why: Some("A network connection failed.".into()),
+            fix: vec![
+                "streamline-cli doctor --check connectivity".into(),
+                "Check firewall rules for ports 9092 and 9094".into(),
+            ],
+            docs: Some("/docs/operations/troubleshooting"),
+        }),
+
+        StreamlineError::Timeout(_) => Some(ErrorInfo {
+            what: "Operation timed out".into(),
+            why: Some("The operation did not complete within the allowed time.".into()),
+            fix: vec![
+                "Check server load with: streamline-cli metrics".into(),
+                "Increase timeout with --timeout 60000".into(),
+            ],
+            docs: Some("/docs/operations/troubleshooting"),
+        }),
+
+        StreamlineError::Validation(_) => Some(ErrorInfo {
+            what: "Validation failed".into(),
+            why: Some("The input did not pass validation checks.".into()),
+            fix: vec![
+                "Check input against the expected schema".into(),
+                "streamline-cli schema describe <subject>".into(),
+            ],
+            docs: Some("/docs/reference/schema-registry"),
+        }),
+
+        StreamlineError::ReplicationConflict(_) => Some(ErrorInfo {
+            what: "Replication conflict".into(),
+            why: Some("Conflicting writes detected across regions.".into()),
+            fix: vec![
+                "streamline-cli cluster geo-status".into(),
+                "Review conflict resolution policy".into(),
+            ],
+            docs: Some("/docs/features/geo-replication"),
+        }),
+
+        StreamlineError::Playground(_) => Some(ErrorInfo {
+            what: "Playground error".into(),
+            why: Some("The playground environment encountered an error.".into()),
+            fix: vec![
+                "Restart with: streamline --playground".into(),
+                "streamline-cli playground reset".into(),
+            ],
+            docs: Some("/docs/getting-started/playground"),
+        }),
+
+        StreamlineError::Internal(_) => Some(ErrorInfo {
+            what: "Internal server error".into(),
+            why: Some("An unexpected error occurred.".into()),
+            fix: vec![
+                "streamline-cli logs --tail 50".into(),
+                "Report at: https://github.com/streamlinelabs/streamline/issues".into(),
+            ],
+            docs: Some("/docs/operations/troubleshooting"),
+        }),
+
         _ => None,
     };
 

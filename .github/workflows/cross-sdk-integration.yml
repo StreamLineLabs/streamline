@@ -8,6 +8,13 @@ on:
       - 'src/server.rs'
       - 'src/consumer/**'
       - 'src/storage/**'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/protocol/**'
+      - 'src/server/**'
+      - 'src/consumer/**'
+      - 'src/storage/**'
   schedule:
     - cron: '0 3 * * *'  # Nightly at 3am UTC
   workflow_dispatch:
@@ -331,13 +338,20 @@ jobs:
             const summary = [
               '## 🔄 SDK Compatibility Matrix',
               '',
-              `**Server:** \`${{ github.sha }}\` | **Run:** [#${context.runNumber}](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})`,
+              `**Server:** \`${{ github.sha }}\` (v${process.env.STREAMLINE_VERSION || '0.2.0'}) | **Run:** [#${context.runNumber}](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})`,
               '',
-              '| SDK | Status |',
-              '|-----|--------|',
-              ...rows,
+              '> Conformance spec: [`streamline-deploy/conformance/conformance-spec.toml`](https://github.com/streamlinelabs/streamline-deploy/blob/main/conformance/conformance-spec.toml)',
               '',
-              `**Result:** ${passed}/6 passed` + (failed > 0 ? ` | ${failed}/6 failed` : ''),
+              '| SDK | Version | Transport | Status |',
+              '|-----|---------|-----------|--------|',
+              ...rows.map((r, i) => {
+                const versions = ['0.2.0', '0.2.0', '0.2.0', '0.2.0', '0.2.0', '0.2.0'];
+                const transports = ['Kafka', 'Kafka', 'Kafka', 'Kafka', 'Kafka', 'Kafka'];
+                const parts = r.split('|').filter(Boolean);
+                return `| ${parts[0].trim()} | ${versions[i]} | ${transports[i]} | ${parts[1].trim()} |`;
+              }),
+              '',
+              `**Result:** ${passed}/6 passed` + (failed > 0 ? ` | ${failed}/6 failed ❌` : ' ✅'),
             ].join('\n');
 
             core.summary.addRaw(summary);

@@ -156,6 +156,97 @@ impl ErrorHint for StreamlineError {
             StreamlineError::ResourceExhausted(_) => Some(
                 "System resources exhausted. Check resource usage: `streamline-cli metrics --system` and review limits in server configuration".into()
             ),
+            StreamlineError::Analytics(msg) => Some(format!(
+                "Analytics query failed: {}. Verify SQL syntax with: `streamline-cli query --validate <sql>` or check the DuckDB documentation for supported functions",
+                msg
+            )),
+            StreamlineError::Sink(_) => Some(
+                "Sink operation failed. Check sink configuration with: `streamline-cli connectors status` and verify the destination is reachable".into()
+            ),
+            StreamlineError::Query(_) => Some(
+                "Query execution failed. Check SQL syntax with: `streamline-cli query --validate <sql>` and ensure the target topic exists".into()
+            ),
+            StreamlineError::Parse(_) => Some(
+                "Failed to parse input. Verify the input format matches the expected schema. Use: `streamline-cli schema describe <subject>` to check expected format".into()
+            ),
+            StreamlineError::Wasm(_) => Some(
+                "WASM transform error. Validate the transform with: `streamline-cli transforms validate <path>` or check transform logs: `streamline-cli transforms logs <name>`".into()
+            ),
+            StreamlineError::InvalidData(_) => Some(
+                "Invalid data encountered. Check message format and encoding. Use: `streamline-cli consume <topic> --format raw` to inspect raw messages".into()
+            ),
+            StreamlineError::AI(_) => Some(
+                "AI/ML pipeline error. Check model configuration with: `streamline-cli ai status` and verify model endpoint connectivity".into()
+            ),
+            StreamlineError::Crdt(_) => Some(
+                "Conflict resolution error in geo-replicated data. Check replication status: `streamline-cli cluster replicas` and review conflict resolution policy".into()
+            ),
+            StreamlineError::Tenant(_) => Some(
+                "Tenant operation failed. Verify tenant exists with: `streamline-cli tenants list` and check quota limits: `streamline-cli tenants describe <id>`".into()
+            ),
+            StreamlineError::Validation(_) => Some(
+                "Validation failed. Check input against the expected schema or constraints. Use: `streamline-cli schema describe <subject>` for schema details".into()
+            ),
+            StreamlineError::Internal(_) => Some(
+                "Internal server error. Check server logs: `streamline-cli logs --tail 50` and report persistent issues at https://github.com/streamlinelabs/streamline/issues".into()
+            ),
+            StreamlineError::Mcp(_) => Some(
+                "MCP (Model Context Protocol) error. Check MCP endpoint configuration and verify the MCP server is running".into()
+            ),
+            StreamlineError::Cdc(_) => Some(
+                "CDC (Change Data Capture) error. Check connector status: `streamline-cli connectors status` and verify source database connectivity and permissions".into()
+            ),
+            StreamlineError::Connector(_) => Some(
+                "Connector error. Check connector status: `streamline-cli connectors list` and review connector logs: `streamline-cli connectors logs <name>`".into()
+            ),
+            StreamlineError::Pipeline(_) => Some(
+                "Pipeline processing error. Check pipeline status: `streamline-cli pipelines status` and verify all stages are configured correctly".into()
+            ),
+            StreamlineError::Namespace(_) => Some(
+                "Namespace error. List available namespaces: `streamline-cli namespaces list` or create one: `streamline-cli namespaces create <name>`".into()
+            ),
+            StreamlineError::ReplicationConflict(_) => Some(
+                "Replication conflict detected between regions. Check conflict resolution policy: `streamline-cli cluster geo-status` and review conflict log".into()
+            ),
+            StreamlineError::QuotaExceeded(_) => Some(
+                "Quota exceeded for this tenant or client. Check current usage: `streamline-cli quotas describe` and request a quota increase if needed".into()
+            ),
+            StreamlineError::ContractViolation(_) => Some(
+                "API contract violation. Ensure your request matches the expected format. Check API docs: `streamline-cli docs open`".into()
+            ),
+            StreamlineError::Debugger(_) => Some(
+                "Debugger error. Restart the debug session: `streamline-cli debug --reset` or check debug port availability".into()
+            ),
+            StreamlineError::Marketplace(_) => Some(
+                "Marketplace operation failed. Check marketplace connectivity: `streamline-cli marketplace status` and verify your authentication token".into()
+            ),
+            StreamlineError::Gateway(_) => Some(
+                "Gateway error. Check gateway status: `streamline-cli gateway status` and verify the upstream service is healthy".into()
+            ),
+            StreamlineError::Rebalance(_) => Some(
+                "Consumer group rebalance error. This is usually transient — consumers will rejoin automatically. Monitor with: `streamline-cli groups describe <group>`".into()
+            ),
+            StreamlineError::Playground(_) => Some(
+                "Playground error. Restart the playground: `streamline --playground` or reset state: `streamline-cli playground reset`".into()
+            ),
+            StreamlineError::Lineage(_) => Some(
+                "Data lineage tracking error. Check lineage configuration: `streamline-cli lineage status` and verify lineage storage is accessible".into()
+            ),
+            StreamlineError::Ffi(_) => Some(
+                "Foreign function interface error. Check that the native library is compatible with this platform and architecture".into()
+            ),
+            StreamlineError::InvalidClientId(_) => Some(
+                "Client ID is invalid. Use alphanumeric characters, dots, underscores, and hyphens only (1-255 chars)".into()
+            ),
+            StreamlineError::Io(_) => Some(
+                "I/O error. Check file system permissions and disk space: `streamline-cli doctor --check storage`".into()
+            ),
+            StreamlineError::Serialization(_) => Some(
+                "Serialization error. Check that the message format matches the expected schema. Use: `streamline-cli schema describe <subject>` for details".into()
+            ),
+            StreamlineError::Server(_) | StreamlineError::ServerDomain(_) => Some(
+                "Server error. Check server logs for details: `streamline-cli logs --tail 50` and restart if the error persists".into()
+            ),
             _ => None,
         }
     }
@@ -238,6 +329,36 @@ impl ErrorHint for StreamlineError {
             StreamlineError::RateLimitExceeded => {
                 Some("# Increase quotas in config or reduce client request rate".into())
             }
+            StreamlineError::Analytics(_) | StreamlineError::Query(_) => {
+                Some("streamline-cli query --validate '<your-sql>'".into())
+            }
+            StreamlineError::Sink(_) | StreamlineError::Connector(_) | StreamlineError::Cdc(_) => {
+                Some("streamline-cli connectors status".into())
+            }
+            StreamlineError::Pipeline(_) => {
+                Some("streamline-cli pipelines status".into())
+            }
+            StreamlineError::Wasm(_) => {
+                Some("streamline-cli transforms validate <path-to-wasm>".into())
+            }
+            StreamlineError::Tenant(_) | StreamlineError::QuotaExceeded(_) => {
+                Some("streamline-cli quotas describe".into())
+            }
+            StreamlineError::Namespace(_) => {
+                Some("streamline-cli namespaces list".into())
+            }
+            StreamlineError::Rebalance(_) => {
+                Some("streamline-cli groups describe <group-id>".into())
+            }
+            StreamlineError::Marketplace(_) => {
+                Some("streamline-cli marketplace status".into())
+            }
+            StreamlineError::Internal(_) | StreamlineError::Server(_) | StreamlineError::ServerDomain(_) => {
+                Some("streamline-cli logs --tail 50".into())
+            }
+            StreamlineError::Playground(_) => {
+                Some("streamline --playground".into())
+            }
             _ => None,
         }
     }
@@ -307,6 +428,50 @@ impl ErrorHint for StreamlineError {
             StreamlineError::RateLimitExceeded => Some(format!("{}/operations/quotas", base)),
             StreamlineError::Protocol(_) | StreamlineError::ProtocolDomain(_) => {
                 Some(format!("{}/reference/protocol", base))
+            }
+            StreamlineError::Analytics(_) | StreamlineError::Query(_) => {
+                Some(format!("{}/features/analytics", base))
+            }
+            StreamlineError::Sink(_) | StreamlineError::Connector(_) | StreamlineError::Cdc(_) => {
+                Some(format!("{}/features/cdc", base))
+            }
+            StreamlineError::Pipeline(_) | StreamlineError::Wasm(_) => {
+                Some(format!("{}/features/transforms", base))
+            }
+            StreamlineError::Tenant(_) | StreamlineError::Namespace(_)
+            | StreamlineError::QuotaExceeded(_) => {
+                Some(format!("{}/operations/multi-tenancy", base))
+            }
+            StreamlineError::ReplicationConflict(_) | StreamlineError::Crdt(_) => {
+                Some(format!("{}/features/geo-replication", base))
+            }
+            StreamlineError::Rebalance(_) => {
+                Some(format!("{}/concepts/consumer-groups", base))
+            }
+            StreamlineError::Marketplace(_) => {
+                Some(format!("{}/features/marketplace", base))
+            }
+            StreamlineError::Gateway(_) => {
+                Some(format!("{}/reference/grpc-api", base))
+            }
+            StreamlineError::Playground(_) => {
+                Some(format!("{}/getting-started/playground", base))
+            }
+            StreamlineError::Lineage(_) => {
+                Some(format!("{}/features/lineage", base))
+            }
+            StreamlineError::AI(_) => {
+                Some(format!("{}/features/ai", base))
+            }
+            StreamlineError::Validation(_) | StreamlineError::InvalidData(_)
+            | StreamlineError::Serialization(_) | StreamlineError::Parse(_) => {
+                Some(format!("{}/reference/schema-registry", base))
+            }
+            StreamlineError::Network(_) | StreamlineError::Io(_) => {
+                Some(format!("{}/operations/troubleshooting", base))
+            }
+            StreamlineError::Internal(_) | StreamlineError::Server(_) | StreamlineError::ServerDomain(_) => {
+                Some(format!("{}/operations/troubleshooting", base))
             }
             _ => None,
         }

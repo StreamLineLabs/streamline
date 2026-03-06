@@ -215,7 +215,7 @@ rustyline = { version = "14.0", optional = true }
 [features]
 # Edition meta-features
 default = ["lite"]
-lite = ["compression"]  # Core streaming with compression support
+lite = ["compression", "metrics"]  # Core streaming with compression + basic Prometheus metrics
 full = ["compression", "clustering", "telemetry", "cloud-storage", "schema-registry", "metrics", "auth", "encryption", "analytics", "iceberg", "repl", "lakehouse", "ai", "cdc", "geo-replication", "kafka-connect", "graphql"]
 
 # Compression codecs
