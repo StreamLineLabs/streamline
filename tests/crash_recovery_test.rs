@@ -37,6 +37,7 @@ fn create_wal_header() -> [u8; WAL_HEADER_SIZE] {
     buf[0..4].copy_from_slice(WAL_MAGIC);
     buf[4..6].copy_from_slice(&1u16.to_le_bytes()); // version
     buf[6..8].copy_from_slice(&0u16.to_le_bytes()); // flags
+
     let timestamp = chrono::Utc::now().timestamp_millis();
     buf[8..16].copy_from_slice(&timestamp.to_le_bytes());
     buf
