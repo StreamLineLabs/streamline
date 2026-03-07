@@ -16,6 +16,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Checkout deploy repo (for Jepsen compose file)
+        uses: actions/checkout@v4
+        with:
+          repository: streamlinelabs/streamline-deploy
+          path: streamline-deploy
+
       - name: Install Rust
         uses: dtolnay/rust-action@stable
 
@@ -29,8 +35,7 @@ jobs:
           lein version
 
       - name: Start Jepsen cluster
-        run: docker compose -f docker-compose.jepsen.yml up -d
-        working-directory: .
+        run: docker compose -f streamline-deploy/docker-compose.jepsen.yml up -d
 
       - name: Wait for cluster health
         run: |
@@ -69,7 +74,7 @@ jobs:
 
       - name: Cleanup
         if: always()
-        run: docker compose -f docker-compose.jepsen.yml down -v
+        run: docker compose -f streamline-deploy/docker-compose.jepsen.yml down -v
 
       - name: Fail on violations
         if: steps.check.outputs.violations == 'true'
