@@ -1,4 +1,5 @@
 //! Error types for the Streamline analytics engine.
+
 //!
 //! This module defines domain-specific errors for the embedded DuckDB analytics
 //! engine, covering SQL execution failures, configuration issues, topic resolution
