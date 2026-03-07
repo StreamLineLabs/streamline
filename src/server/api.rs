@@ -8,6 +8,7 @@
 //!
 //! - `GET /api/v1/topics` - List all topics
 //! - `POST /api/v1/topics` - Create a topic
+//! - `GET /api/v1/topics/compare?topics=a,b` - Compare two topics (partitions, message counts)
 //! - `GET /api/v1/topics/{topic}` - Get topic metadata
 //! - `DELETE /api/v1/topics/{topic}` - Delete a topic
 //! - `POST /api/v1/topics/{topic}/messages` - Produce messages

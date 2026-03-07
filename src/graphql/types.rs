@@ -316,3 +316,192 @@ pub fn record_to_message(
         headers,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_record_to_message_basic() {
+        let record = crate::storage::record::Record {
+            offset: 42,
+            timestamp: 1700000000000,
+            key: Some(b"my-key".to_vec()),
+            value: b"hello world".to_vec(),
+            headers: vec![],
+        };
+
+        let msg = record_to_message("events", 0, record);
+        assert_eq!(msg.topic, "events");
+        assert_eq!(msg.partition, 0);
+        assert_eq!(msg.offset, 42);
+        assert_eq!(msg.key, Some("my-key".to_string()));
+        assert_eq!(msg.value, "hello world");
+        assert!(msg.headers.is_empty());
+    }
+
+    #[test]
+    fn test_record_to_message_no_key() {
+        let record = crate::storage::record::Record {
+            offset: 0,
+            timestamp: 1700000000000,
+            key: None,
+            value: b"data".to_vec(),
+            headers: vec![],
+        };
+
+        let msg = record_to_message("logs", 3, record);
+        assert!(msg.key.is_none());
+        assert_eq!(msg.partition, 3);
+    }
+
+    #[test]
+    fn test_record_to_message_with_headers() {
+        let record = crate::storage::record::Record {
+            offset: 10,
+            timestamp: 1700000000000,
+            key: None,
+            value: b"v".to_vec(),
+            headers: vec![
+                crate::storage::record::RecordHeader {
+                    key: "trace-id".to_string(),
+                    value: b"abc-123".to_vec(),
+                },
+                crate::storage::record::RecordHeader {
+                    key: "content-type".to_string(),
+                    value: b"application/json".to_vec(),
+                },
+            ],
+        };
+
+        let msg = record_to_message("events", 0, record);
+        assert_eq!(msg.headers.len(), 2);
+        assert_eq!(msg.headers[0].key, "trace-id");
+        assert_eq!(msg.headers[0].value, "abc-123");
+        assert_eq!(msg.headers[1].key, "content-type");
+        assert_eq!(msg.headers[1].value, "application/json");
+    }
+
+    #[test]
+    fn test_record_to_message_non_utf8_value() {
+        let record = crate::storage::record::Record {
+            offset: 0,
+            timestamp: 1700000000000,
+            key: None,
+            value: vec![0xFF, 0xFE, 0xFD],
+            headers: vec![],
+        };
+
+        let msg = record_to_message("binary", 0, record);
+        // from_utf8_lossy should handle non-UTF8 gracefully
+        assert!(!msg.value.is_empty());
+    }
+
+    #[test]
+    fn test_record_to_message_timestamp_formatting() {
+        let record = crate::storage::record::Record {
+            offset: 0,
+            timestamp: 1700000000000, // 2023-11-14T22:13:20Z
+            key: None,
+            value: b"v".to_vec(),
+            headers: vec![],
+        };
+
+        let msg = record_to_message("t", 0, record);
+        assert!(msg.timestamp.contains("2023"));
+        assert!(msg.timestamp.contains("T"));
+    }
+
+    #[test]
+    fn test_topic_type_construction() {
+        let topic = Topic {
+            name: "events".to_string(),
+            partitions: 6,
+            replication_factor: 3,
+            message_count: 1000,
+            retention_ms: Some(86400000),
+            created_at: "2024-01-01T00:00:00Z".to_string(),
+        };
+        assert_eq!(topic.name, "events");
+        assert_eq!(topic.partitions, 6);
+        assert_eq!(topic.retention_ms, Some(86400000));
+    }
+
+    #[test]
+    fn test_group_state_enum() {
+        assert_ne!(GroupState::Stable, GroupState::Dead);
+        assert_ne!(GroupState::Empty, GroupState::PreparingRebalance);
+        assert_eq!(GroupState::Stable, GroupState::Stable);
+    }
+
+    #[test]
+    fn test_topic_event_types() {
+        assert_ne!(TopicEventType::Created, TopicEventType::Deleted);
+    }
+
+    #[test]
+    fn test_cluster_event_types() {
+        let event = ClusterEvent {
+            event_type: ClusterEventType::TopicCreated,
+            description: "Topic 'events' created".to_string(),
+            resource: Some("events".to_string()),
+            timestamp: "2024-01-01T00:00:00Z".to_string(),
+        };
+        assert_eq!(event.event_type, ClusterEventType::TopicCreated);
+        assert_eq!(event.resource, Some("events".to_string()));
+    }
+
+    #[test]
+    fn test_produce_input_construction() {
+        let input = ProduceInput {
+            key: Some("k".to_string()),
+            value: "v".to_string(),
+            headers: Some(vec![HeaderInput {
+                key: "h1".to_string(),
+                value: "val".to_string(),
+            }]),
+            partition: Some(2),
+        };
+        assert_eq!(input.key, Some("k".to_string()));
+        assert_eq!(input.partition, Some(2));
+        assert_eq!(input.headers.unwrap().len(), 1);
+    }
+
+    #[test]
+    fn test_search_result_construction() {
+        let result = SearchResult {
+            matches: vec![],
+            total_matches: 0,
+            scanned: 1000,
+        };
+        assert!(result.matches.is_empty());
+        assert_eq!(result.scanned, 1000);
+    }
+
+    #[test]
+    fn test_partition_stats() {
+        let p = Partition {
+            id: 0,
+            earliest_offset: 0,
+            latest_offset: 500,
+            message_count: 500,
+        };
+        assert_eq!(p.message_count, p.latest_offset - p.earliest_offset);
+    }
+
+    #[test]
+    fn test_topic_config_optional_fields() {
+        let config = TopicConfig {
+            retention_ms: None,
+            max_message_bytes: None,
+        };
+        assert!(config.retention_ms.is_none());
+        assert!(config.max_message_bytes.is_none());
+
+        let config2 = TopicConfig {
+            retention_ms: Some(3600000),
+            max_message_bytes: Some(1048576),
+        };
+        assert_eq!(config2.retention_ms, Some(3600000));
+    }
+}
