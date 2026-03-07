@@ -5,8 +5,8 @@
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue?style=flat-square)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-1.80%2B-orange?style=flat-square)](https://www.rust-lang.org/)
 [![Stability](https://img.shields.io/badge/stability-alpha-yellow?style=flat-square)](#project-status)
-[![Documentation](https://img.shields.io/badge/docs-josedab.github.io%2Fstreamline-blue?style=flat-square)](https://josedab.github.io/streamline/)
-[![Benchmarks](https://img.shields.io/badge/benchmarks-live-brightgreen?style=flat-square)](https://josedab.github.io/streamline/dev/bench/)
+[![Documentation](https://img.shields.io/badge/docs-streamlinelabs.dev-blue?style=flat-square)](https://streamlinelabs.dev/docs/)
+[![Benchmarks](https://img.shields.io/badge/benchmarks-live-brightgreen?style=flat-square)](https://streamlinelabs.dev/dev/bench/)
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/streamlinelabs/streamline/badge?style=flat-square)](https://securityscorecards.dev/viewer/?uri=github.com/streamlinelabs/streamline)
 
 **The Redis of Streaming** — A developer-first, operationally simple streaming solution that bridges the gap between enterprise platforms (Kafka, Redpanda) and simple messaging systems (Redis Pub/Sub).
@@ -361,7 +361,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 **Not yet recommended for:** Production workloads with critical data, high-availability requirements.
 
-See [API Stability](docs/API_STABILITY.md) for detailed compatibility matrices and [Benchmarks](https://josedab.github.io/streamline/dev/bench/) for live performance data.
+See [API Stability](docs/API_STABILITY.md) for detailed compatibility matrices and [Benchmarks](https://streamlinelabs.dev/dev/bench/) for live performance data.
 
 ## Community
 

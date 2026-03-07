@@ -1,5 +1,7 @@
 # Anomaly Alerting Example
 
+> **⚠️ Experimental:** This example demonstrates a planned AI integration. The `streamline_sdk.ai` module is not yet available in the released Python SDK. Code below is illustrative pseudocode showing the intended API design.
+
 Real-time anomaly detection on a metrics stream.
 
 ## Run

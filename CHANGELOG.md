@@ -6,14 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
-- test: add protocol conformance tests (2026-03-06)
-
-- refactor: optimize segment compaction pipeline (2026-03-06)
-
-- fix: resolve partition rebalance race condition (2026-03-06)
 ## [Unreleased]
 
-## [0.2.0] - 2026-02-28
+- test: add protocol conformance tests (2026-03-06)
+- refactor: optimize segment compaction pipeline (2026-03-06)
+- fix: resolve partition rebalance race condition (2026-03-06)
 - **Added**: add marketplace web registry integration
 - **Changed**: restructure server HTTP API handlers
 - **Added**: implement connect runtime framework
@@ -51,6 +48,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     SUM, AVG), GROUP BY, window functions (ROW_NUMBER), error handling (invalid
     SQL, non-existent topics), caching, pagination, concurrent queries,
     materialized view lifecycle, and large result set handling.
+
 
 ## [0.2.0] - 2026-01-23
 
@@ -287,4 +285,3 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [Unreleased]: https://github.com/streamlinelabs/streamline/compare/v0.2.0...HEAD
 [0.2.0]: https://github.com/streamlinelabs/streamline/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/streamlinelabs/streamline/releases/tag/v0.1.0
-

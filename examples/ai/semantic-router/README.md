@@ -1,5 +1,7 @@
 # Semantic Router Example
 
+> **⚠️ Experimental:** This example demonstrates a planned AI integration. The `streamline_sdk.ai` module is not yet available in the released Python SDK. Code below is illustrative pseudocode showing the intended API design.
+
 Route messages to different topics based on their semantic meaning.
 
 ## Run

@@ -1,6 +1,9 @@
 {
   "name": "streamline-kafkajs-example",
+  "version": "0.2.0",
+  "description": "Streamline example using KafkaJS — demonstrates Kafka client compatibility",
   "private": true,
+  "license": "Apache-2.0",
   "dependencies": {
     "kafkajs": "^2.2.4"
   }

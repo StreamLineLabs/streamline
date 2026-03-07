@@ -1,5 +1,7 @@
 # RAG Pipeline Example
 
+> **⚠️ Experimental:** This example demonstrates a planned AI integration. The `streamline_sdk.ai` module is not yet available in the released Python SDK. Code below is illustrative pseudocode showing the intended API design.
+
 Demonstrates building a Retrieval-Augmented Generation pipeline with Streamline.
 
 ## Overview
