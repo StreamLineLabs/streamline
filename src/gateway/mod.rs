@@ -9,7 +9,7 @@
 //!
 //! ```text
 //! ┌────────────┐  ┌────────────┐  ┌────────────┐
-//! │ MQTT 3.1.1 │  │  AMQP 1.0  │  │   gRPC     │
+//! │ MQTT 3.1.1 │  │ AMQP 0-9-1 │  │   gRPC     │
 //! │  :1883     │  │  :5672     │  │  :9096     │
 //! └─────┬──────┘  └─────┬──────┘  └─────┬──────┘
 //!       │               │               │
@@ -30,8 +30,14 @@ pub mod mqtt;
 pub mod mqtt_handler;
 pub mod router;
 
-pub use amqp::{AmqpAdapter, AmqpConfig};
-pub use grpc::{GrpcAdapter, GrpcConfig};
+pub use amqp::{
+    AmqpAdapter, AmqpBinding, AmqpChannel, AmqpConfig, AmqpExchange, AmqpHandlerStatsSnapshot,
+    AmqpMessageProperties, AmqpPublishData, AmqpQueue, AmqpSession, ExchangeType,
+};
+pub use grpc::{
+    GrpcAdapter, GrpcConfig, GrpcConsumeRequest, GrpcConsumeResponse, GrpcCreateTopicRequest,
+    GrpcHandlerStatsSnapshot, GrpcProduceRequest, GrpcProduceResponse, GrpcSession, GrpcTopicInfo,
+};
 pub use mqtt::{MqttAdapter, MqttConfig};
 pub use mqtt_handler::{
     ConnAckCode, MqttConnectData, MqttHandlerStatsSnapshot, MqttPacketType, MqttPublishData,
