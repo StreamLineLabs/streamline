@@ -32,6 +32,7 @@ fn test_add_partitions_to_txn_request_v3_and_below() {
     request.v3_and_below_producer_id = ProducerId(12345);
     request.v3_and_below_producer_epoch = 3;
 
+
     let mut topic = AddPartitionsToTxnTopic::default();
     topic.name = TopicName(StrBytes::from_static_str("test-topic"));
     topic.partitions = vec![0, 1, 2];
