@@ -209,3 +209,39 @@ pub use io_backend::{
 
 // Re-export async index types
 pub use async_index::{AsyncIndexBuilder, AsyncSegmentIndex};
+
+
+/// Memory budget tracker for storage operations.
+pub(crate) struct MemoryBudget {
+    allocated: std::sync::atomic::AtomicUsize,
+    limit: usize,
+}
+
+impl MemoryBudget {
+    pub fn new(limit: usize) -> Self {
+        Self {
+            allocated: std::sync::atomic::AtomicUsize::new(0),
+            limit,
+        }
+    }
+
+    pub fn try_allocate(&self, bytes: usize) -> bool {
+        self.allocated
+            .fetch_update(
+                std::sync::atomic::Ordering::SeqCst,
+                std::sync::atomic::Ordering::SeqCst,
+                |current| {
+                    if current + bytes <= self.limit {
+                        Some(current + bytes)
+                    } else {
+                        None
+                    }
+                },
+            )
+            .is_ok()
+    }
+
+    pub fn release(&self, bytes: usize) {
+        self.allocated.fetch_sub(bytes, std::sync::atomic::Ordering::SeqCst);
+    }
+}
