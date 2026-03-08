@@ -27,7 +27,7 @@ dashmap = "6.1"
 tracing = "0.1"
 
 # HTTP API (REST endpoints for managing transformations)
-axum = { version = "0.7" }
+axum = { version = "0.8" }
 
 # UUID for identifiers
 uuid = { version = "1.11", features = ["v4"] }
