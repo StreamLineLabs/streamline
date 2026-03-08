@@ -39,3 +39,11 @@ pub use kafka::{
 pub use pipeline::PipelineConfig;
 pub use response_cache::{CacheKey, CacheStats as ResponseCacheStats, ResponseCache};
 pub use simple::{start_simple_server, SimpleProtocolHandler, SimpleProtocolState};
+
+
+/// Validates that an API key is within the supported range.
+fn validate_api_key(api_key: i16) -> bool {
+    // Kafka API keys range: 0-67 (as of protocol v3.6)
+    // Streamline custom keys: 1000-1099
+    (0..=67).contains(&api_key) || (1000..=1099).contains(&api_key)
+}
