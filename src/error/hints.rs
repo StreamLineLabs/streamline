@@ -1,6 +1,6 @@
 //! Error hints and context for actionable error messages
 
-use super::{StreamlineError, KafkaErrorCode};
+use super::StreamlineError;
 
 /// Context for errors that can include available resources
 #[derive(Debug, Clone, Default)]
@@ -211,12 +211,6 @@ impl ErrorHint for StreamlineError {
             StreamlineError::QuotaExceeded(_) => Some(
                 "Quota exceeded for this tenant or client. Check current usage: `streamline-cli quotas describe` and request a quota increase if needed".into()
             ),
-            StreamlineError::ContractViolation(_) => Some(
-                "API contract violation. Ensure your request matches the expected format. Check API docs: `streamline-cli docs open`".into()
-            ),
-            StreamlineError::Debugger(_) => Some(
-                "Debugger error. Restart the debug session: `streamline-cli debug --reset` or check debug port availability".into()
-            ),
             StreamlineError::Marketplace(_) => Some(
                 "Marketplace operation failed. Check marketplace connectivity: `streamline-cli marketplace status` and verify your authentication token".into()
             ),
@@ -231,9 +225,6 @@ impl ErrorHint for StreamlineError {
             ),
             StreamlineError::Lineage(_) => Some(
                 "Data lineage tracking error. Check lineage configuration: `streamline-cli lineage status` and verify lineage storage is accessible".into()
-            ),
-            StreamlineError::Ffi(_) => Some(
-                "Foreign function interface error. Check that the native library is compatible with this platform and architecture".into()
             ),
             StreamlineError::InvalidClientId(_) => Some(
                 "Client ID is invalid. Use alphanumeric characters, dots, underscores, and hyphens only (1-255 chars)".into()

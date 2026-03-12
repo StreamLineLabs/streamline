@@ -7,11 +7,11 @@
 use crate::error::{Result, StreamlineError};
 use crate::gateway::mqtt::{MqttConfig, QoSLevel};
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, info};
 
 /// MQTT packet types (subset of MQTT 3.1.1 spec)
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

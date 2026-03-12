@@ -80,6 +80,8 @@ pub struct StreamingState {
     pub active_subscriptions: Arc<AtomicU64>,
     /// Total messages streamed
     pub total_messages_streamed: Arc<AtomicU64>,
+    /// Consumer group coordinator for offset persistence
+    pub group_coordinator: Option<Arc<crate::consumer::GroupCoordinator>>,
 }
 
 impl StreamingState {
@@ -88,7 +90,16 @@ impl StreamingState {
             topic_manager,
             active_subscriptions: Arc::new(AtomicU64::new(0)),
             total_messages_streamed: Arc::new(AtomicU64::new(0)),
+            group_coordinator: None,
         }
+    }
+
+    pub fn with_group_coordinator(
+        mut self,
+        coordinator: Option<Arc<crate::consumer::GroupCoordinator>>,
+    ) -> Self {
+        self.group_coordinator = coordinator;
+        self
     }
 }
 
@@ -131,6 +142,17 @@ pub enum ClientCommand {
     /// Acknowledge messages (for consumer group mode)
     Ack {
         offsets: HashMap<String, HashMap<i32, i64>>,
+    },
+    /// Produce a message to a topic
+    Produce {
+        topic: String,
+        #[serde(default)]
+        key: Option<String>,
+        value: serde_json::Value,
+        #[serde(default)]
+        headers: HashMap<String, String>,
+        #[serde(default)]
+        partition: Option<i32>,
     },
     /// Get current status
     Status,
@@ -237,6 +259,12 @@ pub enum ServerMessage {
     },
     /// Pong response
     Pong { id: Option<u64> },
+    /// Produce acknowledgment
+    ProduceAck {
+        topic: String,
+        partition: i32,
+        offset: i64,
+    },
     /// Error
     Error { code: String, message: String },
     /// Warning (non-fatal)
@@ -738,8 +766,45 @@ async fn handle_command(
         }
 
         ClientCommand::Ack { offsets } => {
-            // In consumer group mode, this would commit offsets
-            debug!(offsets = ?offsets, "Received offset acknowledgment");
+            // Commit offsets to the GroupCoordinator if available
+            if let Some(ref coordinator) = state.group_coordinator {
+                for (topic, partition_offsets) in &offsets {
+                    for (&partition, &offset) in partition_offsets {
+                        // Use the subscription's group_id if configured
+                        let subs = subscriptions.read().await;
+                        let group_id = subs
+                            .get(topic)
+                            .and_then(|s| s.config.group_id.clone())
+                            .unwrap_or_else(|| "ws-default".to_string());
+                        drop(subs);
+
+                        if let Err(e) = coordinator.commit_offset(
+                            &group_id,
+                            topic,
+                            partition,
+                            offset,
+                            String::new(),
+                        ) {
+                            warn!(
+                                topic = %topic,
+                                partition = partition,
+                                offset = offset,
+                                error = %e,
+                                "Failed to commit offset via WebSocket ACK"
+                            );
+                        } else {
+                            debug!(
+                                topic = %topic,
+                                partition = partition,
+                                offset = offset,
+                                "Committed offset via WebSocket ACK"
+                            );
+                        }
+                    }
+                }
+            } else {
+                debug!(offsets = ?offsets, "Received offset acknowledgment (no coordinator configured)");
+            }
         }
 
         ClientCommand::Status => {
@@ -793,6 +858,72 @@ async fn handle_command(
         ClientCommand::Ping { id } => {
             let msg = ServerMessage::Pong { id };
             let _ = message_tx.send(msg).await;
+        }
+
+        ClientCommand::Produce {
+            topic,
+            key,
+            value,
+            headers,
+            partition,
+        } => {
+            let value_str = match &value {
+                serde_json::Value::String(s) => s.clone(),
+                other => serde_json::to_string(other).unwrap_or_default(),
+            };
+            let value_bytes = bytes::Bytes::from(value_str);
+            let key_bytes = key.map(bytes::Bytes::from);
+
+            // Use partition 0 as default if not specified
+            let target_partition = partition.unwrap_or(0);
+
+            let result = if headers.is_empty() {
+                state.topic_manager.append(
+                    &topic,
+                    target_partition,
+                    key_bytes,
+                    value_bytes,
+                )
+            } else {
+                let record_headers: Vec<crate::storage::record::Header> = headers
+                    .into_iter()
+                    .map(|(k, v)| crate::storage::record::Header {
+                        key: k,
+                        value: bytes::Bytes::from(v),
+                    })
+                    .collect();
+                state.topic_manager.append_with_headers(
+                    &topic,
+                    target_partition,
+                    key_bytes,
+                    value_bytes,
+                    record_headers,
+                )
+            };
+
+            match result {
+                Ok(offset) => {
+                    let msg = ServerMessage::ProduceAck {
+                        topic: topic.clone(),
+                        partition: target_partition,
+                        offset,
+                    };
+                    let _ = message_tx.send(msg).await;
+                    debug!(
+                        topic = %topic,
+                        partition = target_partition,
+                        offset = offset,
+                        "Produced message via WebSocket"
+                    );
+                }
+                Err(e) => {
+                    let msg = ServerMessage::Error {
+                        code: "PRODUCE_FAILED".to_string(),
+                        message: format!("Failed to produce to '{}': {}", topic, e),
+                    };
+                    let _ = message_tx.send(msg).await;
+                }
+            }
         }
     }
 }

@@ -6,7 +6,7 @@
 use std::sync::{Arc, RwLock};
 
 use serde::{Deserialize, Serialize};
-use tracing::{debug, info, warn};
+use tracing::{debug, info};
 use uuid::Uuid;
 
 // ---------------------------------------------------------------------------

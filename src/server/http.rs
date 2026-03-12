@@ -210,7 +210,8 @@ fn build_http_router(state: &HttpServerState, bootstrap: &HttpBootstrap) -> Rout
     let ws_router = create_websocket_router(ws_state);
 
     // Create advanced streaming router
-    let streaming_state = StreamingState::new(state.topic_manager.clone());
+    let streaming_state = StreamingState::new(state.topic_manager.clone())
+        .with_group_coordinator(state.group_coordinator.clone());
     let streaming_router = create_streaming_router(streaming_state);
 
     // Merge the REST API, WebSocket, and Streaming routers

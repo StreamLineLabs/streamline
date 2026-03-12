@@ -21,7 +21,7 @@
 use axum::{
     extract::{Path, State},
     http::StatusCode,
-    routing::{delete, get, post, put},
+    routing::{get, post, put},
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
@@ -331,7 +331,7 @@ async fn get_connector_tasks(
 }
 
 async fn get_task_status(
-    Path((name, task_id)): Path<(String, i32)>,
+    Path((_name, task_id)): Path<(String, i32)>,
 ) -> Json<serde_json::Value> {
     Json(serde_json::json!({
         "id": task_id,
@@ -366,7 +366,7 @@ async fn get_connector_offsets(
 
 async fn alter_connector_offsets(
     Path(name): Path<String>,
-    Json(payload): Json<serde_json::Value>,
+    Json(_payload): Json<serde_json::Value>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
     tracing::info!(connector = %name, "Altering offsets");
     Ok(Json(serde_json::json!({

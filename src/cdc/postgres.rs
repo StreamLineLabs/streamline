@@ -1689,7 +1689,13 @@ impl CdcSource for PostgresCdcSource {
         // Connect to drop slot if needed
         if self.config.drop_slot_on_stop {
             if let Ok(client) = self.connect().await {
-                let _ = self.drop_slot(&client).await;
+                if let Err(e) = self.drop_slot(&client).await {
+                    tracing::warn!(
+                        slot = %self.config.slot_name,
+                        error = %e,
+                        "Failed to drop replication slot on stop — slot may need manual cleanup"
+                    );
+                }
             }
         }
 

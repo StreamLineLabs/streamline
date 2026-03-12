@@ -862,8 +862,13 @@ pub use gateway::{
 
 // Re-export Smart Partition types
 pub use smart_partition::{
-    PartitionMetrics, RebalanceConfig, RebalanceMode, RebalancePlan, SkewAnalyzer,
-    SkewAnalyzerConfig, SkewReport, SkewSeverity, SmartRebalancer,
+    BrokerState, ClusterState, DryRunResult, PartitionAssignment, PartitionMetrics,
+    RebalanceConfig, RebalanceMode, RebalancePlan, SkewAnalysis, SkewAnalyzer, SkewAnalyzerConfig,
+    SkewReport, SkewSeverity, SmartRebalancer, ValidationError,
+};
+pub use smart_partition::analyzer::{
+    analyze_key_distribution, analyze_throughput_skew, gini_coefficient,
+    predict_rebalance_benefit,
 };
 
 // Re-export Playground types

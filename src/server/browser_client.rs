@@ -92,6 +92,8 @@ pub struct BrowserClientState {
     pub allowed_origins: Arc<Vec<String>>,
     /// Token validator (optional)
     pub token_validator: Option<Arc<dyn TokenValidator>>,
+    /// Consumer group coordinator for offset persistence
+    pub group_coordinator: Option<Arc<crate::consumer::GroupCoordinator>>,
 }
 
 impl BrowserClientState {
@@ -102,6 +104,7 @@ impl BrowserClientState {
             total_messages_delivered: Arc::new(AtomicU64::new(0)),
             allowed_origins: Arc::new(Vec::new()),
             token_validator: None,
+            group_coordinator: None,
         }
     }
 

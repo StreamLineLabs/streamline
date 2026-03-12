@@ -172,15 +172,6 @@ pub enum StreamlineError {
     #[error("Quota exceeded: {0}")]
     QuotaExceeded(String),
 
-    #[error("Contract violation: {0}")]
-    ContractViolation(String),
-
-    #[error("Debugger error: {0}")]
-    Debugger(String),
-
-    #[error("Marketplace error: {0}")]
-    Marketplace(String),
-
     #[error("Gateway error: {0}")]
     Gateway(String),
 
@@ -193,8 +184,8 @@ pub enum StreamlineError {
     #[error("Lineage error: {0}")]
     Lineage(String),
 
-    #[error("FFI error: {0}")]
-    Ffi(String),
+    #[error("Marketplace error: {0}")]
+    Marketplace(String),
 }
 
 impl StreamlineError {
@@ -411,14 +402,11 @@ impl StreamlineError {
             StreamlineError::Namespace(_) => KafkaErrorCode::UnknownServerError,
             StreamlineError::ReplicationConflict(_) => KafkaErrorCode::UnknownServerError,
             StreamlineError::QuotaExceeded(_) => KafkaErrorCode::ThrottlingQuotaExceeded,
-            StreamlineError::ContractViolation(_) => KafkaErrorCode::UnknownServerError,
-            StreamlineError::Debugger(_) => KafkaErrorCode::UnknownServerError,
             StreamlineError::Marketplace(_) => KafkaErrorCode::UnknownServerError,
             StreamlineError::Gateway(_) => KafkaErrorCode::NetworkException,
             StreamlineError::Rebalance(_) => KafkaErrorCode::RebalanceInProgress,
             StreamlineError::Playground(_) => KafkaErrorCode::UnknownServerError,
             StreamlineError::Lineage(_) => KafkaErrorCode::UnknownServerError,
-            StreamlineError::Ffi(_) => KafkaErrorCode::UnknownServerError,
         }
     }
 

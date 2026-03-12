@@ -256,6 +256,8 @@ kafka-connect = []  # Kafka Connect REST API compatibility layer
 # Next-gen / experimental features (not included in `full` — enable individually)
 featurestore = []  # Real-time ML Feature Store
 faas = ["wasm-transforms"]  # Functions-as-a-Service (requires WASM runtime)
+# Experimental: WASM function execution runtime for FaaS (v0.3.0+)
+wasm-runtime = ["dep:wasmtime"]
 geo-replication = ["clustering"]  # Multi-region active-active replication
 control-plane = []  # Cloud SaaS control plane
 native-cdc = ["postgres-cdc", "mysql-cdc"]  # Built-in CDC from PostgreSQL/MySQL
@@ -324,4 +326,8 @@ harness = false
 
 [[bench]]
 name = "latency_benchmarks"
+harness = false
+
+[[bench]]
+name = "smart_partition_bench"
 harness = false

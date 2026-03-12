@@ -45,7 +45,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 use tokio::sync::RwLock;
-use tracing::{debug, info, warn};
+use tracing::info;
 
 /// Type of continuous query
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

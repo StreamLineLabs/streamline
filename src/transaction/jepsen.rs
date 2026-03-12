@@ -415,7 +415,7 @@ mod tests {
 /// Predefined test scenarios for comprehensive correctness verification.
 pub mod scenarios {
     use super::*;
-    use std::time::Duration;
+    
 
     /// Scenario 1: Append Linearizability.
     ///

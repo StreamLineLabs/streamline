@@ -13,14 +13,14 @@
 //!                                   {query_id}/{epoch}.checkpoint
 //! ```
 
-use crate::error::{Result, StreamlineError};
+use crate::error::Result;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use tracing::{debug, info, warn};
+use tracing::{info, warn};
 
 /// Checkpoint metadata for a continuous query.
 #[derive(Debug, Clone, Serialize, Deserialize)]

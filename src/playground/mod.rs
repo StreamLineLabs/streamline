@@ -18,10 +18,6 @@ pub mod tutorial;
 
 pub use scenario::{PlaygroundConfig, PlaygroundManager, PlaygroundStats};
 pub use tutorial::{Tutorial, TutorialEngine};
-pub use progress::{
-    Badge, CurriculumItem, CurriculumLevel, ProgressState, ProgressTracker,
-    default_curriculum,
-};
 
 use crate::error::Result;
 use crate::storage::TopicManager;

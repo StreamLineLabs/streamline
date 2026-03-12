@@ -1,9 +1,10 @@
 ---
 source: tests/snapshot_test.rs
+assertion_line: 84
 expression: json_output
 ---
 {
   "error": "Topic not found: orders",
-  "hint": "Topic 'orders' does not exist. Create it with: `streamline-cli topics create orders --partitions 3`",
+  "hint": "Topic 'orders' does not exist. List available topics with: `streamline-cli topics list` or create it with: `streamline-cli topics create orders --partitions 3`",
   "retriable": true
 }

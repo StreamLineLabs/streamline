@@ -29,7 +29,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 // Re-import original infrastructure for backward-compatible router
 use crate::observability::dashboard::{
-    default_alert_rules, ActiveAlert as DashboardActiveAlert, AlertEvaluator, AlertRule,
+    default_alert_rules, ActiveAlert as DashboardActiveAlert, AlertEvaluator,
     DashboardConfig, DashboardSnapshot, MetricsAggregator,
 };
 use crate::observability::{ObservabilityConfig, ObservabilityManager, SystemMetrics};

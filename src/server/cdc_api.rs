@@ -30,7 +30,6 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 
 use crate::storage::TopicManager;
-use uuid::Uuid;
 
 // ---------------------------------------------------------------------------
 // Types
@@ -523,6 +522,7 @@ mod tests {
     use axum::body::Body;
     use axum::http::{Request, StatusCode};
     use tower::ServiceExt;
+    use uuid::Uuid;
 
     fn app() -> Router {
         create_cdc_router()

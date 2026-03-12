@@ -4,7 +4,17 @@
 //! - XDP (eXpress Data Path) for kernel-bypass packet processing
 //! - AF_XDP sockets for zero-copy packet reception
 //! - DPDK (Data Plane Development Kit) for userspace networking
+//! - RDMA for low-latency inter-broker communication
 //! - Hardware acceleration for sub-millisecond latencies
+//!
+//! # Stability
+//!
+//! | Backend  | Status          | Notes                                          |
+//! |----------|-----------------|------------------------------------------------|
+//! | Standard | 🟢 Stable       | Default on all platforms (Tokio TCP)            |
+//! | XDP      | 🟢 Implemented  | Linux 4.18+, XDP-capable NIC, CAP_NET_ADMIN     |
+//! | DPDK     | 🟡 Experimental | Framework defined; PMD driver integration pending|
+//! | RDMA     | 🟡 Experimental | Framework defined; InfiniBand/RoCE HW required   |
 //!
 //! # Architecture
 //!
