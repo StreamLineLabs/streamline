@@ -91,3 +91,4 @@ retry = 3
 color = "auto"
 # Show progress bar
 progress.when = "auto"
+
