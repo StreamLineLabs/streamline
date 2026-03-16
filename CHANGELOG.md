@@ -288,3 +288,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.1.0]: https://github.com/streamlinelabs/streamline/releases/tag/v0.1.0
 - feat: add configurable log compaction trigger threshold
 - refactor: improve partition assignment algorithm during rebalance
+- docs: improve partition retention configuration reference
