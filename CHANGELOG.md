@@ -290,3 +290,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - refactor: improve partition assignment algorithm during rebalance
 - docs: improve partition retention configuration reference
 - fix: resolve consumer group rebalance starvation under load
+- chore: update clippy allow/deny configuration for 0.3 release
