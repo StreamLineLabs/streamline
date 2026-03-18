@@ -88,6 +88,9 @@
 
 pub mod clock;
 pub mod compaction;
+pub mod gset;
+pub mod merge_log;
+pub mod or_set;
 pub mod record;
 pub mod replication;
 pub mod state;
@@ -103,6 +106,10 @@ pub use types::{
     Crdt, CrdtOperation, CrdtType, CrdtValue, GCounter, LWWRegister, ORSet, PNCounter, RGASequence,
     RgaElement, RgaId, UniqueTag,
 };
+
+// Re-export standalone CRDT modules
+pub use gset::GSet;
+pub use or_set::{ObservedRemoveSet, Tag};
 
 // Re-export record types
 pub use record::{
