@@ -60,6 +60,8 @@
 //! - Enable maximum compression with `EdgeCompressionStrategy::Maximum`
 //! - Disable WAL for lowest latency (at cost of durability)
 
+pub mod bandwidth;
+pub mod bootstrap;
 pub mod checkpoint;
 pub mod config;
 pub mod conflict;
@@ -76,8 +78,13 @@ pub mod routing;
 pub mod service_mesh;
 pub mod store_forward;
 pub mod sync;
+pub mod sync_service;
+#[allow(dead_code)]
+pub mod crdt;
 
 // Re-export main types
+pub use bandwidth::{BandwidthConfig, BandwidthEstimator, calculate_batch_size};
+pub use bootstrap::{BootstrapConfig, BootstrapError, BootstrapResult, bootstrap};
 pub use checkpoint::{CheckpointState, EdgeSyncCheckpoint, PartitionCheckpoint, TopicCheckpoint};
 pub use config::{
     ConflictResolution, EdgeCompressionStrategy, EdgeConfig, EdgeNetworkConfig, EdgeResourceConfig,
@@ -111,6 +118,9 @@ pub use store_forward::{
 pub use power::{
     BatteryStatus, EdgeOperation, PowerConfig, PowerManager, PowerProfile,
     PowerSource, PowerThresholds, ProfileChange,
+};
+pub use sync_service::{
+    PendingWrite, ServerWrite, SyncConfig, SyncResponse, SyncService, SyncSession,
 };
 
 use crate::error::{Result, StreamlineError};
