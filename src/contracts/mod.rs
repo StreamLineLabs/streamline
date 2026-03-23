@@ -38,6 +38,7 @@ pub mod definition;
 pub mod mock_producer;
 pub mod runner;
 pub mod validation;
+pub mod produce_guard;
 
 pub use assertion::{Assertion, AssertionEngine, AssertionResult, AssertionType, FieldAssertion};
 pub use definition::{
