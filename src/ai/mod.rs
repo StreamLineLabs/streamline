@@ -49,6 +49,9 @@ pub mod semantic_search;
 pub mod similarity_stream;
 pub mod summarization;
 pub mod vector_streaming;
+#[cfg(feature = "semantic-topics")]
+#[allow(dead_code)]
+pub mod semantic_topics;
 
 pub use anomaly::{AnomalyDetector, AnomalyEvent, AnomalyResult, AnomalyType, DetectorConfig};
 pub use config::{
