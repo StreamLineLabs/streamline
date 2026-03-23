@@ -78,6 +78,15 @@ pub struct MessageResponse {
     pub message: String,
 }
 
+/// Response for per-event lineage query.
+#[derive(Debug, Serialize)]
+pub struct EventLineageResponse {
+    pub topic: String,
+    pub offset: i64,
+    pub upstream: Vec<LineageEdge>,
+    pub downstream: Vec<LineageEdge>,
+}
+
 // ---------------------------------------------------------------------------
 // Router
 // ---------------------------------------------------------------------------
@@ -93,6 +102,7 @@ pub fn create_lineage_api_router(state: LineageApiState) -> Router {
         )
         .route("/api/v1/lineage/search", get(search_entries))
         .route("/api/v1/lineage/stats", get(get_stats))
+        .route("/api/v1/lineage/:topic/:offset", get(get_event_lineage))
         .route("/api/v1/lineage/:subject/impact", get(get_impact))
         .route("/api/v1/lineage/:subject", get(get_lineage))
         .with_state(state)
@@ -110,6 +120,52 @@ async fn get_lineage(
     debug!(subject = %subject, "fetching lineage");
     let view: LineageView = state.catalog.get_lineage(&subject);
     (StatusCode::OK, Json(view))
+}
+
+/// `GET /api/v1/lineage/:topic/:offset` — per-event lineage.
+///
+/// Returns the lineage graph for a specific event identified by topic and
+/// offset. The topic-level lineage is used as a basis; future implementations
+/// will attach per-record provenance.
+async fn get_event_lineage(
+    State(state): State<LineageApiState>,
+    Path((topic, offset)): Path<(String, i64)>,
+) -> axum::response::Response {
+    debug!(topic = %topic, offset = offset, "fetching event lineage");
+
+    if offset < 0 {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(LineageApiError {
+                error: "offset must be non-negative".to_string(),
+            }),
+        )
+            .into_response();
+    }
+
+    let all_edges = state.catalog.get_all_edges();
+
+    let upstream: Vec<LineageEdge> = all_edges
+        .iter()
+        .filter(|e| e.target == topic)
+        .cloned()
+        .collect();
+    let downstream: Vec<LineageEdge> = all_edges
+        .iter()
+        .filter(|e| e.source == topic)
+        .cloned()
+        .collect();
+
+    (
+        StatusCode::OK,
+        Json(EventLineageResponse {
+            topic,
+            offset,
+            upstream,
+            downstream,
+        }),
+    )
+        .into_response()
 }
 
 /// `GET /api/v1/lineage/:subject/impact` — impact analysis.

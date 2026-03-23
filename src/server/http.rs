@@ -114,6 +114,15 @@ pub struct HttpServerState {
     /// Cluster manager for Raft cluster operations (requires clustering feature)
     #[cfg(feature = "clustering")]
     pub cluster_manager: Option<Arc<crate::cluster::ClusterManager>>,
+    /// Optional injected branch store (overrides the process-global default).
+    /// Allows multi-tenant deployments to scope branches per HTTP server.
+    #[cfg(feature = "branches")]
+    pub branch_store: Option<Arc<crate::branches::BranchStore>>,
+    /// Optional injected key provider for attestation. Production
+    /// deployments should pass a KMS-backed provider here; defaults to a
+    /// process-global LocalAgeProvider if `None`.
+    #[cfg(feature = "attestation")]
+    pub key_provider: Option<Arc<crate::security::local_age::LocalAgeProvider>>,
 }
 
 #[derive(Clone)]
@@ -345,6 +354,74 @@ fn build_http_router(state: &HttpServerState, bootstrap: &HttpBootstrap) -> Rout
     let browser_state = BrowserClientState::new(state.topic_manager.clone());
     let browser_router = create_browser_client_router(browser_state);
     app = app.merge(browser_router);
+
+    // Contract pre-flight validation API (always available, stateless).
+    {
+        let contracts_validate_router =
+            crate::server::contracts_validate_api::create_contracts_validate_router();
+        app = app.merge(contracts_validate_router);
+        tracing::info!("Contract validate API enabled at POST /api/v1/contracts/validate");
+    }
+
+    // Add branches HTTP API (requires branches feature)
+    #[cfg(feature = "branches")]
+    {
+        let branches_state = match &state.branch_store {
+            Some(store) => crate::server::branches_api::BranchesApiState {
+                store: store.clone(),
+            },
+            None => crate::server::branches_api::BranchesApiState::shared(),
+        };
+        let branches_router =
+            crate::server::branches_api::create_branches_api_router(branches_state);
+        app = app.merge(branches_router);
+        tracing::info!("Branches API enabled at /api/v1/branches/*");
+    }
+
+    // Add attestation sign/verify API (requires attestation feature)
+    #[cfg(feature = "attestation")]
+    {
+        let attest_state = match &state.key_provider {
+            Some(p) => crate::server::attestation_api::AttestationApiState {
+                provider: p.clone(),
+            },
+            None => crate::server::attestation_api::AttestationApiState::shared(),
+        };
+        let attest_router =
+            crate::server::attestation_api::create_attestation_api_router(attest_state);
+        app = app.merge(attest_router);
+        tracing::info!("Attestation API enabled at POST /api/v1/attest{{,/verify}}");
+    }
+
+    // Add semantic-topics search API (requires semantic-topics feature)
+    #[cfg(feature = "semantic-topics")]
+    {
+        let search_router = crate::server::search_api::create_search_api_router();
+        app = app.merge(search_router);
+        tracing::info!("Search API enabled at POST /api/v1/topics/:topic/search");
+    }
+
+    // Add agent-memory recall/remember API (requires agent-memory feature)
+    #[cfg(feature = "agent-memory")]
+    {
+        let memory_router = crate::server::memory_api::create_memory_api_router();
+        app = app.merge(memory_router);
+        tracing::info!(
+            "Memory API enabled at POST /api/v1/memory/{{remember,recall}} + agents/*"
+        );
+    }
+
+    // Add lineage API (requires schema-registry feature)
+    #[cfg(feature = "schema-registry")]
+    {
+        let lineage_state = crate::server::lineage_api::LineageApiState {
+            catalog: std::sync::Arc::new(crate::schema::catalog::SchemaCatalog::new()),
+        };
+        let lineage_router =
+            crate::server::lineage_api::create_lineage_api_router(lineage_state);
+        app = app.merge(lineage_router);
+        tracing::info!("Lineage API enabled at /api/v1/lineage/*");
+    }
 
     // Add analytics API for SQL queries (requires analytics feature)
     #[cfg(feature = "analytics")]
@@ -605,6 +682,16 @@ fn build_http_router(state: &HttpServerState, bootstrap: &HttpBootstrap) -> Rout
             let raft_cluster_router = create_raft_cluster_api_router(raft_cluster_state);
             app = app.merge(raft_cluster_router);
         }
+    }
+
+    // Add MCP (Model Context Protocol) server for AI agent integration
+    {
+        let mcp_server = Arc::new(crate::mcp::McpServer::new(state.topic_manager.clone()));
+        let mcp_router = crate::mcp::server::create_mcp_router(mcp_server);
+        app = app.merge(mcp_router);
+        tracing::info!(
+            "MCP server enabled at /mcp/v1 (JSON-RPC), /mcp/v1/sse, /mcp/v1/health"
+        );
     }
 
     app
@@ -1088,6 +1175,10 @@ mod tests {
             start_time: Instant::now(),
             shutdown_coordinator: Arc::new(ShutdownCoordinator::with_config(config.shutdown)),
             log_buffer: None,
+            #[cfg(feature = "branches")]
+            branch_store: None,
+            #[cfg(feature = "attestation")]
+            key_provider: None,
         };
 
         (state, temp_dir)

@@ -169,6 +169,9 @@ mod transaction_handlers;
 mod admin_handlers;
 mod kip848_handlers;
 mod security_handlers;
+#[cfg(feature = "semantic-topics")]
+#[allow(dead_code)]
+mod search_api;
 
 use crate::consumer::kip848::ReconciliationEngine;
 use crate::consumer::GroupCoordinator;

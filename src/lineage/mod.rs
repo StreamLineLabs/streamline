@@ -12,6 +12,7 @@
 //! ```
 
 pub mod graph;
+pub mod openlineage;
 pub mod tracker;
 
 pub use graph::{LineageEdge, LineageGraph, LineageNode, LineageNodeType};

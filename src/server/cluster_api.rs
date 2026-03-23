@@ -322,6 +322,8 @@ mod tests {
             ephemeral_auto_topics: Vec::new(),
             #[cfg(feature = "edge")]
             edge: crate::config::EdgeDeploymentConfig::default(),
+            #[cfg(feature = "semantic-topics")]
+            embed_queue_capacity: 10_000,
         };
 
         let topic_manager = Arc::new(TopicManager::new(temp_dir.path()).unwrap());
