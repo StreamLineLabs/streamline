@@ -12,6 +12,10 @@ use streamline::cli_utils::profile_store::{get_default_profile, load_profile};
 use streamline::{GroupCoordinator, Result, TopicManager};
 
 mod cli_auth;
+#[cfg(feature = "attestation")]
+mod cli_attest_cmd;
+#[cfg(feature = "branches")]
+mod cli_branches_cmd;
 mod cli_cluster;
 mod cli_commands;
 mod cli_config;
@@ -21,8 +25,19 @@ mod cli_errors;
 mod cli_format;
 mod cli_groups;
 mod cli_history;
+#[cfg(any(
+    feature = "branches",
+    feature = "attestation",
+    feature = "semantic-topics",
+    feature = "agent-memory"
+))]
+mod cli_http;
+#[cfg(feature = "agent-memory")]
+mod cli_memory_cmd;
 mod cli_ops;
 mod cli_produce_consume;
+#[cfg(feature = "semantic-topics")]
+mod cli_search_cmd;
 mod cli_shell;
 mod cli_telemetry;
 mod cli_topics;
@@ -697,6 +712,31 @@ EXAMPLES:
         /// Plugin name (for install/remove/info)
         name: Option<String>,
     },
+
+    /// Manage branched-stream views (Experimental, requires `branches` feature)
+    #[cfg(feature = "branches")]
+    Branch {
+        #[command(subcommand)]
+        cmd: cli_branches_cmd::BranchCli,
+    },
+
+    /// Sign / verify event attestations (Experimental, requires `attestation` feature)
+    #[cfg(feature = "attestation")]
+    Attest {
+        #[command(subcommand)]
+        cmd: cli_attest_cmd::AttestCli,
+    },
+
+    /// Semantic search over a topic (Experimental, requires `semantic-topics` feature)
+    #[cfg(feature = "semantic-topics")]
+    Search(cli_search_cmd::SearchCli),
+
+    /// Agent Memory remember/recall (Experimental, requires `agent-memory` feature)
+    #[cfg(feature = "agent-memory")]
+    Memory {
+        #[command(subcommand)]
+        cmd: cli_memory_cmd::MemoryCli,
+    },
 }
 
 /// Actions for the plugin command
@@ -1220,6 +1260,25 @@ fn run(cli: Cli, ctx: &CliContext) -> Result<()> {
                     }
                 }
             }
+        }
+        #[cfg(feature = "branches")]
+        Commands::Branch { cmd } => {
+            cli_branches_cmd::handle(cmd)?;
+        }
+        #[cfg(feature = "attestation")]
+        Commands::Attest { cmd } => {
+            let code = cli_attest_cmd::handle(cmd)?;
+            if code != ExitCode::SUCCESS {
+                std::process::exit(3);
+            }
+        }
+        #[cfg(feature = "semantic-topics")]
+        Commands::Search(cmd) => {
+            cli_search_cmd::handle(cmd)?;
+        }
+        #[cfg(feature = "agent-memory")]
+        Commands::Memory { cmd } => {
+            cli_memory_cmd::handle(cmd)?;
         }
     }
     Ok(())

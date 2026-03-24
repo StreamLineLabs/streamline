@@ -284,6 +284,20 @@ pub(crate) mod edge;
 #[allow(dead_code)]
 pub mod faas;
 
+// ── Moonshot modules (Experimental) ──
+// Each gated by an opt-in feature; default builds skip them entirely.
+#[cfg(feature = "kms")]
+#[allow(dead_code)]
+pub mod security;
+
+#[cfg(feature = "agent-memory")]
+#[allow(dead_code)]
+pub mod memory;
+
+#[cfg(feature = "branches")]
+#[allow(dead_code)]
+pub mod branches;
+
 // CRDT (Conflict-free Replicated Data Types) for edge computing
 #[doc(hidden)]
 pub mod crdt;

@@ -172,6 +172,17 @@ pub struct ServerConfig {
     /// Edge deployment configuration (requires `edge` feature)
     #[cfg(feature = "edge")]
     pub edge: EdgeDeploymentConfig,
+
+    /// Semantic topics configuration: embed worker queue capacity.
+    /// Only relevant when compiled with `semantic-topics` feature.
+    #[cfg(feature = "semantic-topics")]
+    #[serde(default = "default_embed_queue_capacity")]
+    pub embed_queue_capacity: usize,
+}
+
+#[cfg(feature = "semantic-topics")]
+fn default_embed_queue_capacity() -> usize {
+    10_000
 }
 
 /// Edge deployment mode configuration embedded in ServerConfig.
@@ -719,6 +730,8 @@ impl ServerConfig {
                 cpu_throttle: args.edge_cpu_throttle,
                 mmap_preferred: args.edge_mmap_preferred,
             },
+            #[cfg(feature = "semantic-topics")]
+            embed_queue_capacity: default_embed_queue_capacity(),
         })
     }
 }
@@ -754,6 +767,8 @@ impl Default for ServerConfig {
             ephemeral_auto_topics: Vec::new(),
             #[cfg(feature = "edge")]
             edge: EdgeDeploymentConfig::default(),
+            #[cfg(feature = "semantic-topics")]
+            embed_queue_capacity: default_embed_queue_capacity(),
         }
     }
 }
