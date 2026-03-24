@@ -592,6 +592,60 @@ pub struct TopicConfig {
     /// Specifies batching, caching, and connection settings for S3/Azure/GCS.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub remote_storage: Option<RemoteStorageConfig>,
+
+    /// Semantic-topic config (M2). When `embed=true`, an embedding worker
+    /// vectorizes each appended record's `field` (default: value) and writes
+    /// to a per-partition vector index, enabling `search()` queries.
+    ///
+    /// Stability: Experimental. Off by default; existing topics deserialize
+    /// unchanged because every field below is `#[serde(default)]`.
+    #[serde(default, skip_serializing_if = "SemanticConfig::is_disabled")]
+    pub semantic: SemanticConfig,
+}
+
+/// Configuration for semantic (vector-indexed) topics.
+///
+/// Stability tier: **Experimental**. See `docs/adr/0014-default-embedding-model.md`.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct SemanticConfig {
+    /// When true, an async embedder runs alongside append; index is built
+    /// per-partition. Default: false (no behavior change).
+    #[serde(default)]
+    pub embed: bool,
+
+    /// Embedding model identifier (e.g. `bge-small-en-v1.5`). When `None`,
+    /// the broker default is used.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
+
+    /// Record field to embed. `None` = embed the raw value bytes (assumed UTF-8).
+    /// For JSON values, e.g. `"text"` to embed the `"text"` field only.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub field: Option<String>,
+
+    /// HNSW M parameter (graph connectivity). Default 16.
+    #[serde(default = "default_hnsw_m")]
+    pub hnsw_m: u32,
+
+    /// HNSW efConstruction parameter. Default 200.
+    #[serde(default = "default_hnsw_ef")]
+    pub hnsw_ef_construction: u32,
+}
+
+impl SemanticConfig {
+    /// Returns true when the topic has no semantic indexing enabled.
+    /// Used by `skip_serializing_if` so existing topics omit the field entirely.
+    pub fn is_disabled(&self) -> bool {
+        !self.embed
+    }
+}
+
+fn default_hnsw_m() -> u32 {
+    16
+}
+
+fn default_hnsw_ef() -> u32 {
+    200
 }
 
 /// Well-known header key for per-message TTL (in milliseconds)
@@ -650,6 +704,7 @@ impl Default for TopicConfig {
             message_ttl_ms: default_message_ttl_ms(),
             storage_mode: StorageMode::default(),
             remote_storage: None,
+            semantic: SemanticConfig::default(),
         }
     }
 }
@@ -1601,6 +1656,16 @@ pub struct TopicManager {
     /// Map of topic name to topic (concurrent hashmap for better scalability)
     topics: DashMap<String, Topic>,
     storage: TopicStorage,
+    /// Optional handle to the semantic-topics embed worker (M2).
+    /// When set, every append to a topic with `semantic.embed = true` dispatches
+    /// an `EmbedJob` to the background worker for vectorization.
+    #[cfg(feature = "semantic-topics")]
+    embed_handle: Option<crate::ai::semantic_topics::EmbedderHandle>,
+    /// Per-topic contract registry for M4 produce-side enforcement.
+    /// When a topic has an active contract, every append validates the
+    /// record and rejects violations with `ContractRejection`.
+    #[cfg(feature = "attestation")]
+    contracts: std::sync::Arc<std::sync::RwLock<std::collections::HashMap<String, crate::contracts::produce_guard::Contract>>>,
 }
 
 impl TopicManager {
@@ -1623,6 +1688,10 @@ impl TopicManager {
         Ok(Self {
             topics: DashMap::new(),
             storage: TopicStorage::in_memory(),
+            #[cfg(feature = "semantic-topics")]
+            embed_handle: None,
+            #[cfg(feature = "attestation")]
+            contracts: std::sync::Arc::new(std::sync::RwLock::new(std::collections::HashMap::new())),
         })
     }
 
@@ -1639,6 +1708,10 @@ impl TopicManager {
         let manager = Self {
             topics: DashMap::new(),
             storage,
+            #[cfg(feature = "semantic-topics")]
+            embed_handle: None,
+            #[cfg(feature = "attestation")]
+            contracts: std::sync::Arc::new(std::sync::RwLock::new(std::collections::HashMap::new())),
         };
 
         // Load existing topics
@@ -1669,6 +1742,77 @@ impl TopicManager {
     /// Get segment configuration
     pub fn segment_config(&self) -> Option<&SegmentConfig> {
         self.storage.segment_config.as_ref()
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // Moonshot hooks (M2/M4)
+    //
+    // These methods wire optional, feature-gated subsystems (semantic
+    // embeddings and produce-time contract validation) into the core
+    // TopicManager.  They live here because they need access to private
+    // fields, but they are logically separate from the storage engine.
+    // ═══════════════════════════════════════════════════════════════════
+
+    /// Attach a semantic-topics embed worker handle (M2).
+    ///
+    /// After this call, every `append` / `append_with_headers` to a topic
+    /// whose `SemanticConfig.embed == true` will dispatch an `EmbedJob` to
+    /// the background worker. The dispatch is non-blocking — if the worker
+    /// queue is full the record is still appended; only the embedding is
+    /// skipped (a metric should be bumped by the caller).
+    #[cfg(feature = "semantic-topics")]
+    pub fn set_embed_handle(&mut self, handle: crate::ai::semantic_topics::EmbedderHandle) {
+        self.embed_handle = Some(handle);
+    }
+
+    /// Dispatch a record to the embed worker if the topic is semantic-enabled.
+    /// Non-blocking: returns immediately even if the queue is full.
+    #[cfg(feature = "semantic-topics")]
+    fn maybe_embed(&self, topic: &str, partition: i32, offset: i64, value: &[u8]) {
+        if let Some(ref handle) = self.embed_handle {
+            if let Some(topic_ref) = self.topics.get(topic) {
+                if topic_ref.metadata.config.semantic.embed {
+                    let _ = handle.try_submit(crate::ai::semantic_topics::EmbedJob {
+                        topic: topic.to_string(),
+                        partition,
+                        offset,
+                        payload: value.to_vec(),
+                    });
+                }
+            }
+        }
+    }
+
+    /// Register a contract for a topic (M4). Records appended to this topic
+    /// will be validated against the contract; invalid records are rejected.
+    #[cfg(feature = "attestation")]
+    pub fn set_contract(&self, topic: &str, contract: crate::contracts::produce_guard::Contract) {
+        if let Ok(mut map) = self.contracts.write() {
+            map.insert(topic.to_string(), contract);
+        }
+    }
+
+    /// Remove the contract for a topic (M4 bypass).
+    #[cfg(feature = "attestation")]
+    pub fn remove_contract(&self, topic: &str) {
+        if let Ok(mut map) = self.contracts.write() {
+            map.remove(topic);
+        }
+    }
+
+    /// Validate a record against the topic's active contract, if any.
+    /// Returns `Ok(())` if no contract is set or the record passes.
+    #[cfg(feature = "attestation")]
+    fn validate_contract(&self, topic: &str, partition: i32, value: &[u8]) -> Result<()> {
+        if let Ok(map) = self.contracts.read() {
+            if let Some(contract) = map.get(topic) {
+                crate::contracts::produce_guard::validate_record(topic, partition, value, contract)
+                    .map_err(|rejection| {
+                        StreamlineError::InvalidData(rejection.to_string())
+                    })?;
+            }
+        }
+        Ok(())
     }
 
     /// Recover from WAL after crash
@@ -1878,6 +2022,18 @@ impl TopicManager {
         key: Option<Bytes>,
         value: Bytes,
     ) -> Result<i64> {
+        // M4: Validate against active contract before writing anything.
+        #[cfg(feature = "attestation")]
+        self.validate_contract(topic, partition, &value)?;
+
+        // Capture value bytes for semantic embedding before the value is moved.
+        #[cfg(feature = "semantic-topics")]
+        let embed_payload = if self.embed_handle.is_some() {
+            Some(value.to_vec())
+        } else {
+            None
+        };
+
         // Write to WAL first (if enabled)
         // ShardedWalWriter handles per-shard locking internally
         let wal_sequence = if let Some(wal) = &self.storage.wal_writer {
@@ -1907,6 +2063,12 @@ impl TopicManager {
             checkpoint.update_partition(topic, partition, offset, wal_seq, false)?;
         }
 
+        // Dispatch to semantic embed worker (non-blocking, fire-and-forget)
+        #[cfg(feature = "semantic-topics")]
+        if let Some(payload) = embed_payload {
+            self.maybe_embed(topic, partition, offset, &payload);
+        }
+
         Ok(offset)
     }
 
@@ -1919,6 +2081,18 @@ impl TopicManager {
         value: Bytes,
         headers: Vec<crate::storage::record::Header>,
     ) -> Result<i64> {
+        // M4: Validate against active contract before writing anything.
+        #[cfg(feature = "attestation")]
+        self.validate_contract(topic, partition, &value)?;
+
+        // Capture value bytes for semantic embedding before the value is moved.
+        #[cfg(feature = "semantic-topics")]
+        let embed_payload = if self.embed_handle.is_some() {
+            Some(value.to_vec())
+        } else {
+            None
+        };
+
         // Write to WAL first (if enabled)
         // ShardedWalWriter handles per-shard locking internally
         let wal_sequence = if let Some(wal) = &self.storage.wal_writer {
@@ -1943,6 +2117,12 @@ impl TopicManager {
         if let (Some(wal_seq), Some(cm)) = (wal_sequence, &self.storage.checkpoint_manager) {
             let mut checkpoint = cm.lock();
             checkpoint.update_partition(topic, partition, offset, wal_seq, false)?;
+        }
+
+        // Dispatch to semantic embed worker (non-blocking, fire-and-forget)
+        #[cfg(feature = "semantic-topics")]
+        if let Some(payload) = embed_payload {
+            self.maybe_embed(topic, partition, offset, &payload);
         }
 
         Ok(offset)
@@ -2476,6 +2656,10 @@ impl TopicManager {
         let manager = Self {
             topics: DashMap::new(),
             storage: TopicStorage::new_async(base_path, wal_config).await?,
+            #[cfg(feature = "semantic-topics")]
+            embed_handle: None,
+            #[cfg(feature = "attestation")]
+            contracts: std::sync::Arc::new(std::sync::RwLock::new(std::collections::HashMap::new())),
         };
 
         // Load existing topics asynchronously
