@@ -147,7 +147,7 @@ pub extern "C" fn transform(input_ptr: *const u8, input_len: usize) -> i64 {{
 
     match serde_json::from_slice::<Value>(input) {{
         Ok(mut value) => {{
-            // TODO: Implement your transform logic here
+            // USER-TODO: Implement your transform logic here
             // Example: add a timestamp field
             if let Some(obj) = value.as_object_mut() {{
                 obj.insert(
@@ -195,7 +195,7 @@ pub struct Config {{
 /// Initialize the sink with configuration.
 #[no_mangle]
 pub extern "C" fn init(_config_ptr: *const u8, _config_len: usize) -> i32 {{
-    // TODO: Parse config, establish connections
+    // USER-TODO: Parse config, establish connections
     0 // Return 0 for success
 }}
 
@@ -208,7 +208,7 @@ pub extern "C" fn write(input_ptr: *const u8, input_len: usize) -> i32 {{
     match serde_json::from_slice::<Vec<Value>>(input) {{
         Ok(messages) => {{
             for msg in &messages {{
-                // TODO: Write each message to your external system
+                // USER-TODO: Write each message to your external system
                 let _ = msg;
             }}
             messages.len() as i32
@@ -261,7 +261,7 @@ pub extern "C" fn init(_config_ptr: *const u8, _config_len: usize) -> i32 {{
 /// Poll for new records. Returns JSON array of records.
 #[no_mangle]
 pub extern "C" fn poll() -> i64 {{
-    // TODO: Poll your external system for new data
+    // USER-TODO: Poll your external system for new data
     let records: Vec<Value> = vec![
         serde_json::json!({{"source": "{name}", "data": "sample"}}),
     ];

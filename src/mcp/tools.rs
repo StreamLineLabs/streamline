@@ -13,7 +13,7 @@ use crate::mcp::{ToolCallResult, ToolDefinition, ToolResultContent};
 
 /// Return all available MCP tool definitions
 pub fn get_tool_definitions() -> Vec<ToolDefinition> {
-    vec![
+    let mut defs = vec![
         ToolDefinition {
             name: "streamline_produce".to_string(),
             description: "Produce a message to a Streamline topic. Use this to write data into a stream.".to_string(),
@@ -179,7 +179,60 @@ pub fn get_tool_definitions() -> Vec<ToolDefinition> {
                 "required": []
             }),
         },
-    ]
+    ];
+
+    #[cfg(feature = "agent-memory")]
+    {
+        defs.push(ToolDefinition {
+            name: "streamline_remember".to_string(),
+            description: "Persist a memory for an agent. kind = observation | fact | procedure.".to_string(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "agent_id": {"type": "string", "description": "Agent owning the memory"},
+                    "content":  {"type": "string", "description": "Memory text"},
+                    "kind":     {"type": "string", "description": "observation | fact | procedure", "enum": ["observation", "fact", "procedure"]},
+                    "skill":    {"type": "string", "description": "Required when kind=procedure"},
+                    "importance": {"type": "number", "description": "0.0..1.0; >=0.3 mirrors facts to semantic", "default": 0.5},
+                    "tags":     {"type": "array", "items": {"type": "string"}}
+                },
+                "required": ["agent_id", "content", "kind"]
+            }),
+        });
+        defs.push(ToolDefinition {
+            name: "streamline_recall".to_string(),
+            description: "Search an agent's long-term memory for the top-k most relevant entries.".to_string(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "agent_id": {"type": "string"},
+                    "query":    {"type": "string"},
+                    "k":        {"type": "integer", "default": 10, "minimum": 1, "maximum": 100},
+                    "min_hits": {"type": "integer", "default": 1, "description": "Fall back to episodic if semantic returns fewer than this"}
+                },
+                "required": ["agent_id", "query"]
+            }),
+        });
+    }
+
+    #[cfg(feature = "semantic-topics")]
+    {
+        defs.push(ToolDefinition {
+            name: "streamline_semantic_search".to_string(),
+            description: "Search a semantic-enabled topic by meaning. Returns the top-k records most similar to the query text.".to_string(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "topic": {"type": "string", "description": "Topic name (must have semantic.embed=on)"},
+                    "query": {"type": "string", "description": "Natural-language search query"},
+                    "k":     {"type": "integer", "default": 10, "minimum": 1, "maximum": 1000, "description": "Number of results to return"}
+                },
+                "required": ["topic", "query"]
+            }),
+        });
+    }
+
+    defs
 }
 
 /// Execute an MCP tool by name with the given arguments.
@@ -202,8 +255,79 @@ pub async fn execute_tool(
         "streamline_list_consumer_groups" => execute_list_consumer_groups(backend).await,
         "streamline_query" => execute_query(arguments, backend).await,
         "streamline_get_metrics" => execute_get_metrics(backend).await,
+        #[cfg(feature = "agent-memory")]
+        "streamline_remember" => execute_remember(arguments).await,
+        #[cfg(feature = "agent-memory")]
+        "streamline_recall" => execute_recall(arguments).await,
+        #[cfg(feature = "semantic-topics")]
+        "streamline_semantic_search" => execute_semantic_search(arguments).await,
         _ => Err(McpError::method_not_found(format!("Unknown tool: {}", name))),
     }
+}
+
+#[cfg(feature = "agent-memory")]
+async fn execute_remember(args: serde_json::Value) -> McpResult<ToolCallResult> {
+    use crate::memory::{tier_router, MemoryWrite, WriteKind};
+
+    let agent_id = args.get("agent_id").and_then(|v| v.as_str())
+        .ok_or_else(|| McpError::invalid_params("Missing required parameter 'agent_id'"))?
+        .to_string();
+    let content = args.get("content").and_then(|v| v.as_str())
+        .ok_or_else(|| McpError::invalid_params("Missing required parameter 'content'"))?
+        .to_string();
+    let kind_str = args.get("kind").and_then(|v| v.as_str())
+        .ok_or_else(|| McpError::invalid_params("Missing required parameter 'kind'"))?;
+    let importance = args.get("importance").and_then(|v| v.as_f64()).unwrap_or(0.5) as f32;
+    let tags: Vec<String> = args.get("tags")
+        .and_then(|v| v.as_array())
+        .map(|a| a.iter().filter_map(|x| x.as_str().map(String::from)).collect())
+        .unwrap_or_default();
+    let kind = match kind_str {
+        "observation" => WriteKind::Observation,
+        "fact" => WriteKind::Fact,
+        "procedure" => {
+            let skill = args.get("skill").and_then(|v| v.as_str())
+                .ok_or_else(|| McpError::invalid_params("kind=procedure requires 'skill'"))?
+                .to_string();
+            WriteKind::Procedure { skill }
+        }
+        other => return Err(McpError::invalid_params(format!("Unknown kind: {}", other))),
+    };
+    let w = MemoryWrite { agent_id, kind, content, importance, tags };
+    match tier_router::remember(&w) {
+        Ok(written) => {
+            let value = serde_json::json!({
+                "written": written.iter().map(|(t, o)| serde_json::json!({"topic": t, "offset": o})).collect::<Vec<_>>(),
+                "count": written.len(),
+            });
+            Ok(success_result(json_text(&value)))
+        }
+        Err(e) => Ok(error_result(format!("remember failed: {}", e))),
+    }
+}
+
+#[cfg(feature = "agent-memory")]
+async fn execute_recall(args: serde_json::Value) -> McpResult<ToolCallResult> {
+    use crate::memory::tier_router;
+
+    let agent_id = args.get("agent_id").and_then(|v| v.as_str())
+        .ok_or_else(|| McpError::invalid_params("Missing required parameter 'agent_id'"))?;
+    let query = args.get("query").and_then(|v| v.as_str())
+        .ok_or_else(|| McpError::invalid_params("Missing required parameter 'query'"))?;
+    let k = args.get("k").and_then(|v| v.as_u64()).unwrap_or(10) as usize;
+    let min_hits = args.get("min_hits").and_then(|v| v.as_u64()).unwrap_or(1) as usize;
+    let hits = tier_router::recall(agent_id, query, k, min_hits);
+    let value = serde_json::json!({
+        "hits": hits.iter().map(|h| serde_json::json!({
+            "tier": format!("{:?}", h.tier),
+            "topic": h.topic,
+            "offset": h.offset,
+            "content": h.content,
+            "score": h.score,
+        })).collect::<Vec<_>>(),
+        "count": hits.len(),
+    });
+    Ok(success_result(json_text(&value)))
 }
 
 fn success_result(text: impl Into<String>) -> ToolCallResult {
@@ -335,6 +459,44 @@ async fn execute_get_metrics(backend: &dyn McpBackend) -> McpResult<ToolCallResu
     }
 }
 
+#[cfg(feature = "semantic-topics")]
+async fn execute_semantic_search(args: serde_json::Value) -> McpResult<ToolCallResult> {
+    let topic = args["topic"]
+        .as_str()
+        .ok_or_else(|| McpError::invalid_params("topic is required"))?;
+    let query = args["query"]
+        .as_str()
+        .ok_or_else(|| McpError::invalid_params("query is required"))?;
+    let k = args["k"].as_u64().unwrap_or(10) as usize;
+
+    if query.trim().is_empty() {
+        return Ok(error_result("query must not be empty"));
+    }
+    if k == 0 || k > 1000 {
+        return Ok(error_result("k must be in [1, 1000]"));
+    }
+
+    let resp = crate::server::search_api::handle_search(
+        topic,
+        crate::server::search_api::SearchRequest {
+            query: query.to_string(),
+            k,
+            filter: None,
+        },
+    );
+    let result = serde_json::json!({
+        "topic": topic,
+        "hits": resp.hits.iter().map(|h| serde_json::json!({
+            "partition": h.partition,
+            "offset": h.offset,
+            "score": h.score,
+        })).collect::<Vec<_>>(),
+        "took_ms": resp.took_ms,
+        "total_hits": resp.hits.len(),
+    });
+    Ok(success_result(json_text(&result)))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -343,7 +505,10 @@ mod tests {
     #[test]
     fn test_get_tool_definitions() {
         let tools = get_tool_definitions();
-        assert_eq!(tools.len(), 10);
+        let mut expected = 10; // base tools
+        if cfg!(feature = "agent-memory") { expected += 2; } // remember + recall
+        if cfg!(feature = "semantic-topics") { expected += 1; } // semantic_search
+        assert_eq!(tools.len(), expected);
 
         let names: Vec<&str> = tools.iter().map(|t| t.name.as_str()).collect();
         assert!(names.contains(&"streamline_produce"));
@@ -356,6 +521,15 @@ mod tests {
         assert!(names.contains(&"streamline_list_consumer_groups"));
         assert!(names.contains(&"streamline_query"));
         assert!(names.contains(&"streamline_get_metrics"));
+        #[cfg(feature = "agent-memory")]
+        {
+            assert!(names.contains(&"streamline_remember"));
+            assert!(names.contains(&"streamline_recall"));
+        }
+        #[cfg(feature = "semantic-topics")]
+        {
+            assert!(names.contains(&"streamline_semantic_search"));
+        }
     }
 
     #[test]
@@ -539,5 +713,65 @@ mod tests {
         assert!(!ok.is_error);
         let err = error_result("bad");
         assert!(err.is_error);
+    }
+
+    #[cfg(feature = "agent-memory")]
+    #[tokio::test]
+    async fn test_remember_then_recall_via_mcp() {
+        crate::memory::tier_router::reset_for_tests();
+        let backend = make_mock_with_data();
+        let r = execute_tool(
+            "streamline_remember",
+            serde_json::json!({
+                "agent_id": "mcp-bob",
+                "content": "kafka rebalance protocol uses cooperative sticky",
+                "kind": "fact",
+                "importance": 0.9
+            }),
+            &backend,
+        )
+        .await
+        .unwrap();
+        assert!(!r.is_error, "remember should succeed: {:?}", r);
+
+        let recall = execute_tool(
+            "streamline_recall",
+            serde_json::json!({"agent_id": "mcp-bob", "query": "rebalance protocol", "k": 3}),
+            &backend,
+        )
+        .await
+        .unwrap();
+        assert!(!recall.is_error);
+        let text = match &recall.content[0] {
+            ToolResultContent::Text { text } => text.clone(),
+            _ => panic!("expected Text content"),
+        };
+        assert!(text.contains("rebalance"), "expected hit content; got {}", text);
+    }
+
+    #[cfg(feature = "agent-memory")]
+    #[tokio::test]
+    async fn test_remember_missing_agent_id_is_invalid_params() {
+        let backend = make_mock_with_data();
+        let r = execute_tool(
+            "streamline_remember",
+            serde_json::json!({"content": "x", "kind": "fact"}),
+            &backend,
+        )
+        .await;
+        assert!(r.is_err());
+    }
+
+    #[cfg(feature = "agent-memory")]
+    #[tokio::test]
+    async fn test_remember_procedure_requires_skill() {
+        let backend = make_mock_with_data();
+        let r = execute_tool(
+            "streamline_remember",
+            serde_json::json!({"agent_id": "a", "content": "x", "kind": "procedure"}),
+            &backend,
+        )
+        .await;
+        assert!(r.is_err());
     }
 }

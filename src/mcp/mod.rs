@@ -86,6 +86,27 @@ pub struct ServerCapabilities {
     pub resources: Option<ResourcesCapability>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub prompts: Option<PromptsCapability>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub memory: Option<MemoryCapability>,
+}
+
+/// Memory capability advertised when agent-memory features are enabled.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MemoryCapability {
+    pub version: String,
+    pub tiers: Vec<String>,
+}
+
+/// Policy governing how a client wants memory to behave.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MemoryPolicy {
+    /// Client must explicitly opt in to each memory operation.
+    OptIn,
+    /// Memory operations happen automatically.
+    Auto,
+    /// Memory is disabled for this session.
+    Disabled,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -230,6 +251,8 @@ pub struct McpSession {
     pub client_capabilities: Option<ClientCapabilities>,
     pub subscribed_resources: Vec<String>,
     pub initialized: bool,
+    /// Memory policy requested by the client during initialization.
+    pub memory_policy: Option<MemoryPolicy>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -269,6 +292,14 @@ impl McpServer {
                 }),
                 prompts: Some(PromptsCapability {
                     list_changed: false,
+                }),
+                memory: Some(MemoryCapability {
+                    version: "v1".to_string(),
+                    tiers: vec![
+                        "episodic".to_string(),
+                        "semantic".to_string(),
+                        "procedural".to_string(),
+                    ],
                 }),
             },
             sessions: Arc::new(RwLock::new(HashMap::new())),
@@ -331,6 +362,11 @@ impl McpServer {
         let client_capabilities: Option<ClientCapabilities> =
             serde_json::from_value(params.get("capabilities").cloned().unwrap_or_default()).ok();
 
+        // Parse optional memory_policy from client init params.
+        let memory_policy: Option<MemoryPolicy> = params
+            .get("memory_policy")
+            .and_then(|v| serde_json::from_value(v.clone()).ok());
+
         let session_id = uuid::Uuid::new_v4().to_string();
         let session = McpSession {
             id: session_id.clone(),
@@ -338,6 +374,7 @@ impl McpServer {
             client_capabilities,
             subscribed_resources: Vec::new(),
             initialized: true,
+            memory_policy,
         };
         self.sessions.write().await.insert(session_id, session);
 
