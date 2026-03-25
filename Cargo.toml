@@ -92,6 +92,10 @@ tower = { version = "0.4", features = ["util"] }
 # Async stream utilities for WebSocket
 futures-util = "0.3"
 
+# Moonshot crypto (optional - kms / attestation features)
+ed25519-dalek = { version = "2.1", optional = true, features = ["rand_core"] }
+age = { version = "0.10", optional = true }
+
 # Authentication (optional - auth feature)
 argon2 = { version = "0.5", features = ["std"], optional = true }
 base64 = "0.22"
@@ -262,6 +266,17 @@ geo-replication = ["clustering"]  # Multi-region active-active replication
 control-plane = []  # Cloud SaaS control plane
 native-cdc = ["postgres-cdc", "mysql-cdc"]  # Built-in CDC from PostgreSQL/MySQL
 
+# ── Moonshot features (Experimental — see MOONSHOT_PLAN.md) ──────────────────
+# Each is opt-in; none are pulled into `lite` or `full` until they reach Beta.
+# Use `moonshot` to enable all moonshot features at once for evaluation.
+kms = ["dep:ed25519-dalek", "dep:age"]                # M4/M1 — pluggable key provider with real Ed25519 + age crypto
+attestation = ["kms", "dep:sha2", "dep:reqwest"]      # M4 — DSSE-style record signing (uses kms + sha2 for payload digests)
+semantic-topics = ["ai", "dep:reqwest"]                # M2 — vector indexing on topics + /search HTTP & wire API
+agent-memory = ["semantic-topics"]                     # M1 — episodic/semantic/procedural memory tiers (recall via M2)
+branches = ["dep:reqwest"]                             # M5 — copy-on-write topic branches + replay
+wasm-browser = []                                      # M3 — browser-targeted WASM build profile + edge join
+moonshot = ["semantic-topics", "agent-memory", "attestation", "branches"]  # All moonshot features (experimental)
+
 # UI feature
 web-ui = ["dep:reqwest"]
 
@@ -330,4 +345,8 @@ harness = false
 
 [[bench]]
 name = "smart_partition_bench"
+harness = false
+
+[[bench]]
+name = "m3_edge_perf"
 harness = false
