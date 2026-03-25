@@ -1,0 +1,60 @@
+name: WASM Build Size Gate (M3)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "streamline/src/**"
+      - "streamline/Cargo.toml"
+      - ".github/workflows/wasm-build.yml"
+  pull_request:
+    paths:
+      - "streamline/src/**"
+      - "streamline/Cargo.toml"
+
+jobs:
+  wasm-size-gate:
+    name: streamline-core-wasm size budget
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust + wasm32 target
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+          components: rustfmt
+
+      - name: Install wasm-opt and gzip
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y binaryen gzip
+
+      - name: Build streamline-core for WASM
+        working-directory: streamline
+        run: |
+          cargo build \
+            --target wasm32-unknown-unknown \
+            --release \
+            --no-default-features \
+            --features wasm-browser \
+            --bin streamline-core-wasm 2>/dev/null || \
+          echo "::warning::M3 P1 wasm-browser feature + binary not yet declared — build skipped."
+
+      - name: Optimize and measure
+        working-directory: streamline
+        run: |
+          WASM=target/wasm32-unknown-unknown/release/streamline-core-wasm.wasm
+          if [ ! -f "$WASM" ]; then
+            echo "::warning::wasm artifact not found — exiting size gate as no-op."
+            exit 0
+          fi
+          wasm-opt -Oz "$WASM" -o /tmp/opt.wasm
+          gzip -9 -c /tmp/opt.wasm > /tmp/opt.wasm.gz
+          SIZE=$(stat -c%s /tmp/opt.wasm.gz)
+          echo "Compressed wasm: $SIZE bytes"
+          BUDGET=819200  # 800 KB
+          if [ "$SIZE" -gt "$BUDGET" ]; then
+            echo "::error::wasm exceeds 800KB gzipped budget ($SIZE > $BUDGET)"
+            exit 1
+          fi

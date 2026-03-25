@@ -1,0 +1,21 @@
+name: Stability Tier Check
+
+on:
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'docs/API_STABILITY.md'
+      - 'scripts/check_stability_tiers.sh'
+  push:
+    branches: [main]
+
+jobs:
+  stability-tier-check:
+    name: Forbid downward stability imports
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run stability-tier lint
+        run: |
+          chmod +x scripts/check_stability_tiers.sh
+          ./scripts/check_stability_tiers.sh

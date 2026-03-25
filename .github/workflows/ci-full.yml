@@ -27,6 +27,7 @@ jobs:
         features:
           - ""               # Default (lite edition)
           - "--all-features" # Full edition
+          - "--features kms,attestation,semantic-topics,agent-memory,branches,wasm-browser"
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -60,7 +61,7 @@ jobs:
       - run: cargo clippy --all-targets ${{ matrix.features }} -- -D warnings
 
   test:
-    name: Test (${{ matrix.os }}, ${{ matrix.edition }})
+    name: Test (${{ matrix.os }}, ${{ matrix.edition.name }})
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -70,6 +71,8 @@ jobs:
             features: ""
           - name: full
             features: "--all-features"
+          - name: moonshot
+            features: "--features kms,attestation,semantic-topics,agent-memory,branches,wasm-browser"
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable

@@ -94,6 +94,8 @@ jobs:
     name: Create Release
     needs: build
     runs-on: ubuntu-latest
+    outputs:
+      hashes: ${{ steps.hashes.outputs.hashes }}
     permissions:
       contents: write
       id-token: write
@@ -113,6 +115,14 @@ jobs:
           # Include C header for FFI consumers
           cp ../include/streamline.h .
           sha256sum streamline-* streamline.h > checksums.txt
+
+      - name: Compute base64 subject hashes for SLSA generator
+        id: hashes
+        working-directory: artifacts
+        run: |
+          set -euo pipefail
+          # Subjects are every release file we will publish (tarballs/zips + header).
+          echo "hashes=$(sha256sum streamline-*.tar.gz streamline-*.zip streamline.h 2>/dev/null | base64 -w0)" >> "$GITHUB_OUTPUT"
 
       - name: Generate SBOM
         run: |
@@ -141,17 +151,35 @@ jobs:
           subject-path: artifacts/streamline-*
           sbom-path: artifacts/sbom.cdx.json
 
-      - name: Sign release artifacts with cosign
+      - name: Install cosign
         uses: sigstore/cosign-installer@v3
-      - name: Sign checksums
+        with:
+          cosign-release: 'v2.4.1'
+
+      - name: Sign checksums file (keyless)
+        env:
+          COSIGN_EXPERIMENTAL: '1'
         run: |
-          cosign sign-blob --yes --output-signature artifacts/checksums.txt.sig \
+          cosign sign-blob --yes \
+            --output-signature artifacts/checksums.txt.sig \
             --output-certificate artifacts/checksums.txt.pem \
             artifacts/checksums.txt
-        env:
-          COSIGN_EXPERIMENTAL: "1"
 
-      - name: Generate provenance attestation
+      - name: Sign each release artifact (keyless)
+        env:
+          COSIGN_EXPERIMENTAL: '1'
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          for f in artifacts/streamline-*.tar.gz artifacts/streamline-*.zip; do
+            echo "Signing $f"
+            cosign sign-blob --yes \
+              --output-signature "${f}.sig" \
+              --output-certificate "${f}.pem" \
+              "$f"
+          done
+
+      - name: Generate provenance attestation (GitHub-native)
         uses: actions/attest-build-provenance@v2
         continue-on-error: true
         with:
@@ -180,3 +208,19 @@ jobs:
           repository: streamlinelabs/homebrew-tap
           event-type: release-published
           client-payload: '{"version": "${{ github.ref_name }}"}'
+
+  # SLSA Level 3 provenance for the binary release artifacts.
+  # Runs only on stable tags (no pre-releases) since it republishes signed
+  # provenance to the GitHub release the previous job created.
+  slsa-provenance:
+    name: SLSA L3 Provenance
+    needs: [release]
+    if: ${{ !contains(github.ref_name, 'alpha') && !contains(github.ref_name, 'beta') && !contains(github.ref_name, 'rc') }}
+    permissions:
+      actions: read
+      id-token: write
+      contents: write
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v2.0.0
+    with:
+      base64-subjects: ${{ needs.release.outputs.hashes }}
+      upload-assets: true

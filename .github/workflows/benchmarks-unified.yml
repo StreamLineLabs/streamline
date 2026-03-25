@@ -1,0 +1,270 @@
+name: Benchmarks
+
+# Unified benchmark workflow.
+#
+# Replaces the prior 5 separate workflows:
+#   benchmark-ci.yml         (PR perf gate)
+#   benchmark.yml            (PR comparison vs main)
+#   benchmarks.yml           (release: streamline-cli microbenches)
+#   nightly-benchmarks.yml   (nightly comparative vs Kafka/Redpanda)
+#   publish-benchmarks.yml   (publish to gh-pages benchmark dashboard)
+#
+# Modes are selected by `bench_type`:
+#   smoke      — fast critical-path microbenches; runs on every PR (paths-filtered)
+#   compare    — checkout PR + main, run both, post comment with diff
+#   release    — full microbenches + CLI throughput/latency profiles
+#   nightly    — comparative run vs Kafka & Redpanda on dedicated runner
+#   publish    — collect latest results and publish to gh-pages dashboard
+#
+# Triggers map onto modes automatically; use workflow_dispatch to override.
+
+on:
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'benches/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'benches/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+  release:
+    types: [published]
+  schedule:
+    # Smoke nightly + comparative nightly + weekly publish
+    - cron: '0 3 * * *'      # 03:00 UTC daily — nightly comparative
+    - cron: '0 4 * * 1'      # 04:00 UTC Mon  — publish to dashboard
+  workflow_dispatch:
+    inputs:
+      bench_type:
+        description: 'Benchmark mode'
+        type: choice
+        default: smoke
+        options: [smoke, compare, release, nightly, publish]
+      targets:
+        description: 'Comparative targets (nightly only)'
+        default: 'streamline,kafka,redpanda'
+      duration:
+        description: 'Per-scenario duration in seconds'
+        default: '60'
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Determine which mode to run based on the trigger.
+  # ---------------------------------------------------------------------------
+  resolve:
+    name: Resolve mode
+    runs-on: ubuntu-latest
+    outputs:
+      mode: ${{ steps.mode.outputs.mode }}
+    steps:
+      - id: mode
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "mode=${{ github.event.inputs.bench_type }}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          case "${{ github.event_name }}" in
+            pull_request) echo "mode=compare" >> "$GITHUB_OUTPUT" ;;
+            push)         echo "mode=smoke"   >> "$GITHUB_OUTPUT" ;;
+            release)      echo "mode=release" >> "$GITHUB_OUTPUT" ;;
+            schedule)
+              if [ "${{ github.event.schedule }}" = "0 4 * * 1" ]; then
+                echo "mode=publish" >> "$GITHUB_OUTPUT"
+              else
+                echo "mode=nightly" >> "$GITHUB_OUTPUT"
+              fi
+              ;;
+            *) echo "mode=smoke" >> "$GITHUB_OUTPUT" ;;
+          esac
+
+  # ---------------------------------------------------------------------------
+  # SMOKE / RELEASE / PUBLISH share runner shape; they vary by which steps run.
+  # ---------------------------------------------------------------------------
+  bench:
+    name: ${{ needs.resolve.outputs.mode }}
+    needs: resolve
+    if: needs.resolve.outputs.mode != 'nightly' && needs.resolve.outputs.mode != 'compare'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: ${{ needs.resolve.outputs.mode == 'publish' && 'write' || 'read' }}
+    concurrency:
+      group: benchmarks-${{ needs.resolve.outputs.mode }}
+      cancel-in-progress: ${{ needs.resolve.outputs.mode != 'publish' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: bench-${{ needs.resolve.outputs.mode }}
+
+      - name: Build release binary
+        run: cargo build --release
+
+      - name: Microbenchmarks
+        if: needs.resolve.outputs.mode != 'publish' || github.event_name == 'schedule'
+        run: |
+          mkdir -p benchmark-results
+          cargo bench --bench storage_benchmarks  -- --output-format bencher | tee benchmark-results/storage.txt
+          cargo bench --bench protocol_benchmarks -- --output-format bencher | tee benchmark-results/protocol.txt
+          cargo bench --bench latency_benchmarks  -- --output-format bencher | tee benchmark-results/latency.txt
+          cargo bench --bench zerocopy_benchmarks -- --output-format bencher | tee benchmark-results/zerocopy.txt || true
+
+      - name: CLI benchmarks (release/publish)
+        if: needs.resolve.outputs.mode == 'release' || needs.resolve.outputs.mode == 'publish'
+        run: |
+          ./target/release/streamline --in-memory --log-level warn &
+          SERVER_PID=$!
+          sleep 2
+          ./target/release/streamline-cli benchmark --profile quick      --format json > benchmark-results/quick.json      || true
+          ./target/release/streamline-cli benchmark --profile throughput --format json > benchmark-results/throughput.json || true
+          ./target/release/streamline-cli benchmark --profile latency    --format json > benchmark-results/latency.json    || true
+          kill $SERVER_PID 2>/dev/null || true
+
+      - name: Binary size & startup snapshot
+        run: |
+          {
+            echo "binary_bytes=$(stat -c%s target/release/streamline 2>/dev/null || stat -f%z target/release/streamline)"
+            echo "binary_human=$(du -sh target/release/streamline | cut -f1)"
+          } | tee benchmark-results/binary-size.txt
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmarks-${{ needs.resolve.outputs.mode }}-${{ github.sha }}
+          path: benchmark-results/
+
+      - name: Publish to dashboard branch
+        if: needs.resolve.outputs.mode == 'publish'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Push results into the gh-pages "bench" subdirectory.
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git fetch origin gh-pages:gh-pages || git checkout --orphan gh-pages
+          git worktree add /tmp/ghp gh-pages
+          ts="$(date -u +%Y%m%d-%H%M%S)"
+          mkdir -p "/tmp/ghp/bench/$ts"
+          cp -r benchmark-results/* "/tmp/ghp/bench/$ts/"
+          ln -sfn "$ts" "/tmp/ghp/bench/latest"
+          git -C /tmp/ghp add bench
+          git -C /tmp/ghp commit -m "bench: results for ${{ github.sha }} (${ts})" || true
+          git -C /tmp/ghp push origin gh-pages
+
+  # ---------------------------------------------------------------------------
+  # COMPARE: PR vs main with critcmp diff comment.
+  # ---------------------------------------------------------------------------
+  compare:
+    name: PR vs main
+    needs: resolve
+    if: needs.resolve.outputs.mode == 'compare'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with: { prefix-key: bench-compare }
+
+      - run: cargo install --locked critcmp
+      - name: Bench PR
+        run: cargo bench --bench storage_benchmarks --bench protocol_benchmarks -- --save-baseline pr
+      - name: Bench main
+        run: |
+          git checkout ${{ github.base_ref }}
+          cargo bench --bench storage_benchmarks --bench protocol_benchmarks -- --save-baseline main
+      - name: Diff
+        id: diff
+        run: |
+          {
+            echo '## Benchmark Comparison: PR vs `${{ github.base_ref }}`'
+            echo
+            echo '```'
+            critcmp main pr || true
+            echo '```'
+          } > diff.md
+          cat diff.md
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            await github.rest.issues.createComment({
+              owner: context.repo.owner, repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              body: fs.readFileSync('diff.md', 'utf8'),
+            });
+
+  # ---------------------------------------------------------------------------
+  # NIGHTLY: comparative vs Kafka & Redpanda on a dedicated runner.
+  # ---------------------------------------------------------------------------
+  nightly:
+    name: Comparative (vs Kafka/Redpanda)
+    needs: resolve
+    if: needs.resolve.outputs.mode == 'nightly'
+    runs-on: ubuntu-latest-16-cores
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with: { prefix-key: bench-nightly }
+
+      - name: Build release binary
+        run: cargo build --release
+
+      - name: Start Streamline
+        run: |
+          ./target/release/streamline --in-memory --log-level warn &
+          sleep 2
+          curl -sf http://localhost:9094/health/live
+
+      - name: Start Kafka
+        if: contains(github.event.inputs.targets || 'streamline,kafka,redpanda', 'kafka')
+        run: |
+          docker run -d --name kafka -p 29092:29092 \
+            -e KAFKA_BROKER_ID=1 \
+            -e KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=PLAINTEXT:PLAINTEXT \
+            -e KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://localhost:29092 \
+            -e KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1 \
+            confluentinc/cp-kafka:7.6.0
+          sleep 30
+
+      - name: Start Redpanda
+        if: contains(github.event.inputs.targets || 'streamline,kafka,redpanda', 'redpanda')
+        run: |
+          docker run -d --name redpanda -p 39092:9092 \
+            redpandadata/redpanda:latest \
+            redpanda start --smp 1 --memory 1G --reserve-memory 0M --overprovisioned --node-id 0 --check=false \
+            --kafka-addr internal://0.0.0.0:9092 --advertise-kafka-addr internal://localhost:9092
+          sleep 15
+
+      - name: Run comparative suite
+        run: |
+          mkdir -p benchmark-results
+          ./target/release/streamline-cli benchmark \
+            --compare "${{ github.event.inputs.targets || 'streamline,kafka,redpanda' }}" \
+            --duration "${{ github.event.inputs.duration || '60' }}" \
+            --format json > benchmark-results/comparative.json
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: benchmarks-nightly-${{ github.sha }}
+          path: benchmark-results/
