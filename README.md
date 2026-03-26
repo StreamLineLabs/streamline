@@ -8,6 +8,7 @@
 [![Documentation](https://img.shields.io/badge/docs-streamlinelabs.dev-blue?style=flat-square)](https://streamlinelabs.dev/docs/)
 [![Benchmarks](https://img.shields.io/badge/benchmarks-live-brightgreen?style=flat-square)](https://streamlinelabs.dev/dev/bench/)
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/streamlinelabs/streamline/badge?style=flat-square)](https://securityscorecards.dev/viewer/?uri=github.com/streamlinelabs/streamline)
+[![Release](https://img.shields.io/github/v/release/streamlinelabs/streamline?label=release)](https://github.com/streamlinelabs/streamline/releases)
 
 **The Redis of Streaming** — A developer-first, operationally simple streaming solution that bridges the gap between enterprise platforms (Kafka, Redpanda) and simple messaging systems (Redis Pub/Sub).
 
@@ -183,6 +184,49 @@ SASL/OAuth authentication, ACL authorization, Raft-based clustering & replicatio
 
 ### Experimental (Feature-Gated)
 SQL analytics (DuckDB), Apache Iceberg & Delta Lake sinks, CDC (PostgreSQL/MySQL), stateful processing, time-series storage
+
+## Experimental: Moonshot Features
+
+> **⚠️ These features are experimental and not included in the default build.**
+> They are not yet validated in production environments. Enable for evaluation
+> only: `cargo build --features moonshot`
+
+Streamline includes forward-looking features that go beyond Kafka compatibility — semantic search, AI agent memory, data contracts, and branched streams. They are gated behind the `moonshot` feature flag and excluded from both `lite` and `full` editions until they reach Beta stability.
+
+### Semantic Topics (M2)
+
+Add `semantic.embed=on` to any topic for built-in vector search — no separate vector database needed.
+
+```bash
+# Create a semantic topic
+streamline-cli topics create logs --config semantic.embed=true
+
+# Search by meaning
+curl -X POST localhost:9094/api/v1/topics/logs/search \
+  -H "Content-Type: application/json" \
+  -d '{"query": "authentication failure", "k": 10}'
+```
+
+### Agent Memory (M1)
+
+Persistent, semantically searchable memory for AI agents via MCP.
+
+```bash
+# MCP endpoint available at localhost:9094/mcp/v1
+# AI agents can use recall/remember/share tools
+```
+
+### Data Contracts & Provenance (M4)
+
+Producer-side schema enforcement with cryptographic attestations.
+
+### Branched Streams (M5)
+
+Git-style topic branching for replay, A/B testing, and counterfactual analysis.
+
+### Edge & CRDT (M3)
+
+Same binary runs in browser, Pi, or datacenter with CRDT merge on reconnect.
 
 ## CLI Highlights
 

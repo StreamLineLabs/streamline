@@ -42,14 +42,16 @@ This repository contains only the core Rust codebase. SDKs, deployment artifacts
 # Build Editions
 cargo build                           # Lite edition (default) - minimal, ~5-8MB
 cargo build --features full           # Full edition - enterprise features, ~15-20MB
-cargo build --all-features            # All features including dev/test
+cargo build --features moonshot       # Experimental moonshot features only
+cargo build --features "full,moonshot" # Full + moonshot (evaluation)
 cargo build --release                 # Release build (optimized)
 
 # Feature Flags
 #   lite (default): Core streaming, TLS, compression, basic logging
 #   full: Adds auth, clustering, telemetry, cloud-storage, schema-registry, metrics, encryption, analytics
+#   moonshot: ALL experimental features (semantic-topics, agent-memory, attestation, branches)
 #
-# Individual features (can combine):
+# Stable features (included in `full`):
 #   --features auth              # SASL/OAuth authentication, ACLs, RBAC
 #   --features clustering        # Raft consensus, multi-node clustering
 #   --features telemetry         # OpenTelemetry distributed tracing
@@ -61,6 +63,12 @@ cargo build --release                 # Release build (optimized)
 #   --features iceberg           # Apache Iceberg lakehouse sink connector
 #   --features delta-lake        # Delta Lake sink connector
 #   --features web-ui            # Web dashboard UI (requires streamline-ui binary)
+#
+# Moonshot features (NOT in `full` — experimental, opt-in only):
+#   --features semantic-topics   # M2: Vector indexing on topics, semantic search
+#   --features agent-memory      # M1: Three-tier AI agent memory via MCP
+#   --features attestation       # M4: Cryptographic event signing + contract enforcement
+#   --features branches          # M5: Copy-on-write topic branches + replay
 
 # Run server
 cargo run                      # Run server with defaults
