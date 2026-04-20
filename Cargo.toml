@@ -4,7 +4,7 @@ resolver = "2"
 
 [package]
 name = "streamline"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 authors = ["Jose David Baena"]
 description = "A developer-first, operationally simple streaming solution with Kafka protocol compatibility"
