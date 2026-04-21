@@ -727,8 +727,12 @@ struct ColumnDef {
 
 impl PostgresCdcSource {
     /// Create a new PostgreSQL CDC source
-    pub fn new(config: PostgresCdcConfig) -> Self {
-        Self {
+    pub fn new(config: PostgresCdcConfig) -> Result<Self> {
+        // Validate config values to prevent injection and catch misconfigurations early
+        Self::validate_identifier(&config.slot_name, "slot_name")?;
+        Self::validate_identifier(&config.publication_name, "publication_name")?;
+
+        Ok(Self {
             config,
             status: RwLock::new(CdcSourceStatus::Stopped),
             metrics: RwLock::new(CdcSourceMetrics::default()),
@@ -739,7 +743,32 @@ impl PostgresCdcSource {
             lsn_tracker: Arc::new(LsnTracker::default()),
             relation_cache: RwLock::new(HashMap::new()),
             consecutive_failures: std::sync::atomic::AtomicU32::new(0),
+        })
+    }
+
+    /// Validate that a config value is a safe PostgreSQL identifier (alphanumeric + underscores).
+    fn validate_identifier(value: &str, field_name: &str) -> Result<()> {
+        if value.is_empty() {
+            return Err(StreamlineError::Config(format!(
+                "CDC {field_name} cannot be empty"
+            )));
         }
+        if !value
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_')
+        {
+            return Err(StreamlineError::Config(format!(
+                "CDC {field_name} '{}' contains invalid characters. Only alphanumeric characters and underscores are allowed",
+                value
+            )));
+        }
+        if value.len() > 63 {
+            return Err(StreamlineError::Config(format!(
+                "CDC {field_name} '{}' exceeds maximum length of 63 characters",
+                value
+            )));
+        }
+        Ok(())
     }
 
     /// Connect to PostgreSQL
@@ -793,11 +822,8 @@ impl PostgresCdcSource {
             let plugin = self.config.output_plugin.to_string();
             client
                 .execute(
-                    &format!(
-                        "SELECT pg_create_logical_replication_slot('{}', '{}')",
-                        self.config.slot_name, plugin
-                    ),
-                    &[],
+                    "SELECT pg_create_logical_replication_slot($1, $2)",
+                    &[&self.config.slot_name, &plugin],
                 )
                 .await
                 .map_err(|e| {
@@ -1182,20 +1208,11 @@ impl PostgresCdcSource {
         // Reset failure counter on successful connect
         self.consecutive_failures.store(0, Ordering::Relaxed);
 
-        // Build the function call based on output plugin
-        let consume_fn = match self.config.output_plugin {
-            PostgresOutputPlugin::PgOutput => format!(
-                "SELECT * FROM pg_logical_slot_get_changes('{}', NULL, {}, 'proto_version', '1', 'publication_names', '{}')",
-                self.config.slot_name,
-                self.config.base.batch_size,
-                self.config.publication_name
-            ),
-            PostgresOutputPlugin::Wal2Json => format!(
-                "SELECT * FROM pg_logical_slot_get_changes('{}', NULL, {})",
-                self.config.slot_name,
-                self.config.base.batch_size
-            ),
-        };
+        // Build the function call based on output plugin (parameterized to prevent SQL injection)
+        let batch_size = self.config.base.batch_size as i32;
+        let slot_name = self.config.slot_name.clone();
+        let publication_name = self.config.publication_name.clone();
+        let output_plugin = self.config.output_plugin;
 
         let poll_interval =
             tokio::time::Duration::from_millis(self.config.base.commit_interval_ms / 10);
@@ -1208,7 +1225,21 @@ impl PostgresCdcSource {
                 }
                 _ = tokio::time::sleep(poll_interval) => {
                     // Poll for changes
-                    match client.query(&consume_fn, &[]).await {
+                    let query_result = match output_plugin {
+                        PostgresOutputPlugin::PgOutput => {
+                            client.query(
+                                "SELECT * FROM pg_logical_slot_get_changes($1, NULL, $2, 'proto_version', '1', 'publication_names', $3)",
+                                &[&slot_name as &(dyn tokio_postgres::types::ToSql + Sync), &batch_size, &publication_name],
+                            ).await
+                        }
+                        PostgresOutputPlugin::Wal2Json => {
+                            client.query(
+                                "SELECT * FROM pg_logical_slot_get_changes($1, NULL, $2)",
+                                &[&slot_name as &(dyn tokio_postgres::types::ToSql + Sync), &batch_size],
+                            ).await
+                        }
+                    };
+                    match query_result {
                         Ok(rows) => {
                             for row in rows {
                                 let lsn: String = row.get(0);
@@ -1735,7 +1766,7 @@ mod tests {
     #[test]
     fn test_postgres_cdc_source_creation() {
         let config = PostgresCdcConfig::default();
-        let source = PostgresCdcSource::new(config);
+        let source = PostgresCdcSource::new(config).expect("default config should be valid");
         assert_eq!(source.name(), "cdc-source");
         assert_eq!(source.source_type(), "postgres");
     }
@@ -1743,17 +1774,38 @@ mod tests {
     #[test]
     fn test_cdc_source_status() {
         let config = PostgresCdcConfig::default();
-        let source = PostgresCdcSource::new(config);
+        let source = PostgresCdcSource::new(config).expect("default config should be valid");
         assert_eq!(source.status(), CdcSourceStatus::Stopped);
     }
 
     #[test]
     fn test_cdc_source_info() {
         let config = PostgresCdcConfig::default();
-        let source = PostgresCdcSource::new(config);
+        let source = PostgresCdcSource::new(config).expect("default config should be valid");
         let info = source.info();
         assert_eq!(info.source_type, "postgres");
         assert_eq!(info.status, CdcSourceStatus::Stopped);
+    }
+
+    #[test]
+    fn test_cdc_source_rejects_invalid_slot_name() {
+        let mut config = PostgresCdcConfig::default();
+        config.slot_name = "slot'; DROP TABLE users;--".to_string();
+        assert!(PostgresCdcSource::new(config).is_err());
+    }
+
+    #[test]
+    fn test_cdc_source_rejects_empty_slot_name() {
+        let mut config = PostgresCdcConfig::default();
+        config.slot_name = "".to_string();
+        assert!(PostgresCdcSource::new(config).is_err());
+    }
+
+    #[test]
+    fn test_cdc_source_accepts_valid_slot_name() {
+        let mut config = PostgresCdcConfig::default();
+        config.slot_name = "my_valid_slot_123".to_string();
+        assert!(PostgresCdcSource::new(config).is_ok());
     }
 
     // -----------------------------------------------------------------------
@@ -2116,7 +2168,7 @@ mod tests {
     #[test]
     fn test_process_wal_message_caches_relation() {
         let config = PostgresCdcConfig::default();
-        let source = PostgresCdcSource::new(config);
+        let source = PostgresCdcSource::new(config).expect("default config should be valid");
 
         // Build a RELATION message
         let mut buf = vec![b'R'];
