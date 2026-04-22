@@ -1,6 +1,6 @@
 {
   "name": "streamlinelabs-streamql-datasource",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Grafana datasource plugin for Streamline StreamQL",
   "scripts": {
     "dev": "webpack -w -c ./.config/webpack/webpack.config.ts --env development",

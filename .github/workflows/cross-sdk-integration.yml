@@ -295,10 +295,43 @@ jobs:
         env:
           STREAMLINE_BOOTSTRAP_SERVERS: localhost:9092
 
+  sdk-swift:
+    name: Swift SDK
+    runs-on: macos-latest
+    needs: build-server
+    timeout-minutes: 20
+    steps:
+      - name: Download server binary
+        uses: actions/download-artifact@v4
+        with:
+          name: streamline-binary
+          path: /tmp/server
+
+      - name: Start server
+        run: |
+          chmod +x /tmp/server/streamline
+          /tmp/server/streamline &
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:9094/health > /dev/null 2>&1 && break
+            sleep 2
+          done
+
+      - name: Checkout Swift SDK
+        uses: actions/checkout@v4
+        with:
+          repository: streamlinelabs/streamline-swift-sdk
+          path: sdk
+
+      - name: Test
+        working-directory: sdk
+        run: swift test
+        env:
+          STREAMLINE_BOOTSTRAP_SERVERS: localhost:9092
+
   compatibility-report:
     name: Compatibility Report
     runs-on: ubuntu-latest
-    needs: [sdk-python, sdk-node, sdk-go, sdk-java, sdk-rust, sdk-dotnet]
+    needs: [sdk-python, sdk-node, sdk-go, sdk-java, sdk-rust, sdk-dotnet, sdk-swift]
     if: always()
     timeout-minutes: 5
     steps:
@@ -312,7 +345,8 @@ jobs:
               { name: 'Go SDK', job: 'sdk-go' },
               { name: 'Java SDK', job: 'sdk-java' },
               { name: 'Rust SDK', job: 'sdk-rust' },
-              { name: '.NET SDK', job: 'sdk-dotnet' }
+              { name: '.NET SDK', job: 'sdk-dotnet' },
+              { name: 'Swift SDK', job: 'sdk-swift' }
             ];
 
             const { data: jobs } = await github.rest.actions.listJobsForWorkflowRun({
@@ -345,13 +379,13 @@ jobs:
               '| SDK | Version | Transport | Status |',
               '|-----|---------|-----------|--------|',
               ...rows.map((r, i) => {
-                const versions = ['0.2.0', '0.2.0', '0.2.0', '0.2.0', '0.2.0', '0.2.0'];
-                const transports = ['Kafka', 'Kafka', 'Kafka', 'Kafka', 'Kafka', 'Kafka'];
+                const versions = ['0.3.0', '0.3.0', '0.3.0', '0.3.0', '0.3.0', '0.3.0', '0.3.0'];
+                const transports = ['Kafka', 'Kafka', 'Kafka', 'Kafka', 'Kafka', 'Kafka', 'Kafka'];
                 const parts = r.split('|').filter(Boolean);
                 return `| ${parts[0].trim()} | ${versions[i]} | ${transports[i]} | ${parts[1].trim()} |`;
               }),
               '',
-              `**Result:** ${passed}/6 passed` + (failed > 0 ? ` | ${failed}/6 failed ❌` : ' ✅'),
+              `**Result:** ${passed}/7 passed` + (failed > 0 ? ` | ${failed}/7 failed ❌` : ' ✅'),
             ].join('\n');
 
             core.summary.addRaw(summary);

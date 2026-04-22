@@ -6408,7 +6408,7 @@ checksum = "d7beae5182595e9a8b683fa98c4317f956c9a2dec3b9716990d20023cc60c766"
 
 [[package]]
 name = "streamline"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "aes-gcm",
  "age",
@@ -6511,7 +6511,7 @@ dependencies = [
 
 [[package]]
 name = "streamline-analytics"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "base64 0.22.1",
  "chrono",
@@ -6530,7 +6530,7 @@ dependencies = [
 
 [[package]]
 name = "streamline-wasm"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "async-trait",
  "axum",
