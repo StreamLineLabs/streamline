@@ -445,11 +445,25 @@ async fn handle_streaming_connection(
                                         StartPosition::Earliest => 0,
                                         StartPosition::Offset(o) => *o,
                                         StartPosition::Timestamp(ts) => {
-                                            reader_state.topic_manager
-                                                .find_offset_by_timestamp(topic, partition, *ts)
-                                                .ok()
-                                                .flatten()
-                                                .unwrap_or(0)
+                                            match reader_state.topic_manager
+                                                .find_offset_by_timestamp(topic, partition, *ts) {
+                                                Ok(Some(offset)) => offset,
+                                                Ok(None) => {
+                                                    tracing::debug!(
+                                                        topic = %topic, partition, timestamp = ts,
+                                                        "No offset found for timestamp, defaulting to earliest"
+                                                    );
+                                                    0
+                                                }
+                                                Err(e) => {
+                                                    tracing::warn!(
+                                                        topic = %topic, partition, timestamp = ts,
+                                                        error = %e,
+                                                        "Failed to look up offset by timestamp, defaulting to earliest"
+                                                    );
+                                                    0
+                                                }
+                                            }
                                         }
                                     }
                                 });

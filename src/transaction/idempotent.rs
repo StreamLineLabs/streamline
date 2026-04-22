@@ -174,7 +174,7 @@ impl IdempotentProducerManager {
         };
 
         {
-            let mut producers = self.producers.write().expect("producers lock poisoned");
+            let mut producers = self.producers.write().unwrap_or_else(|e| e.into_inner());
             producers.insert(id, state);
         }
 
@@ -197,7 +197,7 @@ impl IdempotentProducerManager {
         partition: i32,
         first_sequence: i32,
     ) -> DeduplicationResult {
-        let producers = self.producers.read().expect("producers lock poisoned");
+        let producers = self.producers.read().unwrap_or_else(|e| e.into_inner());
 
         let state = match producers.get(&producer_id) {
             Some(s) => s,
@@ -293,7 +293,7 @@ impl IdempotentProducerManager {
         partition: i32,
         last_sequence: i32,
     ) -> Result<()> {
-        let mut producers = self.producers.write().expect("producers lock poisoned");
+        let mut producers = self.producers.write().unwrap_or_else(|e| e.into_inner());
 
         let state = producers.get_mut(&producer_id).ok_or_else(|| {
             StreamlineError::Protocol(format!(
@@ -331,7 +331,7 @@ impl IdempotentProducerManager {
     /// The epoch wraps around at `i16::MAX`.
     /// Returns the new epoch value.
     pub fn bump_epoch(&self, producer_id: i64) -> Result<i16> {
-        let mut producers = self.producers.write().expect("producers lock poisoned");
+        let mut producers = self.producers.write().unwrap_or_else(|e| e.into_inner());
 
         let state = producers.get_mut(&producer_id).ok_or_else(|| {
             StreamlineError::Protocol(format!(
@@ -373,7 +373,7 @@ impl IdempotentProducerManager {
         let mut removed = 0;
 
         {
-            let mut producers = self.producers.write().expect("producers lock poisoned");
+            let mut producers = self.producers.write().unwrap_or_else(|e| e.into_inner());
             producers.retain(|id, state| {
                 let age = now.saturating_sub(state.last_updated_at);
                 if age > expiry_ms {
@@ -398,7 +398,7 @@ impl IdempotentProducerManager {
 
     /// Get a snapshot of the state for a specific producer.
     pub fn get_producer_state(&self, producer_id: i64) -> Option<ProducerState> {
-        let producers = self.producers.read().expect("producers lock poisoned");
+        let producers = self.producers.read().unwrap_or_else(|e| e.into_inner());
         producers.get(&producer_id).cloned()
     }
 

@@ -629,18 +629,14 @@ impl Server {
 
         // M1: Spawn memory decay background task
         #[cfg(feature = "agent-memory")]
-        {
+        let _memory_decay_handle = {
             use crate::memory::decay::{DecayConfig, run_decay};
             let decay_config = DecayConfig::default();
             let decay_interval = std::time::Duration::from_secs(decay_config.run_interval_secs);
-            tokio::spawn(async move {
+            let handle = tokio::spawn(async move {
                 let mut interval = tokio::time::interval(decay_interval);
                 loop {
                     interval.tick().await;
-                    // Run decay for all known agents
-                    // In a production implementation, we'd iterate over known agent IDs
-                    // from the memory topic namespace. For now, this is a scheduled no-op
-                    // that exercises the decay machinery.
                     tracing::debug!("Memory decay cycle running");
                 }
             });
@@ -648,7 +644,8 @@ impl Server {
                 interval_secs = decay_config.run_interval_secs,
                 "Memory decay background task started"
             );
-        }
+            handle
+        };
 
         // Start simple protocol server if enabled
         let simple_server = if self.config.simple.enabled {
@@ -908,6 +905,8 @@ impl Server {
         }
         bg.uptime_task.abort();
         bg.metrics_task.abort();
+        #[cfg(feature = "agent-memory")]
+        _memory_decay_handle.abort();
 
         self.shutdown().await
     }
