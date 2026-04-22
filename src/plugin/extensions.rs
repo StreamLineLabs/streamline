@@ -147,8 +147,9 @@ pub extern "C" fn transform(input_ptr: *const u8, input_len: usize) -> i64 {{
 
     match serde_json::from_slice::<Value>(input) {{
         Ok(mut value) => {{
-            // USER-TODO: Implement your transform logic here
-            // Example: add a timestamp field
+            // Transform logic: modify the JSON message before it reaches consumers.
+            // Common patterns: add fields, filter, redact PII, route by content.
+            // See https://streamlinelabs.dev/docs/features/transforms for examples.
             if let Some(obj) = value.as_object_mut() {{
                 obj.insert(
                     "processed_by".to_string(),
@@ -195,7 +196,8 @@ pub struct Config {{
 /// Initialize the sink with configuration.
 #[no_mangle]
 pub extern "C" fn init(_config_ptr: *const u8, _config_len: usize) -> i32 {{
-    // USER-TODO: Parse config, establish connections
+    // Parse config JSON, validate fields, and establish connections to your external system.
+    // Return 0 on success or a negative error code on failure.
     0 // Return 0 for success
 }}
 
@@ -208,7 +210,8 @@ pub extern "C" fn write(input_ptr: *const u8, input_len: usize) -> i32 {{
     match serde_json::from_slice::<Vec<Value>>(input) {{
         Ok(messages) => {{
             for msg in &messages {{
-                // USER-TODO: Write each message to your external system
+                // Write each message to your external system (e.g., HTTP POST, database insert).
+                // Return the count of successfully written messages, or -1 on error.
                 let _ = msg;
             }}
             messages.len() as i32
@@ -261,7 +264,8 @@ pub extern "C" fn init(_config_ptr: *const u8, _config_len: usize) -> i32 {{
 /// Poll for new records. Returns JSON array of records.
 #[no_mangle]
 pub extern "C" fn poll() -> i64 {{
-    // USER-TODO: Poll your external system for new data
+    // Poll your external system for new records and return them as a JSON array.
+    // Each record should include at minimum a "data" field with the payload.
     let records: Vec<Value> = vec![
         serde_json::json!({{"source": "{name}", "data": "sample"}}),
     ];
