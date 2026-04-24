@@ -87,7 +87,7 @@ metrics-exporter-prometheus = { version = "0.16", optional = true }
 
 # HTTP server for metrics and WebSocket
 axum = { version = "0.7", features = ["ws"] }
-tower = { version = "0.4", features = ["util"] }
+tower = { version = "0.5", features = ["util"] }
 
 # Async stream utilities for WebSocket
 futures-util = "0.3"
