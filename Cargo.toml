@@ -100,7 +100,7 @@ age = { version = "0.10", optional = true }
 argon2 = { version = "0.5", features = ["std"], optional = true }
 base64 = "0.22"
 serde_yaml = "0.9"
-rand = "0.8"
+rand = "0.9"
 
 # SCRAM authentication (SHA256/SHA512) - optional, part of auth feature
 sha2 = { version = "0.10", optional = true }
