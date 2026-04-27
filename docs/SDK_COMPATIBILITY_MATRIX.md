@@ -6,13 +6,13 @@
 
 | SDK | Language | Version | Tests | CI | Security |
 |-----|----------|---------|-------|----|----------|
-| **Java** | Java 17+ | 0.2.0-SNAPSHOT | 13 files | ✅ | ✅ |
-| **Python** | Python 3.9+ | 0.2.0 | 17 files | ✅ | ✅ |
-| **Go** | Go 1.22+ | module | 8 files | ✅ | ✅ |
-| **Node.js** | TypeScript | 0.2.0 | 6 files | ✅ | ✅ |
-| **Rust** | Rust 1.80+ | 0.2.0 | 6 files | ✅ | ✅ |
+| **Java** | Java 17+ | 0.3.0 | 33 files | ✅ | ✅ |
+| **Python** | Python 3.9+ | 0.3.0 | 23 files | ✅ | ✅ |
+| **Go** | Go 1.22+ | module | 17 files | ✅ | ✅ |
+| **Node.js** | TypeScript | 0.3.0 | 15 files | ✅ | ✅ |
+| **Rust** | Rust 1.80+ | 0.3.0 | 6 files | ✅ | ✅ |
 | **.NET** | C# .NET 8+ | ? | 1 files | ✅ | ✅ |
-| **WASM** | Rust/JS | 0.2.0 | 1 files | ✅ | ✅ |
+| **WASM** | Rust/JS | 0.3.0 | 1 files | ✅ | ✅ |
 
 ## Feature Support
 
@@ -22,16 +22,16 @@
 | **Consumer** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **Admin Client** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **Consumer Groups** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **TLS/SSL** | ❌ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ |
-| **SASL Auth** | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ |
-| **Compression** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ |
-| **Connection Pooling** | ✅ | ❌ | ❌ | ❌ | ✅ | ✅ | ❌ |
+| **TLS/SSL** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **SASL Auth** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **Compression** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **Connection Pooling** | ✅ | ✅ | ❌ | ❌ | ✅ | ✅ | ❌ |
 | **Auto Reconnect** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **OpenTelemetry** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **TestContainers** | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ |
-| **Embedded Mode** | ✅ | ✅ | ❌ | ❌ | ✅ | ❌ | ❌ |
+| **Embedded Mode** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **Async/Streaming** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **Benchmarks** | ❌ | ✅ | ✅ | ❌ | ❌ | ✅ | ❌ |
+| **Benchmarks** | ❌ | ✅ | ✅ | ❌ | ❌ | ✅ | ✅ |
 
 ## Legend
 
