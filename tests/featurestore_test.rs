@@ -165,22 +165,22 @@ mod featurestore_tests {
 
         let fetched = engine.get_feature_view("windowed_view").await.unwrap();
         assert_eq!(fetched.aggregation_windows.len(), 4);
-        assert_eq!(fetched.aggregation_windows[0].name, "1_minute");
+        assert_eq!(fetched.aggregation_windows[0].name, "1min");
         assert_eq!(fetched.aggregation_windows[0].duration_seconds, 60);
-        assert_eq!(fetched.aggregation_windows[1].name, "5_minutes");
+        assert_eq!(fetched.aggregation_windows[1].name, "5min");
         assert_eq!(fetched.aggregation_windows[1].duration_seconds, 300);
-        assert_eq!(fetched.aggregation_windows[2].name, "1_hour");
+        assert_eq!(fetched.aggregation_windows[2].name, "1hour");
         assert_eq!(fetched.aggregation_windows[2].duration_seconds, 3600);
-        assert_eq!(fetched.aggregation_windows[3].name, "1_day");
+        assert_eq!(fetched.aggregation_windows[3].name, "1day");
         assert_eq!(fetched.aggregation_windows[3].duration_seconds, 86400);
     }
 
     #[tokio::test]
     async fn test_feature_view_custom_window() {
         let view = FeatureViewDefinition::new("custom_windows")
-            .with_aggregation_window(AggregationWindow::custom_tumbling("15_min", 900))
-            .with_aggregation_window(AggregationWindow::custom_sliding("30_min_slide_5", 1800, 300))
-            .with_aggregation_window(AggregationWindow::custom_session("30_min_session", 1800));
+            .with_aggregation_window(AggregationWindow::tumbling("15_min", 900))
+            .with_aggregation_window(AggregationWindow::sliding("30_min_slide_5", 1800, 300))
+            .with_aggregation_window(AggregationWindow::session("30_min_session", 1800));
 
         assert_eq!(view.aggregation_windows.len(), 3);
         assert_eq!(view.aggregation_windows[0].window_type, WindowType::Tumbling);
@@ -879,8 +879,8 @@ mod featurestore_tests {
 
     #[test]
     fn test_hour_of_day() {
-        // 2024-01-15 14:30:00 UTC = 1705325400000 ms
-        let ts = 1705325400000i64;
+        // 2024-01-15 14:30:00 UTC = 1705329000000 ms
+        let ts = 1_705_329_000_000i64;
         match TransformationEngine::hour_of_day(ts) {
             FeatureValue::Int64(h) => assert_eq!(h, 14),
             other => panic!("Expected Int64, got {:?}", other),

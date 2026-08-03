@@ -235,7 +235,7 @@ pub fn create_router(state: WebUiState) -> Router {
         .route("/api/v1/streamql/execute", post(api_execute_streamql))
         .route("/api/v1/streamql/validate", post(api_validate_streamql))
         .route("/api/v1/streamql/history", get(api_get_streamql_history))
-        .route("/api/v1/streamql/views", get(api_list_materialized_views))
+        .route("/api/v1/streamql/views", get(api_list_streamql_views))
         // Message Inspector (deep-dive into individual messages)
         .route("/messages/inspect", get(message_inspector_page))
         .route("/api/v1/messages/decode", post(api_decode_message))
@@ -3270,7 +3270,7 @@ async fn api_get_streamql_history() -> Json<serde_json::Value> {
     Json(serde_json::json!({"queries": []}))
 }
 
-async fn api_list_materialized_views() -> Json<serde_json::Value> {
+async fn api_list_streamql_views() -> Json<serde_json::Value> {
     Json(serde_json::json!({"views": []}))
 }
 
@@ -3309,7 +3309,7 @@ async fn api_decode_message(
 }
 
 async fn api_search_messages(
-    axum::extract::Query(params): axum::extract::Query<HashMap<String, String>>,
+    axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
 ) -> Json<serde_json::Value> {
     let topic = params.get("topic").cloned().unwrap_or_default();
     let query = params.get("q").cloned().unwrap_or_default();

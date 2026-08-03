@@ -249,10 +249,13 @@ async fn create_agent(
     let mut agents = state.agents.write().await;
     agents.insert(id.clone(), agent.clone());
 
-    (
-        StatusCode::CREATED,
-        Json(serde_json::to_value(&agent).unwrap()),
-    )
+    match serde_json::to_value(&agent) {
+        Ok(body) => (StatusCode::CREATED, Json(body)),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "error": e.to_string() })),
+        ),
+    }
 }
 
 async fn list_agents(

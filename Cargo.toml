@@ -350,3 +350,4 @@ harness = false
 [[bench]]
 name = "m3_edge_perf"
 harness = false
+required-features = ["edge"]

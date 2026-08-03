@@ -57,8 +57,7 @@ mod conformance {
         let req = build_api_versions_request(3, 1);
         let response_body = send_request(server.kafka_port, &req);
 
-        let (_, api_response) =
-            parse_api_versions_response(&response_body).expect("Failed to parse");
+        let api_response = parse_api_versions_response(&response_body, 3).expect("Failed to parse");
 
         // Must report at least 50 supported APIs
         assert!(
@@ -85,8 +84,7 @@ mod conformance {
         let req = build_metadata_request(9, 1, None);
         let response_body = send_request(server.kafka_port, &req);
 
-        let (_, meta_response) =
-            parse_metadata_response(&response_body).expect("Failed to parse");
+        let meta_response = parse_metadata_response(&response_body, 9).expect("Failed to parse");
 
         // Must return at least one broker
         assert!(
@@ -145,8 +143,7 @@ mod conformance {
         let req = build_api_versions_request(3, 1);
         let response_body = send_request(server.kafka_port, &req);
 
-        let (_, api_response) =
-            parse_api_versions_response(&response_body).expect("Failed to parse");
+        let api_response = parse_api_versions_response(&response_body, 3).expect("Failed to parse");
 
         // Verify expected core API keys are present
         let api_map: std::collections::HashMap<i16, _> = api_response

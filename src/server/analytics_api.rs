@@ -172,6 +172,18 @@ pub fn create_analytics_api_router(state: AnalyticsApiState) -> Router {
     Router::new()
         .route("/api/v1/query", post(execute_query_handler))
         .route("/api/v1/query/explain", post(explain_query_handler))
+        .merge(analytics_management_router())
+        .with_state(state)
+}
+
+/// Create the analytics cache and materialized-view routes without claiming
+/// the ADR-008 unified query endpoints.
+pub fn create_analytics_management_router(state: AnalyticsApiState) -> Router {
+    analytics_management_router().with_state(state)
+}
+
+fn analytics_management_router() -> Router<AnalyticsApiState> {
+    Router::new()
         .route("/api/v1/query/cache/stats", get(cache_stats_handler))
         .route("/api/v1/query/cache", delete(clear_cache_handler))
         .route("/api/v1/views", post(create_view_handler))
@@ -180,7 +192,6 @@ pub fn create_analytics_api_router(state: AnalyticsApiState) -> Router {
         .route("/api/v1/views/:name", delete(delete_view_handler))
         .route("/api/v1/views/:name/refresh", post(refresh_view_handler))
         .route("/api/v1/views/:name/query", get(query_view_handler))
-        .with_state(state)
 }
 
 // ─── Handlers (analytics enabled) ────────────────────────────────────────────
@@ -513,7 +524,9 @@ impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
         let (status, code, message) = match self {
             ApiError::Analytics(msg) => (StatusCode::INTERNAL_SERVER_ERROR, "ANALYTICS_ERROR", msg),
-            ApiError::FeatureNotEnabled(msg) => (StatusCode::NOT_IMPLEMENTED, "FEATURE_DISABLED", msg),
+            ApiError::FeatureNotEnabled(msg) => {
+                (StatusCode::NOT_IMPLEMENTED, "FEATURE_DISABLED", msg)
+            }
             ApiError::NotFound(msg) => (StatusCode::NOT_FOUND, "NOT_FOUND", msg),
             ApiError::InvalidSql(msg) => (StatusCode::BAD_REQUEST, "INVALID_SQL", msg),
             ApiError::QueryTimeout(msg) => (StatusCode::GATEWAY_TIMEOUT, "QUERY_TIMEOUT", msg),

@@ -184,7 +184,7 @@ async fn run_automated_failover_check(
                 "from_region": e.from_region,
                 "to_region": e.to_region,
                 "reason": format!("{:?}", e.reason),
-                "timestamp": e.timestamp.to_rfc3339(),
+                "timestamp": e.initiated_at.to_rfc3339(),
             })).collect::<Vec<_>>(),
         }))),
         Err(e) => Err((

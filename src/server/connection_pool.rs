@@ -198,12 +198,11 @@ impl ConnectionPool {
                 let rr = self.rr_counter.fetch_add(1, Ordering::Relaxed) as usize;
                 candidates[rr % candidates.len()]
             }
-            LoadBalanceStrategy::LeastConnections => {
-                *candidates
-                    .iter()
-                    .min_by_key(|&&i| conns[i].active_streams)
-                    .unwrap()
-            }
+            LoadBalanceStrategy::LeastConnections => candidates
+                .iter()
+                .min_by_key(|&&i| conns[i].active_streams)
+                .copied()
+                .unwrap_or(candidates[0]),
             LoadBalanceStrategy::Random => {
                 // Deterministic-ish fallback without pulling in rand for this hot path.
                 let pseudo = now_epoch() as usize;

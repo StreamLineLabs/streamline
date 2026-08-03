@@ -370,7 +370,7 @@ pub fn mesh_api_routes(manager: MeshManager) -> Router {
         .route("/api/v1/mesh/topology", get(get_topology))
         .route("/api/v1/mesh/peers", get(list_peers).post(add_peer))
         .route(
-            "/api/v1/mesh/peers/{id}",
+            "/api/v1/mesh/peers/:id",
             get(get_peer).delete(remove_peer),
         )
         .route("/api/v1/mesh/stats", get(get_stats))

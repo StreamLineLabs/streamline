@@ -537,8 +537,8 @@ mod tests {
             FeatureValue::Int64(42)
         );
         assert_eq!(
-            json_to_feature_value(&serde_json::json!(3.14)),
-            FeatureValue::Float64(3.14)
+            json_to_feature_value(&serde_json::json!(2.5)),
+            FeatureValue::Float64(2.5)
         );
         assert_eq!(
             json_to_feature_value(&serde_json::json!("hello")),

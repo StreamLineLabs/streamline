@@ -605,7 +605,7 @@ mod tests {
     #[test]
     fn test_hour_of_day() {
         // 2024-01-15 14:30:00 UTC -> hour = 14
-        let ts = 1705325400000i64;
+        let ts = 1_705_329_000_000i64;
         match TransformationEngine::hour_of_day(ts) {
             FeatureValue::Int64(h) => assert_eq!(h, 14),
             other => panic!("Expected Int64, got {:?}", other),

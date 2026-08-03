@@ -140,9 +140,10 @@ mod tests {
 
     #[test]
     fn search_after_indexing_returns_top_match() {
-        use crate::ai::semantic_topics::{registry, HashEmbedder, SemanticIndex};
         use crate::ai::semantic_topics::worker::Embedder;
+        use crate::ai::semantic_topics::{registry, HashEmbedder, SemanticIndex};
 
+        let _guard = registry::test_lock();
         let embedder = HashEmbedder::default();
         let topic = "search-after-indexing-topic";
         let idx = registry::get_or_create(topic);

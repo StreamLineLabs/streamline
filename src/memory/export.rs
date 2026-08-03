@@ -133,6 +133,7 @@ mod tests {
 
     #[test]
     fn jsonl_export_contains_records() {
+        let _guard = crate::ai::semantic_topics::registry::test_lock();
         seed_memories();
         let agent = format!("export-agent-{}", std::process::id());
         let cfg = ExportConfig {
@@ -150,6 +151,7 @@ mod tests {
 
     #[test]
     fn csv_export_has_header() {
+        let _guard = crate::ai::semantic_topics::registry::test_lock();
         seed_memories();
         let agent = format!("export-agent-{}", std::process::id());
         let cfg = ExportConfig {
@@ -165,6 +167,7 @@ mod tests {
 
     #[test]
     fn export_empty_agent() {
+        let _guard = crate::ai::semantic_topics::registry::test_lock();
         tier_router::reset_for_tests();
         let cfg = ExportConfig {
             agent_id: "nobody".into(),
@@ -180,6 +183,7 @@ mod tests {
 
     #[test]
     fn tier_filter_narrows_output() {
+        let _guard = crate::ai::semantic_topics::registry::test_lock();
         seed_memories();
         let cfg = ExportConfig {
             agent_id: "export-agent".into(),

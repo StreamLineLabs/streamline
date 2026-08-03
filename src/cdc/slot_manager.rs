@@ -60,7 +60,11 @@ pub struct SlotInfo {
     pub database: String,
     /// When the slot was created
     pub created_at: Option<chrono::DateTime<chrono::Utc>>,
-    /// Last time the slot was active
+    /// Last time the slot was active.
+    ///
+    /// Not serialized: `Instant` is a monotonic clock reading with no
+    /// meaningful cross-process representation.
+    #[serde(skip)]
     pub last_active: Option<Instant>,
 }
 

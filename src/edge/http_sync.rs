@@ -364,21 +364,66 @@ impl HttpSyncClient {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use axum::routing::{get, post};
+    use axum::{Json, Router};
     use bytes::Bytes;
 
     fn make_record(value: &[u8]) -> Record {
-        Record {
-            offset: 0,
-            timestamp: chrono::Utc::now().timestamp_millis(),
-            key: None,
-            value: Bytes::copy_from_slice(value),
-            headers: Vec::new(),
+        Record::new(
+            0,
+            chrono::Utc::now().timestamp_millis(),
+            None,
+            Bytes::copy_from_slice(value),
+        )
+    }
+
+    /// Spawn a minimal in-process cloud endpoint so the HTTP transport can be
+    /// exercised without depending on an externally running server.
+    async fn cloud_stub_config() -> HttpSyncConfig {
+        let app = Router::new()
+            .route("/health", get(|| async { "ok" }))
+            .route(
+                "/api/v1/edge/upload",
+                post(|body: String| async move {
+                    let (records, sequence) = serde_json::from_str::<SyncBatchPayload>(&body)
+                        .map(|p| (p.records.len() as u64, p.sequence))
+                        .unwrap_or((0, 0));
+                    Json(SyncUploadResponse {
+                        accepted: true,
+                        records_processed: records,
+                        ack_sequence: sequence,
+                        errors: vec![],
+                    })
+                }),
+            )
+            .route(
+                "/api/v1/edge/fetch",
+                get(|| async {
+                    Json(SyncFetchResponse {
+                        records: vec![],
+                        has_more: false,
+                        next_offset: HashMap::new(),
+                    })
+                }),
+            );
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind cloud stub");
+        let addr = listener.local_addr().expect("cloud stub address");
+        tokio::spawn(async move {
+            let _ = axum::serve(listener, app).await;
+        });
+
+        HttpSyncConfig {
+            endpoint: format!("http://{}", addr),
+            ..Default::default()
         }
     }
 
     #[tokio::test]
     async fn test_upload_empty_batch() {
-        let client = HttpSyncClient::new(HttpSyncConfig::default());
+        let client = HttpSyncClient::new(cloud_stub_config().await);
         let response = client.upload_batch("test", 0, &[]).await.unwrap();
         assert!(response.accepted);
         assert_eq!(response.records_processed, 0);
@@ -386,7 +431,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_upload_batch() {
-        let client = HttpSyncClient::new(HttpSyncConfig::default());
+        let client = HttpSyncClient::new(cloud_stub_config().await);
         let records = vec![make_record(b"hello"), make_record(b"world")];
         let response = client.upload_batch("test", 0, &records).await.unwrap();
         assert!(response.accepted);
@@ -394,21 +439,21 @@ mod tests {
 
     #[tokio::test]
     async fn test_fetch_records() {
-        let client = HttpSyncClient::new(HttpSyncConfig::default());
+        let client = HttpSyncClient::new(cloud_stub_config().await);
         let response = client.fetch_records("test", 0, 0, 100).await.unwrap();
         assert!(!response.has_more);
     }
 
     #[tokio::test]
     async fn test_check_connectivity() {
-        let client = HttpSyncClient::new(HttpSyncConfig::default());
+        let client = HttpSyncClient::new(cloud_stub_config().await);
         let connected = client.check_connectivity().await.unwrap();
         assert!(connected);
     }
 
     #[tokio::test]
     async fn test_stats_tracking() {
-        let client = HttpSyncClient::new(HttpSyncConfig::default());
+        let client = HttpSyncClient::new(cloud_stub_config().await);
         let records = vec![make_record(b"test")];
         client.upload_batch("t", 0, &records).await.unwrap();
 

@@ -116,12 +116,8 @@ impl TestServer {
         let http_port = find_available_port();
         let data_dir = tempfile::tempdir().expect("Failed to create temp dir");
 
-        let mut cmd = Command::new("cargo");
-        cmd.arg("run")
-            .arg("--bin")
-            .arg("streamline")
-            .arg("--")
-            .arg("--listen-addr")
+        let mut cmd = Command::new(env!("CARGO_BIN_EXE_streamline"));
+        cmd.arg("--listen-addr")
             .arg(format!("127.0.0.1:{}", kafka_port))
             .arg("--http-addr")
             .arg(format!("127.0.0.1:{}", http_port))

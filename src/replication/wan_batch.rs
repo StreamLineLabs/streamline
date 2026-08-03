@@ -95,6 +95,7 @@ pub struct WanBatch {
 }
 
 /// WAN batch accumulator — collects records and flushes when thresholds are reached.
+#[derive(Debug)]
 pub struct WanBatchAccumulator {
     config: WanBatchConfig,
     source_region: String,

@@ -272,7 +272,7 @@ fn build_router(state: ObservabilityApiState) -> Router {
         .route("/api/v1/observability/system", get(legacy_system_metrics))
         .route("/api/v1/observability/alerts", get(legacy_active_alerts))
         .route("/api/v1/observability/connections", get(legacy_connections))
-        .route("/api/v1/observability/trace/{trace_id}", get(legacy_get_message_trace))
+        .route("/api/v1/observability/trace/:trace_id", get(legacy_get_message_trace))
         .route("/api/v1/observability/topology", get(legacy_get_topology))
         .route("/api/v1/observability/lag/summary", get(legacy_get_lag_summary))
         .route("/api/v1/observability/hotspots", get(legacy_get_partition_hotspots))
@@ -292,8 +292,8 @@ fn now_iso() -> String {
 }
 
 fn build_health(state: &ObservabilityApiState) -> HealthSummary {
-    let metrics = state.metric_snapshots.read().unwrap();
-    let active = state.active_alerts.read().unwrap();
+    let metrics = state.metric_snapshots.read().unwrap_or_else(|e| e.into_inner());
+    let active = state.active_alerts.read().unwrap_or_else(|e| e.into_inner());
 
     let status = if active.iter().any(|a| a.severity == "critical") {
         "critical"
@@ -339,9 +339,9 @@ fn build_health(state: &ObservabilityApiState) -> HealthSummary {
 
 /// GET /api/v1/observability/dashboard
 async fn dashboard(State(state): State<ObservabilityApiState>) -> Json<DashboardResponse> {
-    let metrics = state.metric_snapshots.read().unwrap().clone();
-    let rules = state.alert_rules.read().unwrap().clone();
-    let alerts = state.active_alerts.read().unwrap().clone();
+    let metrics = state.metric_snapshots.read().unwrap_or_else(|e| e.into_inner()).clone();
+    let rules = state.alert_rules.read().unwrap_or_else(|e| e.into_inner()).clone();
+    let alerts = state.active_alerts.read().unwrap_or_else(|e| e.into_inner()).clone();
     let health = build_health(&state);
 
     Json(DashboardResponse {
@@ -357,7 +357,7 @@ async fn metrics(
     State(state): State<ObservabilityApiState>,
     Query(query): Query<MetricsQuery>,
 ) -> Json<serde_json::Value> {
-    let all = state.metric_snapshots.read().unwrap();
+    let all = state.metric_snapshots.read().unwrap_or_else(|e| e.into_inner());
     let filtered: HashMap<&String, &MetricValue> = match &query.prefix {
         Some(prefix) => all.iter().filter(|(k, _)| k.starts_with(prefix.as_str())).collect(),
         None => all.iter().collect(),
@@ -378,7 +378,7 @@ async fn create_alert_rule(
     State(state): State<ObservabilityApiState>,
     Json(rule): Json<AlertRuleConfig>,
 ) -> Result<(StatusCode, Json<AlertRuleConfig>), (StatusCode, Json<ObsErrorResponse>)> {
-    let mut rules = state.alert_rules.write().unwrap();
+    let mut rules = state.alert_rules.write().unwrap_or_else(|e| e.into_inner());
     if rules.iter().any(|r| r.id == rule.id) {
         return Err((
             StatusCode::CONFLICT,
@@ -394,7 +394,7 @@ async fn create_alert_rule(
 
 /// GET /api/v1/observability/alerts/rules
 async fn list_alert_rules(State(state): State<ObservabilityApiState>) -> Json<serde_json::Value> {
-    let rules = state.alert_rules.read().unwrap();
+    let rules = state.alert_rules.read().unwrap_or_else(|e| e.into_inner());
     Json(serde_json::json!({
         "rules": *rules,
         "total": rules.len(),
@@ -406,7 +406,7 @@ async fn delete_alert_rule(
     State(state): State<ObservabilityApiState>,
     Path(id): Path<String>,
 ) -> Result<Json<ObsDeleteResponse>, (StatusCode, Json<ObsErrorResponse>)> {
-    let mut rules = state.alert_rules.write().unwrap();
+    let mut rules = state.alert_rules.write().unwrap_or_else(|e| e.into_inner());
     let before = rules.len();
     rules.retain(|r| r.id != id);
     if rules.len() == before {
@@ -424,7 +424,7 @@ async fn delete_alert_rule(
 
 /// GET /api/v1/observability/alerts/active
 async fn list_active_alerts(State(state): State<ObservabilityApiState>) -> Json<serde_json::Value> {
-    let alerts = state.active_alerts.read().unwrap();
+    let alerts = state.active_alerts.read().unwrap_or_else(|e| e.into_inner());
     Json(serde_json::json!({
         "alerts": *alerts,
         "total": alerts.len(),
@@ -437,7 +437,7 @@ async fn acknowledge_alert(
     Path(id): Path<String>,
     Json(body): Json<AcknowledgeRequest>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<ObsErrorResponse>)> {
-    let mut alerts = state.active_alerts.write().unwrap();
+    let mut alerts = state.active_alerts.write().unwrap_or_else(|e| e.into_inner());
     let alert = alerts.iter_mut().find(|a| a.rule_id == id);
     match alert {
         Some(a) => {

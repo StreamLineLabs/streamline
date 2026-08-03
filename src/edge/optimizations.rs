@@ -474,7 +474,7 @@ impl EdgeOptimizer {
                 buffer_pool_size: 16,
                 max_cache_entries: 4096,
                 max_concurrent_reads: self.effective_max_concurrent_reads(8),
-                use_memory_mapped_io: self.config.prefer_mmap || true,
+                use_memory_mapped_io: true,
                 description: "Standard mode: full buffers and caching".to_string(),
             }
         }

@@ -104,8 +104,16 @@ mod tests {
     use crate::ai::semantic_topics::registry;
     use crate::ai::semantic_topics::SemanticIndex;
 
+    /// The semantic index registry is process-global, so these tests must not
+    /// run concurrently: one test's `reset_for_tests()` would otherwise wipe
+    /// another test's seeded index.
+    fn registry_guard() -> std::sync::MutexGuard<'static, ()> {
+        registry::test_lock()
+    }
+
     #[test]
     fn reembed_empty_topic_is_noop() {
+        let _guard = registry_guard();
         registry::reset_for_tests();
         let embedder = HashEmbedder::default();
         let config = ReembedConfig::new("nonexistent", "bge-small");
@@ -117,6 +125,7 @@ mod tests {
 
     #[test]
     fn reembed_swaps_index() {
+        let _guard = registry_guard();
         let topic = format!("reembed-swap-{}", std::process::id());
         let embedder = HashEmbedder::new(32);
 
@@ -142,6 +151,7 @@ mod tests {
 
     #[test]
     fn reembed_respects_batch_size() {
+        let _guard = registry_guard();
         registry::reset_for_tests();
         let embedder = HashEmbedder::new(16);
 
@@ -160,6 +170,7 @@ mod tests {
 
     #[test]
     fn progress_tracks_elapsed_time() {
+        let _guard = registry_guard();
         registry::reset_for_tests();
         let embedder = HashEmbedder::default();
         let config = ReembedConfig::new("elapsed-test", "model");

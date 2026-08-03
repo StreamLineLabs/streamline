@@ -115,9 +115,7 @@ fn bench_latency_under_load(c: &mut Criterion) {
     for partitions in [1, 4, 12] {
         let dir = tempdir().unwrap();
         let manager = TopicManager::new(dir.path()).unwrap();
-        manager
-            .create_topic_with_partitions("load-topic", partitions)
-            .unwrap();
+        manager.create_topic("load-topic", partitions).unwrap();
 
         let payload = Bytes::from(vec![b'x'; 1024]);
 

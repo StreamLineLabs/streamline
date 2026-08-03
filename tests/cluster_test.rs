@@ -33,6 +33,7 @@ fn test_cluster_config(node_id: u64, kafka_port: u16, inter_broker_port: u16) ->
         inter_broker_tls: InterBrokerTlsConfig::default(),
         rack_id: None,
         rack_aware_assignment: true,
+        ..ClusterConfig::default()
     }
 }
 

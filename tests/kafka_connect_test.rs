@@ -27,6 +27,7 @@ mod kafka_connect_tests {
     fn test_router() -> axum::Router {
         let state = ConnectApiState {
             connector_manager: Arc::new(ConnectorManager::new()),
+            runtime: None,
         };
         create_connect_router(state)
     }

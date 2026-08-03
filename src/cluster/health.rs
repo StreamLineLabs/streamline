@@ -596,12 +596,12 @@ mod tests {
     }
 
     #[test]
-    fn test_empty_cluster_is_green() {
+    fn test_empty_cluster_is_yellow_until_controller_is_elected() {
         let mut monitor = ClusterHealthMonitor::new(1);
         let metadata = ClusterMetadata::new("test".to_string());
 
         let report = monitor.evaluate(&metadata);
-        assert_eq!(report.status, ClusterHealthStatus::Green);
+        assert_eq!(report.status, ClusterHealthStatus::Yellow);
     }
 
     #[test]

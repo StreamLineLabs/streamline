@@ -949,7 +949,7 @@ mod tests {
             "name": "Alice",
             "age": 30,
             "active": true,
-            "score": 3.14,
+            "score": 2.5,
             "tags": ["a", "b"],
             "address": {"city": "NYC"},
             "deleted_at": null

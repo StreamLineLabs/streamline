@@ -718,6 +718,7 @@ mod tests {
     #[cfg(feature = "agent-memory")]
     #[tokio::test]
     async fn test_remember_then_recall_via_mcp() {
+        let _guard = crate::ai::semantic_topics::registry::test_lock();
         crate::memory::tier_router::reset_for_tests();
         let backend = make_mock_with_data();
         let r = execute_tool(

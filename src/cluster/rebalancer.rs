@@ -411,8 +411,12 @@ impl PartitionRebalancer {
                         },
                     });
 
-                    *load_map.get_mut(&overloaded).unwrap() -= 1;
-                    *load_map.get_mut(&underloaded).unwrap() += 1;
+                    if let Some(load) = load_map.get_mut(&overloaded) {
+                        *load -= 1;
+                    }
+                    if let Some(load) = load_map.get_mut(&underloaded) {
+                        *load += 1;
+                    }
                     moved = true;
                     break;
                 }

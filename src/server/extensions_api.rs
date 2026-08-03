@@ -200,11 +200,11 @@ pub fn create_extensions_api_router(state: ExtensionsApiState) -> Router {
             post(create_webhook).get(list_webhooks),
         )
         .route(
-            "/api/v1/extensions/webhooks/{id}",
+            "/api/v1/extensions/webhooks/:id",
             delete(delete_webhook),
         )
         .route(
-            "/api/v1/extensions/webhooks/{id}/test",
+            "/api/v1/extensions/webhooks/:id/test",
             post(test_webhook),
         )
         // widgets
@@ -213,7 +213,7 @@ pub fn create_extensions_api_router(state: ExtensionsApiState) -> Router {
             post(create_widget).get(list_widgets),
         )
         .route(
-            "/api/v1/extensions/widgets/{id}",
+            "/api/v1/extensions/widgets/:id",
             delete(delete_widget),
         )
         // triggers
@@ -222,7 +222,7 @@ pub fn create_extensions_api_router(state: ExtensionsApiState) -> Router {
             post(create_trigger).get(list_triggers),
         )
         .route(
-            "/api/v1/extensions/triggers/{id}",
+            "/api/v1/extensions/triggers/:id",
             delete(delete_trigger),
         )
         // stats

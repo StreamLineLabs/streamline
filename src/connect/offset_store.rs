@@ -224,8 +224,15 @@ impl ConnectorOffsetStore {
         })?;
 
         let cache = self.cache.clone();
-        // We're in a synchronous context at startup; use blocking lock.
-        let mut cache_guard = cache.blocking_write();
+        // Startup runs before the store is shared, so the lock is uncontended.
+        // `try_write` avoids blocking the calling thread, which panics when the
+        // store is constructed from inside an async runtime.
+        let mut cache_guard = cache.try_write().map_err(|_| {
+            StreamlineError::storage(
+                "load_offsets",
+                "offset cache was already locked during startup",
+            )
+        })?;
 
         for entry in entries {
             let entry = match entry {

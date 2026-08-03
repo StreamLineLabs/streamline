@@ -382,8 +382,8 @@ pub use cluster::{
     AutoScaler, AutoScalerConfig, AutoScalerStats, BrokerInfo, ClusterConfig, ClusterManager,
     ClusterMetadata, DrainInfo, DrainState, FailoverConfig, FailoverEvent, FailoverHandler,
     HpaMetric, HpaMetricsAdapter, InterBrokerTls, InterBrokerTlsConfig, MetricType,
-    MetricsSnapshot, NodeId, NodeState, PartitionAssignment, ScaleDirection, ScalingDecision,
-    ScalingPolicy, TopicAssignment,
+    MetricsSnapshot, NodeId, NodeState, ScaleDirection, ScalingDecision, ScalingPolicy,
+    TopicAssignment,
 };
 pub use config::{AclConfig, AuthConfig, ServerArgs, ServerConfig, StorageConfig, WalConfig};
 pub use consumer::{

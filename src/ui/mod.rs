@@ -26,6 +26,7 @@
 //! ```
 
 mod client;
+#[allow(dead_code)]
 mod query_editor;
 mod routes;
 mod sse;

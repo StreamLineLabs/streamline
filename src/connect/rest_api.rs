@@ -284,20 +284,20 @@ pub fn connect_router() -> Router<ConnectState> {
     Router::new()
         .route("/connectors", get(list_connectors).post(create_connector))
         .route(
-            "/connectors/{name}",
+            "/connectors/:name",
             get(get_connector).delete(delete_connector),
         )
         .route(
-            "/connectors/{name}/config",
+            "/connectors/:name/config",
             get(get_connector_config).put(update_connector_config),
         )
-        .route("/connectors/{name}/status", get(get_connector_status))
-        .route("/connectors/{name}/restart", post(restart_connector))
-        .route("/connectors/{name}/pause", put(pause_connector))
-        .route("/connectors/{name}/resume", put(resume_connector))
-        .route("/connectors/{name}/tasks", get(list_tasks))
+        .route("/connectors/:name/status", get(get_connector_status))
+        .route("/connectors/:name/restart", post(restart_connector))
+        .route("/connectors/:name/pause", put(pause_connector))
+        .route("/connectors/:name/resume", put(resume_connector))
+        .route("/connectors/:name/tasks", get(list_tasks))
         .route(
-            "/connectors/{name}/tasks/{task_id}/status",
+            "/connectors/:name/tasks/:task_id/status",
             get(get_task_status),
         )
         .route("/connector-plugins", get(list_plugins))

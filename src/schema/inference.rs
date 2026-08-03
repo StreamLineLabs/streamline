@@ -787,6 +787,17 @@ fn generate_doc_from_name(name: &str) -> String {
     sentence
 }
 
+/// Infer a JSON Schema document from a sample JSON value.
+///
+/// Returns the serialized JSON Schema, suitable for registration with the
+/// schema registry as a [`SchemaType::Json`](crate::schema::SchemaType) schema.
+pub fn infer_json_schema(value: &Value) -> String {
+    SchemaInferrer::new()
+        .infer_from_value(value)
+        .to_json_schema()
+        .to_string()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -943,5 +954,24 @@ mod tests {
         assert_eq!(to_pascal_case("my_field"), "MyField");
         assert_eq!(to_pascal_case("user-id"), "UserId");
         assert_eq!(to_pascal_case("simple"), "Simple");
+    }
+
+    #[test]
+    fn test_infer_json_schema_from_object() {
+        let value = serde_json::json!({"id": 1, "name": "Alice", "active": true});
+        let schema: Value = serde_json::from_str(&infer_json_schema(&value))
+            .expect("inferred schema must be valid JSON");
+
+        assert_eq!(schema["type"], "object");
+        assert_eq!(schema["properties"]["id"]["type"], "integer");
+        assert_eq!(schema["properties"]["name"]["type"], "string");
+        assert_eq!(schema["properties"]["active"]["type"], "boolean");
+    }
+
+    #[test]
+    fn test_infer_json_schema_from_scalar() {
+        let schema: Value = serde_json::from_str(&infer_json_schema(&serde_json::json!("hello")))
+            .expect("inferred schema must be valid JSON");
+        assert_eq!(schema["type"], "string");
     }
 }

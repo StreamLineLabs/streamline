@@ -112,6 +112,7 @@ impl ChaosCluster {
                 inter_broker_tls: InterBrokerTlsConfig::default(),
                 rack_id: None,
                 rack_aware_assignment: true,
+                ..ClusterConfig::default()
             };
 
             let node = ChaosNode::new(node_id, config, data_path, network.clone());

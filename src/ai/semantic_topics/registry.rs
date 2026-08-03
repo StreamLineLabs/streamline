@@ -57,12 +57,23 @@ pub(crate) fn reset_for_tests() {
     }
 }
 
+/// Test helper: serialize tests that mutate the process-global registry.
+///
+/// The registry is shared by the whole test binary, so a `reset_for_tests()`
+/// in one test would otherwise wipe an index another test just seeded.
+#[cfg(test)]
+pub(crate) fn test_lock() -> std::sync::MutexGuard<'static, ()> {
+    static REGISTRY_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    REGISTRY_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn get_or_create_is_idempotent() {
+        let _guard = test_lock();
         reset_for_tests();
         let a = get_or_create("topic-a");
         let b = get_or_create("topic-a");
@@ -71,6 +82,7 @@ mod tests {
 
     #[test]
     fn unknown_topic_returns_none() {
+        let _guard = test_lock();
         reset_for_tests();
         assert!(get("never-created").is_none());
         let _ = get_or_create("now-it-exists");

@@ -166,8 +166,8 @@ async fn test_hive_catalog_not_supported() {
     assert!(result.is_err());
 
     let error = result.unwrap_err().to_string();
-    assert!(error.contains("Hive catalog support is not yet available"));
-    assert!(error.contains("hive_metastore"));
+    assert!(error.contains("Hive catalog is currently 'planned'"), "unexpected error: {error}");
+    assert!(error.contains("hive_metastore"), "unexpected error: {error}");
 }
 
 /// Test Glue catalog type returns helpful error
@@ -192,8 +192,8 @@ async fn test_glue_catalog_not_supported() {
     assert!(result.is_err());
 
     let error = result.unwrap_err().to_string();
-    assert!(error.contains("Glue catalog support is not yet available"));
-    assert!(error.contains("hive_metastore"));
+    assert!(error.contains("Glue catalog is currently 'planned'"), "unexpected error: {error}");
+    assert!(error.contains("hive_metastore"), "unexpected error: {error}");
 }
 
 /// Test different partitioning strategies

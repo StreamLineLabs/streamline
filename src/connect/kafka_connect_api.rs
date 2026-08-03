@@ -347,14 +347,12 @@ async fn create_connector(
         );
     }
 
-    if !req.config.contains_key("connector.class") {
+    let Some(class) = req.config.get("connector.class") else {
         return error_response(
             StatusCode::BAD_REQUEST,
             "Missing required config: connector.class",
         );
-    }
-
-    let class = req.config.get("connector.class").unwrap();
+    };
     let connector_type = connector_type_from_class(class);
 
     let tasks_max = req
@@ -794,37 +792,37 @@ pub fn create_kafka_connect_router(state: KafkaConnectApiState) -> Router {
         // Connectors CRUD
         .route("/connectors", get(list_connectors).post(create_connector))
         .route(
-            "/connectors/{name}",
+            "/connectors/:name",
             get(get_connector).delete(delete_connector),
         )
         .route(
-            "/connectors/{name}/config",
+            "/connectors/:name/config",
             get(get_connector_config).put(update_connector_config),
         )
-        .route("/connectors/{name}/status", get(get_connector_status))
-        .route("/connectors/{name}/pause", put(pause_connector))
-        .route("/connectors/{name}/resume", put(resume_connector))
-        .route("/connectors/{name}/restart", post(restart_connector))
+        .route("/connectors/:name/status", get(get_connector_status))
+        .route("/connectors/:name/pause", put(pause_connector))
+        .route("/connectors/:name/resume", put(resume_connector))
+        .route("/connectors/:name/restart", post(restart_connector))
         // Tasks
-        .route("/connectors/{name}/tasks", get(get_connector_tasks))
+        .route("/connectors/:name/tasks", get(get_connector_tasks))
         .route(
-            "/connectors/{name}/tasks/{task_id}/status",
+            "/connectors/:name/tasks/:task_id/status",
             get(get_task_status),
         )
         .route(
-            "/connectors/{name}/tasks/{task_id}/restart",
+            "/connectors/:name/tasks/:task_id/restart",
             post(restart_task),
         )
         // Topics
-        .route("/connectors/{name}/topics", get(get_connector_topics))
+        .route("/connectors/:name/topics", get(get_connector_topics))
         .route(
-            "/connectors/{name}/topics/reset",
+            "/connectors/:name/topics/reset",
             put(reset_connector_topics),
         )
         // Plugins
         .route("/connector-plugins", get(list_connector_plugins))
         .route(
-            "/connector-plugins/{plugin_name}/config/validate",
+            "/connector-plugins/:plugin_name/config/validate",
             put(validate_connector_config),
         )
         .with_state(state)

@@ -444,7 +444,7 @@ impl FailoverOrchestrator {
         let regions: Vec<RegionFailoverState> = self.regions.read().await.values().cloned().collect();
 
         for region in &regions {
-            if region.role == RegionRole::Active && region.health == RegionHealth::Unhealthy {
+            if region.role == RegionRole::Active && region.health == RegionHealth::Unreachable {
                 if let Some(event) = self.record_failure(&region.region_id).await? {
                     triggered_events.push(event);
                 }
@@ -527,6 +527,45 @@ mod tests {
         // Second failure - triggers failover
         let event = orch.record_failure("us-east-1").await.unwrap();
         assert!(event.is_some());
+
+        let regions = orch.region_states().await;
+        let west = regions.iter().find(|r| r.region_id == "us-west-2").unwrap();
+        assert_eq!(west.role, RegionRole::Active);
+    }
+
+    #[tokio::test]
+    async fn test_automated_failover_promotes_on_unreachable_active() {
+        let config = FailoverConfig {
+            failure_threshold: 1,
+            auto_failover: true,
+            ..Default::default()
+        };
+        let orch = FailoverOrchestrator::new("us-east-1", config);
+
+        orch.register_region("us-east-1", "east:9092", RegionRole::Active)
+            .await
+            .unwrap();
+
+        // Healthy regions are never failed over automatically.
+        orch.record_heartbeat("us-east-1", 100).await.unwrap();
+        assert!(orch.check_automated_failover().await.unwrap().is_empty());
+
+        // Without a standby the active region is marked unreachable but stays active.
+        assert!(orch.record_failure("us-east-1").await.unwrap().is_none());
+        let regions = orch.region_states().await;
+        let east = regions.iter().find(|r| r.region_id == "us-east-1").unwrap();
+        assert_eq!(east.health, RegionHealth::Unreachable);
+        assert_eq!(east.role, RegionRole::Active);
+
+        // Once a standby exists, the automated sweep detects the stale active
+        // region and promotes the standby.
+        orch.register_region("us-west-2", "west:9092", RegionRole::Standby)
+            .await
+            .unwrap();
+        let events = orch.check_automated_failover().await.unwrap();
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].from_region, "us-east-1");
+        assert_eq!(events[0].to_region, "us-west-2");
 
         let regions = orch.region_states().await;
         let west = regions.iter().find(|r| r.region_id == "us-west-2").unwrap();

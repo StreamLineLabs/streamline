@@ -13,7 +13,7 @@
 //! ## Example
 //!
 //! ```
-//! use streamline::cluster::autoscaler::{AutoScaler, AutoScalerConfig, ScalingPolicy};
+//! use streamline::{AutoScaler, AutoScalerConfig, ScalingPolicy};
 //!
 //! let config = AutoScalerConfig {
 //!     enabled: true,

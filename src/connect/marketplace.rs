@@ -539,7 +539,7 @@ pub fn create_marketplace_router(state: MarketplaceApiState) -> Router {
             get(list_installed_transforms),
         )
         .route(
-            "/api/v1/marketplace/transforms/{name}/install",
+            "/api/v1/marketplace/transforms/:name/install",
             post(install_transform),
         )
         .with_state(state)

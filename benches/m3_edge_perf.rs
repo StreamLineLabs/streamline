@@ -7,7 +7,7 @@
 //! Run: `cargo bench --bench m3_edge_perf --features edge`
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion, BenchmarkId};
-use streamline::edge::EdgeRuntime;
+use streamline::EdgeRuntime;
 
 fn setup_runtime_with_data(topic: &str, record_count: usize) -> EdgeRuntime {
     let runtime = EdgeRuntime::in_memory().expect("failed to create edge runtime");

@@ -284,7 +284,7 @@ impl EbpfMetricsCollector {
         bytes_recv: u64,
         latency_us: f64,
     ) {
-        let mut conns = self.connection_metrics.write().unwrap();
+        let mut conns = self.connection_metrics.write().unwrap_or_else(|e| e.into_inner());
 
         // Evict oldest entry when at capacity and this is a new key.
         if conns.len() >= self.config.max_connections_tracked && !conns.contains_key(remote) {
@@ -337,7 +337,7 @@ impl EbpfMetricsCollector {
         if !self.config.enable_io_tracking {
             return;
         }
-        let mut io = self.io_metrics.write().unwrap();
+        let mut io = self.io_metrics.write().unwrap_or_else(|e| e.into_inner());
         if is_read {
             io.read_latency_us.observe(latency_us);
             io.read_bytes_total += bytes;
@@ -355,7 +355,7 @@ impl EbpfMetricsCollector {
         if !self.config.enable_io_tracking {
             return;
         }
-        let mut io = self.io_metrics.write().unwrap();
+        let mut io = self.io_metrics.write().unwrap_or_else(|e| e.into_inner());
         io.fsync_count += 1;
         io.fsync_latency_us.observe(latency_us);
         self.stats.record_event();
@@ -366,7 +366,7 @@ impl EbpfMetricsCollector {
         if !self.config.enable_syscall_tracking {
             return;
         }
-        let mut sc = self.syscall_metrics.write().unwrap();
+        let mut sc = self.syscall_metrics.write().unwrap_or_else(|e| e.into_inner());
         let entry = sc.calls.entry(name.to_string()).or_insert_with(|| SyscallStats {
             count: 0,
             total_duration_us: 0.0,
@@ -392,7 +392,7 @@ impl EbpfMetricsCollector {
 
         let top_connections = self.get_top_connections(self.config.top_n_connections);
 
-        let io = self.io_metrics.read().unwrap();
+        let io = self.io_metrics.read().unwrap_or_else(|e| e.into_inner());
         let io_summary = IoSummary {
             read_throughput_bytes_sec: io.read_bytes_total as f64 / window as f64,
             write_throughput_bytes_sec: io.write_bytes_total as f64 / window as f64,
@@ -401,7 +401,7 @@ impl EbpfMetricsCollector {
             fsync_p99_latency_us: io.fsync_latency_us.percentile(0.99),
         };
 
-        let sc = self.syscall_metrics.read().unwrap();
+        let sc = self.syscall_metrics.read().unwrap_or_else(|e| e.into_inner());
         let syscall_summary: Vec<SyscallSummary> = sc
             .calls
             .iter()
@@ -417,7 +417,7 @@ impl EbpfMetricsCollector {
             })
             .collect();
 
-        let conns = self.connection_metrics.read().unwrap();
+        let conns = self.connection_metrics.read().unwrap_or_else(|e| e.into_inner());
         let total_io_ops = io.read_ops_total + io.write_ops_total + io.fsync_count;
         let total_syscalls: u64 = sc.calls.values().map(|s| s.count).sum();
 
@@ -436,7 +436,7 @@ impl EbpfMetricsCollector {
 
     /// Return the top-N connections ranked by total bytes transferred.
     pub fn get_top_connections(&self, n: usize) -> Vec<ConnectionSummary> {
-        let conns = self.connection_metrics.read().unwrap();
+        let conns = self.connection_metrics.read().unwrap_or_else(|e| e.into_inner());
         let mut entries: Vec<_> = conns.values().collect();
         entries.sort_by(|a, b| {
             let total_a = a.bytes_sent + a.bytes_received;
@@ -466,12 +466,19 @@ impl EbpfMetricsCollector {
 
     /// Reset all collected metrics.
     pub fn reset(&self) {
-        self.connection_metrics.write().unwrap().clear();
+        self.connection_metrics
+            .write()
+            .unwrap_or_else(|e| e.into_inner())
+            .clear();
         {
-            let mut io = self.io_metrics.write().unwrap();
+            let mut io = self.io_metrics.write().unwrap_or_else(|e| e.into_inner());
             *io = IoMetricsAggregator::new(&self.config.histogram_buckets);
         }
-        self.syscall_metrics.write().unwrap().calls.clear();
+        self.syscall_metrics
+            .write()
+            .unwrap_or_else(|e| e.into_inner())
+            .calls
+            .clear();
     }
 }
 

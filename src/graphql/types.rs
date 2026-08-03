@@ -320,16 +320,17 @@ pub fn record_to_message(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::storage::record::{Header, Record};
+    use bytes::Bytes;
 
     #[test]
     fn test_record_to_message_basic() {
-        let record = crate::storage::record::Record {
-            offset: 42,
-            timestamp: 1700000000000,
-            key: Some(b"my-key".to_vec()),
-            value: b"hello world".to_vec(),
-            headers: vec![],
-        };
+        let record = Record::new(
+            42,
+            1700000000000,
+            Some(Bytes::from_static(b"my-key")),
+            Bytes::from_static(b"hello world"),
+        );
 
         let msg = record_to_message("events", 0, record);
         assert_eq!(msg.topic, "events");
@@ -342,13 +343,7 @@ mod tests {
 
     #[test]
     fn test_record_to_message_no_key() {
-        let record = crate::storage::record::Record {
-            offset: 0,
-            timestamp: 1700000000000,
-            key: None,
-            value: b"data".to_vec(),
-            headers: vec![],
-        };
+        let record = Record::new(0, 1700000000000, None, Bytes::from_static(b"data"));
 
         let msg = record_to_message("logs", 3, record);
         assert!(msg.key.is_none());
@@ -357,22 +352,22 @@ mod tests {
 
     #[test]
     fn test_record_to_message_with_headers() {
-        let record = crate::storage::record::Record {
-            offset: 10,
-            timestamp: 1700000000000,
-            key: None,
-            value: b"v".to_vec(),
-            headers: vec![
-                crate::storage::record::RecordHeader {
+        let record = Record::with_headers(
+            10,
+            1700000000000,
+            None,
+            Bytes::from_static(b"v"),
+            vec![
+                Header {
                     key: "trace-id".to_string(),
-                    value: b"abc-123".to_vec(),
+                    value: Bytes::from_static(b"abc-123"),
                 },
-                crate::storage::record::RecordHeader {
+                Header {
                     key: "content-type".to_string(),
-                    value: b"application/json".to_vec(),
+                    value: Bytes::from_static(b"application/json"),
                 },
             ],
-        };
+        );
 
         let msg = record_to_message("events", 0, record);
         assert_eq!(msg.headers.len(), 2);
@@ -384,13 +379,12 @@ mod tests {
 
     #[test]
     fn test_record_to_message_non_utf8_value() {
-        let record = crate::storage::record::Record {
-            offset: 0,
-            timestamp: 1700000000000,
-            key: None,
-            value: vec![0xFF, 0xFE, 0xFD],
-            headers: vec![],
-        };
+        let record = Record::new(
+            0,
+            1700000000000,
+            None,
+            Bytes::from_static(&[0xFF, 0xFE, 0xFD]),
+        );
 
         let msg = record_to_message("binary", 0, record);
         // from_utf8_lossy should handle non-UTF8 gracefully
@@ -399,13 +393,12 @@ mod tests {
 
     #[test]
     fn test_record_to_message_timestamp_formatting() {
-        let record = crate::storage::record::Record {
-            offset: 0,
-            timestamp: 1700000000000, // 2023-11-14T22:13:20Z
-            key: None,
-            value: b"v".to_vec(),
-            headers: vec![],
-        };
+        let record = Record::new(
+            0,
+            1700000000000, // 2023-11-14T22:13:20Z
+            None,
+            Bytes::from_static(b"v"),
+        );
 
         let msg = record_to_message("t", 0, record);
         assert!(msg.timestamp.contains("2023"));

@@ -88,7 +88,12 @@ impl StreamlineClient {
         let client = reqwest::Client::builder()
             .timeout(Duration::from_millis(config.timeout_ms))
             .build()
-            .map_err(|e| crate::error::StreamlineError::Internal(format!("Failed to create HTTP client: {}", e)))?;
+            .map_err(|e| {
+                crate::error::StreamlineError::Internal(format!(
+                    "Failed to create HTTP client: {}",
+                    e
+                ))
+            })?;
 
         Ok(Self {
             config,
@@ -515,6 +520,32 @@ impl StreamlineClient {
 
         let produce_response = response.json().await?;
         Ok(produce_response)
+    }
+
+    /// Execute a SQL query via the Streamline unified query API.
+    pub async fn execute_query(
+        &self,
+        sql: &str,
+        max_rows: usize,
+    ) -> Result<QueryResponse, ClientError> {
+        let url = format!("{}/api/v1/query", self.config.base_url);
+        let response = self
+            .client
+            .post(&url)
+            .json(&serde_json::json!({ "sql": sql, "max_rows": max_rows }))
+            .send()
+            .await?;
+
+        if !response.status().is_success() {
+            return Err(ClientError::ApiError(format!(
+                "HTTP {}: {}",
+                response.status(),
+                response.text().await.unwrap_or_default()
+            )));
+        }
+
+        let query_response = response.json().await?;
+        Ok(query_response)
     }
 
     /// Compare two topics.
@@ -1255,6 +1286,47 @@ pub struct ConsumeRecord {
     pub value: serde_json::Value,
     /// Record headers.
     pub headers: std::collections::HashMap<String, String>,
+}
+
+/// Column metadata returned by `POST /api/v1/query`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QueryColumn {
+    /// Column name.
+    pub name: String,
+    /// Column data type.
+    #[serde(rename = "type", default)]
+    pub col_type: String,
+}
+
+/// Execution metadata returned by `POST /api/v1/query`.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct QueryResponseMetadata {
+    /// Server-side execution time in milliseconds.
+    #[serde(default)]
+    pub execution_time_ms: u64,
+    /// Number of rows scanned by the engine.
+    #[serde(default)]
+    pub rows_scanned: u64,
+    /// Number of rows returned to the caller.
+    #[serde(default)]
+    pub rows_returned: usize,
+    /// Whether the result set was truncated by `max_rows`.
+    #[serde(default)]
+    pub truncated: bool,
+}
+
+/// Response body of `POST /api/v1/query`.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct QueryResponse {
+    /// Result column metadata.
+    #[serde(default)]
+    pub columns: Vec<QueryColumn>,
+    /// Result rows, each a positional array matching `columns`.
+    #[serde(default)]
+    pub rows: Vec<Vec<serde_json::Value>>,
+    /// Execution metadata.
+    #[serde(default)]
+    pub metadata: QueryResponseMetadata,
 }
 
 /// Broker information.

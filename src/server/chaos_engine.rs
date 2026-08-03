@@ -267,7 +267,7 @@ impl ChaosEngine {
             ended_at: None,
         };
 
-        let mut experiments = self.experiments.write().unwrap();
+        let mut experiments = self.experiments.write().unwrap_or_else(|e| e.into_inner());
         experiments.insert(id.clone(), experiment);
         info!(id = %id, name, "chaos experiment created");
         Ok(id)
@@ -279,7 +279,7 @@ impl ChaosEngine {
             return Err(ChaosError::Disabled);
         }
 
-        let mut experiments = self.experiments.write().unwrap();
+        let mut experiments = self.experiments.write().unwrap_or_else(|e| e.into_inner());
 
         // Check concurrent limit (count currently running experiments).
         let running = experiments
@@ -318,7 +318,7 @@ impl ChaosEngine {
 
     /// Stop a running experiment (marks it as [`ExperimentStatus::Completed`]).
     pub fn stop_experiment(&self, id: &str) -> Result<()> {
-        let mut experiments = self.experiments.write().unwrap();
+        let mut experiments = self.experiments.write().unwrap_or_else(|e| e.into_inner());
         let exp = experiments
             .get_mut(id)
             .ok_or_else(|| ChaosError::NotFound(id.to_string()))?;
@@ -341,15 +341,15 @@ impl ChaosEngine {
     }
 
     pub fn get_experiment(&self, id: &str) -> Option<ChaosExperiment> {
-        self.experiments.read().unwrap().get(id).cloned()
+        self.experiments.read().unwrap_or_else(|e| e.into_inner()).get(id).cloned()
     }
 
     pub fn list_experiments(&self) -> Vec<ChaosExperiment> {
-        self.experiments.read().unwrap().values().cloned().collect()
+        self.experiments.read().unwrap_or_else(|e| e.into_inner()).values().cloned().collect()
     }
 
     pub fn delete_experiment(&self, id: &str) -> Result<()> {
-        let mut experiments = self.experiments.write().unwrap();
+        let mut experiments = self.experiments.write().unwrap_or_else(|e| e.into_inner());
         let exp = experiments
             .get(id)
             .ok_or_else(|| ChaosError::NotFound(id.to_string()))?;
@@ -368,7 +368,7 @@ impl ChaosEngine {
     }
 
     pub fn record_result(&self, id: &str, result: ExperimentResult) -> Result<()> {
-        let mut experiments = self.experiments.write().unwrap();
+        let mut experiments = self.experiments.write().unwrap_or_else(|e| e.into_inner());
         let exp = experiments
             .get_mut(id)
             .ok_or_else(|| ChaosError::NotFound(id.to_string()))?;

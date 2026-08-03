@@ -2257,7 +2257,7 @@ mod tests {
             DataType::Int64
         );
         assert_eq!(
-            IcebergSink::infer_arrow_type(&serde_json::json!(3.14)),
+            IcebergSink::infer_arrow_type(&serde_json::json!(2.5)),
             DataType::Float64
         );
         assert_eq!(

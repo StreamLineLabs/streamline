@@ -244,6 +244,7 @@ mod tests {
 
     #[test]
     fn remember_then_recall_returns_fact() {
+        let _guard = crate::ai::semantic_topics::registry::test_lock();
         reset_for_tests();
         let w = MemoryWrite {
             agent_id: "bob".into(),
@@ -262,6 +263,7 @@ mod tests {
 
     #[test]
     fn recall_unknown_agent_is_empty() {
+        let _guard = crate::ai::semantic_topics::registry::test_lock();
         reset_for_tests();
         let hits = recall("ghost", "anything", 5, 0);
         assert!(hits.is_empty());
@@ -269,6 +271,7 @@ mod tests {
 
     #[test]
     fn recall_falls_back_to_episodic_when_semantic_empty() {
+        let _guard = crate::ai::semantic_topics::registry::test_lock();
         reset_for_tests();
         let w = MemoryWrite {
             agent_id: "carol".into(),
@@ -285,6 +288,7 @@ mod tests {
 
     #[test]
     fn k_zero_short_circuits() {
+        let _guard = crate::ai::semantic_topics::registry::test_lock();
         reset_for_tests();
         assert!(recall("a", "q", 0, 0).is_empty());
     }

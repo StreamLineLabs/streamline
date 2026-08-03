@@ -197,7 +197,7 @@ async fn apply_handler(Json(req): Json<ApplyContractRequest>) -> Response {
         }
     }
 
-    let mut registry = contract_registry().lock().unwrap();
+    let mut registry = contract_registry().lock().unwrap_or_else(|e| e.into_inner());
     let version = registry
         .get(&req.topic)
         .map(|c| c.version + 1)

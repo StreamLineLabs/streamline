@@ -11,7 +11,8 @@
 
 #[cfg(feature = "sqlite-queries")]
 use crate::sqlite::SQLiteQueryEngine;
-
+#[cfg(feature = "sqlite-queries")]
+use std::sync::Arc;
 
 use axum::{
     extract::{Path, State},

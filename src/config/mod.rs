@@ -1173,9 +1173,7 @@ impl ServerConfig {
             )));
         }
 
-        if self.limits.connection_idle_timeout_secs > 0
-            && self.limits.connection_idle_timeout_secs > 86400
-        {
+        if self.limits.connection_idle_timeout_secs > 86400 {
             return Err(StreamlineError::Config(format!(
                 "connection_idle_timeout_secs ({}) exceeds 24 hours — likely a misconfiguration",
                 self.limits.connection_idle_timeout_secs

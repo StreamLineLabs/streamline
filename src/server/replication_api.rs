@@ -130,11 +130,11 @@ pub fn create_replication_api_router(state: ReplicationApiState) -> Router {
             get(list_regions).post(add_region),
         )
         .route(
-            "/api/v1/replication/regions/{id}",
+            "/api/v1/replication/regions/:id",
             get(get_region).delete(remove_region),
         )
-        .route("/api/v1/replication/regions/{id}/lag", get(get_region_lag))
-        .route("/api/v1/replication/regions/{id}/sync", post(force_sync))
+        .route("/api/v1/replication/regions/:id/lag", get(get_region_lag))
+        .route("/api/v1/replication/regions/:id/sync", post(force_sync))
         .route(
             "/api/v1/replication/topics",
             get(list_replicated_topics).post(configure_topic_replication),
