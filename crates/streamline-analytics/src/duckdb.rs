@@ -192,18 +192,13 @@ pub struct MaterializedView {
 }
 
 /// How a materialized view is refreshed.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum RefreshMode {
     /// Full recomputation from scratch on each refresh.
+    #[default]
     Full,
     /// Incremental: only process new records since last watermark.
     Incremental,
-}
-
-impl Default for RefreshMode {
-    fn default() -> Self {
-        RefreshMode::Full
-    }
 }
 
 /// Window specification for windowed materialized views.
