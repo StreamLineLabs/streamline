@@ -139,25 +139,20 @@ impl ContractValidator {
             ));
         }
 
-        let mut checks = Vec::new();
-
-        // 1. Compatibility check
-        checks.push(self.check_compatibility(request));
-
-        // 2. Naming convention
-        checks.push(self.check_naming_convention(request));
-
-        // 3. Documentation present
-        checks.push(self.check_documentation_present(request));
-
-        // 4. Field count limit
-        checks.push(self.check_field_count_limit(request));
-
-        // 5. No breaking changes
-        checks.push(self.check_no_breaking_changes(request));
-
-        // 6. Required fields have defaults
-        checks.push(self.check_required_fields_have_defaults(request));
+        let checks = vec![
+            // 1. Compatibility check
+            self.check_compatibility(request),
+            // 2. Naming convention
+            self.check_naming_convention(request),
+            // 3. Documentation present
+            self.check_documentation_present(request),
+            // 4. Field count limit
+            self.check_field_count_limit(request),
+            // 5. No breaking changes
+            self.check_no_breaking_changes(request),
+            // 6. Required fields have defaults
+            self.check_required_fields_have_defaults(request),
+        ];
 
         let verdict = Self::compute_verdict(&checks, self.config.strict_mode);
         let summary = Self::build_summary(&checks, verdict);
@@ -222,12 +217,12 @@ impl ContractValidator {
         debug!(subject = %result.subject, passed = checks_passed, failed = checks_failed, "CI report generated");
 
         CiReport {
-            title: format!("Schema Validation: {} — {:?}", result.subject, result.verdict),
-            body,
-            badge_url: format!(
-                "https://img.shields.io/badge/schema-{}-{}",
-                badge_label, badge_color
+            title: format!(
+                "Schema Validation: {} — {:?}",
+                result.subject, result.verdict
             ),
+            body,
+            badge_url: format!("https://img.shields.io/badge/schema-{badge_label}-{badge_color}"),
             checks_passed,
             checks_failed,
             checks_warned,
@@ -435,9 +430,7 @@ impl ContractValidator {
         let has_failure = checks.iter().any(|c| c.status == CheckStatus::Failed);
         let has_warning = checks.iter().any(|c| c.status == CheckStatus::Warning);
 
-        if has_failure {
-            Verdict::Fail
-        } else if has_warning && strict {
+        if has_failure || (has_warning && strict) {
             Verdict::Fail
         } else if has_warning {
             Verdict::Warn

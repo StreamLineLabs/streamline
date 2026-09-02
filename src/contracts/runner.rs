@@ -115,9 +115,14 @@ impl TestReport {
 
             for assertion in &result.assertions {
                 if !assertion.passed {
+                    let marker = if assertion.unsupported {
+                        "✗ [UNSUPPORTED]"
+                    } else {
+                        "✗"
+                    };
                     out.push_str(&format!(
-                        "      ✗ {}: {}\n",
-                        assertion.name, assertion.message
+                        "      {} {}: {}\n",
+                        marker, assertion.name, assertion.message
                     ));
                     for detail in &assertion.failure_details {
                         out.push_str(&format!("        - {detail}\n"));

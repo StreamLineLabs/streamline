@@ -437,14 +437,13 @@ kind: Connector
 metadata:
   name: my-connector
 spec:
-  connector_type: {}
+  connector_type: {connector_type}
   version: "1.0"
   direction: source
   topics:
     - my-topic
   config: {{}}
-"#,
-                connector_type
+"#
             ),
         }
     }

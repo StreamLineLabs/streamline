@@ -182,7 +182,12 @@ hex = "0.4"
 apache-avro = { version = "0.17", optional = true }
 prost = { version = "0.13", optional = true }
 prost-types = { version = "0.13", optional = true }
-jsonschema = { version = "0.26", optional = true }
+# Remote schema retrieval is deliberately unsupported. jsonschema's default
+# `resolve-http` feature calls its own blocking reqwest client, which cannot use
+# Streamline's explicit AWS-LC provider and can panic when no process-wide
+# provider is installed. Local fragments still work; external references fail
+# through the explicit retriever in src/schema/json_schema.rs.
+jsonschema = { version = "0.26", optional = true, default-features = false }
 
 # Clustering and Raft consensus (optional - clustering feature)
 openraft = { version = "0.9", features = ["serde", "tracing-log", "loosen-follower-log-revert"], optional = true }

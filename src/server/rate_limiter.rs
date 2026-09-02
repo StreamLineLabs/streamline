@@ -3,11 +3,11 @@
 //! Token bucket rate limiter for enforcing per-tenant / per-client quotas on
 //! produce, consume, and request rates.
 
+use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
-use parking_lot::RwLock;
 use tracing::{debug, info, warn};
 
 // ---------------------------------------------------------------------------
@@ -165,7 +165,6 @@ pub struct LimiterUsage {
 pub struct RateLimiterManager {
     limiters: Arc<RwLock<HashMap<String, TokenBucket>>>,
     config: RateLimiterConfig,
-    stats: Arc<RateLimiterStats>,
     /// Reference instant so we can derive monotonic milliseconds.
     epoch: Instant,
 }
@@ -176,7 +175,6 @@ impl RateLimiterManager {
         Self {
             limiters: Arc::new(RwLock::new(HashMap::new())),
             config,
-            stats: Arc::new(RateLimiterStats::default()),
             epoch: Instant::now(),
         }
     }

@@ -1,4 +1,18 @@
-//! Connector registry — manages installed connectors.
+//! Connector registry — tracks which *built-in* connectors are enabled.
+//!
+//! # Scope and limits
+//!
+//! This registry is an in-memory enablement record for connectors that already
+//! ship inside the binary (see [`super::catalog::MarketplaceCatalog`]). It does
+//! **not**:
+//!
+//! - fetch anything from a remote registry,
+//! - download, unpack or write connector artifacts to
+//!   [`MarketplaceConfig::install_dir`], or
+//! - verify any signature.
+//!
+//! "Installing" here means "mark this catalogued, already-compiled connector as
+//! enabled". Remote connector distribution is not implemented.
 
 use super::catalog::ConnectorCatalogEntry;
 use serde::{Deserialize, Serialize};
@@ -8,11 +22,20 @@ use std::path::PathBuf;
 /// Marketplace configuration.
 #[derive(Debug, Clone)]
 pub struct MarketplaceConfig {
-    /// Directory for installed connectors
+    /// Directory reserved for connector artifacts.
+    ///
+    /// Not written to: nothing is downloaded today.
     pub install_dir: PathBuf,
-    /// Registry URL for fetching connectors
+    /// Registry URL reserved for remote connector distribution.
+    ///
+    /// **Not used.** Remote fetching is not implemented; only connectors in the
+    /// built-in catalog can be enabled.
     pub registry_url: String,
-    /// Whether to allow unsigned connectors
+    /// Reserved for a future signature-verification policy.
+    ///
+    /// **Not enforced.** Because nothing is downloaded, there is nothing to
+    /// verify; this flag currently has no effect and must not be read as a
+    /// statement that signatures are checked when it is `false`.
     pub allow_unsigned: bool,
 }
 
@@ -71,7 +94,11 @@ impl MarketplaceRegistry {
         }
     }
 
-    /// Install a connector from the catalog.
+    /// Enable a connector from the built-in catalog.
+    ///
+    /// This does not download or verify anything — see the module docs. The
+    /// connector's code is already compiled into the binary; this only records
+    /// that it should be available.
     pub fn install(&mut self, entry: &ConnectorCatalogEntry) -> Result<(), String> {
         if self.installed.contains_key(&entry.metadata.name) {
             return Err(format!(

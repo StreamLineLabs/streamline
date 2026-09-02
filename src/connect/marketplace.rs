@@ -1,17 +1,39 @@
 //! WASM Transform Marketplace Client
 //!
-//! Provides server-side integration with the Streamline WASM Transform Marketplace.
-//! This module handles:
-//! - Fetching the transform registry from a remote URL
-//! - Downloading and caching WASM modules locally
-//! - Installing transforms to the server's transform directory
-//! - Listing available and installed transforms
+//! # Status: the marketplace is NOT implemented in this build
+//!
+//! There is no registry client, no downloader and no signature/digest
+//! verification here. Every operation that would require one fails closed with
+//! [`MarketplaceClientError::Unsupported`], which the HTTP layer maps to
+//! `501 Not Implemented`. Nothing is fetched, written or executed as a result
+//! of a marketplace request.
+//!
+//! What does work:
+//!
+//! - reading a registry index from a **local JSON file**, when an embedder
+//!   constructs [`MarketplaceClientConfig`] with `registry_url` set to that
+//!   path, and
+//! - registering a WASM module an embedder has already placed on disk, via
+//!   [`MarketplaceClient::register_local_transform`], which makes no integrity
+//!   claim it cannot back up.
 //!
 //! ## HTTP API Endpoints (behind `wasm-transforms` feature)
 //!
-//! - `GET /api/v1/marketplace/transforms` - List available transforms from registry
-//! - `POST /api/v1/marketplace/transforms/{name}/install` - Install a transform
-//! - `GET /api/v1/marketplace/transforms/installed` - List installed transforms
+//! The HTTP surface always builds its client with the built-in remote registry
+//! URL ([`DEFAULT_REGISTRY_URL`]) and exposes no setting to point it at a local
+//! file, so **the HTTP marketplace is unsupported end to end**:
+//!
+//! - `GET /api/v1/marketplace/transforms` — `501 Not Implemented` (the remote
+//!   registry cannot be fetched).
+//! - `POST /api/v1/marketplace/transforms/{name}/install` — `501 Not
+//!   Implemented`.
+//! - `GET /api/v1/marketplace/transforms/installed` — works; lists what an
+//!   embedder registered locally (usually empty).
+//!
+//! Adding a configuration knob or a "register a local module" endpoint is
+//! deliberately out of scope: exposing third-party module loading over HTTP
+//! needs a trust model (published digests, signature verification, size and
+//! path limits) that must be designed rather than bolted on.
 
 use axum::{
     extract::{Path, State},
@@ -76,8 +98,20 @@ pub struct InstalledMarketplaceTransform {
     pub version: String,
     /// Absolute path to the cached WASM module.
     pub wasm_path: String,
-    /// SHA-256 hash of the WASM module.
-    pub sha256: String,
+    /// SHA-256 hash of the WASM module, when one has actually been computed and
+    /// verified.
+    ///
+    /// This is `None` for modules that were registered from local disk: this
+    /// build has no SHA-256 implementation available unconditionally, and
+    /// reporting a non-cryptographic digest (a CRC32 was previously written
+    /// into this field) under the name `sha256` misrepresents the integrity
+    /// guarantee. See [`InstalledMarketplaceTransform::verified`].
+    #[serde(default)]
+    pub sha256: Option<String>,
+    /// Whether the module's integrity was cryptographically verified against a
+    /// digest published by the registry. Always `false` today.
+    #[serde(default)]
+    pub verified: bool,
     /// ISO 8601 timestamp of installation.
     pub installed_at: String,
     /// Original download URL.
@@ -114,6 +148,55 @@ impl Default for MarketplaceClientConfig {
 pub struct MarketplaceError {
     pub error: String,
     pub code: u16,
+}
+
+/// Errors produced by [`MarketplaceClient`].
+///
+/// The marketplace deliberately fails closed: operations that cannot be
+/// performed safely return [`MarketplaceClientError::Unsupported`] rather than
+/// fabricating a successful result.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum MarketplaceClientError {
+    /// The operation is not implemented in this build.
+    #[error("unsupported: {0}")]
+    Unsupported(String),
+    /// The registry could not be read or parsed.
+    #[error("registry error: {0}")]
+    Registry(String),
+    /// The requested transform is not in the registry.
+    #[error("transform not found: {0}")]
+    NotFound(String),
+    /// A filesystem operation failed.
+    #[error("io error: {0}")]
+    Io(String),
+    /// The module on disk is not a usable WASM module.
+    #[error("integrity error: {0}")]
+    Integrity(String),
+}
+
+impl MarketplaceClientError {
+    /// HTTP status that best represents this error.
+    fn status_code(&self) -> StatusCode {
+        match self {
+            // 501: the server understands the request but has not implemented it.
+            Self::Unsupported(_) => StatusCode::NOT_IMPLEMENTED,
+            Self::NotFound(_) => StatusCode::NOT_FOUND,
+            // 503: the registry is a dependency we could not consult.
+            Self::Registry(_) => StatusCode::SERVICE_UNAVAILABLE,
+            Self::Io(_) | Self::Integrity(_) => StatusCode::INTERNAL_SERVER_ERROR,
+        }
+    }
+
+    fn into_response_pair(self) -> (StatusCode, Json<MarketplaceError>) {
+        let status = self.status_code();
+        (
+            status,
+            Json(MarketplaceError {
+                error: self.to_string(),
+                code: status.as_u16(),
+            }),
+        )
+    }
 }
 
 /// Install request body.
@@ -162,13 +245,18 @@ impl MarketplaceClient {
     }
 
     /// Fetch the transform registry, using cache if available and fresh.
-    pub fn get_registry(&self) -> Vec<MarketplaceTransform> {
+    ///
+    /// Returns an error rather than an empty list when the registry cannot be
+    /// consulted: "the registry is unreachable" and "the registry is empty" are
+    /// very different answers, and conflating them made a broken configuration
+    /// look like an empty marketplace.
+    pub fn get_registry(&self) -> Result<Vec<MarketplaceTransform>, MarketplaceClientError> {
         // Check cache
         {
             let cache = self.registry_cache.read();
             if let Some(ref cached) = *cache {
                 if cached.fetched_at.elapsed().as_secs() < self.config.cache_ttl_secs {
-                    return cached.entries.clone();
+                    return Ok(cached.entries.clone());
                 }
             }
         }
@@ -181,55 +269,68 @@ impl MarketplaceClient {
                     entries: entries.clone(),
                     fetched_at: std::time::Instant::now(),
                 });
-                entries
+                Ok(entries)
             }
             Err(e) => {
                 warn!("Failed to fetch marketplace registry: {}", e);
-                // Return stale cache if available
+                // Serving a stale cache is acceptable; silently serving an empty
+                // list is not.
                 let cache = self.registry_cache.read();
-                cache
-                    .as_ref()
-                    .map(|c| c.entries.clone())
-                    .unwrap_or_default()
+                match cache.as_ref() {
+                    Some(c) => Ok(c.entries.clone()),
+                    None => Err(e),
+                }
             }
         }
     }
 
     /// Fetch the registry from the configured URL.
-    fn fetch_registry(&self) -> Result<Vec<MarketplaceTransform>, String> {
-        // Check if it is a local file
+    fn fetch_registry(&self) -> Result<Vec<MarketplaceTransform>, MarketplaceClientError> {
+        // A local file path is the supported configuration.
         let path = PathBuf::from(&self.config.registry_url);
         if path.exists() {
             let content = std::fs::read_to_string(&path)
-                .map_err(|e| format!("Failed to read registry file: {}", e))?;
+                .map_err(|e| MarketplaceClientError::Io(format!("read registry file: {e}")))?;
             let entries: Vec<MarketplaceTransform> = serde_json::from_str(&content)
-                .map_err(|e| format!("Failed to parse registry: {}", e))?;
+                .map_err(|e| MarketplaceClientError::Registry(format!("parse registry: {e}")))?;
             info!("Loaded {} transforms from local registry", entries.len());
             return Ok(entries);
         }
 
-        // For HTTP fetch, we use a blocking approach since this is called from sync context.
-        // In production, this would use the async reqwest client.
         debug!(
-            "Fetching marketplace registry from {}",
+            "Marketplace registry is not a local file: {}",
             self.config.registry_url
         );
 
-        // Placeholder: In a real implementation, this would use reqwest::blocking::get().
-        // For the server integration, the registry can also be loaded from a local file
-        // bundled with the server or fetched on startup.
-        Err(format!(
-            "HTTP fetch not available in this build. Configure a local registry file at: {}",
+        // Remote registry fetching is NOT implemented. It previously returned an
+        // error that callers swallowed into an empty list. Fetching a registry
+        // over HTTP requires TLS verification, response size limits, and a
+        // published-digest trust model that this build does not have, so the
+        // operation is refused rather than partially implemented.
+        //
+        // The message deliberately does not tell the reader to "configure a
+        // local registry file": the HTTP server always constructs this client
+        // with the built-in remote URL (see `MarketplaceApiState::new`) and
+        // exposes no setting to change it, so that advice would point at a knob
+        // the reader does not have.
+        Err(MarketplaceClientError::Unsupported(format!(
+            "the remote WASM transform marketplace is not implemented in this \
+             build: '{}' is not a local path and no registry client exists to \
+             fetch it",
             self.config.registry_url
-        ))
+        )))
     }
 
     /// Search the registry by query string.
-    pub fn search(&self, query: &str, category: Option<&str>) -> Vec<MarketplaceTransform> {
-        let registry = self.get_registry();
+    pub fn search(
+        &self,
+        query: &str,
+        category: Option<&str>,
+    ) -> Result<Vec<MarketplaceTransform>, MarketplaceClientError> {
+        let registry = self.get_registry()?;
         let query_lower = query.to_lowercase();
 
-        registry
+        Ok(registry
             .into_iter()
             .filter(|entry| {
                 let matches_query = entry.name.to_lowercase().contains(&query_lower)
@@ -245,103 +346,138 @@ impl MarketplaceClient {
 
                 matches_query && matches_category
             })
-            .collect()
+            .collect())
+    }
+
+    /// Look up a registry entry by name and optional version.
+    fn find_entry(
+        &self,
+        name: &str,
+        version: Option<&str>,
+    ) -> Result<MarketplaceTransform, MarketplaceClientError> {
+        let registry = self.get_registry()?;
+        registry
+            .into_iter()
+            .find(|e| e.name == name && version.map(|v| e.version == v).unwrap_or(true))
+            .ok_or_else(|| {
+                MarketplaceClientError::NotFound(format!(
+                    "'{name}' is not in the marketplace registry"
+                ))
+            })
+    }
+
+    /// Directory a transform's module is expected to live in.
+    fn install_dir(&self, name: &str, version: &str) -> PathBuf {
+        self.config.cache_dir.join(name).join(version)
+    }
+
+    /// Conventional module file name for a transform.
+    fn wasm_file_name(name: &str) -> String {
+        format!("{}.wasm", name.replace('-', "_"))
     }
 
     /// Install a transform by name and optional version.
     ///
-    /// Downloads the WASM module to the local cache directory and registers it.
+    /// **Not implemented.** Installing means downloading a third-party binary
+    /// and executing it inside the broker, which requires TLS-verified
+    /// downloads and verification against a digest published by the registry.
+    /// None of that exists in this build.
+    ///
+    /// The previous implementation wrote a *text placeholder* to
+    /// `<name>.wasm`, hashed it with CRC32, stored the CRC in a field named
+    /// `sha256`, and reported "installed successfully". Operators had no way to
+    /// tell that nothing had been installed and that no integrity check had
+    /// been performed.
+    ///
+    /// Embedders that construct a [`MarketplaceClient`] themselves can place a
+    /// module on disk and call
+    /// [`MarketplaceClient::register_local_transform`]. That path is *not*
+    /// reachable through the HTTP API, so the error returned here does not
+    /// suggest it.
     pub fn install_transform(
         &self,
         name: &str,
         version: Option<&str>,
-    ) -> Result<InstalledMarketplaceTransform, String> {
-        let registry = self.get_registry();
+    ) -> Result<InstalledMarketplaceTransform, MarketplaceClientError> {
+        // Resolve first so the caller gets "not found" rather than a confusing
+        // "unsupported" for a transform that does not exist at all.
+        let entry = self.find_entry(name, version)?;
 
-        // Find the entry
-        let entry = registry
-            .iter()
-            .find(|e| {
-                e.name == name && version.map(|v| e.version == v).unwrap_or(true)
-            })
-            .ok_or_else(|| format!("Transform '{}' not found in the marketplace registry", name))?;
+        Err(MarketplaceClientError::Unsupported(format!(
+            "installing marketplace transforms is not implemented in this build, \
+             so '{}' v{} was not installed: there is no verified download path \
+             for {} and no publisher digest to check it against",
+            entry.name, entry.version, entry.wasm_url,
+        )))
+    }
 
-        info!(
-            "Installing marketplace transform: {} v{}",
-            entry.name, entry.version
-        );
+    /// Register a WASM module that an operator has already placed in the cache
+    /// directory.
+    ///
+    /// This is the supported installation path. It performs the checks it can
+    /// actually perform — the file exists, is non-empty, and starts with the
+    /// WASM magic number — and makes no integrity claim it cannot back up: the
+    /// returned record has `sha256: None` and `verified: false`.
+    pub fn register_local_transform(
+        &self,
+        name: &str,
+        version: Option<&str>,
+    ) -> Result<InstalledMarketplaceTransform, MarketplaceClientError> {
+        let entry = self.find_entry(name, version)?;
 
-        // Create the cache directory
-        let install_dir = self
-            .config
-            .cache_dir
-            .join(&entry.name)
-            .join(&entry.version);
+        let wasm_path = self
+            .install_dir(&entry.name, &entry.version)
+            .join(Self::wasm_file_name(&entry.name));
 
-        std::fs::create_dir_all(&install_dir)
-            .map_err(|e| format!("Failed to create cache directory: {}", e))?;
+        let wasm_bytes = std::fs::read(&wasm_path).map_err(|e| {
+            MarketplaceClientError::Io(format!(
+                "no module at {}: {e}. Place the verified .wasm module there first",
+                wasm_path.display()
+            ))
+        })?;
 
-        // Download the WASM module
-        // For now, create a placeholder indicating the download URL.
-        // In production, this would use reqwest to download the actual binary.
-        let wasm_filename = format!("{}.wasm", entry.name.replace('-', "_"));
-        let wasm_path = install_dir.join(&wasm_filename);
-
-        // Write a placeholder or attempt download
-        if !wasm_path.exists() {
-            // Placeholder: write metadata about where to download
-            let placeholder = format!(
-                "# WASM module placeholder\n# Download from: {}\n# Transform: {} v{}\n",
-                entry.wasm_url, entry.name, entry.version
-            );
-            std::fs::write(&wasm_path, placeholder)
-                .map_err(|e| format!("Failed to write WASM placeholder: {}", e))?;
+        // WASM binaries start with the four-byte magic number `\0asm`. This
+        // rejects the text placeholders the old install path used to write.
+        if !wasm_bytes.starts_with(b"\0asm") {
+            return Err(MarketplaceClientError::Integrity(format!(
+                "{} is not a WebAssembly module (missing \\0asm magic number)",
+                wasm_path.display()
+            )));
         }
 
-        // Compute SHA-256 of whatever we have
-        let wasm_bytes = std::fs::read(&wasm_path)
-            .map_err(|e| format!("Failed to read WASM file: {}", e))?;
-
-        let sha256 = {
-            // Simple hash without pulling in sha2 crate (use CRC as fallback)
-            let mut hasher = crc32fast::Hasher::new();
-            hasher.update(&wasm_bytes);
-            format!("{:016x}", hasher.finalize())
-        };
-
-        // Save metadata
-        let metadata_path = install_dir.join("metadata.json");
-        let metadata_json = serde_json::to_string_pretty(entry)
-            .map_err(|e| format!("Failed to serialize metadata: {}", e))?;
+        // Persist the registry metadata alongside the module.
+        let metadata_path = self
+            .install_dir(&entry.name, &entry.version)
+            .join("metadata.json");
+        let metadata_json = serde_json::to_string_pretty(&entry)
+            .map_err(|e| MarketplaceClientError::Io(format!("serialize metadata: {e}")))?;
         std::fs::write(&metadata_path, metadata_json)
-            .map_err(|e| format!("Failed to write metadata: {}", e))?;
+            .map_err(|e| MarketplaceClientError::Io(format!("write metadata: {e}")))?;
 
         let installed = InstalledMarketplaceTransform {
             name: entry.name.clone(),
             version: entry.version.clone(),
             wasm_path: wasm_path.to_string_lossy().to_string(),
-            sha256,
+            // No cryptographic digest is computed, so none is reported.
+            sha256: None,
+            verified: false,
             installed_at: now_iso8601(),
             source_url: entry.wasm_url.clone(),
             category: entry.category.clone(),
             description: entry.description.clone(),
         };
 
-        // Update in-memory list
         {
             let mut list = self.installed.write();
-            list.retain(|i| i.name != name);
+            list.retain(|i| i.name != entry.name);
             list.push(installed.clone());
         }
 
-        // Persist to disk
         self.save_installed_to_disk();
 
         info!(
-            "Installed marketplace transform: {} v{} at {}",
-            installed.name,
-            installed.version,
-            installed.wasm_path
+            "Registered local marketplace transform: {} v{} at {} (unverified)",
+            installed.name, installed.version, installed.wasm_path
         );
 
         Ok(installed)
@@ -354,7 +490,11 @@ impl MarketplaceClient {
 
     /// Get an installed transform by name.
     pub fn get_installed(&self, name: &str) -> Option<InstalledMarketplaceTransform> {
-        self.installed.read().iter().find(|i| i.name == name).cloned()
+        self.installed
+            .read()
+            .iter()
+            .find(|i| i.name == name)
+            .cloned()
     }
 
     /// Load installed transforms from the manifest file on disk.
@@ -365,7 +505,8 @@ impl MarketplaceClient {
         }
         match std::fs::read_to_string(&manifest_path) {
             Ok(content) => {
-                if let Ok(list) = serde_json::from_str::<Vec<InstalledMarketplaceTransform>>(&content)
+                if let Ok(list) =
+                    serde_json::from_str::<Vec<InstalledMarketplaceTransform>>(&content)
                 {
                     *self.installed.write() = list;
                     debug!("Loaded installed marketplace transforms from disk");
@@ -420,20 +561,16 @@ fn now_iso8601() -> String {
     let mo = if mp < 10 { mp + 3 } else { mp - 9 };
     let year = if mo <= 2 { y + 1 } else { y };
 
-    format!(
-        "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}Z",
-        year, mo, d, h, m, s
-    )
+    format!("{year:04}-{mo:02}-{d:02}T{h:02}:{m:02}:{s:02}Z")
 }
 
-/// CRC32 hash (used as a lightweight hash when sha2 is unavailable).
-#[allow(dead_code)]
-fn crc32_hash(data: &[u8]) -> u64 {
-    let mut hasher = crc32fast::Hasher::new();
-    hasher.update(data);
-    hasher.finalize() as u64
-}
-
+// NOTE: a `crc32_hash` helper used to live here and its output was written into
+// the `sha256` field of `InstalledMarketplaceTransform`. CRC32 is a
+// non-cryptographic error-detection code, not a digest: it is trivially
+// forgeable and 32 bits wide. Presenting it as a SHA-256 gave a false integrity
+// signal, so both the helper and the field's unconditional population were
+// removed. If a real digest is needed, add a cryptographic hash implementation
+// and populate `sha256` only from that.
 // ============================================================================
 // Axum API State and Handlers
 // ============================================================================
@@ -446,6 +583,12 @@ pub struct MarketplaceApiState {
 
 impl MarketplaceApiState {
     /// Create a new marketplace API state with default configuration.
+    ///
+    /// The registry URL is always [`DEFAULT_REGISTRY_URL`]; there is
+    /// intentionally no way to override it from here, because the code that
+    /// would fetch it does not exist. The endpoints therefore fail closed with
+    /// `501 Not Implemented` rather than pretending the marketplace is one
+    /// configuration change away from working.
     pub fn new(cache_dir: PathBuf) -> Self {
         let config = MarketplaceClientConfig {
             cache_dir,
@@ -480,15 +623,27 @@ struct InstallResponse {
 }
 
 /// GET /api/v1/marketplace/transforms - List available transforms from registry.
+///
+/// Returns `501 Not Implemented` in this build: the state below always points
+/// the client at the remote [`DEFAULT_REGISTRY_URL`], which cannot be fetched.
 async fn list_available_transforms(
     State(state): State<MarketplaceApiState>,
-) -> Json<ListAvailableResponse> {
-    let transforms = state.client.get_registry();
+) -> Result<Json<ListAvailableResponse>, (StatusCode, Json<MarketplaceError>)> {
+    // Surface registry failures instead of returning `{"transforms": [], ...}`,
+    // which made an unreachable registry indistinguishable from an empty one.
+    let transforms = state
+        .client
+        .get_registry()
+        .map_err(MarketplaceClientError::into_response_pair)?;
     let total = transforms.len();
-    Json(ListAvailableResponse { transforms, total })
+    Ok(Json(ListAvailableResponse { transforms, total }))
 }
 
 /// POST /api/v1/marketplace/transforms/{name}/install - Install a transform.
+///
+/// Returns `501 Not Implemented`: this build cannot download and verify
+/// third-party WASM modules. It previously returned `200 OK` with
+/// `"success": true` after writing a text placeholder to disk.
 async fn install_transform(
     State(state): State<MarketplaceApiState>,
     Path(name): Path<String>,
@@ -496,26 +651,22 @@ async fn install_transform(
 ) -> Result<(StatusCode, Json<InstallResponse>), (StatusCode, Json<MarketplaceError>)> {
     let version = body.as_ref().and_then(|b| b.version.as_deref());
 
-    match state.client.install_transform(&name, version) {
-        Ok(installed) => Ok((
-            StatusCode::OK,
-            Json(InstallResponse {
-                success: true,
-                message: format!(
-                    "Transform '{}' v{} installed successfully",
-                    installed.name, installed.version
-                ),
-                transform: installed,
-            }),
-        )),
-        Err(e) => Err((
-            StatusCode::BAD_REQUEST,
-            Json(MarketplaceError {
-                error: e,
-                code: 400,
-            }),
-        )),
-    }
+    let installed = state
+        .client
+        .install_transform(&name, version)
+        .map_err(MarketplaceClientError::into_response_pair)?;
+
+    Ok((
+        StatusCode::OK,
+        Json(InstallResponse {
+            success: true,
+            message: format!(
+                "Transform '{}' v{} installed successfully",
+                installed.name, installed.version
+            ),
+            transform: installed,
+        }),
+    ))
 }
 
 /// GET /api/v1/marketplace/transforms/installed - List installed transforms.
@@ -553,6 +704,9 @@ pub fn create_marketplace_router(state: MarketplaceApiState) -> Router {
 mod tests {
     use super::*;
     use tempfile::TempDir;
+
+    /// Minimal valid WASM module header (magic + version).
+    const WASM_HEADER: &[u8] = b"\0asm\x01\x00\x00\x00";
 
     fn test_client() -> (MarketplaceClient, TempDir) {
         let temp_dir = TempDir::new().unwrap();
@@ -610,6 +764,13 @@ mod tests {
         (client, temp_dir)
     }
 
+    /// Place a real WASM module where `register_local_transform` expects it.
+    fn place_module(client: &MarketplaceClient, name: &str, version: &str, bytes: &[u8]) {
+        let dir = client.install_dir(name, version);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join(MarketplaceClient::wasm_file_name(name)), bytes).unwrap();
+    }
+
     #[test]
     fn test_marketplace_client_creation() {
         let (_client, _temp) = test_client();
@@ -618,16 +779,63 @@ mod tests {
     #[test]
     fn test_get_registry_from_file() {
         let (client, _temp) = test_client_with_registry();
-        let registry = client.get_registry();
+        let registry = client.get_registry().unwrap();
         assert_eq!(registry.len(), 2);
         assert_eq!(registry[0].name, "test-filter");
         assert_eq!(registry[1].name, "test-enricher");
     }
 
+    /// Regression: an unreachable registry must surface an error rather than
+    /// masquerading as an empty marketplace.
+    #[test]
+    fn test_unreachable_registry_is_an_error_not_an_empty_list() {
+        let (client, _temp) = test_client();
+        let err = client.get_registry().unwrap_err();
+        assert!(
+            matches!(err, MarketplaceClientError::Unsupported(_)),
+            "expected Unsupported, got {err:?}"
+        );
+        assert!(err.to_string().contains("not implemented"));
+    }
+
+    /// Regression: HTTP registry fetching is not implemented and must say so —
+    /// without telling the reader to point `registry_url` at a local file. The
+    /// HTTP surface (`MarketplaceApiState`) offers no such setting, so that
+    /// advice would send operators after a knob that does not exist.
+    #[test]
+    fn test_http_registry_url_reports_unsupported() {
+        let temp_dir = TempDir::new().unwrap();
+        let client = MarketplaceClient::new(MarketplaceClientConfig {
+            registry_url: DEFAULT_REGISTRY_URL.to_string(),
+            cache_dir: temp_dir.path().to_path_buf(),
+            cache_ttl_secs: 3600,
+        });
+        let err = client.get_registry().unwrap_err();
+        assert_eq!(err.status_code(), StatusCode::NOT_IMPLEMENTED);
+
+        let msg = err.to_string();
+        assert!(msg.contains("not implemented"), "{msg}");
+        assert!(
+            !msg.to_lowercase().contains("configure"),
+            "the 501 must not instruct operators to configure an unavailable \
+             registry path: {msg}"
+        );
+    }
+
+    /// The state used by the HTTP router is hard-wired to the remote registry,
+    /// so every listing request fails closed with 501.
+    #[test]
+    fn test_api_state_registry_is_unsupported() {
+        let temp_dir = TempDir::new().unwrap();
+        let state = MarketplaceApiState::new(temp_dir.path().to_path_buf());
+        let err = state.client.get_registry().unwrap_err();
+        assert_eq!(err.status_code(), StatusCode::NOT_IMPLEMENTED);
+    }
+
     #[test]
     fn test_search_by_name() {
         let (client, _temp) = test_client_with_registry();
-        let results = client.search("filter", None);
+        let results = client.search("filter", None).unwrap();
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].name, "test-filter");
     }
@@ -635,7 +843,7 @@ mod tests {
     #[test]
     fn test_search_by_description() {
         let (client, _temp) = test_client_with_registry();
-        let results = client.search("enrichment", None);
+        let results = client.search("enrichment", None).unwrap();
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].name, "test-enricher");
     }
@@ -643,7 +851,7 @@ mod tests {
     #[test]
     fn test_search_by_category() {
         let (client, _temp) = test_client_with_registry();
-        let results = client.search("test", Some("enrich"));
+        let results = client.search("test", Some("enrich")).unwrap();
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].name, "test-enricher");
     }
@@ -651,27 +859,99 @@ mod tests {
     #[test]
     fn test_search_no_results() {
         let (client, _temp) = test_client_with_registry();
-        let results = client.search("nonexistent", None);
+        let results = client.search("nonexistent", None).unwrap();
         assert!(results.is_empty());
     }
 
+    /// Regression: installing must fail closed. It used to write a text
+    /// placeholder named `*.wasm`, hash it with CRC32, store that in `sha256`
+    /// and report success.
     #[test]
-    fn test_install_transform() {
+    fn test_install_transform_is_unsupported_and_writes_nothing() {
         let (client, _temp) = test_client_with_registry();
-        let result = client.install_transform("test-filter", None);
-        assert!(result.is_ok());
+        let err = client.install_transform("test-filter", None).unwrap_err();
 
-        let installed = result.unwrap();
-        assert_eq!(installed.name, "test-filter");
-        assert_eq!(installed.version, "0.1.0");
-        assert!(installed.wasm_path.contains("test_filter.wasm"));
+        assert!(
+            matches!(err, MarketplaceClientError::Unsupported(_)),
+            "expected Unsupported, got {err:?}"
+        );
+        assert_eq!(err.status_code(), StatusCode::NOT_IMPLEMENTED);
+
+        // The 501 must not hand HTTP callers an "install it yourself" recipe:
+        // `register_local_transform` is an embedder API with no HTTP route.
+        let msg = err.to_string();
+        assert!(msg.contains("not implemented"), "{msg}");
+        assert!(!msg.contains("register_local_transform"), "{msg}");
+
+        // Nothing may be created on disk, and nothing may be registered.
+        let wasm_path = client
+            .install_dir("test-filter", "0.1.0")
+            .join(MarketplaceClient::wasm_file_name("test-filter"));
+        assert!(
+            !wasm_path.exists(),
+            "install must not fabricate {}",
+            wasm_path.display()
+        );
+        assert!(client.list_installed().is_empty());
     }
 
     #[test]
     fn test_install_transform_not_found() {
         let (client, _temp) = test_client_with_registry();
-        let result = client.install_transform("nonexistent", None);
-        assert!(result.is_err());
+        let err = client.install_transform("nonexistent", None).unwrap_err();
+        assert!(matches!(err, MarketplaceClientError::NotFound(_)));
+        assert_eq!(err.status_code(), StatusCode::NOT_FOUND);
+    }
+
+    #[test]
+    fn test_register_local_transform_requires_the_module_on_disk() {
+        let (client, _temp) = test_client_with_registry();
+        let err = client
+            .register_local_transform("test-filter", None)
+            .unwrap_err();
+        assert!(matches!(err, MarketplaceClientError::Io(_)), "{err:?}");
+    }
+
+    /// Regression: a text placeholder must be rejected, not accepted as a
+    /// module.
+    #[test]
+    fn test_register_local_transform_rejects_non_wasm_content() {
+        let (client, _temp) = test_client_with_registry();
+        place_module(
+            &client,
+            "test-filter",
+            "0.1.0",
+            b"# WASM module placeholder\n# Download from: https://example.com\n",
+        );
+
+        let err = client
+            .register_local_transform("test-filter", None)
+            .unwrap_err();
+        assert!(
+            matches!(err, MarketplaceClientError::Integrity(_)),
+            "expected Integrity, got {err:?}"
+        );
+        assert!(client.list_installed().is_empty());
+    }
+
+    #[test]
+    fn test_register_local_transform_accepts_a_real_module() {
+        let (client, _temp) = test_client_with_registry();
+        place_module(&client, "test-filter", "0.1.0", WASM_HEADER);
+
+        let installed = client
+            .register_local_transform("test-filter", None)
+            .unwrap();
+        assert_eq!(installed.name, "test-filter");
+        assert_eq!(installed.version, "0.1.0");
+        assert!(installed.wasm_path.contains("test_filter.wasm"));
+
+        // No integrity claim may be made without a real digest.
+        assert!(
+            installed.sha256.is_none(),
+            "no digest is computed, so none may be reported"
+        );
+        assert!(!installed.verified);
     }
 
     #[test]
@@ -681,10 +961,11 @@ mod tests {
         // Initially empty
         assert!(client.list_installed().is_empty());
 
-        // Install one
-        client.install_transform("test-filter", None).unwrap();
+        place_module(&client, "test-filter", "0.1.0", WASM_HEADER);
+        client
+            .register_local_transform("test-filter", None)
+            .unwrap();
 
-        // Should have one
         let installed = client.list_installed();
         assert_eq!(installed.len(), 1);
         assert_eq!(installed[0].name, "test-filter");
@@ -693,17 +974,19 @@ mod tests {
     #[test]
     fn test_get_installed() {
         let (client, _temp) = test_client_with_registry();
-        client.install_transform("test-filter", None).unwrap();
+        place_module(&client, "test-filter", "0.1.0", WASM_HEADER);
+        client
+            .register_local_transform("test-filter", None)
+            .unwrap();
 
         assert!(client.get_installed("test-filter").is_some());
         assert!(client.get_installed("nonexistent").is_none());
     }
 
     #[test]
-    fn test_install_persists_to_disk() {
+    fn test_registration_persists_to_disk() {
         let temp_dir = TempDir::new().unwrap();
 
-        // Write registry
         let registry = serde_json::json!([{
             "name": "persist-test",
             "version": "0.1.0",
@@ -722,29 +1005,60 @@ mod tests {
         std::fs::write(&registry_path, registry.to_string()).unwrap();
         let cache_dir = temp_dir.path().join("cache");
 
-        // Install with first client
+        let config = || MarketplaceClientConfig {
+            registry_url: registry_path.to_string_lossy().to_string(),
+            cache_dir: cache_dir.clone(),
+            cache_ttl_secs: 3600,
+        };
+
         {
-            let config = MarketplaceClientConfig {
-                registry_url: registry_path.to_string_lossy().to_string(),
-                cache_dir: cache_dir.clone(),
-                cache_ttl_secs: 3600,
-            };
-            let client = MarketplaceClient::new(config);
-            client.install_transform("persist-test", None).unwrap();
+            let client = MarketplaceClient::new(config());
+            place_module(&client, "persist-test", "0.1.0", WASM_HEADER);
+            client
+                .register_local_transform("persist-test", None)
+                .unwrap();
         }
 
-        // Create a new client and verify persistence
         {
-            let config = MarketplaceClientConfig {
-                registry_url: registry_path.to_string_lossy().to_string(),
-                cache_dir: cache_dir.clone(),
-                cache_ttl_secs: 3600,
-            };
-            let client = MarketplaceClient::new(config);
+            let client = MarketplaceClient::new(config());
             let installed = client.list_installed();
             assert_eq!(installed.len(), 1);
             assert_eq!(installed[0].name, "persist-test");
+            assert!(installed[0].sha256.is_none());
         }
+    }
+
+    #[test]
+    fn test_reregistration_replaces_old() {
+        let (client, _temp) = test_client_with_registry();
+        place_module(&client, "test-filter", "0.1.0", WASM_HEADER);
+
+        client
+            .register_local_transform("test-filter", None)
+            .unwrap();
+        client
+            .register_local_transform("test-filter", None)
+            .unwrap();
+
+        assert_eq!(client.list_installed().len(), 1);
+    }
+
+    /// Records persisted before `sha256` became optional must still load.
+    #[test]
+    fn test_installed_record_deserializes_legacy_manifest() {
+        let legacy = r#"[{
+            "name": "legacy",
+            "version": "0.1.0",
+            "wasm_path": "/tmp/legacy.wasm",
+            "installed_at": "2026-01-01T00:00:00Z",
+            "source_url": "https://example.com/legacy.wasm",
+            "category": "filter",
+            "description": "legacy record without sha256"
+        }]"#;
+        let parsed: Vec<InstalledMarketplaceTransform> = serde_json::from_str(legacy).unwrap();
+        assert_eq!(parsed.len(), 1);
+        assert!(parsed[0].sha256.is_none());
+        assert!(!parsed[0].verified);
     }
 
     #[test]
@@ -791,16 +1105,118 @@ mod tests {
         assert!(state.client.list_installed().is_empty());
     }
 
-    #[test]
-    fn test_reinstall_replaces_old() {
-        let (client, _temp) = test_client_with_registry();
+    /// Router-level regression tests.
+    ///
+    /// The client-level tests above prove `install_transform` fails closed, but
+    /// the false-success bug was observable at the *HTTP* boundary: the route
+    /// answered `200 OK` with `{"success": true, "message": "... installed
+    /// successfully"}` after writing a text placeholder to disk. These tests
+    /// drive the real router so a future refactor cannot reintroduce a success
+    /// response without failing here.
+    mod http_routes {
+        use super::*;
+        use axum::body::Body;
+        use axum::http::{Request, StatusCode};
+        use http_body_util::BodyExt;
+        use tower::ServiceExt;
 
-        // Install twice
-        client.install_transform("test-filter", None).unwrap();
-        client.install_transform("test-filter", None).unwrap();
+        /// Build the router exactly as the server does, over an empty cache dir.
+        fn router(temp: &TempDir) -> Router {
+            create_marketplace_router(MarketplaceApiState::new(temp.path().to_path_buf()))
+        }
 
-        // Should still be only one entry
-        let installed = client.list_installed();
-        assert_eq!(installed.len(), 1);
+        async fn call(app: Router, request: Request<Body>) -> (StatusCode, String) {
+            let response = app.oneshot(request).await.expect("router call");
+            let status = response.status();
+            let bytes = response
+                .into_body()
+                .collect()
+                .await
+                .expect("collect body")
+                .to_bytes();
+            (status, String::from_utf8_lossy(&bytes).into_owned())
+        }
+
+        #[tokio::test]
+        async fn install_route_reports_not_implemented_and_never_success() {
+            let temp = TempDir::new().unwrap();
+            let request = Request::builder()
+                .method("POST")
+                .uri("/api/v1/marketplace/transforms/json-filter/install")
+                .body(Body::empty())
+                .unwrap();
+
+            let (status, body) = call(router(&temp), request).await;
+
+            assert_eq!(
+                status,
+                StatusCode::NOT_IMPLEMENTED,
+                "install must fail closed, got {status}: {body}"
+            );
+            assert!(
+                !body.contains("\"success\""),
+                "the install response must not carry a success flag: {body}"
+            );
+            assert!(
+                !body.contains("installed successfully"),
+                "the install response must not claim an installation happened: {body}"
+            );
+
+            // Nothing may be fabricated on disk: no placeholder module, no
+            // installed-transform manifest.
+            let mut created = Vec::new();
+            let mut stack = vec![temp.path().to_path_buf()];
+            while let Some(dir) = stack.pop() {
+                for entry in std::fs::read_dir(&dir).expect("read cache dir") {
+                    let path = entry.expect("dir entry").path();
+                    if path.is_dir() {
+                        stack.push(path);
+                    } else {
+                        created.push(path);
+                    }
+                }
+            }
+            assert!(
+                created.is_empty(),
+                "a failed install must not write anything, found {created:?}"
+            );
+        }
+
+        #[tokio::test]
+        async fn list_available_route_reports_not_implemented_not_an_empty_catalogue() {
+            let temp = TempDir::new().unwrap();
+            let request = Request::builder()
+                .uri("/api/v1/marketplace/transforms")
+                .body(Body::empty())
+                .unwrap();
+
+            let (status, body) = call(router(&temp), request).await;
+
+            assert_eq!(
+                status,
+                StatusCode::NOT_IMPLEMENTED,
+                "an unreachable registry must not look like an empty one: {body}"
+            );
+            assert!(
+                !body.contains("\"transforms\""),
+                "the error response must not be shaped like a catalogue: {body}"
+            );
+        }
+
+        /// Listing what is installed locally needs no registry, so it keeps
+        /// working — and truthfully reports nothing installed.
+        #[tokio::test]
+        async fn installed_route_still_answers() {
+            let temp = TempDir::new().unwrap();
+            let request = Request::builder()
+                .uri("/api/v1/marketplace/transforms/installed")
+                .body(Body::empty())
+                .unwrap();
+
+            let (status, body) = call(router(&temp), request).await;
+
+            assert_eq!(status, StatusCode::OK, "{body}");
+            assert!(body.contains("\"total\":0"), "{body}");
+        }
     }
 }

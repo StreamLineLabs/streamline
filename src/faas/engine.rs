@@ -6,14 +6,14 @@ use super::function::{
     VersionedFunction,
 };
 use super::registry::{FunctionInfo, FunctionRegistry};
-use super::trigger::{TriggerBinding, TriggerType};
+use super::trigger::TriggerBinding;
 use crate::error::{Result, StreamlineError};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Instant;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, info, warn};
 
 /// FaaS engine configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1002,6 +1002,7 @@ impl FunctionChain {
 mod tests {
     use super::*;
     use crate::faas::function::{ResourceLimits, WasmSource};
+    use crate::faas::trigger::TriggerType;
 
     fn test_config(name: &str) -> FunctionConfig {
         FunctionConfig {

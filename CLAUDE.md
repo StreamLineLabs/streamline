@@ -218,11 +218,20 @@ Streamline uses semantic versioning with stability levels:
 
 ### Module Stability
 
+`docs/API_STABILITY.md` is the **single source of truth** for module stability
+tiers; `scripts/check_stability_tiers.sh` parses it and enforces the
+import-direction rule in CI. The summary below mirrors it — update both together.
+
 | Stability | Modules |
 |-----------|---------|
-| Stable | `server`, `storage`, `consumer`, `protocol`, `config`, `error`, `analytics` |
-| Beta | `embedded`, `transaction`, `cluster`, `replication`, `schema` |
-| Experimental | `sink`, `streamql`, `cdc`, `edge` |
+| Stable | `server`, `storage`, `consumer`, `protocol`, `config`, `error`, `analytics`, `embedded` |
+| Beta | `transaction`, `cluster`, `replication`, `schema`, `auth`, `metrics`, `telemetry`, `observability`, `gateway`, `connect`, `featurestore`, `ffi` |
+| Experimental | `sink`, `streamql`, `cdc`, `edge`, `wasm`, `graphql`, `transport`, `timeseries`, `dsl`, `ai` |
+
+**Import direction rule**: Stable modules must not import Beta or Experimental
+modules, and Beta modules must not import Experimental modules. Pre-existing
+violations are recorded in `scripts/stability-tier-baseline.txt`; that file may
+only shrink. Adding a new downward import fails CI.
 
 ### When Working on Code
 

@@ -198,11 +198,18 @@ pub(crate) mod connect;
 pub(crate) mod dlq;
 #[allow(dead_code)]
 pub(crate) mod ffi;
-pub(crate) mod gateway;
-pub(crate) mod lineage;
+// `gateway`, `lineage`, `observability` and `plugin` are documented public
+// modules (see docs/API_STABILITY.md — `gateway` and `observability` are Beta
+// tier). They were declared `pub(crate)` while the crate root re-exported only
+// a subset of their types, which left whole submodules — `gateway::mqtt_handler`,
+// `lineage::openlineage`, `observability::{ebpf_metrics, otel_exporter}` and
+// `plugin::sdk` — unreachable and therefore dead. Exporting the modules matches
+// the documented tiers instead of silencing `dead_code` over them.
+pub mod gateway;
+pub mod lineage;
 #[allow(dead_code)]
 pub(crate) mod playground;
-pub(crate) mod plugin;
+pub mod plugin;
 #[allow(dead_code)]
 pub(crate) mod policy;
 pub(crate) mod pubsub;

@@ -432,7 +432,12 @@ pub struct TestRecord {
 }
 
 impl TestRecord {
-    /// Get the key as a string, panics if no key
+    /// Get the key as a string, panics if no key.
+    ///
+    /// This is a test-assertion helper: panicking on a missing key is the
+    /// documented contract, so the `expect` is deliberate. `TestRecord` is
+    /// public API, so the signature cannot become fallible.
+    #[allow(clippy::expect_used)]
     pub fn key_str(&self) -> &str {
         self.key.as_ref().expect("Expected record to have a key")
     }

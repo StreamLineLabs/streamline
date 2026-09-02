@@ -8,7 +8,7 @@
 //! - [`MessageInterceptor`]: Intercept and transform messages during produce/fetch
 //! - [`AuthenticationPlugin`]: Custom authentication mechanisms
 //! - [`MetricsPlugin`]: Custom metrics collection and export
-//! - [`StoragePlugin`]: Alternative storage backends
+//! - `StoragePlugin`: Planned alternative-storage extension point
 //!
 //! ## Example
 //!
@@ -607,11 +607,10 @@ impl PluginManager {
         // Save manifest
         let manifest_path = plugin_dir.join("plugin.json");
         let manifest_json = serde_json::to_string_pretty(&manifest).map_err(|e| {
-            PluginError::OperationFailed(format!("Failed to serialize manifest: {}", e))
+            PluginError::OperationFailed(format!("Failed to serialize manifest: {e}"))
         })?;
-        std::fs::write(&manifest_path, manifest_json).map_err(|e| {
-            PluginError::OperationFailed(format!("Failed to write manifest: {}", e))
-        })?;
+        std::fs::write(&manifest_path, manifest_json)
+            .map_err(|e| PluginError::OperationFailed(format!("Failed to write manifest: {e}")))?;
 
         let installed = InstalledPlugin {
             manifest,

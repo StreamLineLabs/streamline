@@ -4,9 +4,34 @@
 //! checking using the `jsonschema` crate.
 
 use super::{CompatibilityLevel, SchemaError};
-use jsonschema::Validator;
+use jsonschema::{Retrieve, Uri, Validator};
 use serde_json::Value;
 use std::collections::HashSet;
+use std::io;
+
+/// Reject every non-local JSON Schema reference without performing I/O.
+///
+/// Streamline does not support fetching user-controlled schemas from the
+/// network or filesystem. In particular, jsonschema's default HTTP retriever
+/// constructs its own blocking reqwest client, bypassing Streamline's explicit
+/// AWS-LC TLS configuration and panicking when no process-wide provider is
+/// installed. Local `#/...` references are resolved internally and never reach
+/// this retriever.
+#[derive(Debug, Clone, Copy)]
+struct RejectExternalReferences;
+
+impl Retrieve for RejectExternalReferences {
+    fn retrieve(&self, uri: &Uri<&str>) -> Result<Value, Box<dyn std::error::Error + Send + Sync>> {
+        Err(io::Error::new(
+            io::ErrorKind::Unsupported,
+            format!(
+                "external JSON Schema references are unsupported; bundle the referenced schema locally: {}",
+                uri.as_str()
+            ),
+        )
+        .into())
+    }
+}
 
 /// JSON Schema validator
 #[derive(Debug, Default)]
@@ -21,7 +46,14 @@ impl JsonSchemaValidator {
     /// Parse and compile a JSON Schema
     pub fn parse(&self, schema_str: &str) -> Result<Value, SchemaError> {
         serde_json::from_str(schema_str)
-            .map_err(|e| SchemaError::InvalidSchema(format!("Invalid JSON: {}", e)))
+            .map_err(|e| SchemaError::InvalidSchema(format!("Invalid JSON: {e}")))
+    }
+
+    fn compile(&self, schema: &Value) -> Result<Validator, SchemaError> {
+        jsonschema::options()
+            .with_retriever(RejectExternalReferences)
+            .build(schema)
+            .map_err(|e| SchemaError::InvalidSchema(format!("Invalid JSON Schema: {e}")))
     }
 
     /// Validate that a schema string is valid JSON Schema
@@ -29,8 +61,7 @@ impl JsonSchemaValidator {
         let schema_value = self.parse(schema_str)?;
 
         // Try to compile the schema
-        Validator::new(&schema_value)
-            .map_err(|e| SchemaError::InvalidSchema(format!("Invalid JSON Schema: {}", e)))?;
+        self.compile(&schema_value)?;
 
         Ok(())
     }
@@ -38,8 +69,7 @@ impl JsonSchemaValidator {
     /// Validate data against a schema
     pub fn validate_data(&self, schema_str: &str, data: &[u8]) -> Result<(), SchemaError> {
         let schema_value = self.parse(schema_str)?;
-        let compiled = Validator::new(&schema_value)
-            .map_err(|e| SchemaError::InvalidSchema(format!("Invalid JSON Schema: {}", e)))?;
+        let compiled = self.compile(&schema_value)?;
 
         let data_value: Value = serde_json::from_slice(data)
             .map_err(|e| SchemaError::InvalidSchema(format!("Invalid JSON data: {e}")))?;
@@ -460,6 +490,41 @@ mod tests {
         // Invalid data (wrong type)
         let invalid_data = br#"{"name": 123}"#;
         assert!(validator.validate_data(schema, invalid_data).is_err());
+    }
+
+    fn assert_external_reference_error(error: SchemaError) {
+        match error {
+            SchemaError::InvalidSchema(message) => assert!(
+                message.contains("external JSON Schema references are unsupported"),
+                "remote references must fail explicitly, got: {message}"
+            ),
+            other => panic!("expected an explicit invalid-schema error, got: {other}"),
+        }
+    }
+
+    #[test]
+    fn test_remote_ref_validation_is_rejected_without_panicking() {
+        let validator = JsonSchemaValidator::new();
+        let schema = r#"{"$ref":"https://schemas.example.invalid/user.json"}"#;
+
+        let result = std::panic::catch_unwind(|| validator.validate(schema));
+        let validation = result.expect("a user-provided remote $ref must never panic");
+        assert_external_reference_error(
+            validation.expect_err("remote JSON Schema references must be rejected"),
+        );
+    }
+
+    #[test]
+    fn test_remote_ref_data_validation_is_rejected_without_panicking() {
+        let validator = JsonSchemaValidator::new();
+        let schema = r#"{"$ref":"http://schemas.example.invalid/user.json"}"#;
+
+        let result =
+            std::panic::catch_unwind(|| validator.validate_data(schema, br#"{"name":"Ada"}"#));
+        let validation = result.expect("a user-provided remote $ref must never panic");
+        assert_external_reference_error(
+            validation.expect_err("remote JSON Schema references must be rejected"),
+        );
     }
 
     #[test]

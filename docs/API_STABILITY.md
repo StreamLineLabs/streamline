@@ -52,7 +52,7 @@ Stable modules follow [Semantic Versioning 2.0.0](https://semver.org/):
 
 | Module | Since | Description |
 |--------|-------|-------------|
-| `sink` | 0.2.0 | Iceberg/Delta Lake sinks |
+| `sink` | 0.2.0 | Sink connectors. Serverless/cloud-function sinks require `--features serverless`; **Iceberg and Delta Lake sinks are unavailable** (see notes below) |
 | `streamql` | 0.2.0 | SQL-like stream processing DSL |
 | `cdc` | 0.2.0 | Change Data Capture (PostgreSQL, MySQL, etc.) |
 | `edge` | 0.2.0 | Edge-first architecture, offline sync |
@@ -62,6 +62,54 @@ Stable modules follow [Semantic Versioning 2.0.0](https://semver.org/):
 | `timeseries` | 0.2.0 | Time-series native storage |
 | `dsl` | 0.2.0 | Stream processing DSL |
 | `ai` | 0.2.0 | AI-powered features |
+
+#### ⛔ Unavailable: Iceberg and Delta Lake sink connectors
+
+The `sink::iceberg` and `sink::delta` connectors are **not available in any
+supported build**, including `--features full` and `--all-features`.
+
+The `iceberg` and `delta-lake` Cargo features are retained as compatibility
+no-ops so existing build scripts keep resolving, but they enable no
+dependencies. `SinkManager::create_sink` rejects `SinkType::Iceberg` and
+`SinkType::DeltaLake` with an explicit error; `sink::unavailable::is_available`
+reports `false` for both.
+
+**Why**: every upstream release compatible with our MSRV (Rust 1.88) pulls
+`quick-xml < 0.41`, affected by RUSTSEC-2026-0194 and RUSTSEC-2026-0195 (both
+CVSS 7.5 and reachable from attacker-influenced S3/Azure list XML — exactly what
+these connectors parse). `deltalake` additionally forces
+`native-tls` → OpenSSL through `delta_kernel`'s `reqwest` default features.
+Streamline does not suppress advisories, so the dependencies were removed rather
+than shipped vulnerable.
+
+**Restoration**: the implementations are preserved verbatim behind the
+never-enabled `iceberg_backend` / `delta_backend` cfgs and will be re-enabled
+once [iceberg-rust](https://github.com/apache/iceberg-rust) and
+[delta-rs](https://github.com/delta-io/delta-rs) publish MSRV-compatible
+releases built on `quick-xml >= 0.41` without `native-tls`.
+`tests/dependency_security_test.rs` and
+`tests/sink_connector_availability_test.rs` enforce both halves of this.
+
+#### 🔧 Feature-gated: Serverless and Cloud Function sink connectors
+
+`SinkType::Serverless` and `SinkType::CloudFunction` are available **only** with
+`--features serverless`. Unlike the lakehouse connectors this is a build-time
+choice, not a removal: the feature is what pulls in the HTTP client
+(`crate::http_client`, backed by `reqwest`) that both connectors deliver
+through, and `src/sink/serverless.rs` / `src/sink/cloud_functions.rs` are
+compiled only under it.
+
+Without the feature, `sink::unavailable::is_available` reports `false` and
+`SinkManager::create_sink` rejects both types **before** duplicate-name, topic
+and configuration validation, with a reason naming `--features serverless`.
+The ordering is part of the contract: the caller must be told the real problem
+rather than an unrelated "topic does not exist", and no sink may be registered
+that would accept records and drop them on delivery.
+
+With the feature enabled, construction, registration and delivery are unchanged.
+
+`tests/sink_connector_availability_test.rs` covers both halves and is run twice
+in CI — once for the default build and once with `--features serverless`.
 
 ### 🔒 Internal (crate-visible only)
 
@@ -139,10 +187,15 @@ Streamline aims for compatibility with these Kafka client libraries:
 
 ### Current Version Matrix
 
-| Version | Release Date | Status | End of Support |
-|---------|-------------|--------|----------------|
-| 0.2.x | 2026-02 | **Current** | Until 0.3.0 release |
-| 0.1.x | 2026-01 | Supported | Until 0.3.0 release |
+The `Since` column in the tier tables above records when a module was
+introduced and does not change. This matrix records which releases are
+currently supported.
+
+| Version | Status | End of Support |
+|---------|--------|----------------|
+| 0.4.x | **Current** | Until 0.6.0 release |
+| 0.3.x | Supported (previous minor) | Until 0.5.0 release |
+| <= 0.2.x | End of life | Unsupported |
 
 ### v1.0 Release Criteria
 
@@ -158,14 +211,18 @@ The following must be met before releasing v1.0:
 
 ## CVE Response Policy
 
+`SECURITY.md` is the authoritative statement of the vulnerability-response
+policy. The table below mirrors it; if the two ever disagree, `SECURITY.md`
+wins.
+
 | Severity | Acknowledgment | Fix Target | Disclosure |
 |----------|---------------|------------|------------|
-| **Critical** (CVSS 9.0+) | 24 hours | 72 hours | After fix + 7 days |
+| **Critical** (CVSS 9.0-10.0) | 48 hours | 48 hours | After fix + 7 days |
 | **High** (CVSS 7.0-8.9) | 48 hours | 7 days | After fix + 14 days |
-| **Medium** (CVSS 4.0-6.9) | 7 days | 30 days | After fix + 30 days |
-| **Low** (CVSS 0.1-3.9) | 14 days | Next release | With release notes |
+| **Medium** (CVSS 4.0-6.9) | 48 hours | 30 days | After fix + 30 days |
+| **Low** (CVSS 0.1-3.9) | 48 hours | Next release | With release notes |
 
-Report vulnerabilities to: **security@streamline.dev**
+Report vulnerabilities to: **security@streamlinelabs.dev** (see `SECURITY.md`).
 
 ## SDK Version Compatibility
 
@@ -173,10 +230,14 @@ All official SDKs target compatibility with the **current** and **previous** min
 
 | SDK | Min Server Version | Max Server Version |
 |-----|-------------------|-------------------|
-| streamline-java-sdk 0.2.x | 0.1.0 | 0.2.x |
-| streamline-python-sdk 0.2.x | 0.1.0 | 0.2.x |
-| streamline-go-sdk 0.2.x | 0.1.0 | 0.2.x |
-| streamline-node-sdk 0.2.x | 0.1.0 | 0.2.x |
-| streamline-rust-sdk 0.2.x | 0.1.0 | 0.2.x |
-| streamline-dotnet-sdk 0.2.x | 0.1.0 | 0.2.x |
-| streamline-wasm-sdk 0.2.x | 0.2.0 | 0.2.x |
+| streamline-java-sdk 0.4.x | 0.3.0 | 0.4.x |
+| streamline-python-sdk 0.4.x | 0.3.0 | 0.4.x |
+| streamline-go-sdk 0.4.x | 0.3.0 | 0.4.x |
+| streamline-node-sdk 0.4.x | 0.3.0 | 0.4.x |
+| streamline-rust-sdk 0.4.x | 0.3.0 | 0.4.x |
+| streamline-dotnet-sdk 0.4.x | 0.3.0 | 0.4.x |
+| streamline-wasm-sdk 0.4.x | 0.3.0 | 0.4.x |
+
+> SDK releases live in their own repositories. These rows state the intended
+> compatibility window for the 0.4.x line; they are not a claim that every SDK
+> has already been tagged 0.4.x.

@@ -527,8 +527,8 @@ pub fn diff_contracts(old: &StreamContract, new: &StreamContract) -> Vec<Contrac
 
 #[cfg(test)]
 mod tests {
+    use super::super::definition::{ContractField, ContractSpec, FieldType, StreamContract};
     use super::*;
-    use super::super::definition::{ContractSpec, ContractField, FieldType, StreamContract};
 
     fn make_contract(fields: Vec<ContractField>) -> StreamContract {
         StreamContract {

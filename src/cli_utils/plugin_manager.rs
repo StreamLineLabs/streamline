@@ -276,27 +276,39 @@ impl CliPluginManager {
     }
 
     /// Search the plugin registry for manifests matching a query.
-    pub async fn search(&self, query: &str) -> Vec<PluginManifest> {
+    ///
+    /// **Not implemented.** Remote registry access does not exist in this
+    /// build. This previously returned an empty `Vec`, which is indistinguishable
+    /// from "the registry has no matching plugins" and made a missing feature
+    /// look like an empty result set.
+    pub async fn search(&self, query: &str) -> Result<Vec<PluginManifest>, String> {
         debug!(query = %query, registry = %self.config.registry_url, "Searching plugin registry");
-
-        // In production this would make an HTTP request to the registry.
-        // Return an empty vec to indicate no matches in the stub.
-        Vec::new()
+        Err(format!(
+            "Unsupported: searching the plugin registry at {} is not implemented \
+             in this build",
+            self.config.registry_url
+        ))
     }
 
     /// Update an installed plugin to the latest version from the registry.
+    ///
+    /// **Not implemented.** This previously logged "Plugin is already up to
+    /// date" and returned `Ok(())` without contacting any registry or comparing
+    /// any versions, so a caller could not tell an up-to-date plugin from an
+    /// update that never happened.
     pub async fn update(&self, name: &str) -> Result<(), String> {
-        let mut plugins = self.plugins.write().await;
+        let plugins = self.plugins.read().await;
         let plugin = plugins
-            .get_mut(name)
-            .ok_or_else(|| format!("Plugin '{}' not found", name))?;
+            .get(name)
+            .ok_or_else(|| format!("Plugin '{name}' not found"))?;
 
-        debug!(name = %name, current_version = %plugin.version, "Checking for plugin update");
+        debug!(name = %name, current_version = %plugin.version, "Plugin update requested");
 
-        // In production this would fetch the latest manifest from the registry,
-        // compare versions, and replace the entrypoint binary.
-        info!(name = %name, "Plugin is already up to date");
-        Ok(())
+        Err(format!(
+            "Unsupported: updating '{}' requires fetching from the plugin registry \
+             at {}, which is not implemented in this build",
+            name, self.config.registry_url
+        ))
     }
 
     /// Validate a plugin manifest and return a list of errors (empty = valid).
@@ -485,11 +497,13 @@ mod tests {
         assert_eq!(roundtrip.stdin, Some("data".to_string()));
     }
 
+    /// Regression: registry search is not implemented, so it must report that
+    /// rather than returning an empty result set that looks like "no matches".
     #[tokio::test]
-    async fn test_search_returns_empty() {
+    async fn test_search_reports_unsupported() {
         let mgr = CliPluginManager::new(default_config());
-        let results = mgr.search("anything").await;
-        assert!(results.is_empty());
+        let err = mgr.search("anything").await.unwrap_err();
+        assert!(err.starts_with("Unsupported:"), "{err}");
     }
 
     #[tokio::test]
@@ -499,11 +513,14 @@ mod tests {
         assert!(err.contains("not found"));
     }
 
+    /// Regression: updating used to log "already up to date" and return Ok
+    /// without ever contacting a registry.
     #[tokio::test]
-    async fn test_update_existing_plugin() {
+    async fn test_update_existing_plugin_reports_unsupported() {
         let mgr = CliPluginManager::new(default_config());
         mgr.install(sample_manifest("up")).await.unwrap();
-        mgr.update("up").await.unwrap();
+        let err = mgr.update("up").await.unwrap_err();
+        assert!(err.starts_with("Unsupported:"), "{err}");
     }
 
     #[tokio::test]

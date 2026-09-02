@@ -160,6 +160,22 @@ the Rust-native tooling above remains the fail-closed dependency and lint layer.
   count of undocumented `unsafe` blocks is capped in CI
 - Input validation at protocol boundaries
 
+### Release integrity
+
+Releases produced by `.github/workflows/release.yml`:
+
+- are built only after the full release gate passes (stability, fail-closed
+  security audit, Kafka compatibility, tests, documentation);
+- ship a `checksums.txt` covering every published artifact, signed with
+  keyless Sigstore `cosign`, alongside per-artifact signatures;
+- ship a CycloneDX SBOM (`sbom.cdx.json`) generated with `cargo-cyclonedx`,
+  which is validated to be non-empty — the release fails if it is not produced;
+- carry GitHub-native build-provenance and SBOM attestations, which are
+  required steps, not best-effort ones;
+- carry SLSA Level 3 provenance for stable (non pre-release) tags.
+
+No SPDX SBOM is published; only CycloneDX.
+
 ## Disclosure Policy
 
 When a security vulnerability is reported:

@@ -58,14 +58,10 @@ pub use schema_history::{DdlType, SchemaChange, SchemaHistoryStore};
 pub use snapshot::{SnapshotManager, SnapshotProgress, SnapshotState, SnapshotStrategy};
 
 #[cfg(feature = "postgres-cdc")]
-pub use config::{PostgresCdcConfig, PostgresOutputPlugin, PostgresSslMode};
-#[cfg(feature = "postgres-cdc")]
-pub use postgres::PostgresCdcSource;
-#[cfg(feature = "postgres-cdc")]
-pub use postgres_offset_store::PostgresOffsetStore;
-
 #[cfg(feature = "mysql-cdc")]
 pub use config::MySqlCdcConfig;
+#[cfg(feature = "postgres-cdc")]
+pub use config::{PostgresCdcConfig, PostgresOutputPlugin, PostgresSslMode};
 #[cfg(feature = "mysql-cdc")]
 pub use mysql::{BinlogPosition, MySqlCdcSource};
 #[cfg(feature = "postgres-cdc")]
