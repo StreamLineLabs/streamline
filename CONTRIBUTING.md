@@ -140,6 +140,7 @@ The project uses a Cargo workspace with multiple crates:
 | `streamline` (main) | `.` (root) | Server, CLI, and core library |
 | `streamline-analytics` | `crates/streamline-analytics` | DuckDB-based SQL analytics engine (isolated due to heavy C deps) |
 | `streamline-wasm` | `crates/streamline-wasm` | WASM transform runtime (isolated due to wasmtime dependency) |
+| `streamline-serde-wincode` | `crates/streamline-serde-wincode` | Apache-2.0 fork of `serde-wincode` 0.1.2 that pins `wincode` to `=0.4.9`; see its README for why the pin cannot live anywhere else |
 | `streamline-operator` | `streamline-operator/` | Kubernetes operator (separate deployment artifact) |
 
 Heavy dependencies like DuckDB and Wasmtime are isolated into workspace crates to keep the main crate's compile time fast when those features are disabled.
@@ -234,6 +235,51 @@ let value = optional.unwrap();
 | **cdc/** | Source connectors implement the `CdcSource` trait. Test with containerized databases. |
 | **cluster/** | Raft state changes require both unit tests and multi-node integration tests. |
 | **edge/** | Offline WAL must be size-bounded. Test sync-on-reconnect scenarios. |
+| **sink/** | A connector that this build cannot actually run must report itself unavailable in `sink/unavailable.rs`, and `SinkManager::create_sink` must reject it *before* duplicate-name, topic and config validation. Registering a sink that fails on delivery makes it look healthy while records are dropped. |
+
+### Adding or bumping a dependency
+
+Two rules, both enforced by `tests/dependency_security_test.rs`:
+
+1. **A `Cargo.lock` pin is not a constraint.** A lockfile binds this repository
+   only; a consumer of the published crate resolves from scratch against the
+   manifests crates.io serves. If a dependency must not float — because a newer
+   release raises `rust-version` above our MSRV of 1.88, or changes an on-disk
+   format — the requirement has to be exact (`=x.y.z`) in a manifest that is
+   itself published. Add it to `MSRV_SENSITIVE_PINS` when you do.
+2. **Pin the whole family, not just the facade.** A crate that depends on its
+   own companion crates with caret requirements (`async-graphql` on
+   `async-graphql-derive`/`-parser`/`-value`, `object_store` on `crc-fast`) will
+   let them float past the facade's pin. Declare the companions as exact
+   optional direct dependencies, activated by the same feature.
+
+`fresh_consumer_resolves_an_msrv_compatible_graph` is the check that matters: it
+packages every publishable crate, deletes the embedded lockfiles and resolves a
+brand-new consumer on the MSRV toolchain. Do not "fix" a failure there with a
+`Cargo.lock` pin or a `[patch]` — neither reaches a downstream consumer.
+
+### Changing a release workflow
+
+`.github/workflows/publish-crate.yml` and `publish-sdks.yml` are covered by
+static guards in `tests/packaging_metadata_test.rs` and by a hermetic suite,
+`scripts/release/tests/release-scripts.test.sh` (run by
+`cargo test --test release_scripts_test`), that drives the helper scripts with
+fake `cargo`/`curl` binaries.
+
+Invariants those tests hold, all of which have been violated in this repository
+before:
+
+- a `workflow_dispatch` of `publish-crate.yml` can never publish;
+- every publishing job waits for `release-gate`, `verify-core-version` and
+  `publish-rust-crate`;
+- every SDK job verifies the checked-out repository's own version before it
+  builds anything, in dry runs too;
+- publication is resumable — an already-published exact version is skipped, and
+  a *different* version is never treated as sufficient.
+
+If you add a publishing job, add it to `SDK_PUBLISH_JOBS` in
+`tests/packaging_metadata_test.rs`; the enumeration is asserted to be complete,
+so an ungated job fails the build rather than shipping.
 
 ---
 
@@ -312,6 +358,9 @@ make validate                  # fmt + clippy + tests + doc build
 | Full feature coverage | `cargo test --all-features` | Before opening a PR |
 | Nextest (if installed) | `cargo nextest run` | Faster parallel execution |
 | Compatibility suite | `cargo test --features compatibility-tests protocol_compatibility -- --ignored --nocapture` | Changing Kafka protocol code |
+| Sink availability | `cargo test --test sink_connector_availability_test` **and** `cargo test --features serverless --test sink_connector_availability_test` | Touching `src/sink/` — the contract has a half in each build |
+| Dependency graph | `cargo test --test dependency_security_test` | Adding or bumping any dependency |
+| Release tooling | `cargo test --test packaging_metadata_test --test release_scripts_test` | Touching `.github/workflows/publish-*.yml` or `scripts/release/` |
 
 ### Writing Tests
 

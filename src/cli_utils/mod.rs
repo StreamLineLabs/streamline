@@ -50,7 +50,6 @@ pub mod tui_state;
 pub mod tune;
 pub mod validator;
 
-#[cfg(feature = "iceberg")]
 pub mod sink_commands;
 
 #[cfg(feature = "edge")]
@@ -114,7 +113,6 @@ pub use plugin_manager::{
     PluginManifest, PluginOutput,
 };
 
-#[cfg(feature = "iceberg")]
 pub use sink_commands::{
     handle_sink_create, handle_sink_delete, handle_sink_list, handle_sink_start,
     handle_sink_status, handle_sink_stop,

@@ -1,27 +1,16 @@
 //! CLI commands for sink connector management
 
-#[cfg(feature = "iceberg")]
 pub use super::context::{CliContext, OutputFormat};
-#[cfg(feature = "iceberg")]
 use crate::error::{Result, StreamlineError};
-#[cfg(feature = "iceberg")]
 use crate::sink::SinkManager;
-#[cfg(feature = "iceberg")]
 use crate::storage::TopicManager;
-#[cfg(feature = "iceberg")]
 use colored::Colorize;
-#[cfg(feature = "iceberg")]
 use comfy_table::presets::UTF8_FULL_CONDENSED;
-#[cfg(feature = "iceberg")]
 use comfy_table::{Cell, Color, ContentArrangement, Table};
-#[cfg(feature = "iceberg")]
 use serde_json::json;
-#[cfg(feature = "iceberg")]
 use std::io::Write;
-#[cfg(feature = "iceberg")]
 use std::sync::Arc;
 
-#[cfg(feature = "iceberg")]
 #[allow(clippy::too_many_arguments)]
 /// Handle sink create command
 pub async fn handle_sink_create(
@@ -52,8 +41,7 @@ pub async fn handle_sink_create(
     // Validate sink type
     if sink_type != "iceberg" {
         return Err(StreamlineError::Config(format!(
-            "Unsupported sink type: {}. Only 'iceberg' is currently supported.",
-            sink_type
+            "Unsupported sink type: {sink_type}. This command only builds Iceberg sink configurations."
         )));
     }
 
@@ -165,7 +153,6 @@ pub async fn handle_sink_create(
     Ok(())
 }
 
-#[cfg(feature = "iceberg")]
 /// Handle sink list command
 pub async fn handle_sink_list(ctx: &CliContext) -> Result<()> {
     use crate::sink::SinkStatus;
@@ -228,7 +215,6 @@ pub async fn handle_sink_list(ctx: &CliContext) -> Result<()> {
     Ok(())
 }
 
-#[cfg(feature = "iceberg")]
 /// Handle sink status command
 pub async fn handle_sink_status(name: String, json: bool, ctx: &CliContext) -> Result<()> {
     use crate::sink::SinkStatus;
@@ -312,7 +298,6 @@ pub async fn handle_sink_status(name: String, json: bool, ctx: &CliContext) -> R
     Ok(())
 }
 
-#[cfg(feature = "iceberg")]
 /// Handle sink start command
 pub async fn handle_sink_start(name: String, ctx: &CliContext) -> Result<()> {
     let data_dir = &ctx.data_dir;
@@ -327,7 +312,6 @@ pub async fn handle_sink_start(name: String, ctx: &CliContext) -> Result<()> {
     Ok(())
 }
 
-#[cfg(feature = "iceberg")]
 /// Handle sink stop command
 pub async fn handle_sink_stop(name: String, ctx: &CliContext) -> Result<()> {
     let data_dir = &ctx.data_dir;
@@ -342,7 +326,6 @@ pub async fn handle_sink_stop(name: String, ctx: &CliContext) -> Result<()> {
     Ok(())
 }
 
-#[cfg(feature = "iceberg")]
 /// Handle sink delete command
 pub async fn handle_sink_delete(name: String, yes: bool, ctx: &CliContext) -> Result<()> {
     let data_dir = &ctx.data_dir;
@@ -368,7 +351,6 @@ pub async fn handle_sink_delete(name: String, yes: bool, ctx: &CliContext) -> Re
     Ok(())
 }
 
-#[cfg(feature = "iceberg")]
 /// Format bytes into human-readable format
 fn format_bytes(bytes: u64) -> String {
     const UNITS: &[&str] = &["B", "KB", "MB", "GB", "TB"];

@@ -4,16 +4,17 @@
 //! which enable streaming data to external storage systems like Apache Iceberg
 //! and Delta Lake.
 //!
-//! # Supported Sinks
+//! # Lakehouse sink compatibility types
 //!
-//! - **Iceberg**: Apache Iceberg lakehouse format with support for REST, Hive,
-//!   and AWS Glue catalogs
-//! - **Delta Lake**: Delta Lake lakehouse format with support for local and
-//!   cloud storage (S3, Azure, GCS)
+//! These configuration types remain available so existing configuration can be
+//! parsed and diagnosed. Iceberg and Delta Lake connector creation currently
+//! fails closed because no Rust 1.88-compatible upstream dependency set fixes
+//! the reachable quick-xml advisories (and the older Delta graph also pulled
+//! native-tls/OpenSSL). See [`crate::sink::unavailable`].
 //!
 //! # Example
 //!
-//! ```
+//! ```ignore
 //! use streamline::sink::config::{SinkConfig, SinkType, IcebergSinkConfig, CatalogType};
 //!
 //! // Create an Iceberg sink configuration

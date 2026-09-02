@@ -73,6 +73,7 @@
 //! | `storage.sync_mode = "os_default"` | Maximum throughput, unbounded loss risk |
 //! | `storage.segment_max_bytes` | Larger segments = longer time to seal |
 
+use crate::bincode_compat;
 use crate::error::{Result, StreamlineError};
 use crate::storage::compression::{compress, decompress, CompressionCodec};
 use crate::storage::index::{index_path_for_segment, IndexBuilder, SegmentIndex};
@@ -987,7 +988,7 @@ impl Segment {
 
             // Deserialize batch
             let batch: RecordBatch = if header.flags & FLAG_BINCODE_FORMAT != 0 {
-                match bincode::deserialize(&batch_bytes) {
+                match bincode_compat::deserialize(&batch_bytes) {
                     Ok(b) => b,
                     Err(e) => {
                         warn!(
@@ -1041,9 +1042,8 @@ impl Segment {
         let batch_position = self.write_position;
 
         // Serialize batch to bincode (more efficient than JSON)
-        let batch_bytes = bincode::serialize(batch).map_err(|e| {
-            StreamlineError::storage_msg(format!("Failed to serialize batch: {}", e))
-        })?;
+        let batch_bytes = bincode_compat::serialize(batch)
+            .map_err(|e| StreamlineError::storage_msg(format!("Failed to serialize batch: {e}")))?;
 
         // Compress if compression is enabled
         let batch_data = compress(&batch_bytes, self.compression)?;
@@ -1197,8 +1197,8 @@ impl Segment {
 
             // Deserialize batch - use bincode if flag is set, otherwise legacy JSON
             let batch: RecordBatch = if self.header.flags & FLAG_BINCODE_FORMAT != 0 {
-                bincode::deserialize(&batch_bytes).map_err(|e| {
-                    StreamlineError::CorruptedData(format!("Failed to deserialize batch: {}", e))
+                bincode_compat::deserialize(&batch_bytes).map_err(|e| {
+                    StreamlineError::CorruptedData(format!("Failed to deserialize batch: {e}"))
                 })?
             } else {
                 // Legacy JSON format for backward compatibility
@@ -1307,8 +1307,8 @@ impl Segment {
 
             // Deserialize batch - use bincode if flag is set, otherwise legacy JSON
             let batch: RecordBatch = if self.header.flags & FLAG_BINCODE_FORMAT != 0 {
-                bincode::deserialize(&batch_bytes).map_err(|e| {
-                    StreamlineError::CorruptedData(format!("Failed to deserialize batch: {}", e))
+                bincode_compat::deserialize(&batch_bytes).map_err(|e| {
+                    StreamlineError::CorruptedData(format!("Failed to deserialize batch: {e}"))
                 })?
             } else {
                 // Legacy JSON format for backward compatibility
@@ -1471,8 +1471,8 @@ impl Segment {
 
             // Deserialize batch to get first offset (format depends on header flags)
             let batch: RecordBatch = if self.header.flags & FLAG_BINCODE_FORMAT != 0 {
-                bincode::deserialize(&batch_bytes).map_err(|e| {
-                    StreamlineError::CorruptedData(format!("Failed to deserialize batch: {}", e))
+                bincode_compat::deserialize(&batch_bytes).map_err(|e| {
+                    StreamlineError::CorruptedData(format!("Failed to deserialize batch: {e}"))
                 })?
             } else {
                 // Legacy JSON format for backward compatibility

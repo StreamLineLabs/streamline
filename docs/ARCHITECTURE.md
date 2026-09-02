@@ -97,7 +97,7 @@ Controlled by Cargo feature flags (71 total):
 | `cluster` | `clustering` | Raft consensus (OpenRaft) |
 | `schema` | `schema-registry` | Avro/Protobuf/JSON Schema registry |
 | `analytics` | `analytics` | DuckDB embedded SQL engine |
-| `sink` | `iceberg`/`delta-lake` | Lakehouse connectors |
+| `sink` | always compiled | Sink connectors. Serverless/cloud-function are usable; Iceberg/Delta Lake are **unavailable** (see `docs/API_STABILITY.md`) |
 | `cdc` | `postgres-cdc` etc. | Change Data Capture |
 | `edge` | `edge` | Edge runtime, fleet management, MQTT bridge |
 | `featurestore` | `featurestore` | ML feature store, materialized views |

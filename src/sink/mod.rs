@@ -14,35 +14,67 @@
 //! The sink system consists of:
 //! - [`SinkConnector`] trait: Defines the interface for sink implementations
 //! - [`SinkManager`]: Manages multiple sink instances and their lifecycle
-//! - Sink implementations: Specific connectors (e.g., Iceberg, Parquet, Delta Lake)
+//! - Sink implementations: Specific connectors (e.g., Serverless, Cloud Functions)
+//!
+//! ## Connector availability
+//!
+//! The **Iceberg** and **Delta Lake** connectors are unavailable in this
+//! release: their upstream crates pull dependencies with unfixed CVSS 7.5
+//! advisories (quick-xml < 0.41 — RUSTSEC-2026-0194 / RUSTSEC-2026-0195) and,
+//! for Delta Lake, native-tls/OpenSSL. Creating them fails with an explicit
+//! error.
+//!
+//! The **Serverless** and **Cloud Function** connectors require the
+//! `serverless` Cargo feature, which is what brings in the HTTP client they
+//! deliver through. In a build without it they are reported unavailable and
+//! [`SinkManager::create_sink`] rejects them up front rather than registering a
+//! sink that would fail on every delivery.
+//!
+//! See [`unavailable`] for the full rationale and
+//! [`unavailable::is_available`] to query it programmatically.
 //!
 //! ## Usage
 //!
 //! ```rust,ignore
 //! use streamline::sink::{SinkManager, SinkConfig};
 //!
-//! let manager = SinkManager::new();
+//! let manager = SinkManager::new(topic_manager);
 //! manager.create_sink(SinkConfig {
-//!     name: "my-iceberg-sink".to_string(),
-//!     sink_type: SinkType::Iceberg,
+//!     name: "my-webhook-sink".to_string(),
+//!     sink_type: SinkType::Serverless,
 //!     topics: vec!["events".to_string()],
-//!     config: IcebergSinkConfig { /* ... */ },
+//!     config: serverless_config,
 //! }).await?;
 //! ```
 
 pub mod config;
 pub mod iceberg_catalog;
+pub mod unavailable;
 
-#[cfg(feature = "delta-lake")]
+// Preserved upstream-backed implementations.
+//
+// `delta_backend` and `iceberg_backend` are never set by any feature or
+// profile, so these modules are not compiled in any supported build. They are
+// kept verbatim so the connectors can be restored without re-implementing them
+// once `deltalake` / `iceberg` ship MSRV-compatible releases on
+// quick-xml >= 0.41 without native-tls. See `unavailable` for details.
+#[cfg(delta_backend)]
 pub mod delta;
 
-#[cfg(feature = "iceberg")]
+#[cfg(iceberg_backend)]
 pub mod iceberg;
 
-#[allow(dead_code)]
+// The Serverless and Cloud Function connectors deliver over HTTP, and their
+// HTTP client (`crate::http_client`, backed by reqwest) is only compiled when
+// the `serverless` feature is on. Compiling the modules without it produced
+// connectors that could be constructed and registered but failed on *every*
+// delivery — the sink accepted records and dropped them. The modules are
+// therefore gated on the same feature that makes them functional, which is also
+// what `unavailable::is_available` reports.
+#[cfg(feature = "serverless")]
 pub mod serverless;
 
-#[allow(dead_code)]
+#[cfg(feature = "serverless")]
 pub mod cloud_functions;
 
 pub mod triggers;
@@ -206,6 +238,24 @@ impl SinkManager {
     pub async fn create_sink(&self, config: SinkConfig) -> Result<()> {
         info!(sink = %config.name, sink_type = ?config.sink_type, "Creating sink");
 
+        // Reject connectors that cannot run in this build *before* any other
+        // validation — duplicate names, topic existence, or config shape.
+        //
+        // Ordering matters. A caller who asks for a connector this binary was
+        // not built with must be told that, not handed an unrelated
+        // "topic does not exist" or "invalid config" error. It also guarantees
+        // that no such sink is ever inserted into the registry: a sink that
+        // registers successfully and then fails on every delivery silently
+        // drops records.
+        if let Some(err) = unavailable::unavailable_error(config.sink_type) {
+            error!(
+                sink = %config.name,
+                sink_type = %config.sink_type,
+                "Refusing to create sink: connector unavailable"
+            );
+            return Err(err);
+        }
+
         // Check if sink already exists
         if self.sinks.contains_key(&config.name) {
             return Err(StreamlineError::Sink(format!(
@@ -218,71 +268,13 @@ impl SinkManager {
         for topic in &config.topics {
             self.topic_manager
                 .get_topic_metadata(topic)
-                .map_err(|_| StreamlineError::Sink(format!("Topic '{}' does not exist", topic)))?;
+                .map_err(|_| StreamlineError::Sink(format!("Topic '{topic}' does not exist")))?;
         }
 
-        // Create sink instance
-        let sink: Box<dyn SinkConnector> = match config.sink_type {
-            #[cfg(feature = "iceberg")]
-            SinkType::Iceberg => {
-                let iceberg_config = serde_json::from_value(config.config.clone())
-                    .map_err(|e| StreamlineError::Sink(format!("Invalid Iceberg config: {}", e)))?;
-                Box::new(iceberg::IcebergSink::new(
-                    config.name.clone(),
-                    config.topics.clone(),
-                    iceberg_config,
-                    self.topic_manager.clone(),
-                )?)
-            }
-            #[cfg(not(feature = "iceberg"))]
-            SinkType::Iceberg => {
-                return Err(StreamlineError::Sink(
-                    "Iceberg sink not available. Compile with --features iceberg".to_string(),
-                ));
-            }
-            #[cfg(feature = "delta-lake")]
-            SinkType::DeltaLake => {
-                let delta_config = serde_json::from_value(config.config.clone()).map_err(|e| {
-                    StreamlineError::Sink(format!("Invalid Delta Lake config: {}", e))
-                })?;
-                Box::new(delta::DeltaLakeSink::new(
-                    config.name.clone(),
-                    config.topics.clone(),
-                    delta_config,
-                    self.topic_manager.clone(),
-                )?)
-            }
-            #[cfg(not(feature = "delta-lake"))]
-            SinkType::DeltaLake => {
-                return Err(StreamlineError::Sink(
-                    "Delta Lake sink not available. Compile with --features delta-lake".to_string(),
-                ));
-            }
-            SinkType::Serverless => {
-                let serverless_config =
-                    serde_json::from_value(config.config.clone()).map_err(|e| {
-                        StreamlineError::Sink(format!("Invalid serverless config: {}", e))
-                    })?;
-                Box::new(serverless::ServerlessConnector::new(
-                    config.name.clone(),
-                    config.topics.clone(),
-                    serverless_config,
-                    self.topic_manager.clone(),
-                )?)
-            }
-            SinkType::CloudFunction => {
-                let cloud_function_config =
-                    serde_json::from_value(config.config.clone()).map_err(|e| {
-                        StreamlineError::Sink(format!("Invalid cloud function config: {}", e))
-                    })?;
-                Box::new(cloud_functions::CloudFunctionConnector::new(
-                    config.name.clone(),
-                    config.topics.clone(),
-                    cloud_function_config,
-                    self.topic_manager.clone(),
-                )?)
-            }
-        };
+        // Create sink instance. `build_connector` fails closed for anything the
+        // availability check above would have rejected, so a future reordering
+        // cannot register an unusable sink.
+        let sink = self.build_connector(&config)?;
 
         // Register sink
         self.sinks
@@ -292,12 +284,92 @@ impl SinkManager {
         Ok(())
     }
 
+    /// Construct the connector for `config.sink_type`.
+    ///
+    /// Only the connectors this build actually contains have an arm here:
+    /// `iceberg`/`delta` are fenced off by the never-enabled `iceberg_backend`
+    /// and `delta_backend` cfgs, and `serverless`/`cloud_function` by the
+    /// `serverless` feature that supplies their HTTP client.
+    ///
+    /// Everything else falls through to the availability error, so this is a
+    /// second, independent gate: even if `create_sink`'s up-front check were
+    /// removed, no unusable connector could be built and registered here.
+    #[allow(
+        unreachable_patterns,
+        reason = "the catch-all is unreachable only in a build where every backend \
+                  cfg and feature is on, which no supported configuration does"
+    )]
+    fn build_connector(&self, config: &SinkConfig) -> Result<Box<dyn SinkConnector>> {
+        // Every arm yields a `Result`, and the catch-all yields `Err` rather
+        // than returning, so the match is an ordinary expression in every
+        // feature combination — including the default build, where the
+        // catch-all is the only arm.
+        match config.sink_type {
+            #[cfg(iceberg_backend)]
+            SinkType::Iceberg => {
+                let iceberg_config = serde_json::from_value(config.config.clone())
+                    .map_err(|e| StreamlineError::Sink(format!("Invalid Iceberg config: {e}")))?;
+                Ok(Box::new(iceberg::IcebergSink::new(
+                    config.name.clone(),
+                    config.topics.clone(),
+                    iceberg_config,
+                    self.topic_manager.clone(),
+                )?))
+            }
+            #[cfg(delta_backend)]
+            SinkType::DeltaLake => {
+                let delta_config = serde_json::from_value(config.config.clone()).map_err(|e| {
+                    StreamlineError::Sink(format!("Invalid Delta Lake config: {e}"))
+                })?;
+                Ok(Box::new(delta::DeltaLakeSink::new(
+                    config.name.clone(),
+                    config.topics.clone(),
+                    delta_config,
+                    self.topic_manager.clone(),
+                )?))
+            }
+            #[cfg(feature = "serverless")]
+            SinkType::Serverless => {
+                let serverless_config =
+                    serde_json::from_value(config.config.clone()).map_err(|e| {
+                        StreamlineError::Sink(format!("Invalid serverless config: {e}"))
+                    })?;
+                Ok(Box::new(serverless::ServerlessConnector::new(
+                    config.name.clone(),
+                    config.topics.clone(),
+                    serverless_config,
+                    self.topic_manager.clone(),
+                )?))
+            }
+            #[cfg(feature = "serverless")]
+            SinkType::CloudFunction => {
+                let cloud_function_config =
+                    serde_json::from_value(config.config.clone()).map_err(|e| {
+                        StreamlineError::Sink(format!("Invalid cloud function config: {e}"))
+                    })?;
+                Ok(Box::new(cloud_functions::CloudFunctionConnector::new(
+                    config.name.clone(),
+                    config.topics.clone(),
+                    cloud_function_config,
+                    self.topic_manager.clone(),
+                )?))
+            }
+            unsupported => Err(
+                unavailable::unavailable_error(unsupported).unwrap_or_else(|| {
+                    StreamlineError::Sink(format!(
+                        "Sink connector '{unsupported}' is not available in this build"
+                    ))
+                }),
+            ),
+        }
+    }
+
     /// Start a sink
     pub async fn start_sink(&self, name: &str) -> Result<()> {
         let sink_ref = self
             .sinks
             .get(name)
-            .ok_or_else(|| StreamlineError::Sink(format!("Sink '{}' not found", name)))?;
+            .ok_or_else(|| StreamlineError::Sink(format!("Sink '{name}' not found")))?;
 
         let mut sink = sink_ref.write().await;
         sink.start().await?;
@@ -311,7 +383,7 @@ impl SinkManager {
         let sink_ref = self
             .sinks
             .get(name)
-            .ok_or_else(|| StreamlineError::Sink(format!("Sink '{}' not found", name)))?;
+            .ok_or_else(|| StreamlineError::Sink(format!("Sink '{name}' not found")))?;
 
         let mut sink = sink_ref.write().await;
         sink.stop().await?;
@@ -335,7 +407,7 @@ impl SinkManager {
         // Remove from registry
         self.sinks
             .remove(name)
-            .ok_or_else(|| StreamlineError::Sink(format!("Sink '{}' not found", name)))?;
+            .ok_or_else(|| StreamlineError::Sink(format!("Sink '{name}' not found")))?;
 
         info!(sink = %name, "Sink deleted");
         Ok(())
@@ -346,7 +418,7 @@ impl SinkManager {
         let sink_ref = self
             .sinks
             .get(name)
-            .ok_or_else(|| StreamlineError::Sink(format!("Sink '{}' not found", name)))?;
+            .ok_or_else(|| StreamlineError::Sink(format!("Sink '{name}' not found")))?;
 
         let sink = sink_ref.read().await;
         Ok(sink.status())
@@ -357,7 +429,7 @@ impl SinkManager {
         let sink_ref = self
             .sinks
             .get(name)
-            .ok_or_else(|| StreamlineError::Sink(format!("Sink '{}' not found", name)))?;
+            .ok_or_else(|| StreamlineError::Sink(format!("Sink '{name}' not found")))?;
 
         let sink = sink_ref.read().await;
         Ok(sink.metrics())
@@ -408,7 +480,7 @@ impl SinkManager {
             let mut sink = entry.value().write().await;
             if let Err(e) = sink.stop().await {
                 error!(sink = %name, error = %e, "Error stopping sink");
-                errors.push(format!("Sink '{}': {}", name, e));
+                errors.push(format!("Sink '{name}': {e}"));
             }
         }
 

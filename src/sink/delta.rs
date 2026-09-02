@@ -42,23 +42,23 @@ use tokio::sync::RwLock;
 use tokio::time::{interval, Duration};
 use tracing::{debug, error, info, warn};
 
-#[cfg(feature = "delta-lake")]
+#[cfg(delta_backend)]
 use deltalake::arrow::array::{
     ArrayRef, BinaryArray, Int32Array, Int64Array, StringArray, TimestampMillisecondArray,
 };
-#[cfg(feature = "delta-lake")]
+#[cfg(delta_backend)]
 use deltalake::arrow::datatypes::{DataType, Field, Schema as ArrowSchema, TimeUnit};
-#[cfg(feature = "delta-lake")]
+#[cfg(delta_backend)]
 use deltalake::arrow::record_batch::RecordBatch;
-#[cfg(feature = "delta-lake")]
+#[cfg(delta_backend)]
 use deltalake::kernel::StructField;
-#[cfg(feature = "delta-lake")]
+#[cfg(delta_backend)]
 use deltalake::operations::create::CreateBuilder;
-#[cfg(feature = "delta-lake")]
+#[cfg(delta_backend)]
 use deltalake::protocol::SaveMode;
-#[cfg(feature = "delta-lake")]
+#[cfg(delta_backend)]
 use deltalake::writer::{DeltaWriter, RecordBatchWriter};
-#[cfg(feature = "delta-lake")]
+#[cfg(delta_backend)]
 use deltalake::DeltaTable;
 
 /// Delta Lake sink connector
@@ -87,9 +87,9 @@ pub struct DeltaLakeSink {
     /// Shutdown signal
     shutdown_tx: Option<tokio::sync::watch::Sender<bool>>,
     /// Delta table handle
-    #[cfg(feature = "delta-lake")]
+    #[cfg(delta_backend)]
     table: Arc<RwLock<Option<DeltaTable>>>,
-    #[cfg(not(feature = "delta-lake"))]
+    #[cfg(not(delta_backend))]
     #[allow(dead_code)]
     table: Arc<RwLock<Option<()>>>,
 }
@@ -142,7 +142,7 @@ impl DeltaLakeSink {
     }
 
     /// Initialize Delta Lake table connection
-    #[cfg(feature = "delta-lake")]
+    #[cfg(delta_backend)]
     async fn initialize_table(&self) -> Result<DeltaTable> {
         info!(
             sink = %self.name,
@@ -207,7 +207,7 @@ impl DeltaLakeSink {
     }
 
     /// Initialize Delta Lake table connection (stub when feature disabled)
-    #[cfg(not(feature = "delta-lake"))]
+    #[cfg(not(delta_backend))]
     async fn initialize_table(&self) -> Result<()> {
         warn!(
             sink = %self.name,
@@ -217,7 +217,7 @@ impl DeltaLakeSink {
     }
 
     /// Create default schema for Streamline records
-    #[cfg(feature = "delta-lake")]
+    #[cfg(delta_backend)]
     fn create_default_schema() -> Vec<StructField> {
         use deltalake::kernel::DataType as DeltaDataType;
         use deltalake::kernel::PrimitiveType;
@@ -267,8 +267,8 @@ impl DeltaLakeSink {
         status: Arc<RwLock<SinkStatus>>,
         metrics: Arc<RwLock<SinkMetrics>>,
         buffer: Arc<RwLock<HashMap<String, Vec<Record>>>>,
-        #[cfg(feature = "delta-lake")] table: Arc<RwLock<Option<DeltaTable>>>,
-        #[cfg(not(feature = "delta-lake"))] _table: Arc<RwLock<Option<()>>>,
+        #[cfg(delta_backend)] table: Arc<RwLock<Option<DeltaTable>>>,
+        #[cfg(not(delta_backend))] _table: Arc<RwLock<Option<()>>>,
         mut shutdown_rx: tokio::sync::watch::Receiver<bool>,
     ) {
         info!(sink = %name, topics = ?topics, "Starting Delta Lake consumer loop");
@@ -280,7 +280,7 @@ impl DeltaLakeSink {
             tokio::select! {
                 _ = commit_interval.tick() => {
                     // Commit buffered records
-                    #[cfg(feature = "delta-lake")]
+                    #[cfg(delta_backend)]
                     if let Err(e) = Self::commit_buffer_impl(
                         &name,
                         &config,
@@ -296,7 +296,7 @@ impl DeltaLakeSink {
                         metrics_guard.error_message = Some(e.to_string());
                     }
 
-                    #[cfg(not(feature = "delta-lake"))]
+                    #[cfg(not(delta_backend))]
                     if let Err(e) = Self::commit_buffer_stub(
                         &name,
                         &buffer,
@@ -423,7 +423,7 @@ impl DeltaLakeSink {
     }
 
     /// Commit buffered records to Delta Lake
-    #[cfg(feature = "delta-lake")]
+    #[cfg(delta_backend)]
     async fn commit_buffer_impl(
         name: &str,
         config: &DeltaLakeSinkConfig,
@@ -615,7 +615,7 @@ impl DeltaLakeSink {
     }
 
     /// Attempt a single write-and-flush to the Delta table
-    #[cfg(feature = "delta-lake")]
+    #[cfg(delta_backend)]
     async fn try_write_batch(
         delta_table: &mut DeltaTable,
         record_batch: &RecordBatch,
@@ -635,7 +635,7 @@ impl DeltaLakeSink {
     }
 
     /// Commit buffered records (stub when feature disabled)
-    #[cfg(not(feature = "delta-lake"))]
+    #[cfg(not(delta_backend))]
     async fn commit_buffer_stub(
         name: &str,
         buffer: &Arc<RwLock<HashMap<String, Vec<Record>>>>,
@@ -675,7 +675,7 @@ impl DeltaLakeSink {
     }
 
     /// Convert Streamline records to Arrow RecordBatch
-    #[cfg(feature = "delta-lake")]
+    #[cfg(delta_backend)]
     fn records_to_arrow_batch(records: &[(&str, i32, &Record)]) -> Result<RecordBatch> {
         let _len = records.len();
 
@@ -749,7 +749,7 @@ impl DeltaLakeSink {
     ///
     /// Uses delta-rs `OptimizeBuilder` to merge files below `target_file_size_bytes`
     /// (default 256 MB) into larger files, reducing file-listing overhead.
-    #[cfg(feature = "delta-lake")]
+    #[cfg(delta_backend)]
     pub async fn optimize_table(&self) -> Result<OptimizeResult> {
         let mut table_guard = self.table.write().await;
         let delta_table = table_guard
@@ -803,7 +803,7 @@ impl DeltaLakeSink {
     }
 
     /// Compact small Parquet files (stub when feature disabled).
-    #[cfg(not(feature = "delta-lake"))]
+    #[cfg(not(delta_backend))]
     pub async fn optimize_table(&self) -> Result<OptimizeResult> {
         warn!(
             sink = %self.name,
@@ -822,7 +822,7 @@ impl DeltaLakeSink {
     ///
     /// Deletes data files that are not part of the current table state and
     /// are older than `retention_hours` (default 168 h / 7 days).
-    #[cfg(feature = "delta-lake")]
+    #[cfg(delta_backend)]
     pub async fn vacuum_table(&self) -> Result<VacuumResult> {
         let mut table_guard = self.table.write().await;
         let delta_table = table_guard
@@ -872,7 +872,7 @@ impl DeltaLakeSink {
     }
 
     /// Remove unreferenced files (stub when feature disabled).
-    #[cfg(not(feature = "delta-lake"))]
+    #[cfg(not(delta_backend))]
     pub async fn vacuum_table(&self) -> Result<VacuumResult> {
         warn!(
             sink = %self.name,
@@ -890,7 +890,7 @@ impl DeltaLakeSink {
     /// - **AddNewColumns**: adds new fields as nullable columns.
     /// - **AddAndWiden**: adds columns *and* widens numeric types
     ///   (e.g. Int32 → Int64, Float32 → Float64).
-    #[cfg(feature = "delta-lake")]
+    #[cfg(delta_backend)]
     fn evolve_schema(
         table_schema: &ArrowSchema,
         incoming_schema: &ArrowSchema,
@@ -997,7 +997,7 @@ impl DeltaLakeSink {
     }
 
     /// Return the wider of two Arrow numeric types if a safe promotion exists.
-    #[cfg(feature = "delta-lake")]
+    #[cfg(delta_backend)]
     fn widen_type(existing: &DataType, incoming: &DataType) -> Option<DataType> {
         match (existing, incoming) {
             // Integer widening
@@ -1025,10 +1025,8 @@ impl DeltaLakeSink {
     }
 
     /// Map an Arrow `DataType` to a delta-rs `DataType`.
-    #[cfg(feature = "delta-lake")]
-    fn arrow_to_delta_type(
-        dt: &DataType,
-    ) -> Result<deltalake::kernel::DataType> {
+    #[cfg(delta_backend)]
+    fn arrow_to_delta_type(dt: &DataType) -> Result<deltalake::kernel::DataType> {
         use deltalake::kernel::DataType as DeltaDataType;
         use deltalake::kernel::PrimitiveType;
 
@@ -1060,7 +1058,7 @@ impl DeltaLakeSink {
 
     /// Open the table at a specific Delta log version and return a
     /// snapshot as a vector of Arrow `RecordBatch`es.
-    #[cfg(feature = "delta-lake")]
+    #[cfg(delta_backend)]
     pub async fn read_at_version(&self, version: i64) -> Result<Vec<RecordBatch>> {
         let storage_options: HashMap<String, String> = self.config.storage_options.clone();
 
@@ -1083,7 +1081,7 @@ impl DeltaLakeSink {
     }
 
     /// Open the table at a specific Delta log version (stub when feature disabled).
-    #[cfg(not(feature = "delta-lake"))]
+    #[cfg(not(delta_backend))]
     pub async fn read_at_version(&self, version: i64) -> Result<Vec<()>> {
         warn!(
             sink = %self.name,
@@ -1095,7 +1093,7 @@ impl DeltaLakeSink {
 
     /// Open the table as of a given timestamp and return a snapshot as
     /// Arrow `RecordBatch`es.
-    #[cfg(feature = "delta-lake")]
+    #[cfg(delta_backend)]
     pub async fn read_at_timestamp(&self, ts: DateTime<Utc>) -> Result<Vec<RecordBatch>> {
         let storage_options: HashMap<String, String> = self.config.storage_options.clone();
         let ts_str = ts.format("%Y-%m-%dT%H:%M:%SZ").to_string();
@@ -1119,7 +1117,7 @@ impl DeltaLakeSink {
     }
 
     /// Open the table as of a given timestamp (stub when feature disabled).
-    #[cfg(not(feature = "delta-lake"))]
+    #[cfg(not(delta_backend))]
     pub async fn read_at_timestamp(&self, ts: DateTime<Utc>) -> Result<Vec<()>> {
         warn!(
             sink = %self.name,
@@ -1134,7 +1132,7 @@ impl DeltaLakeSink {
     /// Returns file metadata (paths and schema) rather than full data reads,
     /// since full Parquet reading requires datafusion which is not included.
     /// Callers can use the returned schema and file list to read data externally.
-    #[cfg(feature = "delta-lake")]
+    #[cfg(delta_backend)]
     async fn read_table_batches(
         table: &DeltaTable,
         _storage_options: &HashMap<String, String>,
@@ -1224,14 +1222,14 @@ impl SinkConnector for DeltaLakeSink {
         }
 
         // Initialize table
-        #[cfg(feature = "delta-lake")]
+        #[cfg(delta_backend)]
         {
             let table = self.initialize_table().await?;
             let mut table_guard = self.table.write().await;
             *table_guard = Some(table);
         }
 
-        #[cfg(not(feature = "delta-lake"))]
+        #[cfg(not(delta_backend))]
         {
             let _ = self.initialize_table().await?;
         }
@@ -1307,7 +1305,7 @@ impl SinkConnector for DeltaLakeSink {
         tokio::time::sleep(Duration::from_secs(2)).await;
 
         // Flush remaining buffer
-        #[cfg(feature = "delta-lake")]
+        #[cfg(delta_backend)]
         {
             let mut offsets = HashMap::new();
             if let Err(e) = Self::commit_buffer_impl(
@@ -1324,7 +1322,7 @@ impl SinkConnector for DeltaLakeSink {
             }
         }
 
-        #[cfg(not(feature = "delta-lake"))]
+        #[cfg(not(delta_backend))]
         {
             let mut offsets = HashMap::new();
             if let Err(e) =
@@ -1375,7 +1373,7 @@ impl SinkConnector for DeltaLakeSink {
     }
 
     async fn flush(&mut self) -> Result<()> {
-        #[cfg(feature = "delta-lake")]
+        #[cfg(delta_backend)]
         {
             let mut offsets = HashMap::new();
             Self::commit_buffer_impl(
@@ -1389,7 +1387,7 @@ impl SinkConnector for DeltaLakeSink {
             .await?;
         }
 
-        #[cfg(not(feature = "delta-lake"))]
+        #[cfg(not(delta_backend))]
         {
             let mut offsets = HashMap::new();
             Self::commit_buffer_stub(&self.name, &self.buffer, &self.metrics, &mut offsets).await?;
@@ -1580,7 +1578,7 @@ mod tests {
         assert!(!healthy);
     }
 
-    #[cfg(not(feature = "delta-lake"))]
+    #[cfg(not(delta_backend))]
     #[tokio::test]
     async fn test_optimize_stub() {
         let temp_dir = TempDir::new().unwrap();
@@ -1604,7 +1602,7 @@ mod tests {
         assert_eq!(opt.files_compacted, 0);
     }
 
-    #[cfg(feature = "delta-lake")]
+    #[cfg(delta_backend)]
     #[tokio::test]
     async fn test_optimize_real() {
         let temp_dir = TempDir::new().unwrap();
@@ -1639,7 +1637,7 @@ mod tests {
         assert_eq!(opt.files_compacted, 0);
     }
 
-    #[cfg(not(feature = "delta-lake"))]
+    #[cfg(not(delta_backend))]
     #[tokio::test]
     async fn test_vacuum_stub() {
         let temp_dir = TempDir::new().unwrap();
@@ -1659,7 +1657,7 @@ mod tests {
         assert_eq!(result.unwrap().files_deleted, 0);
     }
 
-    #[cfg(feature = "delta-lake")]
+    #[cfg(delta_backend)]
     #[tokio::test]
     async fn test_vacuum_real() {
         let temp_dir = TempDir::new().unwrap();
@@ -1690,7 +1688,7 @@ mod tests {
         assert_eq!(result.unwrap().files_deleted, 0);
     }
 
-    #[cfg(not(feature = "delta-lake"))]
+    #[cfg(not(delta_backend))]
     #[tokio::test]
     async fn test_time_travel_read_at_version_stub() {
         let temp_dir = TempDir::new().unwrap();
@@ -1710,7 +1708,7 @@ mod tests {
         assert!(result.unwrap().is_empty());
     }
 
-    #[cfg(feature = "delta-lake")]
+    #[cfg(delta_backend)]
     #[tokio::test]
     async fn test_time_travel_read_at_version_real() {
         let temp_dir = TempDir::new().unwrap();
@@ -1740,7 +1738,7 @@ mod tests {
         assert!(result.is_ok());
     }
 
-    #[cfg(not(feature = "delta-lake"))]
+    #[cfg(not(delta_backend))]
     #[tokio::test]
     async fn test_time_travel_read_at_timestamp_stub() {
         let temp_dir = TempDir::new().unwrap();
@@ -1760,7 +1758,7 @@ mod tests {
         assert!(result.unwrap().is_empty());
     }
 
-    #[cfg(feature = "delta-lake")]
+    #[cfg(delta_backend)]
     #[tokio::test]
     async fn test_time_travel_read_at_timestamp_real() {
         let temp_dir = TempDir::new().unwrap();

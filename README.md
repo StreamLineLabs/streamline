@@ -172,7 +172,19 @@ make test-lite
 
 *First build on a modern CPU. Subsequent incremental builds: ~10-30 seconds. Install [sccache](https://github.com/mozilla/sccache) for faster cross-branch rebuilds.
 
-Individual features: `auth`, `clustering`, `telemetry`, `metrics`, `cloud-storage`, `schema-registry`, `encryption`, `analytics`, `iceberg`, `delta-lake`
+Individual features: `auth`, `clustering`, `telemetry`, `metrics`, `cloud-storage`, `schema-registry`, `encryption`, `analytics`
+
+> **Lakehouse sink connectors are unavailable in this release.** The `iceberg`
+> and `delta-lake` features still exist as compatibility no-ops, but they enable
+> no dependencies and the connectors cannot be constructed. Every upstream
+> release compatible with our MSRV (1.88) pulls `quick-xml < 0.41`
+> ([RUSTSEC-2026-0194](https://rustsec.org/advisories/RUSTSEC-2026-0194),
+> [RUSTSEC-2026-0195](https://rustsec.org/advisories/RUSTSEC-2026-0195) — both
+> CVSS 7.5, reachable from object-storage XML) and, for Delta Lake,
+> `native-tls`/OpenSSL. We do not suppress advisories, so the dependencies were
+> removed rather than shipped vulnerable. See
+> [`src/sink/unavailable.rs`](src/sink/unavailable.rs) for the full rationale
+> and the upstream trackers to watch.
 
 ## Features
 
@@ -183,7 +195,9 @@ Persistent segment-based storage, log compaction, TLS/mTLS, Gzip/LZ4/Snappy/Zstd
 SASL/OAuth authentication, ACL authorization, Raft-based clustering & replication, tiered storage (S3/Azure/GCS), Schema Registry (Avro/Protobuf/JSON Schema), client quotas, OpenTelemetry tracing, Prometheus metrics
 
 ### Experimental (Feature-Gated)
-SQL analytics (DuckDB), Apache Iceberg & Delta Lake sinks, CDC (PostgreSQL/MySQL), stateful processing, time-series storage
+CDC (PostgreSQL/MySQL), stateful processing, time-series storage, Parquet lakehouse export, serverless/cloud-function sinks
+
+> Apache Iceberg & Delta Lake sinks are **not available** in this release — see the note under [Build Editions](#build-editions).
 
 ## Experimental: Moonshot Features
 
@@ -382,7 +396,7 @@ See **[Configuration Reference](docs/CONFIGURATION.md)** for all options (TLS, c
          │                │                      │
     ┌────┴────┐    ┌──────┴──────┐    ┌─────────┴─────────┐
     │  SDKs   │    │  Operator   │    │  Sink Connectors   │
-    │ 7 langs │    │  (K8s CRDs) │    │ Iceberg/Delta/S3   │
+    │ 7 langs │    │  (K8s CRDs) │    │ Parquet/S3/Webhook │
     └─────────┘    └─────────────┘    └───────────────────┘
 ```
 

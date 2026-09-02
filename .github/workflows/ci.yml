@@ -34,20 +34,13 @@ jobs:
           components: clippy
       - uses: Swatinem/rust-cache@v2
 
-  audit:
-    name: cargo-audit
-    runs-on: ubuntu-latest
-    permissions:
-      issues: write
-      checks: write
-    steps:
-      - uses: actions/checkout@v4
-      - uses: rustsec/audit-check@v2.0.0
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+      - run: cargo clippy --all-targets --locked -- -D warnings
+      - run: cargo test --locked
+      - run: cargo clippy --all-targets --all-features --locked -- -D warnings
+      - run: cargo test --all-features --locked
 
-  deny:
-    name: cargo-deny
+  msrv:
+    name: MSRV
     runs-on: ubuntu-latest
     env:
       # rust-toolchain.toml pins an exact channel, and cargo honours that file
@@ -59,7 +52,27 @@ jobs:
       RUSTUP_TOOLCHAIN: '1.88'
     steps:
       - uses: actions/checkout@v4
-      - uses: EmbarkStudios/cargo-deny-action@v2
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          command: check advisories bans licenses sources
+          toolchain: ${{ env.MSRV }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: msrv
 
+      - name: Confirm the MSRV toolchain is actually in use
+        run: |
+          set -euo pipefail
+          ACTUAL=$(rustc --version | awk '{print $2}')
+          echo "rustc in use: $ACTUAL (expected ${MSRV}.x)"
+          case "$ACTUAL" in
+            "$MSRV"|"$MSRV".*) ;;
+            *)
+              echo "::error::MSRV job is running rustc $ACTUAL, not $MSRV"
+              exit 1
+              ;;
+          esac
+
+      - run: cargo check --all-targets --locked
+
+  # Security scanning (cargo-audit / cargo-deny / security lints) lives in one
+  # fail-closed workflow: .github/workflows/security-scan.yml

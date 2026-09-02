@@ -153,6 +153,11 @@
 // Test code is exempt via #[cfg(test)] and --cfg test.
 #![cfg_attr(not(test), deny(clippy::unwrap_used))]
 
+// ── Crate-internal modules (not part of the public API) ──
+// Pins the bincode 1.x-compatible on-disk encoding in a single place; see the
+// module docs for why the configuration must not be chosen per call site.
+pub(crate) mod bincode_compat;
+
 // ── Stable public API modules ──
 pub mod config;
 pub mod consumer;
@@ -236,8 +241,11 @@ pub mod graphql;
 #[cfg(feature = "sqlite-queries")]
 pub mod sqlite;
 
-// Sink connectors (requires iceberg or delta-lake feature)
-#[cfg(any(feature = "iceberg", feature = "delta-lake"))]
+// Sink connectors.
+//
+// Always available. Note that the Iceberg and Delta Lake connectors within it
+// are *unavailable* in this release for security reasons — see
+// `sink::unavailable`. The Serverless and Cloud Function connectors are usable.
 pub mod sink;
 
 // Optional web UI module (requires "web-ui" feature)
@@ -570,13 +578,15 @@ pub use analytics::{
     QueryResult as AnalyticsQueryResult, QueryResultRow, StreamTable,
 };
 
-// Re-export Sink types (requires iceberg feature)
-#[cfg(feature = "iceberg")]
+// Re-export Sink types.
+//
+// `IcebergSinkConfig` and the catalog/partitioning types remain exported so
+// existing configuration files and callers still type-check, but constructing
+// the corresponding connectors always fails — see `sink::unavailable`.
 pub use sink::config::{
     CatalogType, IcebergSinkConfig, PartitioningConfig, PartitioningStrategy, SinkConfig, SinkType,
     TimeGranularity,
 };
-#[cfg(feature = "iceberg")]
 pub use sink::{SinkConnector, SinkInfo, SinkManager, SinkMetrics, SinkStatus};
 
 // Re-export Observability types

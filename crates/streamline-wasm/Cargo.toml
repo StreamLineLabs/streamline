@@ -45,7 +45,7 @@ base64 = "0.22"
 rand = "0.8"
 
 # WASM runtime (optional - provides real WASM execution when enabled)
-wasmtime = { version = "27", optional = true }
+wasmtime = { version = "36.0.14", optional = true }
 
 [features]
 default = []

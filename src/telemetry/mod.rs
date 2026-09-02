@@ -141,11 +141,18 @@ impl TelemetryManager {
     /// Create a new telemetry manager
     #[cfg(feature = "auth")]
     pub fn new(config: TelemetryConfig) -> Self {
-        let client = reqwest::Client::builder()
-            .timeout(Duration::from_secs(30))
-            .user_agent(format!("streamline/{}", env!("CARGO_PKG_VERSION")))
-            .build()
-            .unwrap_or_default();
+        let client = match crate::http_client::builder() {
+            Ok(builder) => builder
+                .timeout(Duration::from_secs(30))
+                .user_agent(format!("streamline/{}", env!("CARGO_PKG_VERSION")))
+                .build()
+                .inspect_err(|e| debug!("Telemetry HTTP client unavailable: {e}"))
+                .ok(),
+            Err(e) => {
+                debug!("Telemetry HTTP client unavailable: {e}");
+                None
+            }
+        };
 
         Self {
             config,
@@ -220,8 +227,11 @@ impl TelemetryManager {
 
         // Note: In the initial release, telemetry endpoint is not active.
         // This code is ready for when the endpoint is deployed.
-        let response = self
-            .client
+        let client = self.client.as_ref().ok_or_else(|| {
+            TelemetryError::Network("telemetry HTTP client is unavailable".to_string())
+        })?;
+
+        let response = client
             .post(&self.config.endpoint)
             .json(report)
             .send()

@@ -39,6 +39,7 @@
 //!            --s3-read-cache-mb 256
 //! ```
 
+use crate::bincode_compat;
 use crate::error::{Result, StreamlineError};
 use crate::storage::backend::{
     BufferConfig, PartitionManifest, SegmentBackend, SegmentManifestEntry,
@@ -48,7 +49,9 @@ use crate::storage::record::{Record, RecordBatch};
 use crate::storage::storage_mode::RemoteStorageConfig;
 use async_trait::async_trait;
 use bytes::Bytes;
-use object_store::{ObjectStore, PutPayload};
+// object_store 0.14 moved the convenience methods (get/put/head/delete/put_multipart)
+// off the `ObjectStore` trait and into the `ObjectStoreExt` extension trait.
+use object_store::{ObjectStore, ObjectStoreExt, PutPayload};
 use parking_lot::RwLock;
 use std::collections::VecDeque;
 use std::sync::Arc;
@@ -511,9 +514,8 @@ impl DisklessSegment {
         };
 
         // Serialize batch to bytes using bincode
-        let data = bincode::serialize(&batch).map_err(|e| {
-            StreamlineError::storage_msg(format!("Failed to serialize batch: {}", e))
-        })?;
+        let data = bincode_compat::serialize(&batch)
+            .map_err(|e| StreamlineError::storage_msg(format!("Failed to serialize batch: {e}")))?;
         let data = Bytes::from(data);
 
         // Generate S3 path
@@ -703,8 +705,8 @@ impl SegmentBackend for DisklessSegment {
             }
 
             // Deserialize records from cached data
-            let batch: RecordBatch = bincode::deserialize(&cached_data).map_err(|e| {
-                StreamlineError::storage_msg(format!("Failed to deserialize batch: {}", e))
+            let batch: RecordBatch = bincode_compat::deserialize(&cached_data).map_err(|e| {
+                StreamlineError::storage_msg(format!("Failed to deserialize batch: {e}"))
             })?;
 
             // Maybe trigger prefetch
@@ -745,8 +747,8 @@ impl SegmentBackend for DisklessSegment {
         );
 
         // Deserialize records
-        let batch: RecordBatch = bincode::deserialize(&data).map_err(|e| {
-            StreamlineError::storage_msg(format!("Failed to deserialize batch: {}", e))
+        let batch: RecordBatch = bincode_compat::deserialize(&data).map_err(|e| {
+            StreamlineError::storage_msg(format!("Failed to deserialize batch: {e}"))
         })?;
 
         // Maybe trigger prefetch

@@ -26,7 +26,9 @@ use crate::storage::wal::WalEntry;
 use async_trait::async_trait;
 use bytes::{BufMut, Bytes, BytesMut};
 use object_store::path::Path as ObjectPath;
-use object_store::{ObjectStore, PutPayload};
+// object_store 0.14 moved the convenience methods (get/put/head/delete/put_multipart)
+// off the `ObjectStore` trait and into the `ObjectStoreExt` extension trait.
+use object_store::{ObjectStore, ObjectStoreExt, PutPayload};
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 use std::fmt::Debug;

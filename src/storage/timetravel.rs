@@ -10,6 +10,7 @@
 //! - Snapshot retention policies
 //! - Incremental snapshots
 
+use crate::bincode_compat;
 use crate::error::{Result, StreamlineError};
 use crate::storage::record::Record;
 use parking_lot::RwLock;
@@ -158,9 +159,12 @@ impl TimeTravelManager {
         }
         let checksum = hasher.finalize();
 
-        // Serialize and optionally compress
-        let data = bincode::serialize(records).map_err(|e| {
-            StreamlineError::storage_msg(format!("Failed to serialize records: {}", e))
+        // Serialize and optionally compress.
+        // `&records` (not `records`) because the compat layer is generic over a
+        // `Sized` value; serde encodes `&[Record]` and `[Record]` identically,
+        // so this is byte-for-byte the same output.
+        let data = bincode_compat::serialize(&records).map_err(|e| {
+            StreamlineError::storage_msg(format!("Failed to serialize records: {e}"))
         })?;
 
         let (final_data, size_bytes) = if self.config.compression {
@@ -311,8 +315,8 @@ impl TimeTravelManager {
             data
         };
 
-        let records: Vec<Record> = bincode::deserialize(&decompressed).map_err(|e| {
-            StreamlineError::storage_msg(format!("Failed to deserialize records: {}", e))
+        let records: Vec<Record> = bincode_compat::deserialize(&decompressed).map_err(|e| {
+            StreamlineError::storage_msg(format!("Failed to deserialize records: {e}"))
         })?;
 
         // Verify checksum

@@ -54,7 +54,7 @@ async fn main() -> Result<()> {
     println!("   └──────────────┘     └──────────────┘     └──────┬───────┘");
     println!("                                                     │");
     println!("   ┌──────────────┐     ┌──────────────┐     ┌──────▼───────┐");
-    println!("   │   Iceberg    │◀────│  Lakehouse   │◀────│ AI Classify  │");
+    println!("   │   Parquet    │◀────│  Lakehouse   │◀────│ AI Classify  │");
     println!("   │  [warehouse] │     │  [parquet]   │     │ [category]   │");
     println!("   └──────────────┘     └──────────────┘     └──────┬───────┘");
     println!("                                                     │");
@@ -90,7 +90,7 @@ async fn main() -> Result<()> {
         ),
         (
             "Lakehouse Sink",
-            "iceberg-warehouse",
+            "parquet-warehouse",
             "Store in Parquet format with partitioning",
         ),
     ];

@@ -795,7 +795,6 @@ pub(crate) enum GroupCommands {
     },
 }
 
-#[cfg(feature = "iceberg")]
 #[derive(Subcommand, Debug)]
 pub(crate) enum SinkCommands {
     /// Create a new sink connector
@@ -803,7 +802,8 @@ pub(crate) enum SinkCommands {
         /// Sink name
         name: String,
 
-        /// Sink type (currently only "iceberg" is supported)
+        /// Sink type. The "iceberg" connector is currently UNAVAILABLE
+        /// (upstream security advisories) and this command will fail.
         #[arg(long, default_value = "iceberg")]
         sink_type: String,
 

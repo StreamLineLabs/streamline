@@ -26,14 +26,12 @@ use super::CdcCommands;
 use super::EdgeCommands;
 #[cfg(feature = "lakehouse")]
 use super::LakehouseCommands;
-#[cfg(feature = "iceberg")]
 use super::SinkCommands;
 use super::{
     AlertingCommands, CloudCommands, ConnectorCommands, ContractCommands, DebugCommands,
     GeoReplicationCommands, GitOpsCommands, GovernorCommands, LineageCommands,
 };
 
-#[cfg(feature = "iceberg")]
 pub(super) fn handle_sink_command(cmd: SinkCommands, ctx: &CliContext) -> Result<()> {
     use streamline::cli_utils::{
         handle_sink_create, handle_sink_delete, handle_sink_list, handle_sink_start,

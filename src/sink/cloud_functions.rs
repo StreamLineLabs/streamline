@@ -41,9 +41,9 @@ use std::sync::Arc;
 #[cfg(feature = "serverless")]
 use std::time::Duration;
 use tokio::sync::RwLock;
-use tracing::{error, info};
 #[cfg(feature = "serverless")]
 use tracing::{debug, warn};
+use tracing::{error, info};
 
 /// Cloud function provider types
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -496,7 +496,8 @@ impl CloudFunctionConnector {
             state: Arc::new(RwLock::new(CloudFunctionState::default())),
             shutdown_tx: None,
             #[cfg(feature = "serverless")]
-            http_client: reqwest::Client::builder()
+            http_client: crate::http_client::builder()
+                .map_err(|e| StreamlineError::Sink(format!("Failed to create HTTP client: {e}")))?
                 .timeout(Duration::from_secs(60))
                 .build()
                 .map_err(|e| StreamlineError::Sink(format!("Failed to create HTTP client: {e}")))?,

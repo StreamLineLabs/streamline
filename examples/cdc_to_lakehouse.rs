@@ -57,11 +57,18 @@ async fn main() -> Result<()> {
     println!("     FROM orders");
     println!("     GROUP BY 1\n");
 
-    // Configure Export to external lakehouse (Iceberg/Delta/Hudi)
+    // Configure Export to the local Parquet lakehouse.
+    //
+    // NOTE: the Apache Iceberg and Delta Lake sink connectors are UNAVAILABLE
+    // in this release — their upstream crates pull quick-xml < 0.41
+    // (RUSTSEC-2026-0194 / RUSTSEC-2026-0195) and, for Delta Lake,
+    // native-tls/OpenSSL. See `streamline::sink::unavailable`. This example
+    // therefore exports to Parquet only.
     println!("4. Export Configuration:");
-    println!("   - Format: Apache Iceberg");
-    println!("   - Catalog: http://localhost:8181");
-    println!("   - Table: analytics.orders_raw\n");
+    println!("   - Format: Parquet (local lakehouse)");
+    println!("   - Path: ./data/lakehouse");
+    println!("   - Table: analytics.orders_raw");
+    println!("   - Note: Iceberg/Delta Lake catalog export is unavailable in this release\n");
 
     // Simulate the pipeline in action
     println!("5. Pipeline Flow:");
@@ -73,7 +80,7 @@ async fn main() -> Result<()> {
     println!("        ↓ (incremental refresh)");
     println!("   Materialized Views [hourly_order_summary]");
     println!("        ↓ (scheduled export)");
-    println!("   Iceberg Table [analytics.orders_raw]\n");
+    println!("   Parquet Dataset [analytics.orders_raw]\n");
 
     // Example: Simulating CDC events
     println!("6. Simulated CDC Events:");

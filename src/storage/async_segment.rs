@@ -26,6 +26,7 @@
 //! let records = segment.read_from_offset(100, 1000).await?;
 //! ```
 
+use crate::bincode_compat;
 use crate::error::{Result, StreamlineError};
 use crate::storage::compression::{compress, decompress, CompressionCodec};
 use crate::storage::io_backend::{AsyncFile, AsyncFileSystem, IoBufferPool};
@@ -229,9 +230,8 @@ impl<F: AsyncFile + 'static> AsyncSegment<F> {
         let batch_position = *self.write_position.read().await;
 
         // Serialize batch to bincode
-        let batch_bytes = bincode::serialize(batch).map_err(|e| {
-            StreamlineError::storage_msg(format!("Failed to serialize batch: {}", e))
-        })?;
+        let batch_bytes = bincode_compat::serialize(batch)
+            .map_err(|e| StreamlineError::storage_msg(format!("Failed to serialize batch: {e}")))?;
 
         // Compress if enabled
         let batch_data = compress(&batch_bytes, self.compression)?;
@@ -389,8 +389,8 @@ impl<F: AsyncFile + 'static> AsyncSegment<F> {
 
             // Deserialize
             let batch: RecordBatch = if use_bincode {
-                bincode::deserialize(&batch_bytes).map_err(|e| {
-                    StreamlineError::CorruptedData(format!("Failed to deserialize batch: {}", e))
+                bincode_compat::deserialize(&batch_bytes).map_err(|e| {
+                    StreamlineError::CorruptedData(format!("Failed to deserialize batch: {e}"))
                 })?
             } else {
                 serde_json::from_slice(&batch_bytes).map_err(|e| {

@@ -49,6 +49,7 @@ cargo build --release                 # Release build (optimized)
 # Feature Flags
 #   lite (default): Core streaming, TLS, compression, basic logging
 #   full: Adds auth, clustering, telemetry, cloud-storage, schema-registry, metrics, encryption, analytics
+#         (note: `iceberg` was removed from `full` — the connector is unavailable, see below)
 #   moonshot: ALL experimental features (semantic-topics, agent-memory, attestation, branches)
 #
 # Stable features (included in `full`):
@@ -60,9 +61,16 @@ cargo build --release                 # Release build (optimized)
 #   --features schema-registry   # Avro/Protobuf/JSON schema management
 #   --features encryption        # AES-256-GCM encryption at rest
 #   --features analytics         # Embedded DuckDB for SQL queries on stream data
-#   --features iceberg           # Apache Iceberg lakehouse sink connector
-#   --features delta-lake        # Delta Lake sink connector
 #   --features web-ui            # Web dashboard UI (requires streamline-ui binary)
+#
+# UNAVAILABLE features (compatibility no-ops — see docs/API_STABILITY.md):
+#   --features iceberg           # Apache Iceberg sink — UNAVAILABLE, enables nothing
+#   --features delta-lake        # Delta Lake sink — UNAVAILABLE, enables nothing
+#   Both upstream crates pull quick-xml < 0.41 (RUSTSEC-2026-0194 /
+#   RUSTSEC-2026-0195, CVSS 7.5) and, for Delta Lake, native-tls/OpenSSL. The
+#   dependencies were removed rather than suppressed; `SinkManager::create_sink`
+#   rejects these sink types with an explicit message. Implementations are
+#   preserved behind the never-enabled `iceberg_backend` / `delta_backend` cfgs.
 #
 # Moonshot features (NOT in `full` — experimental, opt-in only):
 #   --features semantic-topics   # M2: Vector indexing on topics, semantic search
@@ -103,6 +111,13 @@ cargo clippy --all-targets --all-features -- -D warnings && \
 cargo test && \
 cargo test --all-features && \
 cargo doc --no-deps --all-features
+```
+
+Two suites have a half in each build and must be run twice:
+
+```bash
+cargo test --test sink_connector_availability_test
+cargo test --features serverless --test sink_connector_availability_test
 ```
 
 ## Architecture
@@ -181,8 +196,15 @@ cargo doc --no-deps --all-features
 | `src/transaction/mod.rs` | Transaction coordinator |
 | `src/sink/mod.rs` | Sink connector framework (trait, manager) |
 | `src/sink/config.rs` | Sink configuration types |
-| `src/sink/iceberg.rs` | Apache Iceberg lakehouse sink |
-| `src/sink/delta.rs` | Delta Lake sink connector |
+| `src/sink/unavailable.rs` | Availability gate for every sink connector: Iceberg/Delta Lake (removed) and Serverless/Cloud Function (`serverless` feature) |
+| `src/sink/serverless.rs` | Serverless connector — compiled only with `--features serverless` |
+| `src/sink/cloud_functions.rs` | Cloud Function connector — compiled only with `--features serverless` |
+| `scripts/release/resolve-publish-mode.sh` | Decides whether a publish-crate.yml run may publish (dry-run unless a gated `workflow_call`) |
+| `scripts/release/publish-crates.sh` | Resumable, idempotent crates.io publication with bounded registry-visibility waits (probed from outside the workspace, so cargo cannot answer from the local manifest) |
+| `scripts/release/require-release-credentials.sh` | Fails a release *before* anything publishes when a cross-repo credential a later step needs (e.g. `GO_SDK_RELEASE_TOKEN`) is missing |
+| `scripts/release/verify-sdk-version.sh` | Reads each SDK ecosystem's authoritative version before it is published |
+| `src/sink/iceberg.rs` | Apache Iceberg sink — preserved, gated behind never-enabled `iceberg_backend` cfg |
+| `src/sink/delta.rs` | Delta Lake sink — preserved, gated behind never-enabled `delta_backend` cfg |
 
 ## API Stability
 
@@ -275,6 +297,16 @@ Key crates used:
 - **chrono**: Time/date handling
 - **openraft** (clustering): Raft consensus
 - **object_store** (cloud-storage): S3/Azure/GCS
+
+**MSRV-sensitive requirements.** A `Cargo.lock` pin does not travel with a
+published crate, so any dependency whose newer releases need a toolchain above
+the MSRV (1.88) carries an exact `=x.y.z` requirement in `Cargo.toml` itself:
+`wincode`, `async-graphql` **and** its `-derive`/`-parser`/`-value` companions
+(the facade asks for them with caret requirements), and `crc-fast`/`crc` under
+`cloud-storage`. The last four are optional direct dependencies that Streamline
+does not use in code — they exist solely to bound a downstream resolution.
+`tests/dependency_security_test.rs` enforces this against a real lockless
+consumer built from the packaged crates.
 
 ## Storage Format
 
@@ -500,73 +532,63 @@ streamline-cli profile add prod --data-dir /data/prod
 streamline-cli -P prod topics list     # Use profile
 ```
 
-### Sink Connectors (requires iceberg or delta-lake feature)
-```bash
-# Create an Iceberg sink
-streamline-cli sink create events-iceberg \
-  --topics events \
-  --catalog-uri http://localhost:8181 \
-  --catalog-type rest \
-  --namespace default \
-  --table events \
-  --commit-interval-ms 60000 \
-  --partitioning time_based_hour \
-  --start
+### Sink Connectors
 
-# List all sinks
-streamline-cli sink list
+**Feature-gated connectors:** Serverless (HTTP webhooks/SaaS) and Cloud Function
+(AWS Lambda, GCF, Azure Functions, Cloudflare Workers) require
+`--features serverless` — that feature is what supplies the HTTP client they
+deliver through. In a build without it `sink::unavailable::is_available` reports
+them unavailable and `SinkManager::create_sink` rejects them *before*
+duplicate-name, topic and configuration validation, so nothing is registered.
+(Previously they were constructed and registered without the feature and then
+failed on every batch — a sink that looked healthy while dropping records.)
+`src/sink/serverless.rs` and `src/sink/cloud_functions.rs` are compiled only
+under the feature.
 
-# Show sink status and metrics
-streamline-cli sink status events-iceberg
-streamline-cli sink status events-iceberg --json
+**⛔ UNAVAILABLE connectors: Apache Iceberg and Delta Lake.**
 
-# Start/stop sinks
-streamline-cli sink start events-iceberg
-streamline-cli sink stop events-iceberg
+These cannot be enabled in any supported build. The `iceberg` and `delta-lake`
+Cargo features still exist as compatibility no-ops (so existing build scripts
+and CI matrices keep resolving), but they enable no dependencies.
+`streamline-cli sink create` and `SinkManager::create_sink` both fail with an
+explicit message naming the advisories.
 
-# Delete a sink
-streamline-cli sink delete events-iceberg --yes
-```
+Why they were removed:
 
-**Supported Catalog Types:**
-- `rest` - REST catalog (default, fully supported)
-- `hive` - Hive Metastore catalog (not yet available - upstream dependency issue)
-- `glue` - AWS Glue catalog (not yet available - upstream dependency issue)
+| Connector | Upstream chain | Problem |
+|---|---|---|
+| Iceberg | `iceberg` 0.4 → `opendal` 0.50 → `quick-xml` 0.36 | RUSTSEC-2026-0194 / RUSTSEC-2026-0195 (CVSS 7.5) |
+| Iceberg | `iceberg` 0.4 → `opendal` 0.50 → `reqsign` → `quick-xml` 0.37 | same advisories |
+| Delta Lake | `deltalake` 0.22 → `delta_kernel` → `object_store` 0.11 → `quick-xml` 0.37 | same advisories |
+| Delta Lake | `deltalake` 0.22 → `delta_kernel` → `reqwest` (default-tls) → `native-tls` | forces OpenSSL into the build |
 
-**Partitioning Strategies:**
-- `time_based_hour` - Partition by hour (default)
-- `time_based_day` - Partition by day
-- `time_based_month` - Partition by month
-- `field_based` - Partition by a field in the record (e.g., region, tenant_id)
-- `none` - No partitioning
+Both quick-xml advisories are reachable from attacker-influenced S3/Azure list
+XML — exactly the data these connectors parse. No released upstream version
+compatible with our MSRV (1.88) avoids them, and this project does not suppress
+advisories, so the dependencies were removed.
 
-**Iceberg Sink Configuration (Programmatic):**
-```rust
-IcebergSinkConfig {
-    catalog_uri: "http://localhost:8181".to_string(),
-    catalog_type: CatalogType::Rest,
-    namespace: "default".to_string(),
-    table: "events".to_string(),
-    commit_interval_ms: 60000,
-    max_batch_size: 1000,
-    partitioning: PartitioningConfig {
-        strategy: PartitioningStrategy::TimeBasedHour,
-        field: None,  // Set for FieldBased strategy
-        time_granularity: TimeGranularity::Hour,
-    },
-    compression: ParquetCompression::Snappy,  // None, Snappy, Gzip, Lz4, Zstd
-    max_retries: 3,                           // Retry attempts for catalog commits
-    retry_delay_ms: 1000,                     // Initial delay (exponential backoff)
-    schema_evolution: IcebergSchemaEvolution::Strict,  // Strict, AddNewColumns, AddAndPromote
-    // ...
-}
-```
+The implementations are preserved verbatim in `src/sink/iceberg.rs` and
+`src/sink/delta.rs` behind the never-enabled `iceberg_backend` / `delta_backend`
+cfgs, plus `src/lakehouse/iceberg_topics.rs`. To restore them, wait for
+[iceberg-rust](https://github.com/apache/iceberg-rust) and
+[delta-rs](https://github.com/delta-io/delta-rs) to publish MSRV-compatible
+releases on `quick-xml >= 0.41` without `native-tls`, then re-add the
+dependencies and set the corresponding cfg.
 
-**Delta Lake Sink** (requires `delta-lake` feature):
-- Write streaming data to Delta Lake tables
-- Supports local filesystem and cloud storage (S3, Azure, GCS)
-- Write modes: Append, Overwrite, Merge
-- Schema evolution policies: Strict, AddNewColumns, AddAndWiden
+Guardrails (do not weaken):
+- `tests/dependency_security_test.rs` — fails if `quick-xml < 0.41`, `rkyv`,
+  `native-tls`, `hyper-tls`, `openssl` or the removed lakehouse crates re-enter
+  `Cargo.lock`, if `deny.toml` gains advisory suppressions, or if a fresh
+  consumer of the *packaged* crates resolves anything above the MSRV.
+- `tests/sink_connector_availability_test.rs` — fails if either lakehouse
+  connector starts reporting itself usable or silently succeeds, and (in both
+  the default and `--features serverless` builds) if the serverless connectors
+  stop tracking their feature.
+- `tests/packaging_metadata_test.rs` + `tests/release_scripts_test.rs` — fail if
+  a manual dispatch can publish, if a publishing job loses its release-gate
+  dependency, or if an SDK job builds before verifying its version.
+
+For lakehouse output today, use the Parquet export path (`--features lakehouse`).
 
 ### Analytics & SQL Queries (requires analytics feature)
 ```bash

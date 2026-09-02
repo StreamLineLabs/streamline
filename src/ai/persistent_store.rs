@@ -4,6 +4,7 @@
 //! the AI pipeline to survive restarts without re-embedding all data.
 //! Uses a simple append-only binary format with periodic compaction.
 
+use crate::bincode_compat;
 use crate::error::{Result, StreamlineError};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -163,9 +164,8 @@ impl PersistentVectorStore {
             .read_to_end(&mut data)
             .map_err(|e| StreamlineError::Storage(format!("Failed to read vector data: {e}")))?;
 
-        let entries: Vec<StoredVector> = bincode::deserialize(&data).map_err(|e| {
-            StreamlineError::Storage(format!("Failed to deserialize vectors: {}", e))
-        })?;
+        let entries: Vec<StoredVector> = bincode_compat::deserialize(&data)
+            .map_err(|e| StreamlineError::Storage(format!("Failed to deserialize vectors: {e}")))?;
 
         for entry in entries {
             if entry.deleted {
@@ -353,15 +353,14 @@ impl PersistentVectorStore {
             .map_err(|e| StreamlineError::Storage(format!("Failed to write count: {e}")))?;
 
         // Write entries
-        let data = bincode::serialize(&entries).map_err(|e| {
-            StreamlineError::Storage(format!("Failed to serialize vectors: {}", e))
-        })?;
-        writer.write_all(&data).map_err(|e| {
-            StreamlineError::Storage(format!("Failed to write vector data: {}", e))
-        })?;
-        writer.flush().map_err(|e| {
-            StreamlineError::Storage(format!("Failed to flush snapshot: {}", e))
-        })?;
+        let data = bincode_compat::serialize(&entries)
+            .map_err(|e| StreamlineError::Storage(format!("Failed to serialize vectors: {e}")))?;
+        writer
+            .write_all(&data)
+            .map_err(|e| StreamlineError::Storage(format!("Failed to write vector data: {e}")))?;
+        writer
+            .flush()
+            .map_err(|e| StreamlineError::Storage(format!("Failed to flush snapshot: {e}")))?;
 
         // Atomic rename
         std::fs::rename(&tmp_file, &data_file)

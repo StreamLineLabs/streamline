@@ -4,6 +4,7 @@
 //! Based on the paper "Efficient and robust approximate nearest neighbor search using
 //! Hierarchical Navigable Small World graphs" by Malkov and Yashunin.
 
+use crate::bincode_compat;
 use crate::error::{Result, StreamlineError};
 use rand::Rng;
 use serde::{Deserialize, Serialize};
@@ -597,8 +598,9 @@ impl HnswIndex {
             max_level,
         };
 
-        let data = bincode::serialize(&snapshot)
-            .map_err(|e| StreamlineError::storage_msg(format!("Failed to serialize HNSW index: {}", e)))?;
+        let data = bincode_compat::serialize(&snapshot).map_err(|e| {
+            StreamlineError::storage_msg(format!("Failed to serialize HNSW index: {e}"))
+        })?;
         std::fs::write(path, data)?;
 
         tracing::info!(path = %path.display(), nodes = nodes.len(), "HNSW index saved to disk");
@@ -616,8 +618,9 @@ impl HnswIndex {
         }
 
         let data = std::fs::read(path)?;
-        let snapshot: IndexSnapshot = bincode::deserialize(&data)
-            .map_err(|e| StreamlineError::storage_msg(format!("Failed to deserialize HNSW index: {}", e)))?;
+        let snapshot: IndexSnapshot = bincode_compat::deserialize(&data).map_err(|e| {
+            StreamlineError::storage_msg(format!("Failed to deserialize HNSW index: {e}"))
+        })?;
 
         let node_count = snapshot.nodes.len();
         let index = Self {

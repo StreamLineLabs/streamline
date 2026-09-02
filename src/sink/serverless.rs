@@ -43,9 +43,9 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use tracing::{debug, error, info};
 #[cfg(feature = "serverless")]
 use tracing::warn;
+use tracing::{debug, error, info};
 
 /// Configuration for a serverless connector
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -617,7 +617,8 @@ impl ServerlessConnector {
         config: &HttpWebhookConfig,
         records: &[Record],
     ) -> Result<()> {
-        let client = reqwest::Client::builder()
+        let client = crate::http_client::builder()
+            .map_err(|e| StreamlineError::Sink(format!("Failed to create HTTP client: {e}")))?
             .timeout(std::time::Duration::from_millis(config.timeout_ms))
             .build()
             .map_err(|e| StreamlineError::Sink(format!("Failed to create HTTP client: {e}")))?;
@@ -656,7 +657,8 @@ impl ServerlessConnector {
     /// Deliver records to Slack
     #[cfg(feature = "serverless")]
     async fn deliver_slack(&self, config: &SlackConfig, records: &[Record]) -> Result<()> {
-        let client = reqwest::Client::new();
+        let client = crate::http_client::client()
+            .map_err(|e| StreamlineError::Sink(format!("Failed to create HTTP client: {e}")))?;
 
         for record in records {
             let message = self.format_slack_message(config, record)?;
@@ -1029,6 +1031,40 @@ impl SinkConnector for ServerlessConnector {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The serverless sink builds a client per delivery (`deliver_http_webhook`)
+    /// and previously used a bare `reqwest::Client::new()` for Slack
+    /// (`deliver_slack`). Both resolve the crypto provider from process-global
+    /// state when built the ambient way, and panic with "No provider set" with
+    /// no default installed — a panic in a delivery path, not a `Result`.
+    ///
+    /// This covers both shapes the sink uses: a builder carrying a per-config
+    /// timeout, and the default client.
+    #[cfg(feature = "serverless")]
+    #[test]
+    fn serverless_http_clients_build_without_a_process_wide_crypto_provider() {
+        assert!(
+            rustls::crypto::CryptoProvider::get_default().is_none(),
+            "a process-wide crypto provider was installed, which would let an \
+             implicit reqwest client build and make this test vacuous"
+        );
+
+        // The `deliver_http_webhook` shape.
+        let webhook_client = crate::http_client::builder()
+            .expect("outbound TLS configuration")
+            .timeout(std::time::Duration::from_millis(30_000))
+            .build();
+        assert!(
+            webhook_client.is_ok(),
+            "the webhook delivery client must build with an explicit crypto provider"
+        );
+
+        // The `deliver_slack` shape, which used `reqwest::Client::new()`.
+        assert!(
+            crate::http_client::client().is_ok(),
+            "the Slack delivery client must build with an explicit crypto provider"
+        );
+    }
 
     #[test]
     fn test_serverless_connector_type_display() {

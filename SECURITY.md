@@ -106,11 +106,51 @@ Streamline includes the following security features:
 
 ## Dependency Security
 
-We use automated security scanning:
+Automated, fail-closed security scanning runs in CI
+(`.github/workflows/security-scan.yml`):
 
-- **cargo-audit** runs in CI to check for known vulnerabilities in dependencies
-- Dependencies are regularly updated
-- Security advisories are monitored via GitHub Dependabot
+- **cargo-audit** (`cargo audit`) — known vulnerability advisories in the
+  committed lockfile. Any vulnerability or tool failure fails the build;
+  warning-class findings remain visible.
+- **cargo-deny** (`--all-features check advisories bans licenses sources`) —
+  enabled-feature advisory policy, licenses, banned crates and source
+  restrictions, per `deny.toml`. Any denial fails the build.
+- **clippy** with `-D warnings` across all features.
+- An `unsafe`-without-`// SAFETY:` budget that fails the build when exceeded.
+
+The same audit and dependency policy checks gate every release through
+`.github/workflows/release-gate.yml`, which `release.yml` requires before it
+publishes anything.
+
+Dependency updates are proposed automatically by GitHub Dependabot
+(`.github/dependabot.yml`).
+
+### Known state of the dependency audit
+
+These checks are fail-closed, which means they report the real state of the
+tree rather than a green tick. The release-preparation dependency update
+cleared the AWS-LC, bytes, crossbeam, h2, LZ4, PostgreSQL, Quinn, rustls,
+tar/time, and Wasmtime vulnerability findings.
+
+At the time of writing, `cargo audit` reports six remaining vulnerability
+findings: four `quick-xml` advisories reached through the experimental
+Iceberg/Delta dependency stacks, plus two `rkyv 0.7` findings that are recorded
+in the lockfile but have no enabled dependency path. The all-feature
+`cargo-deny` gate also reports the reachable `quick-xml` findings and the
+directly used but unmaintained `bincode` and `rustls-pemfile` crates.
+
+**A release cannot pass the release gate until these are remediated.** Remediate
+with `cargo update -p <crate>` (or a minor-version bump in `Cargo.toml` where
+the fix is behind a semver bump), then re-run `cargo audit` and
+`cargo deny check`. Advisories that genuinely do not apply may be waived, one at
+a time and with a written justification, via `[advisories] ignore` in
+`deny.toml` — never by weakening the CI invocation. No such waiver is present
+for the remaining release blockers.
+
+Note: this project is pure Rust. A previous CodeQL workflow targeted `cpp` and
+reported on a language this repository does not contain. CodeQL now analyzes
+the Rust source and GitHub Actions workflows in `.github/workflows/codeql.yml`;
+the Rust-native tooling above remains the fail-closed dependency and lint layer.
 
 ## Secure Development
 

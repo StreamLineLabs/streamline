@@ -1,0 +1,9 @@
+# Upstream `serde-wincode`'s formatting configuration, kept verbatim.
+#
+# The library sources in this crate are upstream 0.1.2 unmodified. The workspace
+# root formats at `max_width = 100`; applying that here would reflow every line
+# and turn a future upstream merge into a whole-file conflict for no benefit.
+# Keeping upstream's settings means `cargo fmt` leaves the vendored code exactly
+# as it is published, so `diff` against a new upstream release stays meaningful.
+edition = "2024"
+max_width = 80

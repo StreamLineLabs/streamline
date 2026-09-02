@@ -361,8 +361,10 @@ SAMPLING:
     #[command(subcommand)]
     Profile(ProfileCommands),
 
-    /// Sink connector management commands (requires iceberg feature)
-    #[cfg(feature = "iceberg")]
+    /// Sink connector management commands
+    ///
+    /// Note: the Iceberg and Delta Lake connectors are unavailable in this
+    /// release (upstream security advisories); `sink create` reports why.
     #[command(subcommand)]
     Sink(SinkCommands),
 
@@ -909,7 +911,6 @@ fn run(cli: Cli, ctx: &CliContext) -> Result<()> {
         Commands::Profile(profile_cmd) => {
             cli_config::handle_profile_command(profile_cmd, ctx)?;
         }
-        #[cfg(feature = "iceberg")]
         Commands::Sink(sink_cmd) => {
             cli_ops::handle_sink_command(sink_cmd, ctx)?;
         }
@@ -1467,6 +1468,16 @@ mod tests {
     fn test_cli_parses_demo_command() {
         let parsed = Cli::try_parse_from(["streamline-cli", "demo"]);
         assert!(parsed.is_ok());
+    }
+
+    #[test]
+    fn test_cli_keeps_sink_command_visible_when_lakehouse_backends_are_unavailable() {
+        let parsed = Cli::try_parse_from(["streamline-cli", "sink", "list"]);
+        assert!(
+            parsed.is_ok(),
+            "the CLI must retain the sink surface so create requests can report \
+             the explicit dependency-security availability error"
+        );
     }
 
     // ==================== parse_header tests ====================
