@@ -2,10 +2,17 @@
 
 ## Supported Versions
 
+Security fixes are provided for the current minor release and the one before
+it. See `docs/API_STABILITY.md` for the full version lifecycle.
+
 | Version | Supported          |
 | ------- | ------------------ |
-| 0.2.x   | :white_check_mark: |
-| 0.1.x   | :white_check_mark: |
+| 0.4.x   | :white_check_mark: |
+| 0.3.x   | :white_check_mark: |
+| <= 0.2.x | :x:               |
+
+> Streamline is pre-1.0. Backwards-incompatible changes can land in minor
+> releases outside the Stable tier; see `docs/API_STABILITY.md`.
 
 ## Reporting a Vulnerability
 
@@ -203,8 +210,13 @@ When a security vulnerability is reported:
 | Low | 0.1-3.9 | Next release | Minor info leak, non-default config |
 
 ### Reporting
-- **Email:** security@streamline.dev
-- **PGP Key:** Available at https://streamline.dev/.well-known/security.txt
+- **Email:** security@streamlinelabs.dev
+- **PGP Key:** Not currently published. Reports may be sent in plain text to
+  the address above, or filed privately through GitHub's private vulnerability
+  reporting on this repository. (This line previously pointed at
+  `https://streamline.dev/.well-known/security.txt`, which does not serve a key
+  for this project; a security policy must not promise a channel that does not
+  exist.)
 - **Bug Bounty:** Not currently offered
 
 ### Process

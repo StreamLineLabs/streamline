@@ -92,19 +92,6 @@ pub struct ConnectorStats {
     pub snapshot_progress: Option<f64>,
 }
 
-impl Default for ConnectorStats {
-    fn default() -> Self {
-        Self {
-            events_captured: 0,
-            events_published: 0,
-            events_failed: 0,
-            lag_ms: 0,
-            last_event_at: None,
-            snapshot_progress: None,
-        }
-    }
-}
-
 /// Full information about a CDC connector.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CdcConnectorInfo {

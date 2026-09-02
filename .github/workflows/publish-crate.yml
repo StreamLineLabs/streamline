@@ -1,64 +1,196 @@
 name: Publish to crates.io
 
+# This workflow is the ONLY path that publishes Streamline crates.
+#
+# ── Who may publish ────────────────────────────────────────────────────────
+#
+# Only a `workflow_call` from a gated caller (release.yml on a tag, or
+# publish-sdks.yml) that passes `dry_run: false`. A `workflow_dispatch` of this
+# workflow is *unconditionally* a dry run: the manual trigger below declares no
+# inputs at all, so there is no boolean for anyone to flip.
+#
+# The obvious guard — `if: github.event_name == 'workflow_call'` — does not
+# work. Inside a called reusable workflow the `github` context belongs to the
+# *caller*, so `github.event_name` is `push` for a tag release and
+# `workflow_dispatch` when publish-sdks.yml is started by hand. It is never the
+# literal string `workflow_call` (actions/runner#3146). The invocation event is
+# therefore derived below from whether the `workflow_call`-only `dry_run` input
+# is present at all, and `scripts/release/resolve-publish-mode.sh` turns that,
+# the requested mode and the calling workflow into a single `publish`/`dry-run`
+# decision that every dangerous step is gated on.
+#
+# ── Publish order and resumability ─────────────────────────────────────────
+#
+# The root `streamline` crate depends on the workspace member crates by
+# `{ path = ..., version = ... }`, and crates.io resolves those by version, so
+# the members must be on crates.io *before* the root crate.
+#
+# crates.io publishes are irrevocable, so a run that dies half way through must
+# be re-runnable. `scripts/release/publish-crates.sh` asks crates.io whether
+# each exact name@version already exists, skips those, and waits for each
+# version to become resolvable before publishing anything that depends on it.
+
 on:
-  release:
-    types: [published]
-  workflow_dispatch:
+  workflow_call:
     inputs:
       dry_run:
-        description: 'Dry run (do not actually publish)'
+        description: 'Verify packaging without publishing'
+        type: boolean
+        # Required, so that "no opinion" can never be mistaken for "publish".
+        # GitHub coerces `null == false` to true in expressions, which is
+        # exactly the trap this workflow used to be exposed to.
+        required: true
+    secrets:
+      # `CARGO_REGISTRY_TOKEN` is the canonical name (it is also the environment
+      # variable cargo itself reads). `CRATES_IO_TOKEN` is accepted as a
+      # fallback because other publishing workflows in this repository were
+      # configured with that name; a repository only needs one of the two.
+      # Both are optional: a dry run requires no token, and the real publish
+      # path fails closed below when neither is set.
+      CARGO_REGISTRY_TOKEN:
         required: false
-        default: 'true'
+      CRATES_IO_TOKEN:
+        required: false
+  # Deliberately no inputs. A manual run verifies packaging and reports what a
+  # release would publish; it can never publish.
+  workflow_dispatch:
 
 env:
   CARGO_TERM_COLOR: always
+  # Publish order: dependencies first, root crate last.
+  PUBLISH_ORDER: 'streamline-serde-wincode streamline-wasm streamline-analytics streamline'
+
+permissions:
+  contents: read
 
 jobs:
-  publish:
-    name: Publish Crate
+  resolve-mode:
+    name: Resolve publish mode
     runs-on: ubuntu-latest
-    # Only run for non-prerelease versions unless manually triggered
-    if: ${{ !github.event.release.prerelease || github.event_name == 'workflow_dispatch' }}
+    outputs:
+      mode: ${{ steps.mode.outputs.mode }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Resolve effective publish mode
+        id: mode
+        env:
+          # `inputs.dry_run` exists only for `workflow_call`; the
+          # `workflow_dispatch` trigger declares no inputs, so this renders as
+          # the empty string for every manual run. `format` is load-bearing:
+          # comparing the raw input against `false` would match an *absent*
+          # input too, because GitHub coerces both to 0.
+          REQUESTED_DRY_RUN: ${{ format('{0}', inputs.dry_run) }}
+          INVOCATION_EVENT: ${{ format('{0}', inputs.dry_run) == '' && github.event_name || 'workflow_call' }}
+          CALLER_WORKFLOW_REF: ${{ github.workflow_ref }}
+          # Only these workflows run release-gate.yml before calling this one.
+          ALLOWED_PUBLISH_CALLERS: 'release.yml publish-sdks.yml'
+        run: |
+          set -euo pipefail
+          mode="$(./scripts/release/resolve-publish-mode.sh)"
+          echo "mode=${mode}" >> "$GITHUB_OUTPUT"
+          echo "Effective publish mode: ${mode}" >> "$GITHUB_STEP_SUMMARY"
+
+  publish:
+    name: Publish Crate (${{ needs.resolve-mode.outputs.mode }})
+    needs: [resolve-mode]
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Install Rust toolchain
-        uses: dtolnay/rust-action@stable
+        uses: dtolnay/rust-toolchain@stable
 
-      - name: Cache cargo registry
-        uses: actions/cache@v4
+      - uses: Swatinem/rust-cache@v2
         with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-cargo-publish-${{ hashFiles('**/Cargo.lock') }}
+          key: publish-crate
 
-      - name: Verify package
-        run: |
-          cargo package --list
-          cargo package --no-verify
+      - name: Verify workspace metadata resolves
+        run: cargo metadata --locked --format-version 1 > /dev/null
 
-      - name: Dry run publish
-        if: ${{ github.event.inputs.dry_run == 'true' || github.event_name != 'workflow_dispatch' }}
+      - name: Verify packaged file list for every publishable crate
         run: |
-          echo "Dry run - would publish version:"
-          cargo pkgid
+          set -euo pipefail
+          for crate in $PUBLISH_ORDER; do
+            echo "::group::cargo package --list --package $crate"
+            # `--list` validates manifest metadata and the packaged file set
+            # without resolving dependencies against the registry, so it works
+            # for the root crate before the member crates exist on crates.io.
+            cargo package --list --locked --package "$crate" > /dev/null
+            echo "::endgroup::"
+          done
+
+      - name: Verify member crates package cleanly
+        run: |
+          set -euo pipefail
+          # Only the leaf crates can be fully packaged ahead of a release: the
+          # root crate's `{ path, version }` dependencies on them must resolve
+          # from crates.io, which is only true after they have been published.
+          # The publish step below therefore publishes in dependency order.
+          for crate in $PUBLISH_ORDER; do
+            if [ "$crate" = "streamline" ]; then
+              continue
+            fi
+            echo "::group::cargo package --package $crate"
+            cargo package --locked --package "$crate"
+            echo "::endgroup::"
+          done
+
+      - name: Report what a release would publish
+        if: ${{ needs.resolve-mode.outputs.mode != 'publish' }}
+        run: |
+          set -euo pipefail
+          # The same crates.io queries a real run makes, so a dry run surfaces a
+          # half-finished previous release instead of hiding it. This step runs
+          # no `cargo publish` at all.
+          ./scripts/release/publish-crates.sh --mode dry-run
+
+      - name: Fail if the registry token is missing for a real publish
+        if: ${{ needs.resolve-mode.outputs.mode == 'publish' }}
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN || secrets.CRATES_IO_TOKEN }}
+        run: |
+          if [ -z "${CARGO_REGISTRY_TOKEN:-}" ]; then
+            echo "::error::no crates.io token configured (set CARGO_REGISTRY_TOKEN, or CRATES_IO_TOKEN); refusing to publish."
+            exit 1
+          fi
 
       - name: Publish to crates.io
-        if: ${{ github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'false') }}
+        if: ${{ needs.resolve-mode.outputs.mode == 'publish' }}
         env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-        run: |
-          cargo publish --no-verify
+          # Cargo reads the token from this environment variable, so it is never
+          # passed on the command line where it could end up in a process list
+          # or a shell trace.
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN || secrets.CRATES_IO_TOKEN }}
+          # Bound on how long to wait for each published version to become
+          # resolvable before the next crate in PUBLISH_ORDER is published.
+          # Replaces the fixed `sleep 30`, which was simultaneously too long in
+          # the common case and too short in the bad one.
+          VISIBILITY_TIMEOUT_SECONDS: '600'
+          VISIBILITY_POLL_SECONDS: '10'
+        run: ./scripts/release/publish-crates.sh --mode publish
 
-      - name: Create publish summary
+      - name: Publish summary
+        if: always()
+        env:
+          PUBLISH_MODE: ${{ needs.resolve-mode.outputs.mode }}
         run: |
-          echo "## Crate Published" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Package:** $(cargo pkgid | cut -d'#' -f1 | rev | cut -d'/' -f1 | rev)" >> $GITHUB_STEP_SUMMARY
-          echo "**Version:** $(cargo pkgid | cut -d'#' -f2)" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "[View on crates.io](https://crates.io/crates/streamline)" >> $GITHUB_STEP_SUMMARY
+          {
+            echo "## crates.io publish"
+            echo ""
+            if [ "$PUBLISH_MODE" = "publish" ]; then
+              echo "**Mode:** PUBLISH"
+            else
+              echo "**Mode:** dry run (packaging verified only, nothing published)"
+            fi
+            echo ""
+            echo "| Crate | Version |"
+            echo "|-------|---------|"
+            for crate in $PUBLISH_ORDER; do
+              version=$(cargo pkgid --package "$crate" 2>/dev/null | sed 's/.*[#@]//')
+              echo "| $crate | ${version:-unknown} |"
+            done
+          } >> "$GITHUB_STEP_SUMMARY"

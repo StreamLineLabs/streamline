@@ -25,7 +25,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
 
       - name: Build Streamline
-        run: cargo build --release
+        run: cargo build --release --locked
 
       - name: Start Streamline
         run: |

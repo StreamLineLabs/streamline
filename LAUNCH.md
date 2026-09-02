@@ -38,7 +38,7 @@ curl -fsSL https://get.streamline.io | sh
 # Docker — zero install, just run
 docker run -p 9092:9092 -p 9094:9094 ghcr.io/streamlinelabs/streamline
 
-# From source (Rust 1.80+)
+# From source (Rust 1.88+)
 git clone https://github.com/streamlinelabs/streamline && cd streamline
 cargo build --release
 ```

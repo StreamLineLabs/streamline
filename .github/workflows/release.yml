@@ -8,10 +8,58 @@ on:
 env:
   CARGO_TERM_COLOR: always
 
+permissions:
+  contents: read
+
 jobs:
+  # A release tag is publication input, not merely a label. Verify it before
+  # running any build or reusable release workflow so a mistagged commit cannot
+  # produce crates, archives, attestations, or a GitHub Release at the wrong
+  # version.
+  verify-tag-version:
+    name: Verify tag matches package version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compare tag and root package version
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          tag_version="${tag#v}"
+          if [ "$tag_version" = "$tag" ] || [ -z "$tag_version" ]; then
+            echo "::error::release tags must have the form v<package-version>; got '$tag'"
+            exit 1
+          fi
+          ./scripts/release/verify-sdk-version.sh \
+            --ecosystem rust --dir . --expected "$tag_version"
+
+  # ---------------------------------------------------------------------------
+  # Release gate. Everything that publishes anything depends on this job, so a
+  # tag push cannot produce a GitHub Release or a crates.io publish unless the
+  # full gate (stability, security, Kafka compatibility, tests, docs) is green.
+  # ---------------------------------------------------------------------------
+  release-gate:
+    name: Release Gate
+    needs: verify-tag-version
+    uses: ./.github/workflows/release-gate.yml
+    permissions:
+      contents: read
+      checks: write
+    with:
+      check_only: false
+
   build:
     name: Build ${{ matrix.target }}
+    needs: [verify-tag-version, release-gate]
     runs-on: ${{ matrix.os }}
+    env:
+      # `rust-toolchain.toml` pins this workspace to 1.88, and that file wins
+      # over whatever toolchain the setup action makes default. Installing the
+      # cross-compilation target into `stable` therefore installed it into a
+      # toolchain cargo never used, and `cargo build --target ...` failed with
+      # "the <target> target may not be installed". Pin both the toolchain the
+      # target is installed into (below) and the toolchain cargo selects here.
+      RUSTUP_TOOLCHAIN: '1.88'
     strategy:
       matrix:
         include:
@@ -39,6 +87,7 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
         with:
+          toolchain: '1.88'
           targets: ${{ matrix.target }}
 
       - name: Install cross-compilation tools
@@ -58,7 +107,7 @@ jobs:
           key: ${{ matrix.target }}
 
       - name: Build
-        run: cargo build --release --target ${{ matrix.target }}
+        run: cargo build --release --locked --target ${{ matrix.target }}
 
       - name: Package (Unix)
         if: matrix.os != 'windows-latest'
@@ -78,21 +127,26 @@ jobs:
           name: streamline-${{ matrix.target }}
           path: streamline-${{ github.ref_name }}-${{ matrix.target }}.*
 
+  # Publishing runs through the single reusable publish workflow, and only after
+  # the gate and the binary builds have succeeded.
+  #
+  # This workflow is triggered by `push: tags`, so `github.event_name` is always
+  # `push` here; gating on `github.event_name == 'release'` (as this job used
+  # to) made the condition permanently false and the job unreachable. The tag
+  # name is the correct signal for "is this a pre-release?".
   publish-crate:
     name: Publish to crates.io
-    needs: build
-    if: github.event_name == 'release' && !contains(github.ref, 'alpha') && !contains(github.ref, 'beta') && !contains(github.ref, 'rc')
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - name: Publish to crates.io
-        run: cargo publish --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
+    needs: [verify-tag-version, release-gate, build]
+    uses: ./.github/workflows/publish-crate.yml
+    with:
+      # Pre-releases exercise the complete package graph without publishing.
+      # Stable tags publish before the GitHub Release becomes public.
+      dry_run: ${{ contains(github.ref_name, 'alpha') || contains(github.ref_name, 'beta') || contains(github.ref_name, 'rc') }}
+    secrets: inherit
 
   release:
     name: Create Release
-    needs: build
+    needs: [verify-tag-version, release-gate, build, publish-crate]
     runs-on: ubuntu-latest
     outputs:
       hashes: ${{ steps.hashes.outputs.hashes }}
@@ -110,11 +164,19 @@ jobs:
 
       - name: Create checksums
         run: |
+          set -euo pipefail
           cd artifacts
-          find . -type f \( -name "*.tar.gz" -o -name "*.zip" \) -exec mv {} . \;
+          find . -mindepth 2 -type f \( -name "*.tar.gz" -o -name "*.zip" \) -exec mv {} . \;
+          # `download-artifact` creates one directory per artifact, and those
+          # directories are themselves named `streamline-<target>`. Remove them
+          # once the archives have been flattened, otherwise every later
+          # `streamline-*` glob (checksums, SLSA subjects, attestation and
+          # cosign subject paths) also matches a directory.
+          find . -mindepth 1 -maxdepth 1 -type d -name 'streamline-*' -exec rm -rf {} +
           # Include C header for FFI consumers
           cp ../include/streamline.h .
-          sha256sum streamline-* streamline.h > checksums.txt
+          # Checksum files only, and only the release artifacts we publish.
+          sha256sum streamline-*.tar.gz streamline-*.zip streamline.h > checksums.txt
 
       - name: Compute base64 subject hashes for SLSA generator
         id: hashes
@@ -122,33 +184,80 @@ jobs:
         run: |
           set -euo pipefail
           # Subjects are every release file we will publish (tarballs/zips + header).
-          echo "hashes=$(sha256sum streamline-*.tar.gz streamline-*.zip streamline.h 2>/dev/null | base64 -w0)" >> "$GITHUB_OUTPUT"
-
-      - name: Generate SBOM
-        run: |
-          # Install cargo-cyclonedx for Rust-native SBOM generation
-          cargo install cargo-cyclonedx --quiet 2>/dev/null || true
-
-          if command -v cargo-cyclonedx &> /dev/null; then
-            cargo cyclonedx --format json --output-file artifacts/sbom.cdx.json
-            echo "✅ SBOM generated with cargo-cyclonedx (CycloneDX JSON)"
-          else
-            echo "cargo-cyclonedx not available, falling back to syft..."
-            curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin 2>/dev/null || true
-            if command -v syft &> /dev/null; then
-              syft dir:. -o cyclonedx-json=artifacts/sbom.cdx.json -o spdx-json=artifacts/sbom.spdx.json
-              echo "✅ SBOM generated with syft (CycloneDX + SPDX)"
-            else
-              echo "⚠️ SBOM generation skipped (no supported tool available)"
-            fi
+          # No `2>/dev/null`: a missing artifact must fail the release rather than
+          # silently produce empty SLSA subjects.
+          HASHES=$(sha256sum streamline-*.tar.gz streamline-*.zip streamline.h | base64 -w0)
+          if [ -z "$HASHES" ]; then
+            echo "::error::no subjects computed for SLSA provenance"
+            exit 1
           fi
+          echo "hashes=$HASHES" >> "$GITHUB_OUTPUT"
 
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Generate SBOM (CycloneDX)
+        run: |
+          set -euo pipefail
+          cargo install cargo-cyclonedx --locked
+          # Marker file so only documents produced by this invocation are
+          # considered; a JSON file already checked into the tree can never be
+          # mistaken for the generated SBOM.
+          touch .sbom-marker
+          # Only the documented, stable invocation is used here: `--format json`
+          # against the workspace root. No file-name/override flags, because
+          # those have changed across cargo-cyclonedx releases and a flag that
+          # does not exist on the installed version would fail the release.
+          cargo cyclonedx --format json
+          # cargo-cyclonedx writes one document per workspace member next to its
+          # manifest and the exact file name has varied across releases, so the
+          # root document is selected by its CycloneDX metadata rather than by a
+          # guessed path. Exactly one match is required: an ambiguous or missing
+          # root SBOM fails the release instead of shipping the wrong one.
+          candidates=()
+          while IFS= read -r f; do
+            if jq -e '.bomFormat == "CycloneDX" and .metadata.component.name == "streamline"' \
+                 "$f" >/dev/null 2>&1; then
+              candidates+=("$f")
+            fi
+          done < <(find . -type f -name '*.json' -newer .sbom-marker \
+                     -not -path './.git/*' -not -path './artifacts/*' -print \
+                   | LC_ALL=C sort)
+          rm -f .sbom-marker
+          if [ "${#candidates[@]}" -ne 1 ]; then
+            echo "::error::expected exactly one root CycloneDX SBOM with metadata.component.name == 'streamline', found ${#candidates[@]}"
+            printf '%s\n' "${candidates[@]+"${candidates[@]}"}"
+            exit 1
+          fi
+          SBOM="${candidates[0]}"
+          cp "$SBOM" artifacts/sbom.cdx.json
+          # Re-assert on the published copy: the shipped SBOM must describe the
+          # root `streamline` component and must not be component-less.
+          jq -e '.metadata.component.name == "streamline"' artifacts/sbom.cdx.json >/dev/null
+          COMPONENTS=$(jq '(.components // []) | length' artifacts/sbom.cdx.json)
+          if [ "${COMPONENTS:-0}" -lt 1 ]; then
+            echo "::error::SBOM contains no components"
+            exit 1
+          fi
+          echo "SBOM generated with cargo-cyclonedx from ${SBOM}: ${COMPONENTS} components"
+
+      - name: Add SBOM to checksums
+        run: |
+          set -euo pipefail
+          cd artifacts
+          sha256sum sbom.cdx.json >> checksums.txt
+
+      # Attestations are a documented release guarantee, so a failure must fail
+      # the release rather than being silently swallowed by continue-on-error.
       - name: Generate SBOM attestation
-        if: hashFiles('artifacts/sbom.cdx.json') != ''
         uses: actions/attest-sbom@v2
-        continue-on-error: true
         with:
-          subject-path: artifacts/streamline-*
+          # Only the release archives are subjects. A bare `streamline-*` also
+          # matched the per-target artifact directories before they were removed
+          # above, and would match the cosign `.sig`/`.pem` files once they
+          # exist.
+          subject-path: |
+            artifacts/streamline-*.tar.gz
+            artifacts/streamline-*.zip
           sbom-path: artifacts/sbom.cdx.json
 
       - name: Install cosign
@@ -181,12 +290,16 @@ jobs:
 
       - name: Generate provenance attestation (GitHub-native)
         uses: actions/attest-build-provenance@v2
-        continue-on-error: true
         with:
-          subject-path: artifacts/streamline-*
+          # Build outputs only: this step runs after signing, so a bare
+          # `streamline-*` would claim provenance for the signature and
+          # certificate files too.
+          subject-path: |
+            artifacts/streamline-*.tar.gz
+            artifacts/streamline-*.zip
 
       - name: Create Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           files: |
             artifacts/streamline-*
@@ -195,7 +308,6 @@ jobs:
             artifacts/checksums.txt.sig
             artifacts/checksums.txt.pem
             artifacts/sbom.cdx.json
-            artifacts/sbom.spdx.json
           generate_release_notes: true
           draft: false
           prerelease: ${{ contains(github.ref_name, 'alpha') || contains(github.ref_name, 'beta') || contains(github.ref_name, 'rc') }}
@@ -214,7 +326,7 @@ jobs:
   # provenance to the GitHub release the previous job created.
   slsa-provenance:
     name: SLSA L3 Provenance
-    needs: [release]
+    needs: [verify-tag-version, release]
     if: ${{ !contains(github.ref_name, 'alpha') && !contains(github.ref_name, 'beta') && !contains(github.ref_name, 'rc') }}
     permissions:
       actions: read

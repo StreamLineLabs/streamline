@@ -44,6 +44,9 @@ coverage/
 # Logs
 *.log
 
+# Node.js diagnostic reports contain host, network, and process metadata
+report.*.json
+
 # Documentation website
 website/node_modules/
 website/build/

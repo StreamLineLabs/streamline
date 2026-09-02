@@ -6,9 +6,20 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  # Single source of truth for the MSRV in CI. Must match `rust-version` in
+  # Cargo.toml and in every workspace member crate; enforced by
+  # tests/packaging_metadata_test.rs.
+  MSRV: '1.88'
+
+permissions:
+  contents: read
 
 jobs:
-  ci:
+  # Pin formatting and Clippy so a new Rust release cannot create hundreds of
+  # unrelated formatting/lint changes overnight. Stable compatibility is
+  # exercised by ci-full.yml; this workflow enforces the declared 1.88 baseline.
+  fmt:
+    name: Format
     runs-on: ubuntu-latest
     env:
       RUSTUP_TOOLCHAIN: '1.88'

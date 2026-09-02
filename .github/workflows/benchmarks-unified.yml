@@ -101,7 +101,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     permissions:
-      contents: ${{ needs.resolve.outputs.mode == 'publish' && 'write' || 'read' }}
+      # Read-only on purpose. This job builds and runs code from the checked-out
+      # ref (`cargo build`, `cargo bench`, and the produced binaries), so it must
+      # never hold a token that can write to the repository. Publishing to the
+      # gh-pages dashboard is done by the separate `publish-dashboard` job below,
+      # which holds `contents: write` but executes no repository code.
+      contents: read
     concurrency:
       group: benchmarks-${{ needs.resolve.outputs.mode }}
       cancel-in-progress: ${{ needs.resolve.outputs.mode != 'publish' }}
@@ -148,8 +153,34 @@ jobs:
           name: benchmarks-${{ needs.resolve.outputs.mode }}-${{ github.sha }}
           path: benchmark-results/
 
+  # ---------------------------------------------------------------------------
+  # PUBLISH: move the collected results onto the gh-pages dashboard branch.
+  #
+  # Deliberately a separate job from `bench`: this is the only job in the
+  # workflow with `contents: write`, and it runs no repository code — it only
+  # downloads the artifact produced by `bench` and commits it to gh-pages.
+  # ---------------------------------------------------------------------------
+  publish-dashboard:
+    name: Publish dashboard
+    needs: [resolve, bench]
+    if: needs.resolve.outputs.mode == 'publish'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    concurrency:
+      group: benchmarks-publish
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download benchmark results
+        uses: actions/download-artifact@v4
+        with:
+          name: benchmarks-${{ needs.resolve.outputs.mode }}-${{ github.sha }}
+          path: benchmark-results
+
       - name: Publish to dashboard branch
-        if: needs.resolve.outputs.mode == 'publish'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |

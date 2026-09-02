@@ -9,6 +9,206 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+- Fixed a runtime panic on every outbound HTTPS request. `reqwest` is built with
+  `rustls-tls-webpki-roots-no-provider`, so when it builds its own rustls
+  `ClientConfig` it resolves the crypto provider from process-global state and,
+  with no `install_default()` anywhere (by design), executes a bare
+  `panic!("No provider set")`. Every `reqwest::Client::new()` and plain
+  `Client::builder().build()` aborted instead of returning an error — affecting
+  OAuth/JWKS validation, Vault KMS, serverless and cloud-function sinks, AI
+  providers, edge sync, telemetry, the web UI and the admin CLI. All client
+  construction now goes through the new crate-internal `http_client` module,
+  which hands reqwest a fully built rustls configuration via
+  `use_preconfigured_tls` — explicit AWS-LC provider, explicit TLS 1.2/1.3, the
+  WebPKI roots and no client authentication. No process-wide provider is
+  installed and the rustls graph stays AWS-LC only.
+- Added a new publishable workspace crate, `streamline-serde-wincode` — an
+  Apache-2.0 fork of `serde-wincode` 0.1.2 (attributed in its `NOTICE`) whose
+  only change is an exact `wincode = "=0.4.9"` requirement. Upstream's
+  `wincode = ">=0.4, <1"` spans three mutually semver-incompatible `0.x` lines,
+  which Cargo does **not** unify with the root crate's `=0.4.9`: a fresh
+  resolution of the published crate selected wincode 0.6 for the bridge
+  *alongside* 0.4.9 for `streamline`, mismatching the ABI that
+  `src/bincode_compat.rs` configures and requiring Rust 1.89 against an MSRV of
+  1.88. A `Cargo.lock` pin could not fix this (it binds only this repository)
+  and neither could `[patch]` (patches are not propagated to consumers), so the
+  requirement now lives in a manifest that is itself published. The upstream
+  package is gone from the graph; the bincode 1 wire format, the bounded
+  decoder and the corrupt-length-prefix protections are unchanged.
+- Closed the remaining lockfile-only MSRV constraints, which did not survive
+  publication. `Cargo.lock` binds this repository and nothing else: a consumer
+  of the published `streamline` resolves from scratch against the normalised
+  manifests crates.io serves, so the "Cargo.lock pins it" comments documented a
+  constraint nobody downstream had. A fresh consumer with `graphql` and
+  `cloud-storage` enabled resolved `async-graphql` 7.2.1 (and its
+  derive/parser/value crates) plus `crc-fast` 1.10.0 — all of which require Rust
+  1.89, above this crate's MSRV of 1.88. Each edge now carries an exact
+  requirement in a manifest that is itself published:
+  - `async-graphql = "=7.0.17"`, plus new optional direct dependencies
+    `async-graphql-derive`/`-parser`/`-value` at `=7.0.17`, activated by the
+    `graphql` feature. Pinning the facade alone was not enough: it asks for its
+    companion crates with caret requirements, which floated to the 7.2.x line.
+  - `crc-fast = "=1.9.0"` and `crc = "=3.3.0"`, new optional direct
+    dependencies activated by `cloud-storage` alongside `object_store`, whose
+    `crc-fast = "^1.6"` edge was the one that floated.
+  These crates are not used by Streamline's own code; they exist solely to bound
+  a downstream resolution. `fresh_consumer_resolves_an_msrv_compatible_graph`
+  proves it end to end: it runs `cargo package` for all four publishable crates,
+  unpacks them, deletes every embedded lockfile, resolves a brand-new consumer
+  with the real 1.88 toolchain, and asserts that no package anywhere in the
+  resulting graph declares a `rust-version` above the MSRV.
+  `permissive_requirements_would_still_float_past_the_msrv` is the non-vacuity
+  control, reproducing the defect on demand.
+- Removed the unmaintained `rustls-pemfile` dependency (RUSTSEC-2025-0134; the
+  repository was archived in August 2025). All PEM certificate and private-key
+  parsing — server TLS, inter-broker cluster TLS, QUIC and WebTransport — now
+  uses the `PemObject` trait from `rustls::pki_types::pem`, which ships inside
+  the `rustls-pki-types` crate that rustls already depends on. `rustls-pemfile`
+  was itself only a thin wrapper around that same code, so the accepted key
+  formats (PKCS#8, PKCS#1/RSA, SEC1/EC) and all error messages are unchanged.
+  The crate is now absent from `Cargo.lock` even under `--all-features`.
+- Replaced the unmaintained `bincode` crate entirely
+  (RUSTSEC-2025-0141, `patched = []`) with maintained
+  `serde-wincode`/`wincode`. The crate-internal `bincode_compat` module
+  preserves bincode 1's little-endian, fixed-width wire format, trailing-byte
+  acceptance and unlimited collection preallocation. Hard-coded golden vectors
+  captured from bincode 1.3.3 cover persisted records, batches, metadata,
+  enums, collections and 128-bit integers. Existing segments, raft state,
+  time-travel archives and AI vector stores remain byte-compatible, while
+  `bincode` is absent from `Cargo.lock`.
+- Removed both `rkyv` advisories (RUSTSEC-2026-0001, RUSTSEC-2026-0235) by
+  updating `rust_decimal` to 1.43.0, which drops `rkyv` 0.7 from its normal
+  dependencies. No code change was required and the MSRV is unaffected.
+- Removed all four `quick-xml` advisory hits (RUSTSEC-2026-0194 and
+  RUSTSEC-2026-0195, both CVSS 7.5) by upgrading `object_store` from 0.11 to
+  0.14.1 — the first line that parses S3/Azure list XML with
+  `quick-xml >= 0.41` — and by removing the `iceberg` and `deltalake`
+  dependencies, which pinned `quick-xml` 0.36/0.37 transitively through
+  `opendal`, `reqsign` and `delta_kernel`.
+- Eliminated the `native-tls`/OpenSSL path from all builds, including
+  `--all-features`. It entered only via `deltalake` → `delta_kernel` →
+  `reqwest` (default-tls) → `hyper-tls` → `native-tls` → `openssl`;
+  `delta_kernel` exposed no rustls switch, so Cargo feature unification forced
+  OpenSSL in regardless of this crate's rustls-only `reqwest` declaration.
+  `cargo deny --all-features check bans` is now clean; Streamline is rustls-only.
+- Standardised every direct TLS transport on the AWS-LC rustls provider and
+  disabled unused Prometheus exporter defaults. Server and inter-broker TLS
+  builders now receive the provider explicitly, so a transitive dependency
+  cannot make rustls provider auto-selection panic at startup.
+- No advisory was suppressed: `deny.toml` `[advisories] ignore` remains empty
+  and the `openssl` ban remains in place. `tests/dependency_security_test.rs`
+  fails the build if `quick-xml < 0.41`, `rkyv`, `native-tls`, `hyper-tls` or
+  `openssl` re-enter `Cargo.lock`, or if suppressions are added.
+- Made RustSec and cargo-deny release checks fail closed and upgraded the
+  compatible vulnerable dependency set, including AWS-LC, bytes, h2,
+  lz4_flex, PostgreSQL, Quinn, rustls-webpki, tar/time, and Wasmtime.
+- Replaced the ineffective C++ CodeQL configuration with Rust and GitHub
+  Actions analysis.
+
+### Removed
+- **BREAKING**: the Apache Iceberg and Delta Lake sink connectors are no longer
+  available in any build configuration. Every upstream release compatible with
+  MSRV 1.88 carries the unfixed advisories above (currently released
+  `deltalake` <= 0.31.1 still pins `object_store` 0.12 / `quick-xml` < 0.41, and
+  MSRV-compatible `iceberg` versions still use `opendal`/`quick-xml` < 0.41), so
+  the dependencies were removed rather than shipped vulnerable.
+  - The `iceberg` and `delta-lake` Cargo features are retained as compatibility
+    no-ops: they resolve and compile but enable no dependencies.
+  - `iceberg` was removed from the `full` feature set.
+  - `SinkManager::create_sink` now rejects `SinkType::Iceberg` and
+    `SinkType::DeltaLake` with an explicit security/upstream message;
+    `sink::unavailable::is_available` reports availability programmatically.
+  - The implementations are preserved verbatim behind the never-enabled
+    `iceberg_backend` / `delta_backend` cfgs (`src/sink/iceberg.rs`,
+    `src/sink/delta.rs`, `src/lakehouse/iceberg_topics.rs`) so they can be
+    restored once upstream ships fixed releases.
+  - `src/lakehouse/iceberg_topics.rs` is no longer compiled. Its flush path
+    simulated Iceberg writes — it logged "would write N records", discarded the
+    buffer and reported synthetic byte counts as success — so shipping it as a
+    working feature would have been inaccurate regardless.
+
+### Changed
+- `object_store` upgraded 0.11 → 0.14.1. The convenience methods
+  (`get`/`put`/`head`/`delete`/`put_multipart`) moved from the `ObjectStore`
+  trait to the new `ObjectStoreExt` extension trait; call sites in
+  `src/storage/{backend_factory,diskless,segment_s3,tiering,wal_s3}.rs` now
+  import it. No behavioural change to tiered storage.
+- The `sink` module is now always compiled instead of being gated behind
+  `iceberg`/`delta-lake`, so the Serverless and Cloud Function connectors and
+  `SinkManager` remain available under `full` after `iceberg` was dropped from it.
+- The `streamline-cli sink` command remains visible in supported builds so
+  unavailable Iceberg/Delta creation requests return the explicit
+  dependency-security explanation instead of an unrecognised-subcommand error.
+- **BREAKING (default builds)**: `SinkType::Serverless` and
+  `SinkType::CloudFunction` now require the `serverless` Cargo feature, and
+  `sink::unavailable::is_available` reports them accordingly. Both connectors
+  deliver over HTTP through `crate::http_client`, which only exists when that
+  feature is on; without it the modules compiled but every delivery path was a
+  stub. `SinkManager::create_sink` therefore *constructed and registered* a
+  sink that failed on every batch — it showed as healthy in `sink list` while
+  dropping records. Creation is now rejected up front, before duplicate-name,
+  topic-existence and configuration validation, so the caller is told the real
+  problem ("rebuild with `--features serverless`") instead of an unrelated
+  "topic does not exist", and nothing reaches the registry. The
+  `src/sink/serverless.rs` and `src/sink/cloud_functions.rs` modules are gated
+  on the same feature. With `--features serverless` the behaviour is unchanged:
+  valid configurations construct, register and deliver exactly as before.
+- Raised the minimum supported Rust version from 1.80 to 1.88 so patched
+  dependency releases can be used consistently across build and release jobs.
+- Marketplace HTTP discovery/install now returns `501 Not Implemented` instead
+  of creating placeholder `.wasm` files or reporting CRC32 as SHA-256.
+- Unsupported contract assertions now fail explicitly rather than passing as
+  skipped checks.
+
+### Release engineering
+- Sequenced validation, crate publication, binary release creation, SBOM,
+  signing, and provenance generation through one gated release path.
+- Made the workspace crate graph packageable by declaring registry versions
+  for local path dependencies and publishing leaf crates before the root crate.
+- A `workflow_dispatch` of `publish-crate.yml` is now unconditionally a dry run.
+  The manual trigger previously took a `dry_run` boolean that fed straight into
+  the token check and `cargo publish`, so anyone who could dispatch the workflow
+  could make an irrevocable crates.io release with none of the release-gate
+  checks having run. The manual boolean is gone — there is nothing left to
+  supply — and the effective mode is computed by
+  `scripts/release/resolve-publish-mode.sh`, which only emits `publish` for a
+  `workflow_call` invocation, with an explicit `dry_run: false`, from a caller
+  that runs the release gate. (`github.event_name` cannot be used for this: in a
+  reusable workflow it is the *caller's* event and is never `workflow_call`.)
+- crates.io publication is now resumable and idempotent. Re-running after a
+  partial release used to fail with "crate version is already uploaded", leaving
+  the release wedged with some crates published and some not.
+  `scripts/release/publish-crates.sh` queries crates.io for each exact
+  `name@version`, skips what is already published (never accepting a *different*
+  version as evidence), and waits for real registry visibility via
+  `cargo info <crate>@<version>` — bounded by `VISIBILITY_TIMEOUT_SECONDS` —
+  before publishing dependents. This replaces the fixed `sleep 30`. Any
+  registry answer that is not a clean 200 or 404 aborts the run rather than
+  guessing. The standalone Rust SDK publish uses the same helper.
+- Every publishing job in `publish-sdks.yml` now declares
+  `needs: [verify-core-version, release-gate, publish-rust-crate]`. The
+  ecosystem jobs previously had no dependencies at all, so a manual run pushed
+  npm, PyPI, Maven Central, NuGet and a Go tag concurrently with — or before —
+  the release gate and the crates.io publish.
+- Every SDK publish now verifies the checked-out repository's own authoritative
+  version against the release version before building or publishing, in dry runs
+  too. The `version` input was previously little more than a label: each job
+  checked out its SDK's default branch and published whatever version that
+  branch declared, so a 0.4.1 release could ship 0.4.0 artefacts and report
+  success. The new `scripts/release/verify-sdk-version.sh` reads the real
+  artefact for Rust, Node, Python, Java, .NET, Go, Kotlin and WASM, and fails
+  closed on a missing file, an unparsable file or an unknown ecosystem. Go has
+  no manifest version, so it is checked against its in-repo `const Version`
+  *and* its release-tag state. SDK repositories are checked out into `sdk/` so
+  this repository's release-control scripts remain available.
+- Added `scripts/release/tests/release-scripts.test.sh`, a hermetic suite for
+  the three release helpers that runs against fake `cargo`/`curl` binaries and
+  generated SDK fixtures — no network, no registry, no sibling repository. It is
+  wired into `cargo test` via `tests/release_scripts_test.rs`, and
+  `tests/packaging_metadata_test.rs` adds static guards that enumerate every
+  publishing job and assert its dependencies and its version-check ordering.
+
 
 ## [0.3.0] - 2026-04-20
 
