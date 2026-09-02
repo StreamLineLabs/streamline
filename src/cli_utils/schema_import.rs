@@ -100,7 +100,11 @@ impl SchemaRegistryClient {
         Ok(Self {
             base_url: base_url.trim_end_matches('/').to_string(),
             auth,
-            client: reqwest::blocking::Client::builder()
+            // Previously `.unwrap_or_default()`. `reqwest::blocking::Client::default()`
+            // is `Client::new()`, which panics without a process-wide crypto
+            // provider, so the failure is surfaced instead of swallowed.
+            client: crate::http_client::blocking_builder()
+                .map_err(|e| format!("Failed to create HTTP client: {e}"))?
                 .timeout(std::time::Duration::from_secs(30))
                 .build()
                 .map_err(|e| format!("Failed to create HTTP client: {e}"))?,

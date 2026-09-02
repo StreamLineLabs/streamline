@@ -419,7 +419,10 @@ impl OAuthProvider {
         debug!(url = %jwks_url, "Fetching JWKS");
 
         // Use reqwest to fetch JWKS
-        let client = reqwest::Client::builder()
+        let client = crate::http_client::builder()
+            .map_err(|e| {
+                StreamlineError::AuthenticationFailed(format!("Failed to create HTTP client: {e}"))
+            })?
             .timeout(Duration::from_secs(10))
             .build()
             .map_err(|e| {
@@ -656,6 +659,36 @@ pub struct OAuthStats {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// `fetch_jwks` builds its HTTP client on every call. reqwest is compiled
+    /// with `rustls-tls-webpki-roots-no-provider`, so a plain
+    /// `reqwest::Client::builder().build()` resolves the crypto provider from
+    /// `CryptoProvider::get_default()` and, with no process-wide default
+    /// installed, panics with "No provider set" instead of returning an error.
+    ///
+    /// This asserts the *auth* path constructs its client the way
+    /// `crate::http_client` does — with the provider supplied explicitly — and
+    /// that it does so while no ambient provider exists. Checking
+    /// `get_default()` first keeps the test from passing vacuously if some other
+    /// test in this binary ever installed one.
+    #[test]
+    fn jwks_http_client_builds_without_a_process_wide_crypto_provider() {
+        assert!(
+            rustls::crypto::CryptoProvider::get_default().is_none(),
+            "a process-wide crypto provider was installed, which would let an \
+             implicit reqwest client build and make this test vacuous"
+        );
+
+        let client = crate::http_client::builder()
+            .expect("outbound TLS configuration")
+            .timeout(Duration::from_secs(10))
+            .build();
+
+        assert!(
+            client.is_ok(),
+            "the OAuth/JWKS HTTP client must build with an explicit crypto provider"
+        );
+    }
 
     #[test]
     fn test_oauth_config_default() {

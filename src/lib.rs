@@ -178,6 +178,14 @@ pub mod cli_utils;
 pub mod contracts;
 #[doc(hidden)]
 pub mod debugger;
+// The single constructor for every `reqwest` client Streamline owns. `pub` for
+// the same reason as the modules around it — `src/cli_http.rs` and
+// `src/cli_utils/` are compiled into the `streamline-cli` binary and reach it
+// through `use streamline::...`. The module gates itself on the features that
+// enable `reqwest`; see its docs for why no call site may build a client
+// directly.
+#[doc(hidden)]
+pub mod http_client;
 #[doc(hidden)]
 pub mod marketplace;
 #[doc(hidden)]

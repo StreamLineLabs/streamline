@@ -116,7 +116,8 @@ impl VaultKeyProvider {
             );
         }
 
-        let http_client = reqwest::blocking::Client::builder()
+        let http_client = crate::http_client::blocking_builder()
+            .map_err(|e| KmsError::Backend(format!("http client init: {e}")))?
             .default_headers(headers)
             .build()
             .map_err(|e| KmsError::Backend(format!("http client init: {e}")))?;
@@ -192,6 +193,29 @@ impl KeyProvider for VaultKeyProvider {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The Vault provider is the `attestation` feature's HTTP path, and it uses
+    /// the *blocking* reqwest client — whose `build()` panics with "No provider
+    /// set" if it has to resolve a crypto provider from process-global state.
+    ///
+    /// `VaultProvider::new` is exercised end to end rather than just the helper,
+    /// so the assertion covers the real call site including its default headers.
+    #[test]
+    fn vault_http_client_builds_without_a_process_wide_crypto_provider() {
+        assert!(
+            rustls::crypto::CryptoProvider::get_default().is_none(),
+            "a process-wide crypto provider was installed, which would let an \
+             implicit reqwest client build and make this test vacuous"
+        );
+
+        let provider = VaultKeyProvider::new(valid_config());
+        assert!(
+            provider.is_ok(),
+            "VaultKeyProvider::new must build its blocking HTTP client with an \
+             explicit crypto provider, got: {:?}",
+            provider.err()
+        );
+    }
 
     fn valid_config() -> VaultConfig {
         VaultConfig {

@@ -189,7 +189,7 @@ Individual features: `auth`, `clustering`, `telemetry`, `metrics`, `cloud-storag
 ## Features
 
 ### Core (Stable)
-Persistent segment-based storage, log compaction, TLS/mTLS, Gzip/LZ4/Snappy/Zstd compression, zero-copy I/O, WebSocket gateway, Redis-like simple protocol, built-in TUI dashboard
+Persistent segment-based storage, log compaction, TLS/mTLS, Gzip/LZ4/Snappy/Zstd compression, zero-copy I/O, WebSocket gateway, Redis-like simple protocol, built-in TUI dashboard, and feature-gated SQL analytics (DuckDB)
 
 ### Enterprise (Feature-Gated)
 SASL/OAuth authentication, ACL authorization, Raft-based clustering & replication, tiered storage (S3/Azure/GCS), Schema Registry (Avro/Protobuf/JSON Schema), client quotas, OpenTelemetry tracing, Prometheus metrics

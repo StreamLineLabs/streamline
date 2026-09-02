@@ -274,7 +274,8 @@ impl HttpSyncClient {
     ))]
     async fn do_upload(&self, body: &[u8]) -> Result<SyncUploadResponse> {
         let url = format!("{}/api/v1/edge/upload", self.config.endpoint);
-        let mut builder = reqwest::Client::new()
+        let mut builder = crate::http_client::client()
+            .map_err(|e| StreamlineError::storage_msg(format!("HTTP client init failed: {e}")))?
             .post(&url)
             .header("Content-Type", "application/json")
             .header("X-Edge-ID", &self.config.edge_id)
@@ -324,7 +325,8 @@ impl HttpSyncClient {
         feature = "web-ui"
     ))]
     async fn do_fetch(&self, url: &str) -> Result<SyncFetchResponse> {
-        let mut builder = reqwest::Client::new()
+        let mut builder = crate::http_client::client()
+            .map_err(|e| StreamlineError::storage_msg(format!("HTTP client init failed: {e}")))?
             .get(url)
             .header("X-Edge-ID", &self.config.edge_id)
             .timeout(self.config.timeout);
@@ -371,7 +373,13 @@ impl HttpSyncClient {
         feature = "web-ui"
     ))]
     async fn do_health_check(&self, url: &str) -> Result<bool> {
-        match reqwest::Client::new()
+        // A client that cannot be constructed is reported the same way as an
+        // unreachable peer: this probe answers "healthy?", never "why not".
+        let Ok(client) = crate::http_client::client() else {
+            return Ok(false);
+        };
+
+        match client
             .get(url)
             .timeout(std::time::Duration::from_secs(5))
             .send()

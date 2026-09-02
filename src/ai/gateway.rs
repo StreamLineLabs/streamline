@@ -566,7 +566,8 @@ impl AIGateway {
             "max_tokens": 256,
         });
 
-        let client = reqwest::Client::builder()
+        let client = crate::http_client::builder()
+            .map_err(|e| StreamlineError::AI(format!("HTTP client error: {e}")))?
             .timeout(std::time::Duration::from_millis(self.config.timeout_ms))
             .build()
             .map_err(|e| StreamlineError::AI(format!("HTTP client error: {e}")))?;
@@ -625,7 +626,8 @@ impl AIGateway {
             "stream": false,
         });
 
-        let client = reqwest::Client::builder()
+        let client = crate::http_client::builder()
+            .map_err(|e| StreamlineError::AI(format!("HTTP client error: {e}")))?
             .timeout(std::time::Duration::from_millis(self.config.timeout_ms))
             .build()
             .map_err(|e| StreamlineError::AI(format!("HTTP client error: {e}")))?;

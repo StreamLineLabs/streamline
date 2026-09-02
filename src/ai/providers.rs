@@ -128,7 +128,8 @@ impl OpenAIProvider {
             return Err(StreamlineError::Config("OpenAI API key is required".into()));
         }
 
-        let client = reqwest::Client::builder()
+        let client = crate::http_client::builder()
+            .map_err(|e| StreamlineError::Config(format!("Failed to create HTTP client: {e}")))?
             .timeout(std::time::Duration::from_millis(config.timeout_ms))
             .build()
             .map_err(|e| StreamlineError::Config(format!("Failed to create HTTP client: {e}")))?;
@@ -346,7 +347,8 @@ impl CohereProvider {
             return Err(StreamlineError::Config("Cohere API key is required".into()));
         }
 
-        let client = reqwest::Client::builder()
+        let client = crate::http_client::builder()
+            .map_err(|e| StreamlineError::Config(format!("Failed to create HTTP client: {e}")))?
             .timeout(std::time::Duration::from_millis(config.timeout_ms))
             .build()
             .map_err(|e| StreamlineError::Config(format!("Failed to create HTTP client: {e}")))?;

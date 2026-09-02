@@ -85,7 +85,12 @@ pub struct StreamlineClient {
 impl StreamlineClient {
     /// Create a new Streamline client.
     pub fn new(config: StreamlineClientConfig) -> crate::error::Result<Self> {
-        let client = reqwest::Client::builder()
+        let client = crate::http_client::builder()
+            .map_err(|e| {
+                crate::error::StreamlineError::Internal(format!(
+                    "Failed to create HTTP client: {e}"
+                ))
+            })?
             .timeout(Duration::from_millis(config.timeout_ms))
             .build()
             .map_err(|e| {

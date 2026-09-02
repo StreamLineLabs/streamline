@@ -132,8 +132,13 @@ impl TelemetryConfig {
 /// Telemetry manager handles collecting and sending telemetry data
 pub struct TelemetryManager {
     config: TelemetryConfig,
+    // `None` when the HTTP client could not be built. `new()` is infallible by
+    // contract (it is public API), and the previous `.unwrap_or_default()` is
+    // no longer an option: `reqwest::Client::default()` is `Client::new()`,
+    // which panics without a process-wide crypto provider. Reporting is
+    // therefore what fails, not construction.
     #[cfg(feature = "auth")]
-    client: reqwest::Client,
+    client: Option<reqwest::Client>,
     last_report: Arc<RwLock<Option<TelemetryReport>>>,
 }
 

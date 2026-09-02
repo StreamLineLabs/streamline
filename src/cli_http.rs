@@ -31,7 +31,8 @@ use streamline::StreamlineError;
 const DEFAULT_TIMEOUT_SECS: u64 = 10;
 
 fn client() -> Result<reqwest::blocking::Client> {
-    reqwest::blocking::Client::builder()
+    streamline::http_client::blocking_builder()
+        .map_err(|e| StreamlineError::Server(format!("http client init: {e}")))?
         .timeout(Duration::from_secs(DEFAULT_TIMEOUT_SECS))
         .build()
         .map_err(|e| StreamlineError::Server(format!("http client init: {e}")))

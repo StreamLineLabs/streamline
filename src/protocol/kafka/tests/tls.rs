@@ -1,5 +1,3 @@
-use super::*;
-
 #[test]
 fn test_tls_config_defaults() {
     // TlsConfig should have reasonable defaults

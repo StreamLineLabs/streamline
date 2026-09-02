@@ -6,13 +6,14 @@
 
 use crate::cluster::config::InterBrokerTlsConfig;
 use crate::error::{Result, StreamlineError};
+use crate::server::tls::crypto_provider;
+use rustls::crypto::CryptoProvider;
+use rustls::pki_types::pem::{Error as PemError, PemObject};
 use rustls::pki_types::{CertificateDer, PrivateKeyDer, ServerName};
 use rustls::version::{TLS12, TLS13};
 use rustls::ClientConfig as RustlsClientConfig;
 use rustls::ServerConfig as RustlsServerConfig;
 use rustls::SupportedProtocolVersion;
-use std::fs::File;
-use std::io::BufReader;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::io::{AsyncRead, AsyncWrite};
@@ -82,6 +83,14 @@ impl InterBrokerTls {
             "Loaded inter-broker private key"
         );
 
+        // One provider for this whole context: the acceptor, the connector, the
+        // client-certificate verifier and the dangerous server verifier below
+        // all clone this same `Arc`. rustls would otherwise resolve a provider
+        // implicitly per builder, which panics without a process-wide default
+        // and silently changes implementation when a transitive dependency
+        // enables a second provider feature.
+        let provider = crypto_provider();
+
         // Build server (acceptor) config
         let server_config = if config.verify_peer {
             // mTLS: Verify client certificates
@@ -108,37 +117,44 @@ impl InterBrokerTls {
                 })?;
             }
 
-            let client_verifier =
-                rustls::server::WebPkiClientVerifier::builder(Arc::new(root_store.clone()))
-                    .build()
-                    .map_err(|e| {
-                        StreamlineError::Config(format!(
-                            "Failed to build inter-broker client verifier: {}",
-                            e
-                        ))
-                    })?;
+            let client_verifier = rustls::server::WebPkiClientVerifier::builder_with_provider(
+                Arc::new(root_store.clone()),
+                Arc::clone(&provider),
+            )
+            .build()
+            .map_err(|e| {
+                StreamlineError::Config(format!(
+                    "Failed to build inter-broker client verifier: {e}"
+                ))
+            })?;
 
             let versions = get_supported_versions(&config.min_version);
-            RustlsServerConfig::builder_with_protocol_versions(&versions)
+            RustlsServerConfig::builder_with_provider(Arc::clone(&provider))
+                .with_protocol_versions(&versions)
+                .map_err(|e| {
+                    StreamlineError::Config(format!(
+                        "Invalid inter-broker TLS protocol configuration: {e}"
+                    ))
+                })?
                 .with_client_cert_verifier(client_verifier)
                 .with_single_cert(certs.clone(), key.clone_key())
                 .map_err(|e| {
-                    StreamlineError::Config(format!(
-                        "Invalid inter-broker mTLS server config: {}",
-                        e
-                    ))
+                    StreamlineError::Config(format!("Invalid inter-broker mTLS server config: {e}"))
                 })?
         } else {
             // No client auth
             let versions = get_supported_versions(&config.min_version);
-            RustlsServerConfig::builder_with_protocol_versions(&versions)
+            RustlsServerConfig::builder_with_provider(Arc::clone(&provider))
+                .with_protocol_versions(&versions)
+                .map_err(|e| {
+                    StreamlineError::Config(format!(
+                        "Invalid inter-broker TLS protocol configuration: {e}"
+                    ))
+                })?
                 .with_no_client_auth()
                 .with_single_cert(certs.clone(), key.clone_key())
                 .map_err(|e| {
-                    StreamlineError::Config(format!(
-                        "Invalid inter-broker TLS server config: {}",
-                        e
-                    ))
+                    StreamlineError::Config(format!("Invalid inter-broker TLS server config: {e}"))
                 })?
         };
 
@@ -164,21 +180,34 @@ impl InterBrokerTls {
 
             // Use mTLS - provide client certificate
             let versions = get_supported_versions(&config.min_version);
-            RustlsClientConfig::builder_with_protocol_versions(&versions)
+            RustlsClientConfig::builder_with_provider(Arc::clone(&provider))
+                .with_protocol_versions(&versions)
+                .map_err(|e| {
+                    StreamlineError::Config(format!(
+                        "Invalid inter-broker TLS protocol configuration: {e}"
+                    ))
+                })?
                 .with_root_certificates(root_store)
                 .with_client_auth_cert(certs, key)
                 .map_err(|e| {
-                    StreamlineError::Config(format!(
-                        "Invalid inter-broker mTLS client config: {}",
-                        e
-                    ))
+                    StreamlineError::Config(format!("Invalid inter-broker mTLS client config: {e}"))
                 })?
         } else {
-            // No server verification (for testing/development)
-            // Use dangerous verifier that accepts any certificate
-            let verifier = NoServerVerification;
+            // No server verification (for testing/development).
+            //
+            // The verifier is dangerous by construction, but it must still be
+            // built from the same explicit provider: `supported_verify_schemes`
+            // has to agree with the schemes the handshake can actually verify,
+            // and rustls requires the two to come from one provider.
+            let verifier = NoServerVerification::new(Arc::clone(&provider));
             let versions = get_supported_versions(&config.min_version);
-            RustlsClientConfig::builder_with_protocol_versions(&versions)
+            RustlsClientConfig::builder_with_provider(provider)
+                .with_protocol_versions(&versions)
+                .map_err(|e| {
+                    StreamlineError::Config(format!(
+                        "Invalid inter-broker TLS protocol configuration: {e}"
+                    ))
+                })?
                 .dangerous()
                 .with_custom_certificate_verifier(Arc::new(verifier))
                 .with_client_auth_cert(certs, key)
@@ -311,8 +340,20 @@ impl<T: AsyncRead + AsyncWrite + Unpin> AsyncWrite for InterBrokerTlsStream<T> {
 }
 
 /// Certificate verifier that accepts any certificate (for development/testing)
+///
+/// It carries the crypto provider it was built from so `supported_verify_schemes`
+/// reports exactly the schemes that provider can verify, instead of a hardcoded
+/// list that could drift from the negotiated cipher suites.
 #[derive(Debug)]
-struct NoServerVerification;
+struct NoServerVerification {
+    provider: Arc<CryptoProvider>,
+}
+
+impl NoServerVerification {
+    fn new(provider: Arc<CryptoProvider>) -> Self {
+        Self { provider }
+    }
+}
 
 impl rustls::client::danger::ServerCertVerifier for NoServerVerification {
     fn verify_server_cert(
@@ -346,33 +387,24 @@ impl rustls::client::danger::ServerCertVerifier for NoServerVerification {
     }
 
     fn supported_verify_schemes(&self) -> Vec<rustls::SignatureScheme> {
-        vec![
-            rustls::SignatureScheme::RSA_PKCS1_SHA256,
-            rustls::SignatureScheme::RSA_PKCS1_SHA384,
-            rustls::SignatureScheme::RSA_PKCS1_SHA512,
-            rustls::SignatureScheme::ECDSA_NISTP256_SHA256,
-            rustls::SignatureScheme::ECDSA_NISTP384_SHA384,
-            rustls::SignatureScheme::ECDSA_NISTP521_SHA512,
-            rustls::SignatureScheme::RSA_PSS_SHA256,
-            rustls::SignatureScheme::RSA_PSS_SHA384,
-            rustls::SignatureScheme::RSA_PSS_SHA512,
-            rustls::SignatureScheme::ED25519,
-        ]
+        self.provider
+            .signature_verification_algorithms
+            .supported_schemes()
     }
 }
 
 /// Load certificates from a PEM file
 fn load_certs(path: &std::path::Path) -> Result<Vec<CertificateDer<'static>>> {
-    let file = File::open(path).map_err(|e| {
-        StreamlineError::Config(format!(
-            "Failed to open inter-broker certificate file {}: {}",
-            path.display(),
-            e
-        ))
-    })?;
-
-    let mut reader = BufReader::new(file);
-    let certs = rustls_pemfile::certs(&mut reader)
+    // `pem_file_iter` reports failures to *open* the file from the call itself,
+    // and failures to *parse* from the returned iterator.
+    let certs = CertificateDer::pem_file_iter(path)
+        .map_err(|e| {
+            StreamlineError::Config(format!(
+                "Failed to open inter-broker certificate file {}: {}",
+                path.display(),
+                e
+            ))
+        })?
         .collect::<std::result::Result<Vec<_>, _>>()
         .map_err(|e| {
             StreamlineError::Config(format!(
@@ -393,30 +425,25 @@ fn load_certs(path: &std::path::Path) -> Result<Vec<CertificateDer<'static>>> {
 }
 
 /// Load private key from a PEM file
+///
+/// Accepts PKCS#8, PKCS#1 (RSA) and SEC1 (EC) private keys, taking the first
+/// key section found in the file.
 fn load_private_key(path: &std::path::Path) -> Result<PrivateKeyDer<'static>> {
-    let file = File::open(path).map_err(|e| {
-        StreamlineError::Config(format!(
+    PrivateKeyDer::from_pem_file(path).map_err(|e| match e {
+        PemError::Io(io_err) => StreamlineError::Config(format!(
             "Failed to open inter-broker private key file {}: {}",
             path.display(),
-            e
-        ))
-    })?;
-
-    let mut reader = BufReader::new(file);
-
-    let key = rustls_pemfile::private_key(&mut reader)
-        .map_err(|e| {
-            StreamlineError::Config(format!(
-                "Failed to parse inter-broker private key from {}: {}",
-                path.display(),
-                e
-            ))
-        })?
-        .ok_or_else(|| {
+            io_err
+        )),
+        PemError::NoItemsFound => {
             StreamlineError::Config(format!("No private key found in {}", path.display()))
-        })?;
-
-    Ok(key)
+        }
+        other => StreamlineError::Config(format!(
+            "Failed to parse inter-broker private key from {}: {}",
+            path.display(),
+            other
+        )),
+    })
 }
 
 #[cfg(test)]

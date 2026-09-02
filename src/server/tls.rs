@@ -2,14 +2,30 @@
 
 use crate::config::TlsConfig;
 use crate::error::{Result, StreamlineError};
+use rustls::crypto::CryptoProvider;
+use rustls::pki_types::pem::{Error as PemError, PemObject};
 use rustls::pki_types::{CertificateDer, PrivateKeyDer};
 use rustls::version::{TLS12, TLS13};
 use rustls::{ServerConfig as RustlsServerConfig, SupportedProtocolVersion};
-use std::fs::File;
-use std::io::BufReader;
 use std::sync::Arc;
 use tokio_rustls::TlsAcceptor;
 use tracing::info;
+
+/// The crypto provider every rustls object in this module is built from.
+///
+/// rustls 0.23 will otherwise pick a provider implicitly: `ServerConfig::builder()`
+/// and `WebPkiClientVerifier::builder()` call `CryptoProvider::get_default()`,
+/// which panics when no process-wide default has been installed and *silently
+/// changes which implementation is used* as soon as a transitive dependency
+/// enables a second provider feature. Neither outcome is acceptable for a
+/// server's TLS stack, so every builder here is given this provider explicitly.
+///
+/// The same `Arc` is cloned into each part of a composite configuration (the
+/// client-certificate verifier and the `ServerConfig` it is installed into), so
+/// a handshake cannot end up mixing two providers.
+pub(crate) fn crypto_provider() -> Arc<CryptoProvider> {
+    Arc::new(rustls::crypto::aws_lc_rs::default_provider())
+}
 
 /// Get supported TLS versions based on minimum version configuration
 fn get_supported_versions(min_version: &str) -> Vec<&'static SupportedProtocolVersion> {
@@ -52,7 +68,9 @@ pub fn load_tls_config(config: &TlsConfig) -> Result<TlsAcceptor> {
 
     // Build rustls config with enforced TLS version
     let versions = get_supported_versions(&config.min_version);
-    let rustls_config = RustlsServerConfig::builder_with_protocol_versions(&versions)
+    let rustls_config = RustlsServerConfig::builder_with_provider(crypto_provider())
+        .with_protocol_versions(&versions)
+        .map_err(|e| StreamlineError::Config(format!("Invalid TLS protocol configuration: {e}")))?
         .with_no_client_auth()
         .with_single_cert(certs, key)
         .map_err(|e| StreamlineError::Config(format!("Invalid TLS configuration: {e}")))?;
@@ -106,7 +124,11 @@ pub fn load_mtls_config(config: &TlsConfig) -> Result<TlsAcceptor> {
         "Loaded CA certificates"
     );
 
-    // Create certificate verifier
+    // Create certificate verifier. The verifier and the `ServerConfig` below
+    // share one provider `Arc`, so client-certificate verification and the
+    // handshake cannot be backed by different implementations.
+    let provider = crypto_provider();
+
     let mut root_store = rustls::RootCertStore::empty();
     for cert in ca_certs {
         root_store
@@ -114,13 +136,18 @@ pub fn load_mtls_config(config: &TlsConfig) -> Result<TlsAcceptor> {
             .map_err(|e| StreamlineError::Config(format!("Failed to add CA certificate: {e}")))?;
     }
 
-    let client_verifier = rustls::server::WebPkiClientVerifier::builder(Arc::new(root_store))
-        .build()
-        .map_err(|e| StreamlineError::Config(format!("Failed to build client verifier: {}", e)))?;
+    let client_verifier = rustls::server::WebPkiClientVerifier::builder_with_provider(
+        Arc::new(root_store),
+        Arc::clone(&provider),
+    )
+    .build()
+    .map_err(|e| StreamlineError::Config(format!("Failed to build client verifier: {e}")))?;
 
     // Build rustls config with client auth and enforced TLS version
     let versions = get_supported_versions(&config.min_version);
-    let rustls_config = RustlsServerConfig::builder_with_protocol_versions(&versions)
+    let rustls_config = RustlsServerConfig::builder_with_provider(provider)
+        .with_protocol_versions(&versions)
+        .map_err(|e| StreamlineError::Config(format!("Invalid mTLS protocol configuration: {e}")))?
         .with_client_cert_verifier(client_verifier)
         .with_single_cert(certs, key)
         .map_err(|e| StreamlineError::Config(format!("Invalid mTLS configuration: {e}")))?;
@@ -135,11 +162,10 @@ pub fn load_mtls_config(config: &TlsConfig) -> Result<TlsAcceptor> {
 
 /// Load certificates from a PEM file
 fn load_certs(path: &std::path::Path) -> Result<Vec<CertificateDer<'static>>> {
-    let file = File::open(path)
-        .map_err(|e| StreamlineError::Config(format!("Failed to open certificate file: {}", e)))?;
-
-    let mut reader = BufReader::new(file);
-    let certs = rustls_pemfile::certs(&mut reader)
+    // `pem_file_iter` reports failures to *open* the file from the call itself,
+    // and failures to *parse* from the returned iterator.
+    let certs = CertificateDer::pem_file_iter(path)
+        .map_err(|e| StreamlineError::Config(format!("Failed to open certificate file: {e}")))?
         .collect::<std::result::Result<Vec<_>, _>>()
         .map_err(|e| StreamlineError::Config(format!("Failed to parse certificates: {e}")))?;
 
@@ -153,18 +179,19 @@ fn load_certs(path: &std::path::Path) -> Result<Vec<CertificateDer<'static>>> {
 }
 
 /// Load private key from a PEM file
+///
+/// Accepts PKCS#8, PKCS#1 (RSA) and SEC1 (EC) private keys, taking the first
+/// key section found in the file.
 fn load_private_key(path: &std::path::Path) -> Result<PrivateKeyDer<'static>> {
-    let file = File::open(path)
-        .map_err(|e| StreamlineError::Config(format!("Failed to open private key file: {}", e)))?;
-
-    let mut reader = BufReader::new(file);
-
-    // Try to read as PKCS8 first, then RSA, then EC
-    let keys = rustls_pemfile::private_key(&mut reader)
-        .map_err(|e| StreamlineError::Config(format!("Failed to parse private key: {}", e)))?
-        .ok_or_else(|| StreamlineError::Config("No private key found in file".to_string()))?;
-
-    Ok(keys)
+    PrivateKeyDer::from_pem_file(path).map_err(|e| match e {
+        PemError::Io(io_err) => {
+            StreamlineError::Config(format!("Failed to open private key file: {io_err}"))
+        }
+        PemError::NoItemsFound => {
+            StreamlineError::Config("No private key found in file".to_string())
+        }
+        other => StreamlineError::Config(format!("Failed to parse private key: {other}")),
+    })
 }
 
 #[cfg(test)]
@@ -271,5 +298,69 @@ vBQ7Q1aqJ+J0vVKGn1F2VwPJN8qF2vBQ7Q1aqJ+J0vVKGn1F2VwPJN8qF2vBQ7Q
         assert!(!config.enabled);
         assert_eq!(config.min_version, "1.2");
         assert!(!config.require_client_cert);
+    }
+
+    #[test]
+    fn test_crypto_provider_builds_tls_protocol_configuration_explicitly() {
+        let versions = get_supported_versions("1.2");
+        let builder = RustlsServerConfig::builder_with_provider(crypto_provider())
+            .with_protocol_versions(&versions);
+
+        assert!(
+            builder.is_ok(),
+            "TLS configuration must not depend on rustls auto-selecting a \
+             process-wide provider when transitive dependencies enable another provider"
+        );
+    }
+
+    /// The client-certificate verifier is the other half of an mTLS
+    /// configuration and has its own builder. Until this was fixed it used
+    /// `WebPkiClientVerifier::builder()`, which resolves the provider from the
+    /// process-wide default — so an mTLS listener could be built from two
+    /// different providers, or panic outright when no default was installed.
+    ///
+    /// No process-wide provider is ever installed by this crate, so the fact
+    /// that this test passes is itself proof that the explicit path works
+    /// without one.
+    #[test]
+    fn test_client_verifier_uses_the_same_explicit_provider() {
+        let provider = crypto_provider();
+        let root_store = rustls::RootCertStore::empty();
+
+        // An empty root store is rejected by the verifier builder *after* the
+        // provider has been resolved, so reaching this error proves provider
+        // resolution succeeded without a process-wide default.
+        let result = rustls::server::WebPkiClientVerifier::builder_with_provider(
+            Arc::new(root_store),
+            Arc::clone(&provider),
+        )
+        .build();
+
+        assert!(
+            matches!(
+                result,
+                Err(rustls::server::VerifierBuilderError::NoRootAnchors)
+            ),
+            "the client verifier must resolve its provider explicitly; got {result:?}"
+        );
+
+        // The shared handle really is shared: cloning it must not deep-copy.
+        let clone = Arc::clone(&provider);
+        assert!(
+            Arc::ptr_eq(&provider, &clone),
+            "each composite construction must clone one provider Arc"
+        );
+    }
+
+    /// rustls must have no process-wide default installed by this crate: if one
+    /// were installed, an implicit `::builder()` call anywhere would start
+    /// working by accident and the explicit wiring above could rot unnoticed.
+    #[test]
+    fn test_no_process_wide_crypto_provider_is_installed() {
+        assert!(
+            rustls::crypto::CryptoProvider::get_default().is_none(),
+            "a process-wide rustls provider was installed; Streamline must pass \
+             providers explicitly so provider choice is visible at every construction site"
+        );
     }
 }

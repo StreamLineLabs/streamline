@@ -88,7 +88,10 @@ pub mod streamql_api;
 pub mod tenant_api;
 #[cfg(feature = "cloud-storage")]
 pub mod tiering_api;
-mod tls;
+// Crate-internal: `cluster::tls` and `transport::{quic,webtransport}` share this
+// module's explicit rustls crypto provider so every rustls object in the process
+// is built from the same one.
+pub(crate) mod tls;
 pub mod wasm_api;
 pub mod wasm_stream_api;
 pub mod websocket;
@@ -1059,48 +1062,45 @@ impl Server {
         // Startup banner uses println! intentionally — ASCII art goes to stdout, not structured logs.
         #[allow(clippy::print_stdout)]
         {
-        println!();
-        println!("  ╔═══════════════════════════════════════════════════════╗");
-        println!("  ║                                                       ║");
-        println!("  ║   ███████╗████████╗██████╗ ███████╗ █████╗ ███╗   ███╗║");
-        println!("  ║   ██╔════╝╚══██╔══╝██╔══██╗██╔════╝██╔══██╗████╗ ████║║");
-        println!("  ║   ███████╗   ██║   ██████╔╝█████╗  ███████║██╔████╔██║║");
-        println!("  ║   ╚════██║   ██║   ██╔══██╗██╔══╝  ██╔══██║██║╚██╔╝██║║");
-        println!("  ║   ███████║   ██║   ██║  ██║███████╗██║  ██║██║ ╚═╝ ██║║");
-        println!("  ║   ╚══════╝   ╚═╝   ╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝╚═╝     ╚═╝║");
-        println!("  ║                                                       ║");
-        println!(
-            "  ║           The Redis of Streaming - v{}            ║",
-            version
-        );
-        println!("  ║                                                       ║");
-        println!("  ╚═══════════════════════════════════════════════════════╝");
-        println!();
+            println!();
+            println!("  ╔═══════════════════════════════════════════════════════╗");
+            println!("  ║                                                       ║");
+            println!("  ║   ███████╗████████╗██████╗ ███████╗ █████╗ ███╗   ███╗║");
+            println!("  ║   ██╔════╝╚══██╔══╝██╔══██╗██╔════╝██╔══██╗████╗ ████║║");
+            println!("  ║   ███████╗   ██║   ██████╔╝█████╗  ███████║██╔████╔██║║");
+            println!("  ║   ╚════██║   ██║   ██╔══██╗██╔══╝  ██╔══██║██║╚██╔╝██║║");
+            println!("  ║   ███████║   ██║   ██║  ██║███████╗██║  ██║██║ ╚═╝ ██║║");
+            println!("  ║   ╚══════╝   ╚═╝   ╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝╚═╝     ╚═╝║");
+            println!("  ║                                                       ║");
+            println!("  ║           The Redis of Streaming - v{version}            ║");
+            println!("  ║                                                       ║");
+            println!("  ╚═══════════════════════════════════════════════════════╝");
+            println!();
 
-        let protocol = if self.config.tls.enabled {
-            if self.config.tls.require_client_cert {
-                "TLS/mTLS"
+            let protocol = if self.config.tls.enabled {
+                if self.config.tls.require_client_cert {
+                    "TLS/mTLS"
+                } else {
+                    "TLS"
+                }
             } else {
-                "TLS"
-            }
-        } else {
-            "TCP"
-        };
+                "TCP"
+            };
 
-        println!(
-            "  Kafka protocol: {} ({})",
-            self.config.listen_addr, protocol
-        );
-        println!("  HTTP API:       {}", self.config.http_addr);
-        println!("  Data directory: {}", self.config.data_dir.display());
-        println!("  WAL:            {}", wal_status);
-
-        if self.config.tls.enabled {
             println!(
-                "  TLS version:    {} or higher",
-                self.config.tls.min_version
+                "  Kafka protocol: {} ({})",
+                self.config.listen_addr, protocol
             );
-        }
+            println!("  HTTP API:       {}", self.config.http_addr);
+            println!("  Data directory: {}", self.config.data_dir.display());
+            println!("  WAL:            {wal_status}");
+
+            if self.config.tls.enabled {
+                println!(
+                    "  TLS version:    {} or higher",
+                    self.config.tls.min_version
+                );
+            }
 
             // Show cluster info if in cluster mode
             #[cfg(feature = "clustering")]

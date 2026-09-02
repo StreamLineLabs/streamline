@@ -4,8 +4,6 @@
 //! and per-connection statistics. This module handles the management plane;
 //! the actual QUIC protocol handling is delegated to a separate layer.
 
-#![cfg(feature = "quic")]
-
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
