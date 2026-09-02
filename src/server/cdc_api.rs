@@ -81,7 +81,7 @@ fn default_output_format() -> String {
 }
 
 /// Runtime statistics for a CDC connector.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ConnectorStats {
     pub events_captured: u64,
     pub events_published: u64,
@@ -242,10 +242,7 @@ pub fn create_cdc_router_with_state(state: CdcApiState) -> Router {
             get(get_connector).delete(delete_connector),
         )
         // Connector lifecycle
-        .route(
-            "/api/v1/cdc/connectors/:name/start",
-            post(start_connector),
-        )
+        .route("/api/v1/cdc/connectors/:name/start", post(start_connector))
         .route("/api/v1/cdc/connectors/:name/stop", post(stop_connector))
         .route(
             "/api/v1/cdc/connectors/:name/restart",
@@ -279,7 +276,7 @@ fn not_found(name: &str) -> (StatusCode, Json<ErrorResponse>) {
     (
         StatusCode::NOT_FOUND,
         Json(ErrorResponse {
-            error: format!("Connector '{}' not found", name),
+            error: format!("Connector '{name}' not found"),
         }),
     )
 }
@@ -472,7 +469,7 @@ async fn retry_dlq_entry(
         (
             StatusCode::NOT_FOUND,
             Json(ErrorResponse {
-                error: format!("DLQ entry '{}' not found", id),
+                error: format!("DLQ entry '{id}' not found"),
             }),
         )
     })?;
@@ -499,7 +496,7 @@ async fn skip_dlq_entry(
         (
             StatusCode::NOT_FOUND,
             Json(ErrorResponse {
-                error: format!("DLQ entry '{}' not found", id),
+                error: format!("DLQ entry '{id}' not found"),
             }),
         )
     })?;
@@ -508,7 +505,7 @@ async fn skip_dlq_entry(
     tracing::info!(dlq_id = %id, "DLQ entry skipped/discarded");
 
     Ok(Json(MessageResponse {
-        message: format!("DLQ entry '{}' skipped", id),
+        message: format!("DLQ entry '{id}' skipped"),
     }))
 }
 
@@ -839,11 +836,7 @@ mod tests {
     #[tokio::test]
     async fn test_list_dlq_empty() {
         let resp = app()
-            .oneshot(
-                Request::get("/api/v1/cdc/dlq")
-                    .body(Body::empty())
-                    .unwrap(),
-            )
+            .oneshot(Request::get("/api/v1/cdc/dlq").body(Body::empty()).unwrap())
             .await
             .unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
@@ -865,7 +858,7 @@ mod tests {
         });
         let resp = app_with_state(state)
             .oneshot(
-                Request::post(format!("/api/v1/cdc/dlq/{}/retry", dlq_id))
+                Request::post(format!("/api/v1/cdc/dlq/{dlq_id}/retry"))
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -903,7 +896,7 @@ mod tests {
         });
         let resp = app_with_state(state.clone())
             .oneshot(
-                Request::post(format!("/api/v1/cdc/dlq/{}/skip", dlq_id))
+                Request::post(format!("/api/v1/cdc/dlq/{dlq_id}/skip"))
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -1035,11 +1028,7 @@ mod tests {
             });
         }
         let resp = app_with_state(state)
-            .oneshot(
-                Request::get("/api/v1/cdc/dlq")
-                    .body(Body::empty())
-                    .unwrap(),
-            )
+            .oneshot(Request::get("/api/v1/cdc/dlq").body(Body::empty()).unwrap())
             .await
             .unwrap();
         assert_eq!(resp.status(), StatusCode::OK);

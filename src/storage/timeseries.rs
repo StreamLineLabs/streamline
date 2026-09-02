@@ -17,7 +17,6 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
-use std::time::{SystemTime, UNIX_EPOCH};
 use tracing::{debug, info};
 
 // ---------------------------------------------------------------------------
@@ -251,7 +250,11 @@ pub struct DataPoint {
 // Helpers
 // ---------------------------------------------------------------------------
 
+/// Only the tests below stamp synthetic points; ingestion timestamps come from
+/// the caller.
+#[cfg(test)]
 fn now_millis() -> u64 {
+    use std::time::{SystemTime, UNIX_EPOCH};
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
@@ -318,16 +321,9 @@ impl TimeSeriesEngine {
 
     /// Retrieve configuration for a registered series topic.
     pub fn get_series(&self, topic: &str) -> Result<TimeSeriesConfig> {
-        self.series
-            .read()
-            .get(topic)
-            .cloned()
-            .ok_or_else(|| {
-                StreamlineError::storage(
-                    "get_series",
-                    format!("series not found: {topic}"),
-                )
-            })
+        self.series.read().get(topic).cloned().ok_or_else(|| {
+            StreamlineError::storage("get_series", format!("series not found: {topic}"))
+        })
     }
 
     /// List all registered series configurations.
@@ -436,7 +432,7 @@ impl TimeSeriesEngine {
                 query
                     .filters
                     .iter()
-                    .all(|(k, v)| p.tags.get(k).map_or(false, |tv| tv == v))
+                    .all(|(k, v)| p.tags.get(k).is_some_and(|tv| tv == v))
             })
             .collect();
 
@@ -526,7 +522,7 @@ impl TimeSeriesEngine {
                     continue;
                 }
                 for agg in aggregations {
-                    let key = format!("{}_{:?}", field, agg).to_lowercase();
+                    let key = format!("{field}_{agg:?}").to_lowercase();
                     values.insert(key, apply_aggregation(agg, &field_vals));
                 }
             }
@@ -781,9 +777,7 @@ mod tests {
         let engine = TimeSeriesEngine::new();
         engine.register_series(make_config("r")).unwrap();
         for ts in [100, 200, 300, 400, 500] {
-            engine
-                .ingest_point("r", make_point(ts, "v", 1.0))
-                .unwrap();
+            engine.ingest_point("r", make_point(ts, "v", 1.0)).unwrap();
         }
         let result = engine
             .query(&TimeSeriesQuery {
@@ -897,7 +891,11 @@ mod tests {
             .unwrap();
 
         assert_eq!(result.points.len(), 2);
-        let bucket0 = result.points.iter().find(|p| p.timestamp == 10_000).unwrap();
+        let bucket0 = result
+            .points
+            .iter()
+            .find(|p| p.timestamp == 10_000)
+            .unwrap();
         assert!((bucket0.values["temperature_avg"] - 25.0).abs() < f64::EPSILON);
         assert!((bucket0.values["temperature_max"] - 30.0).abs() < f64::EPSILON);
     }
@@ -906,7 +904,9 @@ mod tests {
 
     #[test]
     fn test_aggregation_avg() {
-        assert!((apply_aggregation(&Aggregation::Avg, &[2.0, 4.0, 6.0]) - 4.0).abs() < f64::EPSILON);
+        assert!(
+            (apply_aggregation(&Aggregation::Avg, &[2.0, 4.0, 6.0]) - 4.0).abs() < f64::EPSILON
+        );
     }
 
     #[test]

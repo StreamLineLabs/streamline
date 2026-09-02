@@ -269,13 +269,12 @@ fn check_server_connectivity(addr: &str) -> DiagnosticResult {
             .unwrap_or_else(|_| std::net::SocketAddr::from(([127, 0, 0, 1], 9092))),
         Duration::from_secs(2),
     ) {
-        Ok(_) => DiagnosticResult::pass(
-            "Server connectivity",
-            format!("Server reachable at {}", addr),
-        ),
+        Ok(_) => {
+            DiagnosticResult::pass("Server connectivity", format!("Server reachable at {addr}"))
+        }
         Err(e) => DiagnosticResult::fail(
             "Server connectivity",
-            format!("Cannot connect to {}: {}", addr, e),
+            format!("Cannot connect to {addr}: {e}"),
             "Start the server with: streamline --playground".to_string(),
         ),
     }
@@ -289,10 +288,10 @@ fn check_http_api(addr: &str) -> DiagnosticResult {
             .unwrap_or_else(|_| std::net::SocketAddr::from(([127, 0, 0, 1], 9094))),
         Duration::from_secs(2),
     ) {
-        Ok(_) => DiagnosticResult::pass("HTTP API", format!("HTTP API reachable at {}", addr)),
+        Ok(_) => DiagnosticResult::pass("HTTP API", format!("HTTP API reachable at {addr}")),
         Err(_) => DiagnosticResult::warn(
             "HTTP API",
-            format!("HTTP API not reachable at {}", addr),
+            format!("HTTP API not reachable at {addr}"),
             "HTTP API is optional. Check --http-addr if you need it.",
         ),
     }
@@ -320,7 +319,7 @@ fn check_data_directory(data_dir: &Path) -> DiagnosticResult {
         }
         Err(e) => DiagnosticResult::fail(
             "Data directory",
-            format!("Cannot write to data directory: {}", e),
+            format!("Cannot write to data directory: {e}"),
             format!("Check permissions: chmod 755 {}", data_dir.display()),
         ),
     }
@@ -343,7 +342,7 @@ fn check_storage_health(data_dir: &Path) -> Vec<DiagnosticResult> {
         Err(e) => {
             results.push(DiagnosticResult::fail(
                 "Storage health",
-                format!("Failed to initialize storage: {}", e),
+                format!("Failed to initialize storage: {e}"),
                 "Check data directory permissions and disk space",
             ));
             return results;
@@ -355,7 +354,7 @@ fn check_storage_health(data_dir: &Path) -> Vec<DiagnosticResult> {
         Err(e) => {
             results.push(DiagnosticResult::fail(
                 "Storage health",
-                format!("Failed to list topics: {}", e),
+                format!("Failed to list topics: {e}"),
                 "The storage may be corrupted. Check the data directory.",
             ));
             return results;
@@ -439,14 +438,14 @@ fn check_consumer_groups(data_dir: &Path) -> Vec<DiagnosticResult> {
     } else {
         for (group_id, topic, partition, lag) in high_lag_groups {
             results.push(DiagnosticResult::warn(
-                format!("Consumer lag: {}", group_id),
+                format!("Consumer lag: {group_id}"),
                 format!(
                     "High lag ({}) on {}[{}]",
                     lag.to_string().yellow(),
                     topic,
                     partition
                 ),
-                format!("streamline-cli groups describe {}", group_id),
+                format!("streamline-cli groups describe {group_id}"),
             ));
         }
     }
@@ -494,8 +493,7 @@ fn check_disk_space(data_dir: &Path) -> DiagnosticResult {
                 DiagnosticResult::fail(
                     "Disk space",
                     format!(
-                        "{:.1}GB available of {:.1}GB ({}% used)",
-                        available_gb, total_gb, usage_percent
+                        "{available_gb:.1}GB available of {total_gb:.1}GB ({usage_percent}% used)"
                     ),
                     "Free up disk space or use a different --data-dir",
                 )
@@ -503,8 +501,7 @@ fn check_disk_space(data_dir: &Path) -> DiagnosticResult {
                 DiagnosticResult::warn(
                     "Disk space",
                     format!(
-                        "{:.1}GB available of {:.1}GB ({}% used)",
-                        available_gb, total_gb, usage_percent
+                        "{available_gb:.1}GB available of {total_gb:.1}GB ({usage_percent}% used)"
                     ),
                     "Consider freeing up disk space or enabling retention policies",
                 )
@@ -512,8 +509,7 @@ fn check_disk_space(data_dir: &Path) -> DiagnosticResult {
                 DiagnosticResult::pass(
                     "Disk space",
                     format!(
-                        "{:.1}GB available of {:.1}GB ({}% used)",
-                        available_gb, total_gb, usage_percent
+                        "{available_gb:.1}GB available of {total_gb:.1}GB ({usage_percent}% used)"
                     ),
                 )
             }
@@ -642,7 +638,7 @@ fn check_segment_integrity(data_dir: &Path) -> Vec<DiagnosticResult> {
     } else if corrupted_segments.is_empty() {
         results.push(DiagnosticResult::pass(
             "Segment integrity",
-            format!("All {} segment files have valid headers", total_segments),
+            format!("All {total_segments} segment files have valid headers"),
         ));
     } else {
         results.push(DiagnosticResult::fail(
@@ -736,10 +732,7 @@ fn check_index_consistency(data_dir: &Path) -> Vec<DiagnosticResult> {
     } else if orphan_indexes.is_empty() {
         results.push(DiagnosticResult::pass(
             "Index consistency",
-            format!(
-                "All {} index files have corresponding segments",
-                total_indexes
-            ),
+            format!("All {total_indexes} index files have corresponding segments"),
         ));
     } else {
         results.push(DiagnosticResult::warn(
@@ -826,19 +819,19 @@ fn check_file_descriptors() -> DiagnosticResult {
             if usage_percent > 80 {
                 DiagnosticResult::fail(
                     "File descriptors",
-                    format!("{} of {} used ({}%)", fd_count, soft_limit, usage_percent),
-                    format!("Increase limit with: ulimit -n {}", hard_limit),
+                    format!("{fd_count} of {soft_limit} used ({usage_percent}%)"),
+                    format!("Increase limit with: ulimit -n {hard_limit}"),
                 )
             } else if usage_percent > 50 {
                 DiagnosticResult::warn(
                     "File descriptors",
-                    format!("{} of {} used ({}%)", fd_count, soft_limit, usage_percent),
+                    format!("{fd_count} of {soft_limit} used ({usage_percent}%)"),
                     "Consider increasing ulimit if handling many connections",
                 )
             } else {
                 DiagnosticResult::pass(
                     "File descriptors",
-                    format!("{} of {} used ({}%)", fd_count, soft_limit, usage_percent),
+                    format!("{fd_count} of {soft_limit} used ({usage_percent}%)"),
                 )
             }
         } else {
@@ -879,7 +872,7 @@ fn check_network_latency(addr: &str) -> DiagnosticResult {
     if latencies.is_empty() {
         return DiagnosticResult::fail(
             "Network latency",
-            format!("Cannot connect to {}", addr),
+            format!("Cannot connect to {addr}"),
             "Check that the server is running and accessible",
         );
     }
@@ -955,7 +948,7 @@ fn check_system_resources() -> DiagnosticResult {
 
     DiagnosticResult::pass(
         "System resources",
-        format!("{} CPU cores available", cpu_count),
+        format!("{cpu_count} CPU cores available"),
     )
 }
 
@@ -1045,7 +1038,7 @@ fn check_log_files(data_dir: &Path) -> Vec<DiagnosticResult> {
                 } else {
                     results.push(DiagnosticResult::pass(
                         "Log analysis",
-                        format!("{} log files, {:.1} MB total", file_count, size_mb),
+                        format!("{file_count} log files, {size_mb:.1} MB total"),
                     ));
                 }
                 return results;
@@ -1120,19 +1113,13 @@ fn check_compaction_status(data_dir: &Path) -> Vec<DiagnosticResult> {
     } else if old_segments > total_segments / 2 {
         results.push(DiagnosticResult::warn(
             "Compaction status",
-            format!(
-                "{} of {} segments are older than 7 days",
-                old_segments, total_segments
-            ),
+            format!("{old_segments} of {total_segments} segments are older than 7 days"),
             "Consider configuring retention policies or running compaction",
         ));
     } else {
         results.push(DiagnosticResult::pass(
             "Compaction status",
-            format!(
-                "{} total segments, {} older than 7 days",
-                total_segments, old_segments
-            ),
+            format!("{total_segments} total segments, {old_segments} older than 7 days"),
         ));
     }
 

@@ -55,8 +55,14 @@ mod tests {
     #[test]
     fn cross_tenant_access_denied() {
         let ctx = TenantContext::new("acme");
-        assert!(!validate_tenant_access(&ctx, "__mem.globex.agent1.episodic"));
-        assert!(!validate_tenant_access(&ctx, "__mem.initech.agent2.semantic"));
+        assert!(!validate_tenant_access(
+            &ctx,
+            "__mem.globex.agent1.episodic"
+        ));
+        assert!(!validate_tenant_access(
+            &ctx,
+            "__mem.initech.agent2.semantic"
+        ));
     }
 
     #[test]
@@ -71,7 +77,10 @@ mod tests {
     fn tenant_id_substring_not_confused() {
         let ctx = TenantContext::new("acme");
         // "acme-corp" is a different tenant
-        assert!(!validate_tenant_access(&ctx, "__mem.acme-corp.agent.episodic"));
+        assert!(!validate_tenant_access(
+            &ctx,
+            "__mem.acme-corp.agent.episodic"
+        ));
     }
 
     #[test]

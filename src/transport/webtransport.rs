@@ -116,7 +116,7 @@ impl WebTransportServer {
         let server_config = Self::build_server_config(&config)?;
 
         let endpoint = Endpoint::server(server_config, config.bind_addr).map_err(|e| {
-            StreamlineError::Config(format!("Failed to create WebTransport endpoint: {}", e))
+            StreamlineError::Config(format!("Failed to create WebTransport endpoint: {e}"))
         })?;
 
         info!("WebTransport server listening on {}", config.bind_addr);
@@ -165,8 +165,8 @@ impl WebTransportServer {
                 let cert_der = vec![cert.der().clone()];
                 let key_der = rustls::pki_types::PrivatePkcs8KeyDer::from(key_pair.serialize_der());
 
-                (cert_der, rustls::pki_types::PrivateKeyDer::Pkcs8(key_der))
-            };
+            (cert_der, rustls::pki_types::PrivateKeyDer::Pkcs8(key_der))
+        };
 
         // Build rustls config with H3 ALPN
         let alpn: Vec<Vec<u8>> = config
@@ -184,7 +184,7 @@ impl WebTransportServer {
 
         let mut server_config = ServerConfig::with_crypto(Arc::new(
             quinn::crypto::rustls::QuicServerConfig::try_from(rustls_config).map_err(|e| {
-                StreamlineError::Config(format!("Failed to create QUIC crypto config: {}", e))
+                StreamlineError::Config(format!("Failed to create QUIC crypto config: {e}"))
             })?,
         ));
 
@@ -195,9 +195,7 @@ impl WebTransportServer {
         transport.max_idle_timeout(Some(
             Duration::from_millis(config.session_idle_timeout_ms)
                 .try_into()
-                .map_err(|e| {
-                    StreamlineError::Config(format!("Invalid idle timeout value: {}", e))
-                })?,
+                .map_err(|e| StreamlineError::Config(format!("Invalid idle timeout value: {e}")))?,
         ));
 
         if config.enable_datagrams {
@@ -223,7 +221,7 @@ impl WebTransportServer {
 
         let connection = incoming.await.map_err(|e| {
             self.metrics.write().errors += 1;
-            StreamlineError::protocol_msg(format!("WebTransport connection failed: {}", e))
+            StreamlineError::protocol_msg(format!("WebTransport connection failed: {e}"))
         })?;
 
         // Perform WebTransport handshake
@@ -259,7 +257,7 @@ impl WebTransportServer {
     async fn perform_handshake(&self, connection: Connection) -> Result<WebTransportSession> {
         // Accept the connect stream (first bidirectional stream)
         let (mut send, mut recv) = connection.accept_bi().await.map_err(|e| {
-            StreamlineError::protocol_msg(format!("Failed to accept handshake stream: {}", e))
+            StreamlineError::protocol_msg(format!("Failed to accept handshake stream: {e}"))
         })?;
 
         // Read CONNECT request (simplified - in production would parse full HTTP/3 frames)
@@ -267,7 +265,7 @@ impl WebTransportServer {
         let n = recv
             .read(&mut buf)
             .await
-            .map_err(|e| StreamlineError::protocol_msg(format!("Failed to read handshake: {}", e)))?
+            .map_err(|e| StreamlineError::protocol_msg(format!("Failed to read handshake: {e}")))?
             .unwrap_or(0);
 
         let request = String::from_utf8_lossy(&buf[..n]);
@@ -279,15 +277,14 @@ impl WebTransportServer {
         // Validate origin
         if !self.validate_origin(&origin) {
             return Err(StreamlineError::protocol_msg(format!(
-                "Origin '{}' not allowed",
-                origin
+                "Origin '{origin}' not allowed"
             )));
         }
 
         // Send 200 OK response (simplified HTTP/3 response)
         let response = b"HTTP/3 200 OK\r\n\r\n";
         send.write_all(response).await.map_err(|e| {
-            StreamlineError::protocol_msg(format!("Failed to send handshake response: {}", e))
+            StreamlineError::protocol_msg(format!("Failed to send handshake response: {e}"))
         })?;
 
         Ok(WebTransportSession {
@@ -407,23 +404,24 @@ impl WebTransportSession {
     pub async fn open_bi(&self) -> Result<WebTransportBiStream> {
         let (send, recv) =
             self.connection.open_bi().await.map_err(|e| {
-                StreamlineError::protocol_msg(format!("Failed to open stream: {}", e))
+                StreamlineError::protocol_msg(format!("Failed to open stream: {e}"))
             })?;
         Ok(WebTransportBiStream::new(send, recv))
     }
 
     /// Accept an incoming bidirectional stream
     pub async fn accept_bi(&self) -> Result<WebTransportBiStream> {
-        let (send, recv) = self.connection.accept_bi().await.map_err(|e| {
-            StreamlineError::protocol_msg(format!("Failed to accept stream: {}", e))
-        })?;
+        let (send, recv) =
+            self.connection.accept_bi().await.map_err(|e| {
+                StreamlineError::protocol_msg(format!("Failed to accept stream: {e}"))
+            })?;
         Ok(WebTransportBiStream::new(send, recv))
     }
 
     /// Open a unidirectional send stream
     pub async fn open_uni(&self) -> Result<WebTransportSendStream> {
         let send = self.connection.open_uni().await.map_err(|e| {
-            StreamlineError::protocol_msg(format!("Failed to open uni stream: {}", e))
+            StreamlineError::protocol_msg(format!("Failed to open uni stream: {e}"))
         })?;
         Ok(WebTransportSendStream::new(send))
     }
@@ -431,7 +429,7 @@ impl WebTransportSession {
     /// Accept an incoming unidirectional receive stream
     pub async fn accept_uni(&self) -> Result<WebTransportRecvStream> {
         let recv = self.connection.accept_uni().await.map_err(|e| {
-            StreamlineError::protocol_msg(format!("Failed to accept uni stream: {}", e))
+            StreamlineError::protocol_msg(format!("Failed to accept uni stream: {e}"))
         })?;
         Ok(WebTransportRecvStream::new(recv))
     }
@@ -440,14 +438,15 @@ impl WebTransportSession {
     pub fn send_datagram(&self, data: Bytes) -> Result<()> {
         self.connection
             .send_datagram(data)
-            .map_err(|e| StreamlineError::protocol_msg(format!("Failed to send datagram: {}", e)))
+            .map_err(|e| StreamlineError::protocol_msg(format!("Failed to send datagram: {e}")))
     }
 
     /// Receive a datagram (unreliable)
     pub async fn receive_datagram(&self) -> Result<Bytes> {
-        self.connection.read_datagram().await.map_err(|e| {
-            StreamlineError::protocol_msg(format!("Failed to receive datagram: {}", e))
-        })
+        self.connection
+            .read_datagram()
+            .await
+            .map_err(|e| StreamlineError::protocol_msg(format!("Failed to receive datagram: {e}")))
     }
 
     /// Get connection statistics
@@ -513,7 +512,7 @@ impl WebTransportBiStream {
         self.recv
             .read(buf)
             .await
-            .map_err(|e| StreamlineError::protocol_msg(format!("Read error: {}", e)))
+            .map_err(|e| StreamlineError::protocol_msg(format!("Read error: {e}")))
     }
 
     /// Write data to the stream
@@ -521,14 +520,14 @@ impl WebTransportBiStream {
         self.send
             .write_all(data)
             .await
-            .map_err(|e| StreamlineError::protocol_msg(format!("Write error: {}", e)))
+            .map_err(|e| StreamlineError::protocol_msg(format!("Write error: {e}")))
     }
 
     /// Finish the send side of the stream
     pub async fn finish(&mut self) -> Result<()> {
         self.send
             .finish()
-            .map_err(|e| StreamlineError::protocol_msg(format!("Finish error: {}", e)))
+            .map_err(|e| StreamlineError::protocol_msg(format!("Finish error: {e}")))
     }
 }
 
@@ -557,14 +556,14 @@ impl WebTransportSendStream {
         self.send
             .write_all(data)
             .await
-            .map_err(|e| StreamlineError::protocol_msg(format!("Write error: {}", e)))
+            .map_err(|e| StreamlineError::protocol_msg(format!("Write error: {e}")))
     }
 
     /// Finish the stream
     pub async fn finish(&mut self) -> Result<()> {
         self.send
             .finish()
-            .map_err(|e| StreamlineError::protocol_msg(format!("Finish error: {}", e)))
+            .map_err(|e| StreamlineError::protocol_msg(format!("Finish error: {e}")))
     }
 }
 
@@ -593,7 +592,7 @@ impl WebTransportRecvStream {
         self.recv
             .read(buf)
             .await
-            .map_err(|e| StreamlineError::protocol_msg(format!("Read error: {}", e)))
+            .map_err(|e| StreamlineError::protocol_msg(format!("Read error: {e}")))
     }
 
     /// Read to end
@@ -601,7 +600,7 @@ impl WebTransportRecvStream {
         self.recv
             .read_to_end(max_size)
             .await
-            .map_err(|e| StreamlineError::protocol_msg(format!("Read to end error: {}", e)))
+            .map_err(|e| StreamlineError::protocol_msg(format!("Read to end error: {e}")))
     }
 }
 
@@ -832,8 +831,7 @@ impl WebTransportMessage {
             Self::TYPE_PING => Ok(WebTransportMessage::Ping),
             Self::TYPE_PONG => Ok(WebTransportMessage::Pong),
             _ => Err(StreamlineError::protocol_msg(format!(
-                "Unknown message type: {}",
-                msg_type
+                "Unknown message type: {msg_type}"
             ))),
         }
     }
@@ -851,7 +849,7 @@ impl WebTransportMessage {
             ));
         }
         let s = String::from_utf8(buf[..len].to_vec())
-            .map_err(|e| StreamlineError::protocol_msg(format!("Invalid UTF-8: {}", e)))?;
+            .map_err(|e| StreamlineError::protocol_msg(format!("Invalid UTF-8: {e}")))?;
         buf.advance(len);
         Ok(s)
     }

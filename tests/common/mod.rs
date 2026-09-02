@@ -69,7 +69,7 @@ pub fn wait_for_port(port: u16, timeout: Duration) -> bool {
     use std::net::TcpStream;
 
     let start = std::time::Instant::now();
-    let addr = format!("127.0.0.1:{}", port);
+    let addr = format!("127.0.0.1:{port}");
 
     while start.elapsed() < timeout {
         if TcpStream::connect(&addr).is_ok() {
@@ -118,9 +118,9 @@ impl TestServer {
 
         let mut cmd = Command::new(env!("CARGO_BIN_EXE_streamline"));
         cmd.arg("--listen-addr")
-            .arg(format!("127.0.0.1:{}", kafka_port))
+            .arg(format!("127.0.0.1:{kafka_port}"))
             .arg("--http-addr")
-            .arg(format!("127.0.0.1:{}", http_port))
+            .arg(format!("127.0.0.1:{http_port}"))
             .arg("--data-dir")
             .arg(data_dir.path().to_str().unwrap())
             .arg("--log-level")
@@ -158,7 +158,7 @@ impl TestServer {
             http_port,
             metrics_port: None,
             _data_dir: data_dir,
-            bootstrap: format!("127.0.0.1:{}", kafka_port),
+            bootstrap: format!("127.0.0.1:{kafka_port}"),
         }
     }
 
@@ -246,7 +246,7 @@ impl TestServerStub {
     pub fn new(port: u16) -> Self {
         TestServerStub {
             port,
-            bootstrap: format!("127.0.0.1:{}", port),
+            bootstrap: format!("127.0.0.1:{port}"),
         }
     }
 
@@ -459,10 +459,10 @@ pub fn parse_api_versions_response(
     let mut buf = bytes::Bytes::copy_from_slice(response_body);
 
     let _header = ResponseHeader::decode(&mut buf, response_header_ver)
-        .map_err(|e| format!("Failed to decode response header: {}", e))?;
+        .map_err(|e| format!("Failed to decode response header: {e}"))?;
 
     ApiVersionsResponse::decode(&mut buf, api_version)
-        .map_err(|e| format!("Failed to decode ApiVersionsResponse: {}", e))
+        .map_err(|e| format!("Failed to decode ApiVersionsResponse: {e}"))
 }
 
 /// Parse a MetadataResponse from raw response bytes
@@ -474,10 +474,10 @@ pub fn parse_metadata_response(
     let mut buf = bytes::Bytes::copy_from_slice(response_body);
 
     let _header = ResponseHeader::decode(&mut buf, response_header_ver)
-        .map_err(|e| format!("Failed to decode response header: {}", e))?;
+        .map_err(|e| format!("Failed to decode response header: {e}"))?;
 
     MetadataResponse::decode(&mut buf, api_version)
-        .map_err(|e| format!("Failed to decode MetadataResponse: {}", e))
+        .map_err(|e| format!("Failed to decode MetadataResponse: {e}"))
 }
 
 // ============================================================================
@@ -584,11 +584,11 @@ pub mod records {
     use bytes::Bytes;
 
     pub fn test_key(n: usize) -> Bytes {
-        Bytes::from(format!("key-{}", n))
+        Bytes::from(format!("key-{n}"))
     }
 
     pub fn test_value(n: usize) -> Bytes {
-        Bytes::from(format!("value-{}", n))
+        Bytes::from(format!("value-{n}"))
     }
 
     pub fn large_value(size: usize) -> Bytes {

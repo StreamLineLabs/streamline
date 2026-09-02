@@ -27,7 +27,9 @@ impl JsonConverter {
 }
 
 impl Converter for JsonConverter {
-    fn name(&self) -> &str { "JsonConverter" }
+    fn name(&self) -> &str {
+        "JsonConverter"
+    }
 
     fn serialize(&self, _topic: &str, value: &Value) -> Result<Vec<u8>, String> {
         if self.schemas_enabled {
@@ -59,7 +61,9 @@ impl Converter for JsonConverter {
 pub struct StringConverter;
 
 impl Converter for StringConverter {
-    fn name(&self) -> &str { "StringConverter" }
+    fn name(&self) -> &str {
+        "StringConverter"
+    }
 
     fn serialize(&self, _topic: &str, value: &Value) -> Result<Vec<u8>, String> {
         match value {
@@ -78,7 +82,9 @@ impl Converter for StringConverter {
 pub struct ByteArrayConverter;
 
 impl Converter for ByteArrayConverter {
-    fn name(&self) -> &str { "ByteArrayConverter" }
+    fn name(&self) -> &str {
+        "ByteArrayConverter"
+    }
 
     fn serialize(&self, _topic: &str, value: &Value) -> Result<Vec<u8>, String> {
         match value {

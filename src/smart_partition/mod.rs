@@ -8,13 +8,11 @@ pub mod analyzer;
 pub mod rebalancer;
 
 pub use analyzer::{
-    PartitionMetrics, SkewAnalysis, SkewAnalyzer, SkewAnalyzerConfig,
-    SkewReport, SkewSeverity,
+    PartitionMetrics, SkewAnalysis, SkewAnalyzer, SkewAnalyzerConfig, SkewReport, SkewSeverity,
 };
 pub use rebalancer::{
-    BrokerState, ClusterState, DryRunResult, PartitionAssignment,
-    RebalanceConfig, RebalanceMode, RebalancePlan, SmartRebalancer,
-    ValidationError,
+    BrokerState, ClusterState, DryRunResult, PartitionAssignment, RebalanceConfig, RebalanceMode,
+    RebalancePlan, SmartRebalancer, ValidationError,
 };
 
 use serde::{Deserialize, Serialize};
@@ -215,7 +213,10 @@ mod tests {
 
         let analysis = mgr.run_analysis("t").unwrap();
         let actions = mgr.suggest_actions(&analysis);
-        assert!(actions.is_empty(), "balanced topic should produce no actions");
+        assert!(
+            actions.is_empty(),
+            "balanced topic should produce no actions"
+        );
     }
 
     #[test]

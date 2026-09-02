@@ -86,7 +86,7 @@ impl std::fmt::Display for QueryState {
         match self {
             Self::Running => write!(f, "RUNNING"),
             Self::Paused => write!(f, "PAUSED"),
-            Self::Failed(e) => write!(f, "FAILED: {}", e),
+            Self::Failed(e) => write!(f, "FAILED: {e}"),
             Self::Stopped => write!(f, "STOPPED"),
         }
     }
@@ -235,7 +235,7 @@ impl ContinuousQueryManager {
     ) -> Result<(), String> {
         let mut queries = self.queries.write().await;
         if queries.contains_key(name) {
-            return Err(format!("Query '{}' already exists", name));
+            return Err(format!("Query '{name}' already exists"));
         }
 
         let def = ContinuousQueryDef {
@@ -275,7 +275,7 @@ impl ContinuousQueryManager {
     ) -> Result<(), String> {
         let mut queries = self.queries.write().await;
         if queries.contains_key(name) {
-            return Err(format!("Alert '{}' already exists", name));
+            return Err(format!("Alert '{name}' already exists"));
         }
 
         let def = ContinuousQueryDef {
@@ -314,7 +314,7 @@ impl ContinuousQueryManager {
                 queries.remove(name);
                 Ok(())
             }
-            None => Err(format!("Query '{}' not found", name)),
+            None => Err(format!("Query '{name}' not found")),
         }
     }
 
@@ -327,8 +327,8 @@ impl ContinuousQueryManager {
                 info!(name = name, "Paused continuous query");
                 Ok(())
             }
-            Some(_) => Err(format!("Query '{}' is not running", name)),
-            None => Err(format!("Query '{}' not found", name)),
+            Some(_) => Err(format!("Query '{name}' is not running")),
+            None => Err(format!("Query '{name}' not found")),
         }
     }
 
@@ -341,8 +341,8 @@ impl ContinuousQueryManager {
                 info!(name = name, "Resumed continuous query");
                 Ok(())
             }
-            Some(_) => Err(format!("Query '{}' is not paused", name)),
-            None => Err(format!("Query '{}' not found", name)),
+            Some(_) => Err(format!("Query '{name}' is not paused")),
+            None => Err(format!("Query '{name}' not found")),
         }
     }
 
@@ -397,7 +397,7 @@ impl ContinuousQueryManager {
             // Periodic checkpoint (every 10,000 rows processed)
             if q.rows_processed % 10_000 == 0 && q.rows_processed > 0 {
                 let offsets = std::collections::HashMap::from([(
-                    format!("{}:processed", name),
+                    format!("{name}:processed"),
                     q.rows_processed as i64,
                 )]);
                 let state = format!("rows_emitted:{}", q.rows_emitted).into_bytes();
@@ -425,7 +425,9 @@ impl ContinuousQueryManager {
         messages_behind: u64,
     ) -> bool {
         self.record_processing(name, rows_in, rows_out).await;
-        self.backpressure.report_lag(name, lag_ms, messages_behind).await
+        self.backpressure
+            .report_lag(name, lag_ms, messages_behind)
+            .await
     }
 
     /// Check if a query is backpressured.
@@ -497,8 +499,10 @@ pub fn parse_create_stream_view(sql: &str) -> Result<(String, String, Vec<String
     let after_from = &select_sql[from_pos + 5..];
 
     let end_pos = {
-        let next_keyword = ["\nWHERE", "\nWINDOW", "\nGROUP", "\nHAVING", "\nORDER", "\nLIMIT",
-                            " WHERE ", " WINDOW ", " GROUP ", " HAVING ", " ORDER ", " LIMIT "];
+        let next_keyword = [
+            "\nWHERE", "\nWINDOW", "\nGROUP", "\nHAVING", "\nORDER", "\nLIMIT", " WHERE ",
+            " WINDOW ", " GROUP ", " HAVING ", " ORDER ", " LIMIT ",
+        ];
         next_keyword
             .iter()
             .filter_map(|kw| after_from.to_uppercase().find(&kw.to_uppercase()))
@@ -539,20 +543,21 @@ pub fn parse_create_alert(sql: &str) -> Result<(String, String, Vec<String>, Str
     let as_pos = alert_as_pos.ok_or("Expected AS keyword after alert name")?;
 
     let alert_name = after_ca[..as_pos].trim().to_string();
-    let rest = after_ca[as_pos..].trim_start()
-        .strip_prefix("AS").or_else(|| after_ca[as_pos..].trim_start().strip_prefix("as"))
-        .unwrap_or("").trim();
+    let rest = after_ca[as_pos..]
+        .trim_start()
+        .strip_prefix("AS")
+        .or_else(|| after_ca[as_pos..].trim_start().strip_prefix("as"))
+        .unwrap_or("")
+        .trim();
 
     // Extract NOTIFY clause
     let notify_endpoint = if let Some(notify_pos) = rest.to_uppercase().find("NOTIFY") {
         let after_notify = rest[notify_pos + 6..].trim();
-        let channel_end = after_notify
-            .find(|c: char| c == '\'' || c == '"')
-            .unwrap_or(0);
+        let channel_end = after_notify.find(['\'', '"']).unwrap_or(0);
         let after_channel = after_notify[channel_end..].trim();
-        let url_start = after_channel.find(|c: char| c == '\'' || c == '"').unwrap_or(0) + 1;
+        let url_start = after_channel.find(['\'', '"']).unwrap_or(0) + 1;
         let url_end = after_channel[url_start..]
-            .find(|c: char| c == '\'' || c == '"')
+            .find(['\'', '"'])
             .unwrap_or(after_channel.len() - url_start);
         after_channel[url_start..url_start + url_end].to_string()
     } else {
@@ -591,7 +596,7 @@ pub fn parse_create_alert(sql: &str) -> Result<(String, String, Vec<String>, Str
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::streamql::checkpoint::{BackpressureController, CheckpointConfig};
+    use crate::streamql::checkpoint::CheckpointConfig;
 
     #[test]
     fn test_parse_create_stream_view() {
@@ -671,9 +676,7 @@ mod tests {
         mgr.create_stream_view("v1", "SELECT 1", vec![], None)
             .await
             .unwrap();
-        let result = mgr
-            .create_stream_view("v1", "SELECT 2", vec![], None)
-            .await;
+        let result = mgr.create_stream_view("v1", "SELECT 2", vec![], None).await;
         assert!(result.is_err());
     }
 
@@ -708,14 +711,9 @@ mod tests {
     #[tokio::test]
     async fn test_record_processing_with_checkpoint() {
         let mgr = ContinuousQueryManager::new();
-        mgr.create_stream_view(
-            "test-view",
-            "SELECT * FROM t",
-            vec!["t".to_string()],
-            None,
-        )
-        .await
-        .unwrap();
+        mgr.create_stream_view("test-view", "SELECT * FROM t", vec!["t".to_string()], None)
+            .await
+            .unwrap();
 
         // Process 10,000 rows to trigger a checkpoint
         mgr.record_processing("test-view", 10_000, 5_000).await;
@@ -723,8 +721,14 @@ mod tests {
         // Allow the async checkpoint to complete
         tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
 
-        let checkpoint = mgr.checkpoint_manager().latest_checkpoint("test-view").await;
-        assert!(checkpoint.is_some(), "Should have created a checkpoint after 10K rows");
+        let checkpoint = mgr
+            .checkpoint_manager()
+            .latest_checkpoint("test-view")
+            .await;
+        assert!(
+            checkpoint.is_some(),
+            "Should have created a checkpoint after 10K rows"
+        );
     }
 
     #[tokio::test]

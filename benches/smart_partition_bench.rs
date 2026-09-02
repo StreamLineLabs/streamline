@@ -11,9 +11,9 @@ use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criteri
 use std::collections::HashMap;
 
 use streamline::{
-    analyze_key_distribution, analyze_throughput_skew, gini_coefficient,
-    predict_rebalance_benefit, BrokerState, PartitionAssignment, PartitionMetrics, RebalanceConfig,
-    RebalanceMode, SkewAnalyzer, SkewAnalyzerConfig, SmartRebalancer,
+    analyze_key_distribution, analyze_throughput_skew, gini_coefficient, predict_rebalance_benefit,
+    BrokerState, PartitionAssignment, PartitionMetrics, RebalanceConfig, RebalanceMode,
+    SkewAnalyzer, SkewAnalyzerConfig, SmartRebalancer,
 };
 
 // ── Data generators ─────────────────────────────────────────────────────
@@ -77,9 +77,7 @@ fn hot_partitions_throughputs(count: usize, base: f64, hot_count: usize) -> Vec<
 }
 
 fn progressive_degradation(count: usize, base: f64) -> Vec<f64> {
-    (0..count)
-        .map(|i| base * (1.0 + 0.1 * i as f64))
-        .collect()
+    (0..count).map(|i| base * (1.0 + 0.1 * i as f64)).collect()
 }
 
 fn zipfian_throughputs(count: usize, base: f64) -> Vec<f64> {
@@ -172,9 +170,7 @@ fn make_assignments(brokers: &[BrokerState]) -> Vec<PartitionAssignment> {
 }
 
 fn make_uniform_keys(count: usize) -> HashMap<String, u64> {
-    (0..count)
-        .map(|i| (format!("key-{:08}", i), 10))
-        .collect()
+    (0..count).map(|i| (format!("key-{i:08}"), 10)).collect()
 }
 
 fn make_zipfian_keys(count: usize) -> HashMap<String, u64> {
@@ -182,7 +178,7 @@ fn make_zipfian_keys(count: usize) -> HashMap<String, u64> {
     for i in 0..count {
         let rank = i + 1;
         let freq = (1_000_000.0 / (rank as f64).powf(1.0)) as u64;
-        map.insert(format!("key-{:08}", i), freq.max(1));
+        map.insert(format!("key-{i:08}"), freq.max(1));
     }
     map
 }
@@ -269,11 +265,9 @@ fn bench_analyze_key_distribution(c: &mut Criterion) {
     let keys_zipf_100k = make_zipfian_keys(100_000);
     let keys_seq_100k = make_sequential_keys(100_000);
 
-    group.bench_with_input(
-        BenchmarkId::new("uniform_1k", 1_000),
-        &keys_1k,
-        |b, k| b.iter(|| analyze_key_distribution(black_box(k))),
-    );
+    group.bench_with_input(BenchmarkId::new("uniform_1k", 1_000), &keys_1k, |b, k| {
+        b.iter(|| analyze_key_distribution(black_box(k)))
+    });
     group.bench_with_input(
         BenchmarkId::new("uniform_100k", 100_000),
         &keys_100k,
@@ -368,8 +362,7 @@ fn bench_plan_rebalance(c: &mut Criterion) {
     {
         let brokers = make_brokers(50, 40);
         let assignments = make_assignments(&brokers);
-        let metrics =
-            make_partition_metrics("large-rack", &top_one_pct_throughputs(2000, 100.0));
+        let metrics = make_partition_metrics("large-rack", &top_one_pct_throughputs(2000, 100.0));
         let analysis = analyze_throughput_skew(&metrics);
 
         group.bench_function(BenchmarkId::new("large_rack_aware", 2000), |b| {
@@ -436,8 +429,7 @@ fn bench_dry_run(c: &mut Criterion) {
     {
         let brokers = make_brokers(10, 30);
         let assignments = make_assignments(&brokers);
-        let metrics =
-            make_partition_metrics("dry-m", &hot_partitions_throughputs(300, 100.0, 3));
+        let metrics = make_partition_metrics("dry-m", &hot_partitions_throughputs(300, 100.0, 3));
         let analysis = analyze_throughput_skew(&metrics);
         let plan = rebalancer.plan_rebalance(&analysis, &assignments, &brokers);
 

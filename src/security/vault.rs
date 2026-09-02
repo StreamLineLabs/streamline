@@ -110,8 +110,9 @@ impl VaultKeyProvider {
         if let Some(ref ns) = config.namespace {
             headers.insert(
                 "X-Vault-Namespace",
-                reqwest::header::HeaderValue::from_str(ns)
-                    .map_err(|e| KmsError::Configuration(format!("invalid namespace header: {e}")))?,
+                reqwest::header::HeaderValue::from_str(ns).map_err(|e| {
+                    KmsError::Configuration(format!("invalid namespace header: {e}"))
+                })?,
             );
         }
 

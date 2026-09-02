@@ -389,8 +389,8 @@ mod tests {
             batch.add_record(Record::new(
                 i as i64,
                 timestamp,
-                Some(Bytes::from(format!("key-{}", i))),
-                Bytes::from(format!("value-{}", i)),
+                Some(Bytes::from(format!("key-{i}"))),
+                Bytes::from(format!("value-{i}")),
             ));
         }
         batch

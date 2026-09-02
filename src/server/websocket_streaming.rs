@@ -587,7 +587,7 @@ async fn handle_streaming_connection(
                     Err(e) => {
                         let err_msg = ServerMessage::Error {
                             code: "INVALID_COMMAND".to_string(),
-                            message: format!("Failed to parse command: {}", e),
+                            message: format!("Failed to parse command: {e}"),
                         };
                         let _ = cmd_message_tx.send(err_msg).await;
                     }
@@ -676,7 +676,7 @@ async fn handle_command(
                     .replace('.', r"\.")
                     .replace('*', ".*")
                     .replace('?', ".");
-                Regex::new(&format!("^{}$", regex_pattern)).ok()
+                Regex::new(&format!("^{regex_pattern}$")).ok()
             });
 
             for topic in &topics {
@@ -707,7 +707,7 @@ async fn handle_command(
                     Err(e) => {
                         let warn_msg = ServerMessage::Warning {
                             code: "TOPIC_NOT_FOUND".to_string(),
-                            message: format!("Topic '{}' not found: {}", topic, e),
+                            message: format!("Topic '{topic}' not found: {e}"),
                         };
                         let _ = message_tx.send(warn_msg).await;
                     }
@@ -774,7 +774,7 @@ async fn handle_command(
             // For now, just acknowledge (full seek implementation would update offset map)
             let msg = ServerMessage::Warning {
                 code: "SEEK_PENDING".to_string(),
-                message: format!("Seek for topic '{}' will be applied", topic),
+                message: format!("Seek for topic '{topic}' will be applied"),
             };
             let _ = message_tx.send(msg).await;
         }
@@ -892,12 +892,9 @@ async fn handle_command(
             let target_partition = partition.unwrap_or(0);
 
             let result = if headers.is_empty() {
-                state.topic_manager.append(
-                    &topic,
-                    target_partition,
-                    key_bytes,
-                    value_bytes,
-                )
+                state
+                    .topic_manager
+                    .append(&topic, target_partition, key_bytes, value_bytes)
             } else {
                 let record_headers: Vec<crate::storage::record::Header> = headers
                     .into_iter()
@@ -933,7 +930,7 @@ async fn handle_command(
                 Err(e) => {
                     let msg = ServerMessage::Error {
                         code: "PRODUCE_FAILED".to_string(),
-                        message: format!("Failed to produce to '{}': {}", topic, e),
+                        message: format!("Failed to produce to '{topic}': {e}"),
                     };
                     let _ = message_tx.send(msg).await;
                 }

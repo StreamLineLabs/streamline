@@ -396,7 +396,7 @@ pub fn display_telemetry_notice(installation_id: &str) {
     println!("View current report: streamline-cli telemetry show");
     println!("Disable anytime:     --telemetry-enabled=false");
     println!();
-    println!("Installation ID: {}", installation_id);
+    println!("Installation ID: {installation_id}");
     println!();
 }
 

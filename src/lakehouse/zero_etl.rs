@@ -330,10 +330,7 @@ impl ZeroEtlManager {
             binding.status = status;
             Ok(())
         } else {
-            Err(StreamlineError::Config(format!(
-                "Binding '{}' not found",
-                id
-            )))
+            Err(StreamlineError::Config(format!("Binding '{id}' not found")))
         }
     }
 
@@ -343,10 +340,7 @@ impl ZeroEtlManager {
         let mut watermarks = self.watermarks.write().await;
 
         if bindings.remove(id).is_none() {
-            return Err(StreamlineError::Config(format!(
-                "Binding '{}' not found",
-                id
-            )));
+            return Err(StreamlineError::Config(format!("Binding '{id}' not found")));
         }
 
         watermarks.remove(id);
@@ -368,14 +362,14 @@ impl ZeroEtlManager {
 
     /// Perform sync for a binding
     pub async fn sync(&self, binding_id: &str) -> Result<SyncResult> {
-        let binding = self.get_binding(binding_id).await.ok_or_else(|| {
-            StreamlineError::Config(format!("Binding '{}' not found", binding_id))
-        })?;
+        let binding = self
+            .get_binding(binding_id)
+            .await
+            .ok_or_else(|| StreamlineError::Config(format!("Binding '{binding_id}' not found")))?;
 
         if binding.status != BindingStatus::Active {
             return Err(StreamlineError::Config(format!(
-                "Binding '{}' is not active",
-                binding_id
+                "Binding '{binding_id}' is not active"
             )));
         }
 

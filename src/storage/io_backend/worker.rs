@@ -146,7 +146,9 @@ impl IoWorker {
                     }
                 });
             })
-            .map_err(|e| StreamlineError::Internal(format!("Failed to spawn I/O worker thread: {}", e)))?;
+            .map_err(|e| {
+                StreamlineError::Internal(format!("Failed to spawn I/O worker thread: {}", e))
+            })?;
 
         info!("I/O worker thread started");
 

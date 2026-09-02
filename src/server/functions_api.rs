@@ -217,10 +217,7 @@ pub fn create_functions_api_router(state: FunctionsApiState) -> Router {
         )
         .route("/api/v1/functions/:name/invoke", post(invoke_function))
         .route("/api/v1/functions/:name/logs", get(get_function_logs))
-        .route(
-            "/api/v1/functions/:name/metrics",
-            get(get_function_metrics),
-        )
+        .route("/api/v1/functions/:name/metrics", get(get_function_metrics))
         .route(
             "/api/v1/functions/:name/config",
             put(update_function_config),
@@ -346,7 +343,7 @@ async fn invoke_function(
     func.logs.push(FunctionLog {
         timestamp: now,
         level: "INFO".to_string(),
-        message: format!("Function invoked with payload: {:?}", payload),
+        message: format!("Function invoked with payload: {payload:?}"),
         invocation_id: invocation_id.clone(),
     });
 

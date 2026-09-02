@@ -28,7 +28,7 @@ pub fn get_or_create(topic: &str) -> Arc<InMemoryIndex> {
             return Arc::clone(idx);
         }
     }
-    let mut map = registry().write().expect("registry poisoned");
+    let mut map = registry().write().unwrap_or_else(|e| e.into_inner());
     Arc::clone(
         map.entry(topic.to_string())
             .or_insert_with(|| Arc::new(InMemoryIndex::new())),
@@ -44,7 +44,7 @@ pub fn get(topic: &str) -> Option<Arc<InMemoryIndex>> {
 /// existed. Used by the re-embed migration to replace an index built with
 /// a stale model.
 pub fn swap(topic: &str, new_index: Arc<InMemoryIndex>) -> Option<Arc<InMemoryIndex>> {
-    let mut map = registry().write().expect("registry poisoned");
+    let mut map = registry().write().unwrap_or_else(|e| e.into_inner());
     map.insert(topic.to_string(), new_index)
 }
 

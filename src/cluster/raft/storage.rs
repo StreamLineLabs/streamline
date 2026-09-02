@@ -411,7 +411,9 @@ pub struct FallbackSnapshotBuilder {
 /// This avoids a panic when `set_self_ref()` was not called.
 pub enum SnapshotBuilderEnum {
     Normal(SnapshotBuilderWrapper),
-    Fallback(FallbackSnapshotBuilder),
+    // Boxed: `FallbackSnapshotBuilder` carries a full cloned state-machine
+    // state, which is ~32x the size of the `Normal` variant.
+    Fallback(Box<FallbackSnapshotBuilder>),
 }
 
 impl RaftSnapshotBuilder<StreamlineTypeConfig> for SnapshotBuilderWrapper {
@@ -689,9 +691,9 @@ impl openraft::RaftStorage<StreamlineTypeConfig> for StreamlineStore {
                 );
                 // Build a fallback snapshot inline from the current state machine.
                 // This is less efficient but avoids a panic in production.
-                SnapshotBuilderEnum::Fallback(FallbackSnapshotBuilder {
+                SnapshotBuilderEnum::Fallback(Box::new(FallbackSnapshotBuilder {
                     state_machine: self.state_machine.read().await.clone(),
-                })
+                }))
             }
         }
     }

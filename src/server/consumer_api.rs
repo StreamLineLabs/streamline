@@ -220,7 +220,7 @@ pub struct HeatmapData {
     pub groups: Vec<String>,
     /// List of topic names (columns)
     pub topics: Vec<String>,
-    /// Cells indexed by [group_idx][topic_idx], None if no subscription
+    /// Cells indexed by `cells[group_idx][topic_idx]`; `None` means no subscription.
     pub cells: Vec<Vec<Option<HeatmapCell>>>,
 }
 
@@ -729,13 +729,13 @@ fn calculate_new_offset(
             // Get earliest offset for partition
             topic_manager
                 .earliest_offset(topic, partition)
-                .map_err(|e| format!("Failed to get earliest offset: {}", e))
+                .map_err(|e| format!("Failed to get earliest offset: {e}"))
         }
         ResetStrategy::Latest => {
             // Get latest offset for partition
             topic_manager
                 .latest_offset(topic, partition)
-                .map_err(|e| format!("Failed to get latest offset: {}", e))
+                .map_err(|e| format!("Failed to get latest offset: {e}"))
         }
         ResetStrategy::Timestamp => {
             // Timestamp-based reset: find first offset >= timestamp
@@ -746,9 +746,9 @@ fn calculate_new_offset(
                     // No offset found for timestamp - fall back to latest
                     topic_manager
                         .latest_offset(topic, partition)
-                        .map_err(|e| format!("Failed to get latest offset: {}", e))
+                        .map_err(|e| format!("Failed to get latest offset: {e}"))
                 }
-                Err(e) => Err(format!("Failed to find offset by timestamp: {}", e)),
+                Err(e) => Err(format!("Failed to find offset by timestamp: {e}")),
             }
         }
         ResetStrategy::Offset => {
@@ -757,20 +757,18 @@ fn calculate_new_offset(
             // Validate offset is within valid range
             let start = topic_manager
                 .earliest_offset(topic, partition)
-                .map_err(|e| format!("Failed to get earliest offset: {}", e))?;
+                .map_err(|e| format!("Failed to get earliest offset: {e}"))?;
             let end = topic_manager
                 .latest_offset(topic, partition)
-                .map_err(|e| format!("Failed to get latest offset: {}", e))?;
+                .map_err(|e| format!("Failed to get latest offset: {e}"))?;
 
             if offset < start {
                 Err(format!(
-                    "Offset {} is before earliest available offset {}",
-                    offset, start
+                    "Offset {offset} is before earliest available offset {start}"
                 ))
             } else if offset > end {
                 Err(format!(
-                    "Offset {} is after latest available offset {}",
-                    offset, end
+                    "Offset {offset} is after latest available offset {end}"
                 ))
             } else {
                 Ok(offset)

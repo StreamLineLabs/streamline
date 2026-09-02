@@ -125,7 +125,7 @@ impl std::fmt::Display for RoutingPreference {
             Self::LowestLag => write!(f, "lowest-lag"),
             Self::RoundRobin => write!(f, "round-robin"),
             Self::RegionAffinity { preferred_region } => {
-                write!(f, "affinity({})", preferred_region)
+                write!(f, "affinity({preferred_region})")
             }
         }
     }
@@ -217,7 +217,7 @@ impl FailoverOrchestrator {
         let mut regions = self.regions.write().await;
         let region = regions
             .get_mut(region_id)
-            .ok_or_else(|| StreamlineError::Internal(format!("Region not found: {}", region_id)))?;
+            .ok_or_else(|| StreamlineError::Internal(format!("Region not found: {region_id}")))?;
 
         region.last_heartbeat = Utc::now();
         region.replication_lag_ms = replication_lag_ms;
@@ -239,7 +239,7 @@ impl FailoverOrchestrator {
         // First pass: update failure count and check if failover is needed
         let (should_failover, was_active) = {
             let region = regions.get_mut(region_id).ok_or_else(|| {
-                StreamlineError::Internal(format!("Region not found: {}", region_id))
+                StreamlineError::Internal(format!("Region not found: {region_id}"))
             })?;
 
             region.consecutive_failures += 1;
@@ -418,7 +418,10 @@ impl FailoverOrchestrator {
     /// Returns a monotonically increasing epoch number that must be included
     /// in all write requests. A leader with a stale epoch will be fenced out.
     pub async fn issue_fencing_token(&self) -> u64 {
-        let new_epoch = self.fencing_epoch.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;
+        let new_epoch = self
+            .fencing_epoch
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst)
+            + 1;
         info!(epoch = new_epoch, "Issued new fencing token");
         new_epoch
     }
@@ -441,7 +444,8 @@ impl FailoverOrchestrator {
     /// Returns any failover events triggered.
     pub async fn check_automated_failover(&self) -> Result<Vec<FailoverEvent>> {
         let mut triggered_events = Vec::new();
-        let regions: Vec<RegionFailoverState> = self.regions.read().await.values().cloned().collect();
+        let regions: Vec<RegionFailoverState> =
+            self.regions.read().await.values().cloned().collect();
 
         for region in &regions {
             if region.role == RegionRole::Active && region.health == RegionHealth::Unreachable {

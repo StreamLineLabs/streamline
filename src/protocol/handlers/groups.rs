@@ -26,7 +26,7 @@ pub(crate) async fn dispatch(
         ApiKey::FindCoordinator => {
             let request = FindCoordinatorRequest::decode(&mut buf, header.request_api_version)
                 .map_err(|e| {
-                    StreamlineError::protocol("decode", format!("Failed to decode request: {}", e))
+                    StreamlineError::protocol("decode", format!("Failed to decode request: {e}"))
                 })?;
             let response = handler.handle_find_coordinator(request, header.request_api_version)?;
             let response_body = handler.encode_response(&response, header.request_api_version)?;
@@ -40,7 +40,7 @@ pub(crate) async fn dispatch(
         ApiKey::JoinGroup => {
             let request =
                 JoinGroupRequest::decode(&mut buf, header.request_api_version).map_err(|e| {
-                    StreamlineError::protocol("decode", format!("Failed to decode request: {}", e))
+                    StreamlineError::protocol("decode", format!("Failed to decode request: {e}"))
                 })?;
 
             handler
@@ -64,7 +64,7 @@ pub(crate) async fn dispatch(
         ApiKey::Heartbeat => {
             let request =
                 HeartbeatRequest::decode(&mut buf, header.request_api_version).map_err(|e| {
-                    StreamlineError::protocol("decode", format!("Failed to decode request: {}", e))
+                    StreamlineError::protocol("decode", format!("Failed to decode request: {e}"))
                 })?;
 
             handler
@@ -88,7 +88,7 @@ pub(crate) async fn dispatch(
         ApiKey::LeaveGroup => {
             let request =
                 LeaveGroupRequest::decode(&mut buf, header.request_api_version).map_err(|e| {
-                    StreamlineError::protocol("decode", format!("Failed to decode request: {}", e))
+                    StreamlineError::protocol("decode", format!("Failed to decode request: {e}"))
                 })?;
 
             handler
@@ -112,7 +112,7 @@ pub(crate) async fn dispatch(
         ApiKey::SyncGroup => {
             let request =
                 SyncGroupRequest::decode(&mut buf, header.request_api_version).map_err(|e| {
-                    StreamlineError::protocol("decode", format!("Failed to decode request: {}", e))
+                    StreamlineError::protocol("decode", format!("Failed to decode request: {e}"))
                 })?;
 
             handler
@@ -136,7 +136,7 @@ pub(crate) async fn dispatch(
         ApiKey::OffsetCommit => {
             let request = OffsetCommitRequest::decode(&mut buf, header.request_api_version)
                 .map_err(|e| {
-                    StreamlineError::protocol("decode", format!("Failed to decode request: {}", e))
+                    StreamlineError::protocol("decode", format!("Failed to decode request: {e}"))
                 })?;
 
             handler
@@ -160,7 +160,7 @@ pub(crate) async fn dispatch(
         ApiKey::OffsetFetch => {
             let request = OffsetFetchRequest::decode(&mut buf, header.request_api_version)
                 .map_err(|e| {
-                    StreamlineError::protocol("decode", format!("Failed to decode request: {}", e))
+                    StreamlineError::protocol("decode", format!("Failed to decode request: {e}"))
                 })?;
 
             handler
@@ -184,7 +184,7 @@ pub(crate) async fn dispatch(
         ApiKey::DescribeGroups => {
             let request = DescribeGroupsRequest::decode(&mut buf, header.request_api_version)
                 .map_err(|e| {
-                    StreamlineError::protocol("decode", format!("Failed to decode request: {}", e))
+                    StreamlineError::protocol("decode", format!("Failed to decode request: {e}"))
                 })?;
 
             for group_id in request.groups.iter() {
@@ -210,7 +210,7 @@ pub(crate) async fn dispatch(
         ApiKey::ListGroups => {
             let request =
                 ListGroupsRequest::decode(&mut buf, header.request_api_version).map_err(|e| {
-                    StreamlineError::protocol("decode", format!("Failed to decode request: {}", e))
+                    StreamlineError::protocol("decode", format!("Failed to decode request: {e}"))
                 })?;
 
             handler
@@ -235,7 +235,7 @@ pub(crate) async fn dispatch(
         ApiKey::DeleteGroups => {
             let request = DeleteGroupsRequest::decode(&mut buf, header.request_api_version)
                 .map_err(|e| {
-                    StreamlineError::protocol("decode", format!("Failed to decode request: {}", e))
+                    StreamlineError::protocol("decode", format!("Failed to decode request: {e}"))
                 })?;
 
             for group_id in request.groups_names.iter() {
@@ -261,7 +261,7 @@ pub(crate) async fn dispatch(
         ApiKey::OffsetDelete => {
             let request = OffsetDeleteRequest::decode(&mut buf, header.request_api_version)
                 .map_err(|e| {
-                    StreamlineError::protocol("decode", format!("Failed to decode request: {}", e))
+                    StreamlineError::protocol("decode", format!("Failed to decode request: {e}"))
                 })?;
 
             let response = handler.handle_offset_delete(request)?;
@@ -279,7 +279,7 @@ pub(crate) async fn dispatch(
                     .map_err(|e| {
                         StreamlineError::protocol(
                             "decode",
-                            format!("Failed to decode request: {}", e),
+                            format!("Failed to decode request: {e}"),
                         )
                     })?;
 
@@ -298,7 +298,7 @@ pub(crate) async fn dispatch(
                     .map_err(|e| {
                         StreamlineError::protocol(
                             "decode",
-                            format!("Failed to decode request: {}", e),
+                            format!("Failed to decode request: {e}"),
                         )
                     })?;
 
@@ -313,7 +313,7 @@ pub(crate) async fn dispatch(
         }
         _ => Err(StreamlineError::protocol(
             "unsupported API key",
-            format!("{:?}", api_key),
+            format!("{api_key:?}"),
         )),
     }
 }

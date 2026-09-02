@@ -1,13 +1,13 @@
 //! Kafka Connect REST API compatibility layer.
 //!
 //! Implements the Kafka Connect REST API v3 endpoints for connector management.
-//! See: https://docs.confluent.io/platform/current/connect/references/restapi.html
+//! See: <https://docs.confluent.io/platform/current/connect/references/restapi.html>
 
 use axum::{
     extract::{Json, Path, State},
     http::StatusCode,
     response::IntoResponse,
-    routing::{delete, get, post, put},
+    routing::{get, post, put},
     Router,
 };
 use dashmap::DashMap;
@@ -34,12 +34,12 @@ impl ConnectState {
 
     /// Save connector state to a JSON file.
     pub fn save_to_file(&self, path: &std::path::Path) -> Result<(), std::io::Error> {
-        let connectors: HashMap<String, ConnectorInfo> = self.connectors
+        let connectors: HashMap<String, ConnectorInfo> = self
+            .connectors
             .iter()
             .map(|e| (e.key().clone(), e.value().clone()))
             .collect();
-        let json = serde_json::to_string_pretty(&connectors)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+        let json = serde_json::to_string_pretty(&connectors).map_err(std::io::Error::other)?;
         std::fs::write(path, json)
     }
 
@@ -169,10 +169,7 @@ async fn update_connector_config(
 ) -> Result<Json<ConnectorInfo>, StatusCode> {
     if let Some(mut entry) = state.connectors.get_mut(&name) {
         entry.config = config.clone();
-        entry.connector_type = config
-            .get("connector.class")
-            .cloned()
-            .unwrap_or_default();
+        entry.connector_type = config.get("connector.class").cloned().unwrap_or_default();
         Ok(Json(entry.value().clone()))
     } else {
         Err(StatusCode::NOT_FOUND)
@@ -445,7 +442,10 @@ mod tests {
 
         let loaded = ConnectState::load_from_file(&path).unwrap();
         assert!(loaded.connectors.contains_key("test"));
-        assert_eq!(loaded.connectors.get("test").unwrap().connector_type, "TestSink");
+        assert_eq!(
+            loaded.connectors.get("test").unwrap().connector_type,
+            "TestSink"
+        );
     }
 
     #[test]

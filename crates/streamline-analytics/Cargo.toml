@@ -6,6 +6,11 @@ authors = ["Jose David Baena"]
 description = "Embedded analytics engine for Streamline (DuckDB-powered SQL queries on stream data)"
 license = "Apache-2.0"
 repository = "https://github.com/streamlinelabs/streamline"
+# Keep in lockstep with the root crate's MSRV.
+rust-version = "1.88"
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(test)'] }
 
 [dependencies]
 # Error handling

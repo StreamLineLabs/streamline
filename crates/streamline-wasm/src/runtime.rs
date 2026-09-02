@@ -43,7 +43,8 @@ use tracing::debug;
 
 #[cfg(feature = "wasm-runtime")]
 use wasmtime::{
-    Config, Engine, Extern, Linker, Module, Store, StoreLimits, StoreLimitsBuilder, TypedFunc,
+    Cache, Config, Engine, Extern, Linker, Module, Store, StoreLimits, StoreLimitsBuilder,
+    TypedFunc,
 };
 
 /// WASM transformation runtime
@@ -277,15 +278,22 @@ impl WasmRuntime {
             .cranelift_opt_level(wasmtime::OptLevel::Speed);
 
         if config.enable_caching {
-            // Use default cache config if available
-            if let Err(e) = wasmtime_config.cache_config_load_default() {
-                debug!("WASM cache not available: {}", e);
+            // wasmtime 36 replaced `Config::cache_config_load_default()` with an
+            // explicit `Cache` value. `Cache::from_file(None)` is the direct
+            // equivalent: it loads the user's default cache configuration file
+            // (or the built-in defaults when no file exists). Caching stays
+            // best-effort — a missing or malformed config must not stop the
+            // runtime from starting.
+            match Cache::from_file(None) {
+                Ok(cache) => {
+                    wasmtime_config.cache(Some(cache));
+                }
+                Err(e) => debug!("WASM cache not available: {}", e),
             }
         }
 
-        let engine = Engine::new(&wasmtime_config).map_err(|e| {
-            WasmError::Configuration(format!("Failed to create WASM engine: {}", e))
-        })?;
+        let engine = Engine::new(&wasmtime_config)
+            .map_err(|e| WasmError::Configuration(format!("Failed to create WASM engine: {e}")))?;
 
         info!(
             max_memory = config.max_memory,
@@ -330,7 +338,7 @@ impl WasmRuntime {
         // Read module bytes
         let module_bytes = tokio::fs::read(&wasm_path)
             .await
-            .map_err(|e| WasmError::Storage(format!("Failed to read WASM file: {}", e)))?;
+            .map_err(|e| WasmError::Storage(format!("Failed to read WASM file: {e}")))?;
 
         // Validate WASM magic bytes
         if module_bytes.len() < 8 || &module_bytes[0..4] != b"\x00asm" {
@@ -339,7 +347,7 @@ impl WasmRuntime {
 
         // Compile module
         let module = Module::new(&self.engine, &module_bytes)
-            .map_err(|e| WasmError::Storage(format!("Failed to compile WASM module: {}", e)))?;
+            .map_err(|e| WasmError::Storage(format!("Failed to compile WASM module: {e}")))?;
 
         // Validate module exports
         self.validate_module_exports(&module, &entry_point)?;
@@ -384,7 +392,7 @@ impl WasmRuntime {
         // Read module bytes for validation
         let module_bytes = tokio::fs::read(&wasm_path)
             .await
-            .map_err(|e| WasmError::Storage(format!("Failed to read WASM file: {}", e)))?;
+            .map_err(|e| WasmError::Storage(format!("Failed to read WASM file: {e}")))?;
 
         // Validate WASM magic bytes
         if module_bytes.len() < 8 || &module_bytes[0..4] != b"\x00asm" {
@@ -421,8 +429,7 @@ impl WasmRuntime {
         for required in &required_exports {
             if !export_names.contains(required) {
                 return Err(WasmError::Configuration(format!(
-                    "WASM module missing required export: {}",
-                    required
+                    "WASM module missing required export: {required}"
                 )));
             }
         }
@@ -454,7 +461,7 @@ impl WasmRuntime {
 
         // Compile module
         let module = Module::new(&self.engine, &bytes)
-            .map_err(|e| WasmError::Storage(format!("Failed to compile WASM module: {}", e)))?;
+            .map_err(|e| WasmError::Storage(format!("Failed to compile WASM module: {e}")))?;
 
         // Validate exports
         self.validate_module_exports(&module, &entry_point)?;
@@ -528,7 +535,7 @@ impl WasmRuntime {
             let modules = self.modules.read();
             let module = modules
                 .get(module_id)
-                .ok_or_else(|| WasmError::Storage(format!("Module not found: {}", module_id)))?;
+                .ok_or_else(|| WasmError::Storage(format!("Module not found: {module_id}")))?;
 
             if !module.config.enabled {
                 return Ok(TransformOutput::Pass(input));
@@ -592,7 +599,7 @@ impl WasmRuntime {
         let fuel = self.config.fuel_per_ms * config.timeout_ms;
         store
             .set_fuel(fuel)
-            .map_err(|e| WasmError::Storage(format!("Failed to set fuel: {}", e)))?;
+            .map_err(|e| WasmError::Storage(format!("Failed to set fuel: {e}")))?;
 
         // Create linker with host functions
         let mut linker = Linker::new(&self.engine);
@@ -601,7 +608,7 @@ impl WasmRuntime {
         // Instantiate module
         let instance = linker
             .instantiate(&mut store, module)
-            .map_err(|e| WasmError::Storage(format!("Failed to instantiate module: {}", e)))?;
+            .map_err(|e| WasmError::Storage(format!("Failed to instantiate module: {e}")))?;
 
         // Get exports
         let memory = instance
@@ -610,21 +617,21 @@ impl WasmRuntime {
 
         let alloc_fn: TypedFunc<i32, i32> = instance
             .get_typed_func(&mut store, "alloc")
-            .map_err(|e| WasmError::Storage(format!("Failed to get alloc function: {}", e)))?;
+            .map_err(|e| WasmError::Storage(format!("Failed to get alloc function: {e}")))?;
 
         let dealloc_fn: TypedFunc<(i32, i32), ()> = instance
             .get_typed_func(&mut store, "dealloc")
-            .map_err(|e| WasmError::Storage(format!("Failed to get dealloc function: {}", e)))?;
+            .map_err(|e| WasmError::Storage(format!("Failed to get dealloc function: {e}")))?;
 
         let transform_fn: TypedFunc<(i32, i32), i64> = instance
             .get_typed_func(&mut store, entry_point)
             .map_err(|e| {
-                WasmError::Storage(format!("Failed to get {} function: {}", entry_point, e))
+                WasmError::Storage(format!("Failed to get {entry_point} function: {e}"))
             })?;
 
         // Serialize input to JSON
         let input_bytes = serde_json::to_vec(&input)
-            .map_err(|e| WasmError::Storage(format!("Failed to serialize input: {}", e)))?;
+            .map_err(|e| WasmError::Storage(format!("Failed to serialize input: {e}")))?;
         let input_len = input_bytes.len() as i32;
 
         // Allocate memory in WASM for input
@@ -634,14 +641,14 @@ impl WasmRuntime {
                 stats.timeout_errors += 1;
                 WasmError::Timeout("WASM execution timeout".into())
             } else {
-                WasmError::Storage(format!("Alloc failed: {}", e))
+                WasmError::Storage(format!("Alloc failed: {e}"))
             }
         })?;
 
         // Write input to WASM memory
         memory
             .write(&mut store, input_ptr as usize, &input_bytes)
-            .map_err(|e| WasmError::Storage(format!("Memory write failed: {}", e)))?;
+            .map_err(|e| WasmError::Storage(format!("Memory write failed: {e}")))?;
 
         // Call transform function
         let result = transform_fn
@@ -652,7 +659,7 @@ impl WasmRuntime {
                     stats.timeout_errors += 1;
                     WasmError::Timeout("WASM execution timeout".into())
                 } else {
-                    WasmError::Storage(format!("Transform execution failed: {}", e))
+                    WasmError::Storage(format!("Transform execution failed: {e}"))
                 }
             })?;
 
@@ -676,14 +683,14 @@ impl WasmRuntime {
         let mut output_bytes = vec![0u8; output_len as usize];
         memory
             .read(&store, output_ptr as usize, &mut output_bytes)
-            .map_err(|e| WasmError::Storage(format!("Memory read failed: {}", e)))?;
+            .map_err(|e| WasmError::Storage(format!("Memory read failed: {e}")))?;
 
         // Free output memory
         let _ = dealloc_fn.call(&mut store, (output_ptr, output_len));
 
         // Parse output
         let output: WasmTransformOutput = serde_json::from_slice(&output_bytes)
-            .map_err(|e| WasmError::Storage(format!("Failed to parse output: {}", e)))?;
+            .map_err(|e| WasmError::Storage(format!("Failed to parse output: {e}")))?;
 
         // Convert to TransformOutput
         Ok(self.convert_wasm_output(output, input, config.transform_type))
@@ -709,7 +716,7 @@ impl WasmRuntime {
                     }
                 },
             )
-            .map_err(|e| WasmError::Storage(format!("Failed to setup log function: {}", e)))?;
+            .map_err(|e| WasmError::Storage(format!("Failed to setup log function: {e}")))?;
 
         // Get current timestamp
         linker
@@ -717,13 +724,13 @@ impl WasmRuntime {
                 chrono::Utc::now().timestamp_millis()
             })
             .map_err(|e| {
-                WasmError::Storage(format!("Failed to setup get_time_ms function: {}", e))
+                WasmError::Storage(format!("Failed to setup get_time_ms function: {e}"))
             })?;
 
         // Generate random bytes
         linker
             .func_wrap("env", "random", || -> i64 { rand::random::<i64>() })
-            .map_err(|e| WasmError::Storage(format!("Failed to setup random function: {}", e)))?;
+            .map_err(|e| WasmError::Storage(format!("Failed to setup random function: {e}")))?;
 
         Ok(())
     }
@@ -776,7 +783,7 @@ impl WasmRuntime {
             let modules = self.modules.read();
             let module = modules
                 .get(module_id)
-                .ok_or_else(|| WasmError::Storage(format!("Module not found: {}", module_id)))?;
+                .ok_or_else(|| WasmError::Storage(format!("Module not found: {module_id}")))?;
 
             if !module.config.enabled {
                 return Ok(TransformOutput::Pass(input));
@@ -832,11 +839,10 @@ impl WasmRuntime {
         modules.get(module_id).map(|m| ModuleStats {
             execution_count: m.execution_count,
             total_execution_time_us: m.total_execution_time_us,
-            avg_execution_time_us: if m.execution_count > 0 {
-                m.total_execution_time_us / m.execution_count
-            } else {
-                0
-            },
+            avg_execution_time_us: m
+                .total_execution_time_us
+                .checked_div(m.execution_count)
+                .unwrap_or(0),
             error_count: m.error_count,
             loaded_at: m.loaded_at,
             uptime_secs: m.loaded_at.elapsed().as_secs(),
@@ -877,10 +883,7 @@ impl WasmRuntime {
             module.config = config;
             Ok(())
         } else {
-            Err(WasmError::Storage(format!(
-                "Module not found: {}",
-                module_id
-            )))
+            Err(WasmError::Storage(format!("Module not found: {module_id}")))
         }
     }
 
@@ -891,7 +894,7 @@ impl WasmRuntime {
             modules
                 .get(module_id)
                 .map(|m| m.config.clone())
-                .ok_or_else(|| WasmError::Storage(format!("Module not found: {}", module_id)))?
+                .ok_or_else(|| WasmError::Storage(format!("Module not found: {module_id}")))?
         };
 
         // Unload and reload

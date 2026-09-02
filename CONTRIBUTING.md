@@ -16,7 +16,9 @@ Thank you for your interest in contributing to Streamline — "The Redis of Stre
 
 ### Prerequisites
 
-- **Rust 1.80+** — install via `rustup update stable`
+- **Rust 1.88+** — the MSRV declared in `Cargo.toml` and pinned in
+  `rust-toolchain.toml`; `rustup` installs it automatically inside this
+  repository
 - **Git**
 - `pkg-config` (Linux: `apt-get install pkg-config`, macOS: `brew install pkg-config`)
 - **Docker** (optional, for integration tests and container workflows)

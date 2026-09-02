@@ -54,7 +54,7 @@ impl TenantManager {
         let id = id.into();
 
         if self.tenants.contains_key(&id) {
-            return Err(format!("Tenant '{}' already exists", id));
+            return Err(format!("Tenant '{id}' already exists"));
         }
 
         // Validate tenant ID
@@ -94,7 +94,7 @@ impl TenantManager {
         let mut entry = self
             .tenants
             .get_mut(id)
-            .ok_or_else(|| format!("Tenant '{}' not found", id))?;
+            .ok_or_else(|| format!("Tenant '{id}' not found"))?;
 
         entry.state = state;
         entry.updated_at_ms = chrono::Utc::now().timestamp_millis();
@@ -108,7 +108,7 @@ impl TenantManager {
         let mut entry = self
             .tenants
             .get_mut(id)
-            .ok_or_else(|| format!("Tenant '{}' not found", id))?;
+            .ok_or_else(|| format!("Tenant '{id}' not found"))?;
 
         entry.config = config;
         entry.updated_at_ms = chrono::Utc::now().timestamp_millis();
@@ -122,7 +122,7 @@ impl TenantManager {
         let (_, tenant) = self
             .tenants
             .remove(id)
-            .ok_or_else(|| format!("Tenant '{}' not found", id))?;
+            .ok_or_else(|| format!("Tenant '{id}' not found"))?;
 
         self.quota_manager.remove_tenant(id);
         info!(tenant_id = %id, "Tenant deleted");
@@ -149,7 +149,7 @@ impl TenantManager {
 
         let tenant = self
             .get_tenant(tenant_id)
-            .ok_or_else(|| format!("Tenant '{}' not found", tenant_id))?;
+            .ok_or_else(|| format!("Tenant '{tenant_id}' not found"))?;
 
         if !tenant.is_active() {
             return Err(format!("Tenant '{}' is {}", tenant_id, tenant.state));
@@ -166,7 +166,7 @@ impl TenantManager {
 
         let tenant = self
             .get_tenant(tenant_id)
-            .ok_or_else(|| format!("Tenant '{}' not found", tenant_id))?;
+            .ok_or_else(|| format!("Tenant '{tenant_id}' not found"))?;
 
         if !tenant.is_active() {
             return Err(format!("Tenant '{}' is {}", tenant_id, tenant.state));
@@ -185,12 +185,11 @@ impl TenantManager {
         let tenants_file = self.data_dir.join("tenants.json");
         let tenants: Vec<Tenant> = self.list_tenants();
         let json = serde_json::to_string_pretty(&tenants)
-            .map_err(|e| format!("Serialization error: {}", e))?;
+            .map_err(|e| format!("Serialization error: {e}"))?;
 
         std::fs::create_dir_all(&self.data_dir)
-            .map_err(|e| format!("Failed to create dir: {}", e))?;
-        std::fs::write(&tenants_file, json)
-            .map_err(|e| format!("Failed to write tenants: {}", e))?;
+            .map_err(|e| format!("Failed to create dir: {e}"))?;
+        std::fs::write(&tenants_file, json).map_err(|e| format!("Failed to write tenants: {e}"))?;
 
         debug!("Saved {} tenants to disk", tenants.len());
         Ok(())
@@ -204,10 +203,10 @@ impl TenantManager {
         }
 
         let json = std::fs::read_to_string(&tenants_file)
-            .map_err(|e| format!("Failed to read tenants: {}", e))?;
+            .map_err(|e| format!("Failed to read tenants: {e}"))?;
 
         let tenants: Vec<Tenant> =
-            serde_json::from_str(&json).map_err(|e| format!("Parse error: {}", e))?;
+            serde_json::from_str(&json).map_err(|e| format!("Parse error: {e}"))?;
 
         let count = tenants.len();
         for tenant in tenants {

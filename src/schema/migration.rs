@@ -331,10 +331,9 @@ impl SchemaMigrationEngine {
             })
             .collect();
 
-        let breaking =
-            !fields_removed.is_empty() || fields_modified.iter().any(|m| !m.compatible);
+        let breaking = !fields_removed.is_empty() || fields_modified.iter().any(|m| !m.compatible);
 
-        let risk_level = compute_risk(&fields_added, &fields_removed, &fields_modified);
+        let risk_level = compute_risk(&fields_removed, &fields_modified);
 
         debug!(
             added = fields_added.len(),
@@ -519,9 +518,7 @@ impl SchemaMigrationEngine {
         }
 
         migration.status = MigrationStatus::Verifying;
-        self.stats
-            .verification_runs
-            .fetch_add(1, Ordering::Relaxed);
+        self.stats.verification_runs.fetch_add(1, Ordering::Relaxed);
 
         // Simulated verification: pass if error rate < 1%
         let passed = if migration.progress.records_total > 0 {
@@ -550,9 +547,7 @@ impl SchemaMigrationEngine {
                 .fetch_add(1, Ordering::Relaxed);
         } else {
             migration.status = MigrationStatus::Failed("Verification failed".into());
-            self.stats
-                .migrations_failed
-                .fetch_add(1, Ordering::Relaxed);
+            self.stats.migrations_failed.fetch_add(1, Ordering::Relaxed);
         }
 
         Ok(passed)
@@ -595,11 +590,9 @@ fn is_compatible_type_change(old: &str, new: &str) -> bool {
     )
 }
 
-fn compute_risk(
-    added: &[FieldChange],
-    removed: &[FieldChange],
-    modified: &[FieldModification],
-) -> RiskLevel {
+/// Added fields are always backwards compatible, so only removals and
+/// modifications influence the risk level.
+fn compute_risk(removed: &[FieldChange], modified: &[FieldModification]) -> RiskLevel {
     if !removed.is_empty() && !modified.is_empty() {
         RiskLevel::Critical
     } else if modified.iter().any(|m| !m.compatible) {
@@ -608,8 +601,6 @@ fn compute_risk(
         RiskLevel::Medium
     } else if !modified.is_empty() {
         RiskLevel::Low
-    } else if added.is_empty() {
-        RiskLevel::Safe
     } else {
         RiskLevel::Safe
     }
@@ -642,7 +633,7 @@ fn build_rollback_steps() -> Vec<MigrationStep> {
 }
 
 fn estimate_duration(config: &MigrationConfig, records: u64) -> u64 {
-    let batches = (records + config.batch_size as u64 - 1) / config.batch_size as u64;
+    let batches = records.div_ceil(config.batch_size as u64);
     // ~100ms per batch + dual-write window
     config.dual_write_duration_secs + batches / 10
 }
@@ -881,7 +872,8 @@ mod tests {
     fn test_compute_diff_add_field() {
         let engine = default_engine();
         let old = json!({"fields": [{"name": "id", "type": "int"}]});
-        let new = json!({"fields": [{"name": "id", "type": "int"}, {"name": "email", "type": "string"}]});
+        let new =
+            json!({"fields": [{"name": "id", "type": "int"}, {"name": "email", "type": "string"}]});
         let diff = engine.compute_diff(&old, &new);
         assert_eq!(diff.fields_added.len(), 1);
         assert_eq!(diff.fields_added[0].name, "email");
@@ -891,7 +883,8 @@ mod tests {
     #[test]
     fn test_compute_diff_remove_field_is_breaking() {
         let engine = default_engine();
-        let old = json!({"fields": [{"name": "id", "type": "int"}, {"name": "name", "type": "string"}]});
+        let old =
+            json!({"fields": [{"name": "id", "type": "int"}, {"name": "name", "type": "string"}]});
         let new = json!({"fields": [{"name": "id", "type": "int"}]});
         let diff = engine.compute_diff(&old, &new);
         assert_eq!(diff.fields_removed.len(), 1);
@@ -938,7 +931,6 @@ mod tests {
     #[test]
     fn test_risk_level_critical() {
         let risk = compute_risk(
-            &[],
             &[FieldChange {
                 name: "x".into(),
                 field_type: "int".into(),
@@ -956,15 +948,8 @@ mod tests {
 
     #[test]
     fn test_risk_level_safe() {
-        let risk = compute_risk(
-            &[FieldChange {
-                name: "a".into(),
-                field_type: "string".into(),
-                default_value: None,
-            }],
-            &[],
-            &[],
-        );
+        // Added-only changes carry no risk.
+        let risk = compute_risk(&[], &[]);
         assert_eq!(risk, RiskLevel::Safe);
     }
 

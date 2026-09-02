@@ -150,11 +150,11 @@ pub fn parse_api_versions_response(
 
     // Parse response header
     let _header = ResponseHeader::decode(&mut buf, response_header_ver)
-        .map_err(|e| format!("Failed to decode response header: {}", e))?;
+        .map_err(|e| format!("Failed to decode response header: {e}"))?;
 
     // Parse response body
     ApiVersionsResponse::decode(&mut buf, api_version)
-        .map_err(|e| format!("Failed to decode ApiVersionsResponse: {}", e))
+        .map_err(|e| format!("Failed to decode ApiVersionsResponse: {e}"))
 }
 
 /// Parse a MetadataResponse from raw response bytes
@@ -168,11 +168,11 @@ pub fn parse_metadata_response(
 
     // Parse response header
     let _header = ResponseHeader::decode(&mut buf, response_header_ver)
-        .map_err(|e| format!("Failed to decode response header: {}", e))?;
+        .map_err(|e| format!("Failed to decode response header: {e}"))?;
 
     // Parse response body
     MetadataResponse::decode(&mut buf, api_version)
-        .map_err(|e| format!("Failed to decode MetadataResponse: {}", e))
+        .map_err(|e| format!("Failed to decode MetadataResponse: {e}"))
 }
 
 /// Get the request header version for a given API key and version

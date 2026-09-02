@@ -160,10 +160,7 @@ impl CheckpointManager {
     /// Restore state from the latest checkpoint.
     ///
     /// Returns the source offsets and serialized operator state to resume from.
-    pub async fn restore(
-        &self,
-        query_id: &str,
-    ) -> Option<(HashMap<String, i64>, Vec<u8>)> {
+    pub async fn restore(&self, query_id: &str) -> Option<(HashMap<String, i64>, Vec<u8>)> {
         let checkpoint = self.latest_checkpoint(query_id).await?;
         info!(
             query_id,
@@ -247,12 +244,7 @@ impl BackpressureController {
     }
 
     /// Report lag for a query. Returns true if backpressure should be applied.
-    pub async fn report_lag(
-        &self,
-        query_id: &str,
-        lag_ms: u64,
-        messages_behind: u64,
-    ) -> bool {
+    pub async fn report_lag(&self, query_id: &str, lag_ms: u64, messages_behind: u64) -> bool {
         let backpressure = lag_ms > self.max_lag_ms;
         let mut lags = self.lags.write().await;
         lags.insert(
@@ -281,8 +273,7 @@ impl BackpressureController {
     /// Check if backpressure is active for a query.
     pub async fn is_backpressured(&self, query_id: &str) -> bool {
         let lags = self.lags.read().await;
-        lags.get(query_id)
-            .map_or(false, |l| l.backpressure_active)
+        lags.get(query_id).is_some_and(|l| l.backpressure_active)
     }
 
     /// Get lag info for all queries.

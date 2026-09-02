@@ -129,8 +129,7 @@ fn test_fetch_request_isolation_level_versions() {
 
         assert_eq!(
             decoded.isolation_level, READ_COMMITTED,
-            "isolation_level should be READ_COMMITTED at v{}",
-            version
+            "isolation_level should be READ_COMMITTED at v{version}"
         );
     }
 }
@@ -224,8 +223,7 @@ fn test_list_offsets_request_isolation_level_versions() {
 
         assert_eq!(
             decoded.isolation_level, READ_COMMITTED,
-            "isolation_level should work at v{}",
-            version
+            "isolation_level should work at v{version}"
         );
     }
 }
@@ -340,8 +338,7 @@ fn test_fetch_response_lso_versions() {
 
         assert_eq!(
             decoded.responses[0].partitions[0].last_stable_offset, 950,
-            "LSO should be preserved at v{}",
-            version
+            "LSO should be preserved at v{version}"
         );
     }
 }

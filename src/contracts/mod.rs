@@ -50,6 +50,6 @@ pub use runner::{
     ContractRunner, ContractRunnerConfig, TestOutcome, TestReport, TestResult, TestSuite,
 };
 pub use validation::{
-    ContractChange, ContractSummary, ContractValidator, EnforcementMode,
-    ValidationResult, ValidationStatsSnapshot, Violation, ViolationType, diff_contracts,
+    diff_contracts, ContractChange, ContractSummary, ContractValidator, EnforcementMode,
+    ValidationResult, ValidationStatsSnapshot, Violation, ViolationType,
 };

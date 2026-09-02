@@ -7,21 +7,17 @@
 pub mod agent_api;
 #[cfg(feature = "ai")]
 pub mod ai_api;
-#[cfg(feature = "semantic-topics")]
-pub mod search_api;
-#[cfg(feature = "agent-memory")]
-pub mod memory_api;
-pub mod autopilot;
 pub mod alerts;
 pub mod alerts_api;
 pub mod analytics_api;
 pub mod api;
-pub mod benchmark_api;
-pub mod browser_client;
-#[cfg(feature = "branches")]
-pub mod branches_api;
 #[cfg(feature = "attestation")]
 pub mod attestation_api;
+pub mod autopilot;
+pub mod benchmark_api;
+#[cfg(feature = "branches")]
+pub mod branches_api;
+pub mod browser_client;
 pub mod cdc_api;
 pub mod chaos_engine;
 pub mod cloud_api;
@@ -33,30 +29,27 @@ pub mod contracts_ci;
 pub mod contracts_validate_api;
 pub mod connections_api;
 pub mod connector_mgmt_api;
-pub mod console_page;
 pub mod console_api;
+pub mod console_page;
 pub mod consumer_api;
 pub mod dashboard_api;
 pub mod data_mesh_api;
-pub mod inspector_api;
-pub mod kafka_connect_api;
-pub mod streamql_api;
 pub mod faas_api;
 #[cfg(feature = "clustering")]
 pub mod failover_api;
-#[cfg(feature = "clustering")]
-pub mod raft_cluster_api;
+pub mod feature_store_api;
 #[cfg(feature = "featurestore")]
 pub mod featurestore_api;
-pub mod feature_store_api;
+#[cfg(feature = "edge")]
+pub mod fleet_api;
 pub mod functions_api;
 pub mod gateway_api;
 pub mod gitops_api;
 pub mod gitops_engine;
 pub mod governor_api;
-#[cfg(feature = "edge")]
-pub mod fleet_api;
 pub mod http;
+pub mod inspector_api;
+pub mod kafka_connect_api;
 pub mod limits;
 #[cfg(feature = "schema-registry")]
 pub mod lineage_api;
@@ -64,6 +57,8 @@ pub mod log_buffer;
 pub mod log_layer;
 pub mod logs_api;
 pub mod memory;
+#[cfg(feature = "agent-memory")]
+pub mod memory_api;
 pub mod mesh_api;
 pub mod metadata_cache;
 pub mod multicloud_api;
@@ -71,9 +66,11 @@ pub mod notebooks_api;
 pub mod observability_api;
 pub mod performance_advisor;
 pub mod playground_api;
-pub mod query_api;
 pub mod playground_cloud_api;
 pub mod plugin_api;
+pub mod query_api;
+#[cfg(feature = "clustering")]
+pub mod raft_cluster_api;
 pub mod rate_limiter;
 pub mod replication_api;
 pub mod scaling_metrics;
@@ -83,8 +80,11 @@ pub mod schema_api;
 pub mod schema_ui;
 #[cfg(feature = "schema-registry")]
 pub mod schema_ui_templates;
+#[cfg(feature = "semantic-topics")]
+pub mod search_api;
 pub mod shutdown;
 pub mod sqlite_routes;
+pub mod streamql_api;
 pub mod tenant_api;
 #[cfg(feature = "cloud-storage")]
 pub mod tiering_api;
@@ -359,7 +359,10 @@ impl Server {
             let worker = EmbedWorker::new(embedder, queue_cap);
             let handle = worker.spawn();
             topic_manager.set_embed_handle(handle);
-            info!(queue_capacity = queue_cap, "Semantic topics embed worker started");
+            info!(
+                queue_capacity = queue_cap,
+                "Semantic topics embed worker started"
+            );
         }
 
         let topic_manager = Arc::new(topic_manager);
@@ -630,7 +633,7 @@ impl Server {
         // M1: Spawn memory decay background task
         #[cfg(feature = "agent-memory")]
         let _memory_decay_handle = {
-            use crate::memory::decay::{DecayConfig, run_decay};
+            use crate::memory::decay::DecayConfig;
             let decay_config = DecayConfig::default();
             let decay_interval = std::time::Duration::from_secs(decay_config.run_interval_secs);
             let handle = tokio::spawn(async move {
@@ -1099,30 +1102,30 @@ impl Server {
             );
         }
 
-        // Show cluster info if in cluster mode
-        #[cfg(feature = "clustering")]
-        if let Some(ref cluster_config) = self.config.cluster {
-            println!(
-                "  Cluster mode:   node {} @ {}",
-                cluster_config.node_id, cluster_config.inter_broker_addr
-            );
-            if !cluster_config.seed_nodes.is_empty() {
-                println!("  Seed nodes:     {:?}", cluster_config.seed_nodes);
+            // Show cluster info if in cluster mode
+            #[cfg(feature = "clustering")]
+            if let Some(ref cluster_config) = self.config.cluster {
+                println!(
+                    "  Cluster mode:   node {} @ {}",
+                    cluster_config.node_id, cluster_config.inter_broker_addr
+                );
+                if !cluster_config.seed_nodes.is_empty() {
+                    println!("  Seed nodes:     {:?}", cluster_config.seed_nodes);
+                }
+            } else {
+                println!("  Cluster mode:   disabled (single-node)");
             }
-        } else {
+            #[cfg(not(feature = "clustering"))]
             println!("  Cluster mode:   disabled (single-node)");
-        }
-        #[cfg(not(feature = "clustering"))]
-        println!("  Cluster mode:   disabled (single-node)");
 
-        // Show simple protocol info if enabled
-        if self.config.simple.enabled {
-            println!("  Simple protocol: {}", self.config.simple.addr);
-        }
+            // Show simple protocol info if enabled
+            if self.config.simple.enabled {
+                println!("  Simple protocol: {}", self.config.simple.addr);
+            }
 
-        println!();
-        println!("  Ready to accept connections. Press Ctrl+C to stop.");
-        println!();
+            println!();
+            println!("  Ready to accept connections. Press Ctrl+C to stop.");
+            println!();
         } // end #[allow(clippy::print_stdout)]
     }
 
@@ -1141,16 +1144,16 @@ impl Server {
 
     /// Log which moonshot features are compiled in and active.
     fn log_moonshot_features(&self) {
-        let mut moonshots: Vec<&str> = Vec::new();
-
-        #[cfg(feature = "semantic-topics")]
-        moonshots.push("semantic-topics (M2)");
-        #[cfg(feature = "agent-memory")]
-        moonshots.push("agent-memory (M1)");
-        #[cfg(feature = "attestation")]
-        moonshots.push("attestation (M4)");
-        #[cfg(feature = "branches")]
-        moonshots.push("branches (M5)");
+        let moonshots: Vec<&str> = vec![
+            #[cfg(feature = "semantic-topics")]
+            "semantic-topics (M2)",
+            #[cfg(feature = "agent-memory")]
+            "agent-memory (M1)",
+            #[cfg(feature = "attestation")]
+            "attestation (M4)",
+            #[cfg(feature = "branches")]
+            "branches (M5)",
+        ];
 
         if moonshots.is_empty() {
             info!("Moonshot features: none (core-only build)");

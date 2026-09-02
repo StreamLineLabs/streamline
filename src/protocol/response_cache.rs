@@ -454,7 +454,7 @@ mod tests {
 
         // Put entries that exceed cache size
         for i in 0..5 {
-            let key = CacheKey::new(format!("topic-{}", i), 0, 0, 1024);
+            let key = CacheKey::new(format!("topic-{i}"), 0, 0, 1024);
             let data = vec![0u8; 30]; // Each entry is 30 bytes
             cache.put(key, &data).unwrap();
         }
@@ -486,7 +486,7 @@ mod tests {
 
         // Add some entries
         for i in 0..3 {
-            let key = CacheKey::new(format!("topic-{}", i), 0, 0, 1024);
+            let key = CacheKey::new(format!("topic-{i}"), 0, 0, 1024);
             cache.put(key, b"test data").unwrap();
         }
 

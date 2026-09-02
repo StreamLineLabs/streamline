@@ -42,7 +42,7 @@ pub(crate) async fn dispatch(
             };
 
             let request = request_result.map_err(|e| {
-                StreamlineError::protocol("decode", format!("Failed to decode request: {}", e))
+                StreamlineError::protocol("decode", format!("Failed to decode request: {e}"))
             })?;
             let response = handler.handle_api_versions(request)?;
             let response_body = handler.encode_response(&response, final_version)?;
@@ -56,7 +56,7 @@ pub(crate) async fn dispatch(
         ApiKey::Metadata => {
             let request =
                 MetadataRequest::decode(&mut buf, header.request_api_version).map_err(|e| {
-                    StreamlineError::protocol("decode", format!("Failed to decode request: {}", e))
+                    StreamlineError::protocol("decode", format!("Failed to decode request: {e}"))
                 })?;
             let response = handler
                 .handle_metadata(request, header.request_api_version)
@@ -72,7 +72,7 @@ pub(crate) async fn dispatch(
         ApiKey::ControlledShutdown => {
             let request = ControlledShutdownRequest::decode(&mut buf, header.request_api_version)
                 .map_err(|e| {
-                StreamlineError::protocol("decode", format!("Failed to decode request: {}", e))
+                StreamlineError::protocol("decode", format!("Failed to decode request: {e}"))
             })?;
             let response = handler.handle_controlled_shutdown(request)?;
             let response_body = handler.encode_response(&response, header.request_api_version)?;
@@ -85,7 +85,7 @@ pub(crate) async fn dispatch(
         }
         _ => Err(StreamlineError::protocol(
             "unsupported API key",
-            format!("{:?}", api_key),
+            format!("{api_key:?}"),
         )),
     }
 }

@@ -102,8 +102,8 @@ impl std::fmt::Display for ScalingDecision {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ScalingDecision::NoChange => write!(f, "no_change"),
-            ScalingDecision::ScaleUp(n) => write!(f, "scale_up_{}", n),
-            ScalingDecision::ScaleDown(n) => write!(f, "scale_down_{}", n),
+            ScalingDecision::ScaleUp(n) => write!(f, "scale_up_{n}"),
+            ScalingDecision::ScaleDown(n) => write!(f, "scale_down_{n}"),
             ScalingDecision::Cooldown => write!(f, "cooldown"),
         }
     }

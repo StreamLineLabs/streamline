@@ -52,8 +52,7 @@ fn test_find_coordinator_all_versions() {
         let response = handler.handle_find_coordinator(request, version);
         assert!(
             response.is_ok(),
-            "FindCoordinator v{} should succeed",
-            version
+            "FindCoordinator v{version} should succeed"
         );
     }
 }

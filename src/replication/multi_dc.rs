@@ -692,10 +692,10 @@ impl DcConnectionManager {
         let conn = self
             .get_connection(dc_id)
             .await
-            .ok_or_else(|| StreamlineError::Cluster(format!("Unknown DC: {}", dc_id)))?;
+            .ok_or_else(|| StreamlineError::Cluster(format!("Unknown DC: {dc_id}")))?;
 
         let endpoint = conn.current_endpoint().await.ok_or_else(|| {
-            StreamlineError::Cluster(format!("No endpoints configured for DC: {}", dc_id))
+            StreamlineError::Cluster(format!("No endpoints configured for DC: {dc_id}"))
         })?;
 
         info!(

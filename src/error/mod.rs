@@ -5,13 +5,13 @@
 
 use thiserror::Error;
 
-mod kafka_error_code;
 mod domain;
 mod hints;
+mod kafka_error_code;
 
-pub use kafka_error_code::KafkaErrorCode;
-pub use domain::{StorageError, ProtocolError, ConfigError, ServerError, ClusterError};
+pub use domain::{ClusterError, ConfigError, ProtocolError, ServerError, StorageError};
 pub use hints::{ErrorContext, ErrorHint};
+pub use kafka_error_code::KafkaErrorCode;
 
 /// Result type alias for Streamline operations
 pub type Result<T> = std::result::Result<T, StreamlineError>;
@@ -330,8 +330,7 @@ impl StreamlineError {
     /// Create an authorization error for a specific resource
     pub fn authz_failed(principal: &str, operation: &str, resource: &str) -> Self {
         StreamlineError::AuthorizationFailed(format!(
-            "{} is not authorized to {} on {}",
-            principal, operation, resource
+            "{principal} is not authorized to {operation} on {resource}"
         ))
     }
 
@@ -455,7 +454,7 @@ impl From<streamline_analytics::error::AnalyticsError> for StreamlineError {
                 StreamlineError::TopicNotFound(topic)
             }
             streamline_analytics::error::AnalyticsError::QueryTimeout { timeout_ms } => {
-                StreamlineError::Timeout(format!("Query timed out after {}ms", timeout_ms))
+                StreamlineError::Timeout(format!("Query timed out after {timeout_ms}ms"))
             }
             streamline_analytics::error::AnalyticsError::DuckDb(msg) => {
                 StreamlineError::Analytics(msg)
@@ -530,7 +529,7 @@ mod tests {
     #[test]
     fn test_error_is_debug() {
         let err = StreamlineError::Storage("test".to_string());
-        let debug_str = format!("{:?}", err);
+        let debug_str = format!("{err:?}");
         assert!(debug_str.contains("Storage"));
     }
 
@@ -588,9 +587,7 @@ mod tests {
             assert_eq!(
                 err.kafka_error_code(),
                 expected_code,
-                "Error {:?} should map to {:?}",
-                err,
-                expected_code
+                "Error {err:?} should map to {expected_code:?}"
             );
         }
     }
@@ -932,17 +929,19 @@ mod tests {
     fn levenshtein_distance(a: &str, b: &str) -> usize {
         let a_len = a.len();
         let b_len = b.len();
-        if a_len == 0 { return b_len; }
-        if b_len == 0 { return a_len; }
+        if a_len == 0 {
+            return b_len;
+        }
+        if b_len == 0 {
+            return a_len;
+        }
         let mut prev: Vec<usize> = (0..=b_len).collect();
         let mut curr = vec![0; b_len + 1];
         for (i, ca) in a.chars().enumerate() {
             curr[0] = i + 1;
             for (j, cb) in b.chars().enumerate() {
                 let cost = if ca == cb { 0 } else { 1 };
-                curr[j + 1] = (prev[j + 1] + 1)
-                    .min(curr[j] + 1)
-                    .min(prev[j] + cost);
+                curr[j + 1] = (prev[j + 1] + 1).min(curr[j] + 1).min(prev[j] + cost);
             }
             std::mem::swap(&mut prev, &mut curr);
         }

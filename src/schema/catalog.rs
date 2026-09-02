@@ -3,10 +3,10 @@
 //! Provides a data catalog backend for schema lineage tracking, dependency graphs,
 //! impact analysis, and team ownership metadata.
 
+use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::Arc;
-use parking_lot::RwLock;
 use tracing::{debug, info, warn};
 
 use crate::error::{Result, StreamlineError};
@@ -205,7 +205,7 @@ impl SchemaCatalog {
     pub fn update_entry(&self, subject: &str, update: CatalogEntryUpdate) -> Result<()> {
         let mut entries = self.entries.write();
         let entry = entries.get_mut(subject).ok_or_else(|| {
-            StreamlineError::Storage(format!("Catalog entry not found: {}", subject))
+            StreamlineError::Storage(format!("Catalog entry not found: {subject}"))
         })?;
 
         if let Some(desc) = update.description {
@@ -266,8 +266,7 @@ impl SchemaCatalog {
         let mut entries = self.entries.write();
         if entries.remove(subject).is_none() {
             return Err(StreamlineError::Storage(format!(
-                "Catalog entry not found: {}",
-                subject
+                "Catalog entry not found: {subject}"
             )));
         }
         info!(subject, "deleted catalog entry");
@@ -355,11 +354,10 @@ impl SchemaCatalog {
                         edge.edge_type,
                         LineageEdgeType::ConsumesFrom | LineageEdgeType::DerivedFrom
                     )
+                    && visited.insert(edge.target.clone())
                 {
-                    if visited.insert(edge.target.clone()) {
-                        transitive.push(edge.target.clone());
-                        queue.push_back(edge.target.clone());
-                    }
+                    transitive.push(edge.target.clone());
+                    queue.push_back(edge.target.clone());
                 }
             }
         }
@@ -403,10 +401,7 @@ impl SchemaCatalog {
                         return true;
                     }
                 }
-                if e.tags
-                    .iter()
-                    .any(|t| t.to_lowercase().contains(&q))
-                {
+                if e.tags.iter().any(|t| t.to_lowercase().contains(&q)) {
                     return true;
                 }
                 if let Some(ref owner) = e.owner {
@@ -424,7 +419,7 @@ impl SchemaCatalog {
     pub fn deprecate(&self, subject: &str, info: DeprecationInfo) -> Result<()> {
         let mut entries = self.entries.write();
         let entry = entries.get_mut(subject).ok_or_else(|| {
-            StreamlineError::Storage(format!("Catalog entry not found: {}", subject))
+            StreamlineError::Storage(format!("Catalog entry not found: {subject}"))
         })?;
         warn!(
             subject,
@@ -478,11 +473,12 @@ impl SchemaCatalog {
     pub fn remove_lineage_edge(&self, source: &str, target: &str) -> Result<()> {
         let mut graph = self.lineage.write();
         let before = graph.edges.len();
-        graph.edges.retain(|e| !(e.source == source && e.target == target));
+        graph
+            .edges
+            .retain(|e| !(e.source == source && e.target == target));
         if graph.edges.len() == before {
             return Err(StreamlineError::Storage(format!(
-                "Lineage edge not found: {} -> {}",
-                source, target
+                "Lineage edge not found: {source} -> {target}"
             )));
         }
         info!(source, target, "removed lineage edge");
@@ -500,6 +496,7 @@ impl Default for SchemaCatalog {
 // Helper to build entries quickly (used by tests)
 // ---------------------------------------------------------------------------
 
+#[cfg(test)]
 fn make_entry(subject: &str) -> CatalogEntry {
     CatalogEntry {
         subject: subject.to_string(),
@@ -533,7 +530,7 @@ mod tests {
         let mut e = sample_entry(subject);
         e.owner = Some(OwnerInfo {
             team: team.to_string(),
-            contact: format!("{}@example.com", team),
+            contact: format!("{team}@example.com"),
             slack_channel: None,
         });
         e
@@ -800,7 +797,7 @@ mod tests {
             catalog
                 .add_lineage_edge(LineageEdge {
                     source: "root".into(),
-                    target: format!("svc-{}", i),
+                    target: format!("svc-{i}"),
                     edge_type: LineageEdgeType::ConsumesFrom,
                     metadata: HashMap::new(),
                 })
@@ -817,7 +814,7 @@ mod tests {
             catalog
                 .add_lineage_edge(LineageEdge {
                     source: "hub".into(),
-                    target: format!("consumer-{}", i),
+                    target: format!("consumer-{i}"),
                     edge_type: LineageEdgeType::ConsumesFrom,
                     metadata: HashMap::new(),
                 })
@@ -833,7 +830,9 @@ mod tests {
     fn test_search_by_subject() {
         let catalog = SchemaCatalog::new();
         catalog.register_entry(sample_entry("user-events")).unwrap();
-        catalog.register_entry(sample_entry("order-events")).unwrap();
+        catalog
+            .register_entry(sample_entry("order-events"))
+            .unwrap();
         let results = catalog.search("user");
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].subject, "user-events");

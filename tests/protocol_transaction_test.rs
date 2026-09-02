@@ -32,7 +32,6 @@ fn test_add_partitions_to_txn_request_v3_and_below() {
     request.v3_and_below_producer_id = ProducerId(12345);
     request.v3_and_below_producer_epoch = 3;
 
-
     let mut topic = AddPartitionsToTxnTopic::default();
     topic.name = TopicName(StrBytes::from_static_str("test-topic"));
     topic.partitions = vec![0, 1, 2];
@@ -665,7 +664,7 @@ fn test_add_partitions_to_txn_versions() {
         let request = AddPartitionsToTxnRequest::default();
         let mut buf = BytesMut::new();
         let result = request.encode(&mut buf, version);
-        assert!(result.is_ok(), "Failed to encode version {}", version);
+        assert!(result.is_ok(), "Failed to encode version {version}");
     }
 }
 
@@ -676,7 +675,7 @@ fn test_end_txn_versions() {
         let request = EndTxnRequest::default();
         let mut buf = BytesMut::new();
         let result = request.encode(&mut buf, version);
-        assert!(result.is_ok(), "Failed to encode version {}", version);
+        assert!(result.is_ok(), "Failed to encode version {version}");
     }
 }
 

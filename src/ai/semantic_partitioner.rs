@@ -160,7 +160,7 @@ impl SemanticPartitioner {
                     let hash = simple_hash(hash_input);
                     return Ok((hash % self.config.num_partitions as u32) as i32);
                 } else {
-                    return Err(StreamlineError::AI(format!("Embedding failed: {}", e)));
+                    return Err(StreamlineError::AI(format!("Embedding failed: {e}")));
                 }
             }
         };
@@ -491,7 +491,7 @@ mod tests {
 
         // Add enough samples to trigger initialization
         for i in 0..15 {
-            let text = format!("sample text number {}", i);
+            let text = format!("sample text number {i}");
             let _ = partitioner.partition(&text, None).await;
         }
 
@@ -512,7 +512,7 @@ mod tests {
 
         // Initialize
         for i in 0..10 {
-            let _ = partitioner.partition(&format!("init {}", i), None).await;
+            let _ = partitioner.partition(&format!("init {i}"), None).await;
         }
 
         // Same text should go to same partition
@@ -534,7 +534,7 @@ mod tests {
         let partitioner = SemanticPartitioner::new(config, provider);
 
         for i in 0..5 {
-            let _ = partitioner.partition(&format!("text {}", i), None).await;
+            let _ = partitioner.partition(&format!("text {i}"), None).await;
         }
 
         let stats = partitioner.stats();
@@ -550,7 +550,7 @@ mod tests {
 
         // Initialize
         for i in 0..10 {
-            let _ = partitioner.partition(&format!("text {}", i), None).await;
+            let _ = partitioner.partition(&format!("text {i}"), None).await;
         }
         assert!(partitioner.is_initialized().await);
 

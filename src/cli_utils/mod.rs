@@ -110,8 +110,8 @@ pub use validator::{
 };
 
 pub use plugin_manager::{
-    CliPluginManager, CliPluginType, InstalledPlugin, PluginInvocation, PluginManifest,
-    PluginManagerConfig, PluginOutput,
+    CliPluginManager, CliPluginType, InstalledPlugin, PluginInvocation, PluginManagerConfig,
+    PluginManifest, PluginOutput,
 };
 
 #[cfg(feature = "iceberg")]

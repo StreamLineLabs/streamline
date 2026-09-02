@@ -25,9 +25,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tracing::{debug, error, info};
 
-use crate::streamql::materialized::{
-    MaterializedViewManager, RefreshMode, ViewInfo, ViewRow,
-};
+use crate::streamql::materialized::{MaterializedViewManager, RefreshMode, ViewInfo, ViewRow};
 use crate::streamql::StreamQL;
 
 // ---------------------------------------------------------------------------
@@ -152,10 +150,16 @@ pub(crate) struct StreamqlApiState {
 }
 
 impl Default for StreamqlApiState {
+    // `TopicManager::in_memory()` only builds in-process structures and cannot
+    // fail today, but it returns `Result` for symmetry with the on-disk
+    // constructors. `Default` has no error channel, and `create_streamql_router`
+    // is public API, so the fallible call is contained here rather than pushed
+    // into the signature.
+    #[allow(clippy::expect_used)]
     fn default() -> Self {
         let topic_manager = Arc::new(
             crate::storage::TopicManager::in_memory()
-                .expect("Failed to create in-memory TopicManager"),
+                .expect("TopicManager::in_memory is infallible"),
         );
         Self {
             streamql: Arc::new(StreamQL::new(topic_manager)),
@@ -193,16 +197,6 @@ impl StreamqlApiError {
             },
         }
     }
-
-    fn internal(message: impl Into<String>) -> Self {
-        Self {
-            status: StatusCode::INTERNAL_SERVER_ERROR,
-            body: StreamqlErrorResponse {
-                error: "INTERNAL_ERROR".to_string(),
-                message: message.into(),
-            },
-        }
-    }
 }
 
 impl IntoResponse for StreamqlApiError {
@@ -216,27 +210,21 @@ impl IntoResponse for StreamqlApiError {
 // ---------------------------------------------------------------------------
 
 /// Build the StreamQL GA REST API router.
-pub fn streamql_ga_router() -> Router<StreamqlApiState> {
+pub(crate) fn streamql_ga_router() -> Router<StreamqlApiState> {
     Router::new()
         .route("/api/v1/streamql/query", post(execute_query))
         .route("/api/v1/streamql/validate", post(validate_query))
         .route("/api/v1/streamql/explain", post(explain_query))
-        .route(
-            "/api/v1/streamql/views",
-            post(create_view).get(list_views),
-        )
+        .route("/api/v1/streamql/views", post(create_view).get(list_views))
         .route(
             "/api/v1/streamql/views/:name",
             get(get_view).delete(drop_view),
         )
-        .route(
-            "/api/v1/streamql/views/:name/query",
-            post(query_view),
-        )
+        .route("/api/v1/streamql/views/:name/query", post(query_view))
 }
 
 /// Backward-compatible alias used by the HTTP server bootstrap.
-pub fn streamql_router() -> Router<StreamqlApiState> {
+pub(crate) fn streamql_router() -> Router<StreamqlApiState> {
     streamql_ga_router()
 }
 
@@ -264,14 +252,10 @@ async fn execute_query(
     debug!(query, "Executing StreamQL query");
 
     let start = std::time::Instant::now();
-    let result = state
-        .streamql
-        .execute(query)
-        .await
-        .map_err(|e| {
-            error!(error = %e, "StreamQL query execution failed");
-            StreamqlApiError::bad_request(format!("Query execution failed: {e}"))
-        })?;
+    let result = state.streamql.execute(query).await.map_err(|e| {
+        error!(error = %e, "StreamQL query execution failed");
+        StreamqlApiError::bad_request(format!("Query execution failed: {e}"))
+    })?;
 
     let columns: Vec<String> = result
         .schema
@@ -289,9 +273,7 @@ async fn execute_query(
                 .iter()
                 .map(|v| match v {
                     crate::streamql::types::Value::Null => serde_json::Value::Null,
-                    crate::streamql::types::Value::Boolean(b) => {
-                        serde_json::Value::Bool(*b)
-                    }
+                    crate::streamql::types::Value::Boolean(b) => serde_json::Value::Bool(*b),
                     crate::streamql::types::Value::Int64(i) => {
                         serde_json::json!(i)
                     }
@@ -413,9 +395,7 @@ async fn create_view(
 }
 
 /// GET /api/v1/streamql/views — list all materialized views
-async fn list_views(
-    State(state): State<StreamqlApiState>,
-) -> Json<Vec<ViewInfo>> {
+async fn list_views(State(state): State<StreamqlApiState>) -> Json<Vec<ViewInfo>> {
     let views = state.view_manager.list_views().await;
     debug!(count = views.len(), "Listed materialized views");
     Json(views)
@@ -431,7 +411,7 @@ async fn get_view(
         .get_view(&name)
         .await
         .map(Json)
-        .ok_or_else(|| StreamqlApiError::not_found(format!("View '{}' not found", name)))
+        .ok_or_else(|| StreamqlApiError::not_found(format!("View '{name}' not found")))
 }
 
 /// DELETE /api/v1/streamql/views/:name — drop a view
@@ -440,14 +420,10 @@ async fn drop_view(
     Path(name): Path<String>,
 ) -> Result<StatusCode, StreamqlApiError> {
     info!(view = %name, "Dropping materialized view");
-    state
-        .view_manager
-        .drop_view(&name)
-        .await
-        .map_err(|e| {
-            error!(error = %e, "Failed to drop view");
-            StreamqlApiError::not_found(format!("View '{}' not found", name))
-        })?;
+    state.view_manager.drop_view(&name).await.map_err(|e| {
+        error!(error = %e, "Failed to drop view");
+        StreamqlApiError::not_found(format!("View '{name}' not found"))
+    })?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -476,9 +452,7 @@ async fn query_view(
             .view_manager
             .scan(&name, req.limit)
             .await
-            .map_err(|e| {
-                StreamqlApiError::not_found(format!("View query failed: {e}"))
-            })?
+            .map_err(|e| StreamqlApiError::not_found(format!("View query failed: {e}")))?
     };
 
     let row_count = rows.len();
@@ -497,7 +471,7 @@ fn parse_refresh_mode(value: &serde_json::Value) -> RefreshMode {
     match value {
         serde_json::Value::String(s) => match s.as_str() {
             "on_demand" => RefreshMode::OnDemand,
-            "continuous" | _ => RefreshMode::Continuous,
+            _ => RefreshMode::Continuous,
         },
         serde_json::Value::Object(map) => {
             if let Some(interval) = map.get("periodic").and_then(|v| v.as_u64()) {
@@ -566,9 +540,7 @@ mod tests {
             .await
             .unwrap();
         // May succeed or fail depending on topic existence — either is valid
-        assert!(
-            resp.status() == StatusCode::OK || resp.status() == StatusCode::BAD_REQUEST
-        );
+        assert!(resp.status() == StatusCode::OK || resp.status() == StatusCode::BAD_REQUEST);
     }
 
     // -- validate endpoint --
@@ -839,9 +811,7 @@ mod tests {
             .oneshot(
                 Request::post("/api/v1/streamql/views")
                     .header("content-type", "application/json")
-                    .body(Body::from(
-                        r#"{"name": "", "query": "SELECT * FROM t"}"#,
-                    ))
+                    .body(Body::from(r#"{"name": "", "query": "SELECT * FROM t"}"#))
                     .unwrap(),
             )
             .await
@@ -866,7 +836,7 @@ mod tests {
         let v = serde_json::json!({"periodic": 5000});
         match parse_refresh_mode(&v) {
             RefreshMode::Periodic { interval_ms } => assert_eq!(interval_ms, 5000),
-            other => panic!("Expected Periodic, got {:?}", other),
+            other => panic!("Expected Periodic, got {other:?}"),
         }
     }
 }

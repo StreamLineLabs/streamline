@@ -119,7 +119,7 @@ impl PartitionState {
 
     /// Generate the partition key for storage
     pub fn partition_key(topic: &str, partition: i32) -> String {
-        format!("{}#{}", topic, partition)
+        format!("{topic}#{partition}")
     }
 }
 
@@ -471,7 +471,7 @@ impl StateStore for InMemoryStateStore {
         let key = Self::key(topic, partition);
 
         let current = states.get(&key).ok_or_else(|| {
-            StreamlineError::storage_msg(format!("Partition {}:{} not found", topic, partition))
+            StreamlineError::storage_msg(format!("Partition {topic}:{partition} not found"))
         })?;
 
         if current.version != expected_version {
@@ -500,7 +500,7 @@ impl StateStore for InMemoryStateStore {
         let key = Self::key(topic, partition);
 
         let state = states.get_mut(&key).ok_or_else(|| {
-            StreamlineError::storage_msg(format!("Partition {}:{} not found", topic, partition))
+            StreamlineError::storage_msg(format!("Partition {topic}:{partition} not found"))
         })?;
 
         if state.version != expected_version {
@@ -529,7 +529,7 @@ impl StateStore for InMemoryStateStore {
         let key = Self::key(topic, partition);
 
         let state = states.get_mut(&key).ok_or_else(|| {
-            StreamlineError::storage_msg(format!("Partition {}:{} not found", topic, partition))
+            StreamlineError::storage_msg(format!("Partition {topic}:{partition} not found"))
         })?;
 
         if state.version != expected_version {
@@ -560,7 +560,7 @@ impl StateStore for InMemoryStateStore {
         let key = Self::key(topic, partition);
 
         let state = states.get_mut(&key).ok_or_else(|| {
-            StreamlineError::storage_msg(format!("Partition {}:{} not found", topic, partition))
+            StreamlineError::storage_msg(format!("Partition {topic}:{partition} not found"))
         })?;
 
         let now_ms = Self::now_ms();
@@ -569,8 +569,7 @@ impl StateStore for InMemoryStateStore {
         if let (Some(owner), Some(expiry)) = (&state.owner_agent_id, state.lease_expiry_ms) {
             if expiry > now_ms && owner != agent_id {
                 return Err(StreamlineError::storage_msg(format!(
-                    "Lease held by agent {} until {}",
-                    owner, expiry
+                    "Lease held by agent {owner} until {expiry}"
                 )));
             }
         }
@@ -662,7 +661,7 @@ impl StateStore for InMemoryStateStore {
     async fn list_partitions(&self, topic: &str) -> Result<Vec<PartitionState>> {
         self.stats.reads.fetch_add(1, Ordering::Relaxed);
         let states = self.states.read();
-        let prefix = format!("{}#", topic);
+        let prefix = format!("{topic}#");
 
         Ok(states
             .iter()

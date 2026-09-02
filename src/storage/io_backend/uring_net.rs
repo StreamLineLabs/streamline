@@ -806,7 +806,7 @@ mod tests {
     #[test]
     fn test_is_uring_net_available() {
         let available = is_uring_net_available();
-        println!("io_uring network available: {}", available);
+        println!("io_uring network available: {available}");
     }
 
     #[cfg(target_os = "linux")]

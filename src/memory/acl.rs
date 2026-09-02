@@ -46,17 +46,15 @@ impl MemoryAcl {
 ///   2. A valid (non-expired) share grant covers the topic.
 pub fn check_access(acl: &MemoryAcl, agent_id: &str, target_topic: &str) -> bool {
     // Own-topic: `__mem.<agent_id>.` anywhere in the topic string.
-    let own_marker = format!("__mem.{}", agent_id);
+    let own_marker = format!("__mem.{agent_id}");
     if target_topic.contains(&own_marker) {
         return true;
     }
 
     let grants = read_or_recover(&acl.grants);
-    grants.iter().any(|g| {
-        g.to_agent == agent_id
-            && target_topic.starts_with(&g.prefix)
-            && !is_expired(g)
-    })
+    grants
+        .iter()
+        .any(|g| g.to_agent == agent_id && target_topic.starts_with(&g.prefix) && !is_expired(g))
 }
 
 /// Record a share grant from one agent to another.

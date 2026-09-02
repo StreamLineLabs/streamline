@@ -289,9 +289,9 @@ impl SqlServerCdcSource {
             let capture_instance = CdcCaptureInstance {
                 source_schema: schema.clone(),
                 source_table: tbl.clone(),
-                capture_instance: format!("{}_{}", schema, tbl),
+                capture_instance: format!("{schema}_{tbl}"),
                 cdc_schema: "cdc".to_string(),
-                change_table: format!("{}_{}_CT", schema, tbl),
+                change_table: format!("{schema}_{tbl}_CT"),
                 columns: Vec::new(),
                 primary_key: Vec::new(),
                 start_lsn: "0x00000000000000000000".to_string(),

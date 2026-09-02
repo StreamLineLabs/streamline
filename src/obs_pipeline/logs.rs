@@ -545,7 +545,7 @@ mod tests {
         let mut aggregator = LogAggregator::new(7);
 
         for i in 0..10 {
-            aggregator.add(LogEntry::new(LogLevel::Info, format!("Message {}", i)));
+            aggregator.add(LogEntry::new(LogLevel::Info, format!("Message {i}")));
         }
 
         let recent = aggregator.recent(3);
@@ -558,7 +558,7 @@ mod tests {
         let mut aggregator = LogAggregator::new(7).with_max_entries(5);
 
         for i in 0..10 {
-            aggregator.add(LogEntry::new(LogLevel::Info, format!("Message {}", i)));
+            aggregator.add(LogEntry::new(LogLevel::Info, format!("Message {i}")));
         }
 
         assert_eq!(aggregator.count(), 5);

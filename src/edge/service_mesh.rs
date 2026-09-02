@@ -124,8 +124,7 @@ impl ServiceMesh {
         let mut services = self.services.write().await;
         if services.remove(service_name).is_none() {
             return Err(StreamlineError::Config(format!(
-                "Service not found: {}",
-                service_name
+                "Service not found: {service_name}"
             )));
         }
 
@@ -158,8 +157,7 @@ impl ServiceMesh {
                     .circuit_breaker_rejections
                     .fetch_add(1, Ordering::Relaxed);
                 return Err(StreamlineError::ResourceExhausted(format!(
-                    "Circuit breaker open for service: {}",
-                    service_name
+                    "Circuit breaker open for service: {service_name}"
                 )));
             }
         }
@@ -173,8 +171,7 @@ impl ServiceMesh {
                     .rate_limit_rejections
                     .fetch_add(1, Ordering::Relaxed);
                 return Err(StreamlineError::ResourceExhausted(format!(
-                    "Rate limit exceeded for service: {}",
-                    service_name
+                    "Rate limit exceeded for service: {service_name}"
                 )));
             }
         }
@@ -182,17 +179,16 @@ impl ServiceMesh {
 
         // Get healthy endpoints
         let endpoints = self.endpoints.read().await;
-        let service_endpoints = endpoints.get(service_name).ok_or_else(|| {
-            StreamlineError::Config(format!("Service not found: {}", service_name))
-        })?;
+        let service_endpoints = endpoints
+            .get(service_name)
+            .ok_or_else(|| StreamlineError::Config(format!("Service not found: {service_name}")))?;
 
         let healthy_endpoints: Vec<&Endpoint> =
             service_endpoints.iter().filter(|e| e.healthy).collect();
 
         if healthy_endpoints.is_empty() {
             return Err(StreamlineError::ResourceExhausted(format!(
-                "No healthy endpoints for service: {}",
-                service_name
+                "No healthy endpoints for service: {service_name}"
             )));
         }
         drop(endpoints);
@@ -201,15 +197,14 @@ impl ServiceMesh {
         let mut lbs = self.load_balancers.write().await;
         let lb = lbs.get_mut(service_name).ok_or_else(|| {
             StreamlineError::Config(format!(
-                "Load balancer not found for service: {}",
-                service_name
+                "Load balancer not found for service: {service_name}"
             ))
         })?;
 
         let endpoints = self.endpoints.read().await;
-        let service_endpoints = endpoints.get(service_name).ok_or_else(|| {
-            StreamlineError::Config(format!("Service not found: {}", service_name))
-        })?;
+        let service_endpoints = endpoints
+            .get(service_name)
+            .ok_or_else(|| StreamlineError::Config(format!("Service not found: {service_name}")))?;
         let healthy_endpoints: Vec<&Endpoint> =
             service_endpoints.iter().filter(|e| e.healthy).collect();
 
@@ -247,9 +242,9 @@ impl ServiceMesh {
         healthy: bool,
     ) -> Result<()> {
         let mut endpoints = self.endpoints.write().await;
-        let service_endpoints = endpoints.get_mut(service_name).ok_or_else(|| {
-            StreamlineError::Config(format!("Service not found: {}", service_name))
-        })?;
+        let service_endpoints = endpoints
+            .get_mut(service_name)
+            .ok_or_else(|| StreamlineError::Config(format!("Service not found: {service_name}")))?;
 
         for endpoint in service_endpoints.iter_mut() {
             if endpoint.id == endpoint_id {
@@ -266,8 +261,7 @@ impl ServiceMesh {
         }
 
         Err(StreamlineError::Config(format!(
-            "Endpoint not found: {}",
-            endpoint_id
+            "Endpoint not found: {endpoint_id}"
         )))
     }
 
@@ -728,7 +722,9 @@ impl RateLimiterState {
 
     fn try_acquire(&mut self) -> Result<bool> {
         // Refill tokens
-        let mut last_refill = self.last_refill.lock()
+        let mut last_refill = self
+            .last_refill
+            .lock()
             .map_err(|_| StreamlineError::Storage("lock poisoned".into()))?;
         let elapsed = last_refill.elapsed();
         let new_tokens = (elapsed.as_secs_f64() * self.config.requests_per_second as f64) as u32;

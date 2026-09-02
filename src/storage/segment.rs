@@ -135,8 +135,7 @@ impl SegmentSyncMode {
             "interval" => Ok(Self::Interval),
             "every_write" | "everywrite" => Ok(Self::EveryWrite),
             _ => Err(StreamlineError::Config(format!(
-                "Invalid segment sync mode '{}'. Valid options: none, on_seal, interval, every_write",
-                s
+                "Invalid segment sync mode '{s}'. Valid options: none, on_seal, interval, every_write"
             ))),
         }
     }
@@ -1205,8 +1204,7 @@ impl Segment {
                 // Legacy JSON format for backward compatibility
                 serde_json::from_slice(&batch_bytes).map_err(|e| {
                     StreamlineError::CorruptedData(format!(
-                        "Failed to deserialize batch (JSON): {}",
-                        e
+                        "Failed to deserialize batch (JSON): {e}"
                     ))
                 })?
             };
@@ -1316,8 +1314,7 @@ impl Segment {
                 // Legacy JSON format for backward compatibility
                 serde_json::from_slice(&batch_bytes).map_err(|e| {
                     StreamlineError::CorruptedData(format!(
-                        "Failed to deserialize batch (JSON): {}",
-                        e
+                        "Failed to deserialize batch (JSON): {e}"
                     ))
                 })?
             };
@@ -1481,8 +1478,7 @@ impl Segment {
                 // Legacy JSON format for backward compatibility
                 serde_json::from_slice(&batch_bytes).map_err(|e| {
                     StreamlineError::CorruptedData(format!(
-                        "Failed to deserialize batch (JSON): {}",
-                        e
+                        "Failed to deserialize batch (JSON): {e}"
                     ))
                 })?
             };
@@ -1546,8 +1542,7 @@ impl Segment {
             let computed_crc = crc32fast::hash(&batch_data);
             if stored_crc != computed_crc {
                 return Err(StreamlineError::CorruptedData(format!(
-                    "Batch CRC mismatch at position {}: stored={:#x}, computed={:#x}",
-                    position, stored_crc, computed_crc
+                    "Batch CRC mismatch at position {position}: stored={stored_crc:#x}, computed={computed_crc:#x}"
                 )));
             }
 
@@ -1771,7 +1766,7 @@ impl Segment {
 
 /// Generate segment filename from base offset
 pub fn segment_filename(base_offset: i64) -> String {
-    format!("{:020}.segment", base_offset)
+    format!("{base_offset:020}.segment")
 }
 
 #[cfg(test)]
@@ -1865,7 +1860,7 @@ mod tests {
         let mut segment = Segment::create(&path, 0).unwrap();
 
         for i in 0..10 {
-            let record = Record::new(i, 1234567890 + i, None, Bytes::from(format!("value {}", i)));
+            let record = Record::new(i, 1234567890 + i, None, Bytes::from(format!("value {i}")));
             segment.append_record(record).unwrap();
         }
 
@@ -1904,7 +1899,7 @@ mod tests {
 
         // Write some records
         for i in 0..10 {
-            let record = Record::new(i, 1234567890 + i, None, Bytes::from(format!("value {}", i)));
+            let record = Record::new(i, 1234567890 + i, None, Bytes::from(format!("value {i}")));
             segment.append_record(record).unwrap();
         }
 
@@ -1925,7 +1920,7 @@ mod tests {
 
         // Write some records
         for i in 0..10 {
-            let record = Record::new(i, 1234567890 + i, None, Bytes::from(format!("value {}", i)));
+            let record = Record::new(i, 1234567890 + i, None, Bytes::from(format!("value {i}")));
             segment.append_record(record).unwrap();
         }
 
@@ -1946,7 +1941,7 @@ mod tests {
 
         // Write some records
         for i in 0..10 {
-            let record = Record::new(i, 1234567890 + i, None, Bytes::from(format!("value {}", i)));
+            let record = Record::new(i, 1234567890 + i, None, Bytes::from(format!("value {i}")));
             segment.append_record(record).unwrap();
         }
 
@@ -1969,7 +1964,7 @@ mod tests {
 
             for i in 0..5 {
                 let record =
-                    Record::new(i, 1234567890 + i, None, Bytes::from(format!("value {}", i)));
+                    Record::new(i, 1234567890 + i, None, Bytes::from(format!("value {i}")));
                 segment.append_record(record).unwrap();
             }
             segment.seal().unwrap();
@@ -1995,7 +1990,7 @@ mod tests {
 
             for i in 0..100 {
                 let record =
-                    Record::new(i, 1234567890 + i, None, Bytes::from(format!("value {}", i)));
+                    Record::new(i, 1234567890 + i, None, Bytes::from(format!("value {i}")));
                 segment.append_record(record).unwrap();
             }
 
@@ -2029,7 +2024,7 @@ mod tests {
 
             for i in 0..50 {
                 let record =
-                    Record::new(i, 1234567890 + i, None, Bytes::from(format!("value {}", i)));
+                    Record::new(i, 1234567890 + i, None, Bytes::from(format!("value {i}")));
                 segment.append_record(record).unwrap();
             }
 
@@ -2094,7 +2089,7 @@ mod tests {
 
         // Write some records
         for i in 0..5 {
-            let record = Record::new(i, 1234567890 + i, None, Bytes::from(format!("value {}", i)));
+            let record = Record::new(i, 1234567890 + i, None, Bytes::from(format!("value {i}")));
             segment.append_record(record).unwrap();
         }
 
@@ -2144,7 +2139,7 @@ mod tests {
             let mut segment = Segment::create(&path, 0).unwrap();
             for i in 0..3 {
                 let record =
-                    Record::new(i, 1234567890 + i, None, Bytes::from(format!("value {}", i)));
+                    Record::new(i, 1234567890 + i, None, Bytes::from(format!("value {i}")));
                 segment.append_record(record).unwrap();
             }
             segment.seal().unwrap();

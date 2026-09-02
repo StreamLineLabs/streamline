@@ -275,8 +275,7 @@ impl MultiCloudFederation {
         let mut regions = self.regions.write().await;
         if regions.remove(region_id).is_none() {
             return Err(StreamlineError::Config(format!(
-                "Region '{}' not found",
-                region_id
+                "Region '{region_id}' not found"
             )));
         }
         Ok(())
@@ -301,8 +300,7 @@ impl MultiCloudFederation {
         for region_id in &config.regions {
             if !regions.contains_key(region_id) {
                 return Err(StreamlineError::Config(format!(
-                    "Region '{}' not registered",
-                    region_id
+                    "Region '{region_id}' not registered"
                 )));
             }
         }
@@ -319,8 +317,7 @@ impl MultiCloudFederation {
         let mut topics = self.topics.write().await;
         if topics.remove(topic).is_none() {
             return Err(StreamlineError::Config(format!(
-                "Topic '{}' not federated",
-                topic
+                "Topic '{topic}' not federated"
             )));
         }
         Ok(())
@@ -346,8 +343,7 @@ impl MultiCloudFederation {
             Ok(())
         } else {
             Err(StreamlineError::Config(format!(
-                "Region '{}' not found",
-                region_id
+                "Region '{region_id}' not found"
             )))
         }
     }
@@ -531,7 +527,7 @@ mod tests {
                 id: id.to_string(),
                 name: name.to_string(),
                 provider: CloudProvider::AWS,
-                endpoint: format!("https://{}.example.com", id),
+                endpoint: format!("https://{id}.example.com"),
                 active: true,
                 primary: id == "us-east",
                 priority: 1,

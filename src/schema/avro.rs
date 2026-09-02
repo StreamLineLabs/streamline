@@ -20,7 +20,7 @@ impl AvroValidator {
     /// Parse and validate an Avro schema string
     pub fn parse(&self, schema_str: &str) -> Result<AvroSchema, SchemaError> {
         AvroSchema::parse_str(schema_str)
-            .map_err(|e| SchemaError::InvalidSchema(format!("Invalid Avro schema: {}", e)))
+            .map_err(|e| SchemaError::InvalidSchema(format!("Invalid Avro schema: {e}")))
     }
 
     /// Validate that a schema string is valid Avro
@@ -241,12 +241,12 @@ impl AvroValidator {
 
         // Try to deserialize the data using the schema
         let reader = apache_avro::Reader::with_schema(&schema, data)
-            .map_err(|e| SchemaError::InvalidSchema(format!("Failed to read Avro data: {}", e)))?;
+            .map_err(|e| SchemaError::InvalidSchema(format!("Failed to read Avro data: {e}")))?;
 
         // Iterate through records to validate
         for value in reader {
             value.map_err(|e| {
-                SchemaError::InvalidSchema(format!("Data doesn't match schema: {}", e))
+                SchemaError::InvalidSchema(format!("Data doesn't match schema: {e}"))
             })?;
         }
 

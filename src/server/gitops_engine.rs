@@ -246,7 +246,7 @@ impl GitOpsEngine {
                     let resource = AppliedResource {
                         kind: change.kind.clone(),
                         name: change.name.clone(),
-                        version: format!("v{}", now),
+                        version: format!("v{now}"),
                         applied_at: now,
                         status: ResourceStatus::InSync,
                     };
@@ -254,9 +254,7 @@ impl GitOpsEngine {
                     applied.push(resource);
                 }
                 ChangeAction::Delete => {
-                    if !self.config.auto_delete_topics
-                        && change.kind == ResourceKind::Topic
-                    {
+                    if !self.config.auto_delete_topics && change.kind == ResourceKind::Topic {
                         warn!(name = %change.name, "auto-delete disabled — skipping topic deletion");
                         errors.push(SyncError {
                             resource: change.name.clone(),
@@ -475,7 +473,10 @@ spec:
     #[test]
     fn test_parse_resource_labels_and_annotations() {
         let res = GitOpsEngine::parse_resource(sample_topic_yaml()).unwrap();
-        assert_eq!(res.metadata.labels.get("team"), Some(&"platform".to_string()));
+        assert_eq!(
+            res.metadata.labels.get("team"),
+            Some(&"platform".to_string())
+        );
         assert_eq!(
             res.metadata.annotations.get("description"),
             Some(&"Order events".to_string())
@@ -571,8 +572,10 @@ spec:
     // 14
     #[tokio::test]
     async fn test_apply_dry_run_skips() {
-        let mut cfg = GitOpsConfig::default();
-        cfg.dry_run = true;
+        let cfg = GitOpsConfig {
+            dry_run: true,
+            ..Default::default()
+        };
         let engine = GitOpsEngine::new(cfg);
         {
             let mut state = engine.state.write().await;
@@ -607,8 +610,10 @@ spec:
     // 16
     #[tokio::test]
     async fn test_apply_delete_allowed() {
-        let mut cfg = GitOpsConfig::default();
-        cfg.auto_delete_topics = true;
+        let cfg = GitOpsConfig {
+            auto_delete_topics: true,
+            ..Default::default()
+        };
         let engine = GitOpsEngine::new(cfg);
         let changes = vec![ResourceChange {
             kind: ResourceKind::Topic,

@@ -95,7 +95,7 @@ pub fn handle_lakehouse_view_create(
     refresh_mode: &str,
     ctx: &CliContext,
 ) -> Result<()> {
-    let spinner = ctx.spinner(&format!("Creating materialized view '{}'...", name));
+    let spinner = ctx.spinner(&format!("Creating materialized view '{name}'..."));
     std::thread::sleep(std::time::Duration::from_millis(800));
     spinner.finish_with_message("Created");
 
@@ -112,9 +112,9 @@ pub fn handle_lakehouse_view_create(
             ctx.println(&serde_json::to_string_pretty(&result)?);
         }
         _ => {
-            ctx.success(&format!("Created materialized view '{}'", name));
-            ctx.println(&format!("  Query:   {}", query));
-            ctx.println(&format!("  Refresh: {}", refresh_mode));
+            ctx.success(&format!("Created materialized view '{name}'"));
+            ctx.println(&format!("  Query:   {query}"));
+            ctx.println(&format!("  Refresh: {refresh_mode}"));
             ctx.info("View will be populated on first refresh");
         }
     }
@@ -125,10 +125,7 @@ pub fn handle_lakehouse_view_create(
 /// Handle lakehouse view refresh command
 pub fn handle_lakehouse_view_refresh(name: &str, full: bool, ctx: &CliContext) -> Result<()> {
     let refresh_type = if full { "full" } else { "incremental" };
-    let spinner = ctx.spinner(&format!(
-        "Performing {} refresh of '{}'...",
-        refresh_type, name
-    ));
+    let spinner = ctx.spinner(&format!("Performing {refresh_type} refresh of '{name}'..."));
     std::thread::sleep(std::time::Duration::from_millis(1000));
     spinner.finish_with_message("Complete");
 
@@ -167,7 +164,7 @@ pub fn handle_lakehouse_export(
     partition_by: Option<&str>,
     ctx: &CliContext,
 ) -> Result<()> {
-    let spinner = ctx.spinner(&format!("Exporting '{}' to {} format...", topic, format));
+    let spinner = ctx.spinner(&format!("Exporting '{topic}' to {format} format..."));
     std::thread::sleep(std::time::Duration::from_millis(1500));
     spinner.finish_with_message("Exported");
 
@@ -187,8 +184,8 @@ pub fn handle_lakehouse_export(
             ctx.println(&serde_json::to_string_pretty(&result)?);
         }
         _ => {
-            ctx.success(&format!("Exported '{}' to {}", topic, destination));
-            ctx.println(&format!("  Format:          {}", format));
+            ctx.success(&format!("Exported '{topic}' to {destination}"));
+            ctx.println(&format!("  Format:          {format}"));
             ctx.println(&format!(
                 "  Records:         {}",
                 format_number(result["records_exported"].as_u64().unwrap_or(0))
@@ -203,7 +200,7 @@ pub fn handle_lakehouse_export(
                 result["duration_seconds"]
             ));
             if let Some(pb) = partition_by {
-                ctx.println(&format!("  Partitioned By:  {}", pb));
+                ctx.println(&format!("  Partitioned By:  {pb}"));
             }
         }
     }

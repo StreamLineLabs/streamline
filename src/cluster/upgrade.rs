@@ -439,7 +439,7 @@ impl UpgradeCoordinator {
 
             if self.config.pause_on_failure {
                 progress.state = UpgradeState::Paused;
-                progress.error = Some(format!("Node {} failed: {}", node_id, error));
+                progress.error = Some(format!("Node {node_id} failed: {error}"));
 
                 warn!(node_id, "Upgrade paused due to node failure");
             }
@@ -576,14 +576,12 @@ impl UpgradeCoordinator {
             if let Some(node) = p.nodes.get(&node_id) {
                 if node.upgrading {
                     return Err(StreamlineError::Config(format!(
-                        "Node {} is already upgrading",
-                        node_id
+                        "Node {node_id} is already upgrading"
                     )));
                 }
                 if node.upgraded {
                     return Err(StreamlineError::Config(format!(
-                        "Node {} is already upgraded",
-                        node_id
+                        "Node {node_id} is already upgraded"
                     )));
                 }
             }

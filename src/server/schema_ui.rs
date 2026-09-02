@@ -158,14 +158,14 @@ async fn schema_list_page(State(state): State<SchemaUiState>) -> Response {
                 .unwrap_or(0);
             total_versions += version_count;
 
-            let (latest_version, schema_type, compat) =
-                match state.store.get_latest_schema(subject) {
-                    Ok(schema) => {
-                        let compat = state.store.get_subject_compatibility(subject).await;
-                        (schema.version, schema.schema_type, compat)
-                    }
-                    Err(_) => (0, SchemaType::Avro, CompatibilityLevel::Backward),
-                };
+            let (latest_version, schema_type, compat) = match state.store.get_latest_schema(subject)
+            {
+                Ok(schema) => {
+                    let compat = state.store.get_subject_compatibility(subject).await;
+                    (schema.version, schema.schema_type, compat)
+                }
+                Err(_) => (0, SchemaType::Avro, CompatibilityLevel::Backward),
+            };
 
             let row = tpl::SUBJECT_ROW
                 .replace("{subject}", subject)
@@ -217,7 +217,13 @@ async fn schema_compare_page(
     // Build <option> elements
     let options: String = sorted_subjects
         .iter()
-        .map(|s| format!(r#"<option value="{}">{}</option>"#, escape_html(s), escape_html(s)))
+        .map(|s| {
+            format!(
+                r#"<option value="{}">{}</option>"#,
+                escape_html(s),
+                escape_html(s)
+            )
+        })
         .collect::<Vec<_>>()
         .join("\n          ");
 
@@ -355,7 +361,7 @@ async fn schema_version_page(
         .replace("{schema_content}", &escape_html(&pretty))
         .replace("{type_color}", type_badge_color(schema.schema_type));
 
-    let title = format!("{} v{}", subject, version);
+    let title = format!("{subject} v{version}");
     render_page(&title, &content).into_response()
 }
 
@@ -436,8 +442,7 @@ async fn api_check_compatibility(
     let schema_type: SchemaType = match query.schema_type.parse() {
         Ok(t) => t,
         Err(_) => {
-            let body =
-                serde_json::json!({ "error": true, "message": "Invalid schema type" });
+            let body = serde_json::json!({ "error": true, "message": "Invalid schema type" });
             return (StatusCode::BAD_REQUEST, Json(body)).into_response();
         }
     };

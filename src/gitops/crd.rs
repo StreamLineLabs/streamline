@@ -507,10 +507,7 @@ impl CrdGenerator {
         let cluster_crd =
             serde_yaml::to_string(&Self::streamline_cluster_crd()).unwrap_or_default();
 
-        format!(
-            "---\n{}\n---\n{}\n---\n{}",
-            topic_crd, sink_crd, cluster_crd
-        )
+        format!("---\n{topic_crd}\n---\n{sink_crd}\n---\n{cluster_crd}")
     }
 
     fn topic_schema() -> CrdSchema {

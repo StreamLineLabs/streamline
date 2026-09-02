@@ -10,12 +10,11 @@ use std::sync::Arc;
 use std::time::Instant;
 
 /// Helper to create a TopicManager backed by a temporary directory
-fn create_test_topic_manager() -> Arc<streamline::storage::TopicManager> {
+fn create_test_topic_manager() -> (Arc<streamline::storage::TopicManager>, tempfile::TempDir) {
     let dir = tempfile::tempdir().expect("Failed to create temp dir");
-    let path = dir.into_path();
-    let tm = streamline::storage::TopicManager::new(&path)
-        .expect("Failed to create TopicManager");
-    Arc::new(tm)
+    let tm =
+        streamline::storage::TopicManager::new(dir.path()).expect("Failed to create TopicManager");
+    (Arc::new(tm), dir)
 }
 
 /// Build a GraphQL schema for testing (no GroupCoordinator)
@@ -31,7 +30,7 @@ fn build_test_schema(
 
 #[tokio::test]
 async fn test_query_topics_empty() {
-    let tm = create_test_topic_manager();
+    let (tm, _tmp) = create_test_topic_manager();
     let schema = build_test_schema(tm);
 
     let res = schema
@@ -48,16 +47,14 @@ async fn test_query_topics_empty() {
 
 #[tokio::test]
 async fn test_query_topics_after_create() {
-    let tm = create_test_topic_manager();
+    let (tm, _tmp) = create_test_topic_manager();
     tm.create_topic("test-topic", 3)
         .expect("Failed to create topic");
 
     let schema = build_test_schema(tm);
 
     let res = schema
-        .execute(Request::new(
-            "{ topics { name partitions messageCount } }",
-        ))
+        .execute(Request::new("{ topics { name partitions messageCount } }"))
         .await;
 
     assert!(res.errors.is_empty(), "Errors: {:?}", res.errors);
@@ -74,7 +71,7 @@ async fn test_query_topics_after_create() {
 
 #[tokio::test]
 async fn test_query_single_topic() {
-    let tm = create_test_topic_manager();
+    let (tm, _tmp) = create_test_topic_manager();
     tm.create_topic("my-topic", 2)
         .expect("Failed to create topic");
 
@@ -94,13 +91,11 @@ async fn test_query_single_topic() {
 
 #[tokio::test]
 async fn test_query_topic_not_found() {
-    let tm = create_test_topic_manager();
+    let (tm, _tmp) = create_test_topic_manager();
     let schema = build_test_schema(tm);
 
     let res = schema
-        .execute(Request::new(
-            r#"{ topic(name: "nonexistent") { name } }"#,
-        ))
+        .execute(Request::new(r#"{ topic(name: "nonexistent") { name } }"#))
         .await;
 
     assert!(res.errors.is_empty(), "Errors: {:?}", res.errors);
@@ -110,7 +105,7 @@ async fn test_query_topic_not_found() {
 
 #[tokio::test]
 async fn test_query_messages_empty_topic() {
-    let tm = create_test_topic_manager();
+    let (tm, _tmp) = create_test_topic_manager();
     tm.create_topic("events", 1)
         .expect("Failed to create topic");
 
@@ -132,7 +127,7 @@ async fn test_query_messages_empty_topic() {
 
 #[tokio::test]
 async fn test_query_cluster_info() {
-    let tm = create_test_topic_manager();
+    let (tm, _tmp) = create_test_topic_manager();
     let schema = build_test_schema(tm);
 
     let res = schema
@@ -144,15 +139,12 @@ async fn test_query_cluster_info() {
     assert!(res.errors.is_empty(), "Errors: {:?}", res.errors);
     let data = res.data.into_json().expect("Failed to convert to JSON");
     assert_eq!(data["clusterInfo"]["nodeId"], 0);
-    assert!(!data["clusterInfo"]["version"]
-        .as_str()
-        .unwrap()
-        .is_empty());
+    assert!(!data["clusterInfo"]["version"].as_str().unwrap().is_empty());
 }
 
 #[tokio::test]
 async fn test_query_consumer_groups_empty() {
-    let tm = create_test_topic_manager();
+    let (tm, _tmp) = create_test_topic_manager();
     let schema = build_test_schema(tm);
 
     let res = schema
@@ -173,7 +165,7 @@ async fn test_query_consumer_groups_empty() {
 
 #[tokio::test]
 async fn test_mutation_create_topic() {
-    let tm = create_test_topic_manager();
+    let (tm, _tmp) = create_test_topic_manager();
     let schema = build_test_schema(tm.clone());
 
     let res = schema
@@ -188,15 +180,13 @@ async fn test_mutation_create_topic() {
     assert_eq!(data["createTopic"]["partitions"], 4);
 
     // Verify the topic was actually created in storage
-    let stats = tm
-        .get_topic_stats("new-topic")
-        .expect("Topic should exist");
+    let stats = tm.get_topic_stats("new-topic").expect("Topic should exist");
     assert_eq!(stats.num_partitions, 4);
 }
 
 #[tokio::test]
 async fn test_mutation_delete_topic() {
-    let tm = create_test_topic_manager();
+    let (tm, _tmp) = create_test_topic_manager();
     tm.create_topic("to-delete", 1)
         .expect("Failed to create topic");
 
@@ -218,7 +208,7 @@ async fn test_mutation_delete_topic() {
 
 #[tokio::test]
 async fn test_mutation_produce_message() {
-    let tm = create_test_topic_manager();
+    let (tm, _tmp) = create_test_topic_manager();
     tm.create_topic("produce-test", 1)
         .expect("Failed to create topic");
 
@@ -242,15 +232,12 @@ async fn test_mutation_produce_message() {
         .read("produce-test", 0, 0, 10)
         .expect("Failed to read messages");
     assert_eq!(records.len(), 1);
-    assert_eq!(
-        String::from_utf8_lossy(&records[0].value),
-        "hello world"
-    );
+    assert_eq!(String::from_utf8_lossy(&records[0].value), "hello world");
 }
 
 #[tokio::test]
 async fn test_mutation_produce_with_key() {
-    let tm = create_test_topic_manager();
+    let (tm, _tmp) = create_test_topic_manager();
     tm.create_topic("keyed-test", 1)
         .expect("Failed to create topic");
 
@@ -284,7 +271,7 @@ async fn test_mutation_produce_with_key() {
 
 #[tokio::test]
 async fn test_produce_then_query_messages() {
-    let tm = create_test_topic_manager();
+    let (tm, _tmp) = create_test_topic_manager();
     tm.create_topic("roundtrip", 1)
         .expect("Failed to create topic");
 
@@ -336,7 +323,7 @@ async fn test_produce_then_query_messages() {
 async fn test_subscription_messages_stream() {
     use futures_util::StreamExt;
 
-    let tm = create_test_topic_manager();
+    let (tm, _tmp) = create_test_topic_manager();
     tm.create_topic("sub-test", 1)
         .expect("Failed to create topic");
 
@@ -352,11 +339,9 @@ async fn test_subscription_messages_stream() {
     let schema = build_test_schema(tm);
 
     // Execute a subscription query
-    let mut stream = schema.execute_stream(
-        Request::new(
-            r#"subscription { messages(topic: "sub-test", fromOffset: 0) { offset key value } }"#,
-        ),
-    );
+    let mut stream = schema.execute_stream(Request::new(
+        r#"subscription { messages(topic: "sub-test", fromOffset: 0) { offset key value } }"#,
+    ));
 
     // Take the first response from the stream
     let response = tokio::time::timeout(std::time::Duration::from_secs(5), stream.next())
@@ -383,7 +368,7 @@ async fn test_subscription_messages_stream() {
 async fn test_subscription_metrics_stream() {
     use futures_util::StreamExt;
 
-    let tm = create_test_topic_manager();
+    let (tm, _tmp) = create_test_topic_manager();
     tm.create_topic("metrics-topic", 1)
         .expect("Failed to create topic");
 
@@ -418,7 +403,7 @@ async fn test_subscription_metrics_stream() {
 async fn test_subscription_topic_metrics_stream() {
     use futures_util::StreamExt;
 
-    let tm = create_test_topic_manager();
+    let (tm, _tmp) = create_test_topic_manager();
     tm.create_topic("topic-metrics-test", 3)
         .expect("Failed to create topic");
 
@@ -467,7 +452,7 @@ async fn test_subscription_topic_metrics_stream() {
 
 #[tokio::test]
 async fn test_subscription_topic_metrics_nonexistent_topic() {
-    let tm = create_test_topic_manager();
+    let (tm, _tmp) = create_test_topic_manager();
     let schema = build_test_schema(tm);
 
     let res = schema
@@ -477,7 +462,10 @@ async fn test_subscription_topic_metrics_nonexistent_topic() {
         .await;
 
     // Should return an error since the topic doesn't exist
-    assert!(!res.errors.is_empty(), "Expected an error for nonexistent topic");
+    assert!(
+        !res.errors.is_empty(),
+        "Expected an error for nonexistent topic"
+    );
 }
 
 // =============================================================================
@@ -488,7 +476,7 @@ async fn test_subscription_topic_metrics_nonexistent_topic() {
 async fn test_subscription_message_stream() {
     use futures_util::StreamExt;
 
-    let tm = create_test_topic_manager();
+    let (tm, _tmp) = create_test_topic_manager();
     tm.create_topic("stream-test", 2)
         .expect("Failed to create topic");
 
@@ -530,7 +518,7 @@ async fn test_subscription_message_stream() {
 
 #[tokio::test]
 async fn test_subscription_message_stream_nonexistent_topic() {
-    let tm = create_test_topic_manager();
+    let (tm, _tmp) = create_test_topic_manager();
     let schema = build_test_schema(tm);
 
     let res = schema
@@ -549,7 +537,7 @@ async fn test_subscription_message_stream_nonexistent_topic() {
 async fn test_subscription_cluster_events_detects_topic_creation() {
     use futures_util::StreamExt;
 
-    let tm = create_test_topic_manager();
+    let (tm, _tmp) = create_test_topic_manager();
 
     // Create a topic BEFORE starting the subscription so it will detect
     // the difference between initial empty state and current state
@@ -587,10 +575,7 @@ async fn test_subscription_cluster_events_detects_topic_creation() {
         .into_json()
         .expect("Failed to convert to JSON");
     assert_eq!(data["clusterEvents"]["eventType"], "TOPIC_CREATED");
-    assert_eq!(
-        data["clusterEvents"]["resource"],
-        "cluster-evt-topic"
-    );
+    assert_eq!(data["clusterEvents"]["resource"], "cluster-evt-topic");
 }
 
 // =============================================================================
@@ -599,16 +584,11 @@ async fn test_subscription_cluster_events_detects_topic_creation() {
 
 #[tokio::test]
 async fn test_query_topic_stats() {
-    let tm = create_test_topic_manager();
+    let (tm, _tmp) = create_test_topic_manager();
     tm.create_topic("stats-topic", 2)
         .expect("Failed to create topic");
-    tm.append(
-        "stats-topic",
-        0,
-        None,
-        bytes::Bytes::from("msg1"),
-    )
-    .expect("Failed to append");
+    tm.append("stats-topic", 0, None, bytes::Bytes::from("msg1"))
+        .expect("Failed to append");
 
     let schema = build_test_schema(tm);
 
@@ -634,21 +614,22 @@ async fn test_query_topic_stats() {
 
 #[tokio::test]
 async fn test_query_topic_stats_nonexistent() {
-    let tm = create_test_topic_manager();
+    let (tm, _tmp) = create_test_topic_manager();
     let schema = build_test_schema(tm);
 
     let res = schema
-        .execute(Request::new(
-            r#"{ topicStats(name: "nope") { name } }"#,
-        ))
+        .execute(Request::new(r#"{ topicStats(name: "nope") { name } }"#))
         .await;
 
-    assert!(!res.errors.is_empty(), "Expected error for nonexistent topic");
+    assert!(
+        !res.errors.is_empty(),
+        "Expected error for nonexistent topic"
+    );
 }
 
 #[tokio::test]
 async fn test_query_topic_stats_invalid_window() {
-    let tm = create_test_topic_manager();
+    let (tm, _tmp) = create_test_topic_manager();
     tm.create_topic("win-topic", 1)
         .expect("Failed to create topic");
     let schema = build_test_schema(tm);
@@ -664,24 +645,19 @@ async fn test_query_topic_stats_invalid_window() {
 
 #[tokio::test]
 async fn test_query_search_messages() {
-    let tm = create_test_topic_manager();
+    let (tm, _tmp) = create_test_topic_manager();
     tm.create_topic("search-topic", 1)
         .expect("Failed to create topic");
 
     // Insert test messages
     for i in 0..10 {
         let value = if i % 2 == 0 {
-            format!(r#"{{"action": "click", "id": {}}}"#, i)
+            format!(r#"{{"action": "click", "id": {i}}}"#)
         } else {
-            format!(r#"{{"action": "scroll", "id": {}}}"#, i)
+            format!(r#"{{"action": "scroll", "id": {i}}}"#)
         };
-        tm.append(
-            "search-topic",
-            0,
-            None,
-            bytes::Bytes::from(value),
-        )
-        .expect("Failed to append");
+        tm.append("search-topic", 0, None, bytes::Bytes::from(value))
+            .expect("Failed to append");
     }
 
     let schema = build_test_schema(tm);
@@ -704,7 +680,7 @@ async fn test_query_search_messages() {
 
 #[tokio::test]
 async fn test_query_search_messages_no_results() {
-    let tm = create_test_topic_manager();
+    let (tm, _tmp) = create_test_topic_manager();
     tm.create_topic("search-empty", 1)
         .expect("Failed to create topic");
     tm.append("search-empty", 0, None, bytes::Bytes::from("hello"))
@@ -730,7 +706,7 @@ async fn test_query_search_messages_no_results() {
 
 #[tokio::test]
 async fn test_mutation_produce_with_schema_valid() {
-    let tm = create_test_topic_manager();
+    let (tm, _tmp) = create_test_topic_manager();
     tm.create_topic("schema-test", 1)
         .expect("Failed to create topic");
 
@@ -755,15 +731,13 @@ async fn test_mutation_produce_with_schema_valid() {
     assert_eq!(data["produceWithSchema"]["offset"], 0);
 
     // Verify message was stored
-    let records = tm
-        .read("schema-test", 0, 0, 10)
-        .expect("Failed to read");
+    let records = tm.read("schema-test", 0, 0, 10).expect("Failed to read");
     assert_eq!(records.len(), 1);
 }
 
 #[tokio::test]
 async fn test_mutation_produce_with_schema_missing_required() {
-    let tm = create_test_topic_manager();
+    let (tm, _tmp) = create_test_topic_manager();
     tm.create_topic("schema-fail", 1)
         .expect("Failed to create topic");
 
@@ -795,7 +769,7 @@ async fn test_mutation_produce_with_schema_missing_required() {
 
 #[tokio::test]
 async fn test_mutation_produce_with_schema_wrong_type() {
-    let tm = create_test_topic_manager();
+    let (tm, _tmp) = create_test_topic_manager();
     tm.create_topic("schema-type", 1)
         .expect("Failed to create topic");
 
@@ -821,7 +795,7 @@ async fn test_mutation_produce_with_schema_wrong_type() {
 
 #[tokio::test]
 async fn test_mutation_produce_with_schema_no_schema() {
-    let tm = create_test_topic_manager();
+    let (tm, _tmp) = create_test_topic_manager();
     tm.create_topic("schema-none", 1)
         .expect("Failed to create topic");
 
@@ -846,7 +820,7 @@ async fn test_mutation_produce_with_schema_no_schema() {
 
 #[tokio::test]
 async fn test_mutation_produce_with_schema_invalid_json() {
-    let tm = create_test_topic_manager();
+    let (tm, _tmp) = create_test_topic_manager();
     tm.create_topic("schema-bad-json", 1)
         .expect("Failed to create topic");
 

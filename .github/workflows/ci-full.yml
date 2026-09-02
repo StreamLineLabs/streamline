@@ -37,16 +37,21 @@ jobs:
   fmt:
     name: Format
     runs-on: ubuntu-latest
+    env:
+      RUSTUP_TOOLCHAIN: '1.88'
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
+          toolchain: '1.88'
           components: rustfmt
       - run: cargo fmt --all -- --check
 
   clippy:
     name: Clippy (${{ matrix.features }})
     runs-on: ubuntu-latest
+    env:
+      RUSTUP_TOOLCHAIN: '1.88'
     strategy:
       matrix:
         features:
@@ -56,6 +61,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
+          toolchain: '1.88'
           components: clippy
       - uses: Swatinem/rust-cache@v2
       - run: cargo clippy --all-targets ${{ matrix.features }} -- -D warnings
@@ -110,12 +116,16 @@ jobs:
       - run: ./scripts/generate-cli-reference.sh --check
       - run: ./scripts/generate-config-reference.sh --check
 
+  # Security scanning is centralised in .github/workflows/security-scan.yml so
+  # there is exactly one fail-closed definition of the policy. It is re-run here
+  # on the nightly schedule via the same reusable checks.
   security-audit:
     name: Security Audit
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: rustsec/audit-check@v2
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
@@ -151,14 +161,35 @@ jobs:
   msrv:
     name: Minimum Supported Rust Version
     runs-on: ubuntu-latest
+    env:
+      # rust-toolchain.toml pins `channel = "stable"`; without this override
+      # cargo would ignore the toolchain installed below and this job would
+      # silently re-test stable instead of the MSRV.
+      RUSTUP_TOOLCHAIN: '1.88'
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@1.80.0
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: '1.88'
       - uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: msrv-full
+      - name: Confirm the MSRV toolchain is actually in use
+        run: |
+          set -euo pipefail
+          ACTUAL=$(rustc --version | awk '{print $2}')
+          echo "rustc in use: $ACTUAL (expected 1.88.x)"
+          case "$ACTUAL" in
+            1.88|1.88.*) ;;
+            *)
+              echo "::error::MSRV job is running rustc $ACTUAL, not 1.88"
+              exit 1
+              ;;
+          esac
       - name: Build with MSRV
-        run: cargo build --all-features
+        run: cargo build --all-features --locked
       - name: Test with MSRV
-        run: cargo test --all-features
+        run: cargo test --all-features --locked
 
   benchmarks:
     name: Benchmark Compilation

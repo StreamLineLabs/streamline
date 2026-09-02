@@ -453,10 +453,7 @@ pub fn create_dashboard_api_router(state: DashboardApiState) -> Router {
             get(topic_activity_handler),
         )
         // Consumer groups
-        .route(
-            "/api/v1/dashboard/groups",
-            get(consumer_groups_handler),
-        )
+        .route("/api/v1/dashboard/groups", get(consumer_groups_handler))
         .route(
             "/api/v1/dashboard/groups/:group_id",
             get(consumer_group_detail_handler),
@@ -1268,7 +1265,7 @@ async fn consumer_group_detail_handler(
             assignment: m
                 .assignment
                 .iter()
-                .map(|(topic, partition)| format!("{}-{}", topic, partition))
+                .map(|(topic, partition)| format!("{topic}-{partition}"))
                 .collect(),
         })
         .collect();
@@ -1310,7 +1307,10 @@ async fn consumer_group_detail_handler(
     Json(detail).into_response()
 }
 
-fn compute_group_lag(topic_manager: &Arc<TopicManager>, group: &crate::consumer::ConsumerGroup) -> i64 {
+fn compute_group_lag(
+    topic_manager: &Arc<TopicManager>,
+    group: &crate::consumer::ConsumerGroup,
+) -> i64 {
     let mut total_lag: i64 = 0;
     for ((topic, partition), committed) in &group.offsets {
         let leo = topic_manager.latest_offset(topic, *partition).unwrap_or(0);

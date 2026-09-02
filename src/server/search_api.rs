@@ -88,10 +88,7 @@ pub fn handle_search(topic: &str, req: SearchRequest) -> SearchResponse {
 }
 
 /// Axum handler: `POST /api/v1/topics/:topic/search`.
-async fn search_handler(
-    Path(topic): Path<String>,
-    Json(req): Json<SearchRequest>,
-) -> Response {
+async fn search_handler(Path(topic): Path<String>, Json(req): Json<SearchRequest>) -> Response {
     if req.query.trim().is_empty() {
         return (
             StatusCode::BAD_REQUEST,

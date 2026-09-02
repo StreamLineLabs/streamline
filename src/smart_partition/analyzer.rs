@@ -258,10 +258,7 @@ fn estimate_cardinality_hll<'a>(keys: impl Iterator<Item = &'a String>) -> u64 {
 
     let alpha = 0.709; // bias correction for m = 64
     let m = HLL_NUM_BUCKETS as f64;
-    let harmonic_sum: f64 = registers
-        .iter()
-        .map(|&r| 2.0_f64.powi(-(r as i32)))
-        .sum();
+    let harmonic_sum: f64 = registers.iter().map(|&r| 2.0_f64.powi(-(r as i32))).sum();
     let raw_estimate = alpha * m * m / harmonic_sum;
 
     // Small-range correction
@@ -310,10 +307,7 @@ fn cm_estimate(counters: &[[u64; CM_WIDTH]; CM_DEPTH], key: &str) -> u64 {
 /// triggers first).  Partitions below `0.5× mean` are **cold**.
 /// Monotonic-key patterns are detected via `hot_key_ratio`.
 pub fn analyze_throughput_skew(metrics: &[PartitionMetrics]) -> SkewAnalysis {
-    let topic = metrics
-        .first()
-        .map(|m| m.topic.clone())
-        .unwrap_or_default();
+    let topic = metrics.first().map(|m| m.topic.clone()).unwrap_or_default();
 
     if metrics.is_empty() {
         return SkewAnalysis {
@@ -360,8 +354,8 @@ pub fn analyze_throughput_skew(metrics: &[PartitionMetrics]) -> SkewAnalysis {
             expected_share
         };
         // Hot: statistical outlier (>2σ) OR practical outlier (>2× fair share)
-        let is_hot = total > 0.0
-            && (m.throughput_mps > hot_threshold || share > expected_share * 2.0);
+        let is_hot =
+            total > 0.0 && (m.throughput_mps > hot_threshold || share > expected_share * 2.0);
         let is_cold = total > 0.0 && m.throughput_mps < cold_threshold;
 
         if is_hot {
@@ -389,21 +383,18 @@ pub fn analyze_throughput_skew(metrics: &[PartitionMetrics]) -> SkewAnalysis {
         } else {
             0.0
         };
-        m.hot_key_ratio > 0.8
-            && (m.throughput_mps > hot_threshold || share > expected_share * 2.0)
+        m.hot_key_ratio > 0.8 && (m.throughput_mps > hot_threshold || share > expected_share * 2.0)
     });
 
     let mut recommendations = Vec::new();
     if !hot_partitions.is_empty() {
         recommendations.push(format!(
-            "Hot partitions detected: {:?} -- consider redistributing keys",
-            hot_partitions
+            "Hot partitions detected: {hot_partitions:?} -- consider redistributing keys"
         ));
     }
     if !cold_partitions.is_empty() {
         recommendations.push(format!(
-            "Cold partitions: {:?} -- candidates for merging or removal",
-            cold_partitions
+            "Cold partitions: {cold_partitions:?} -- candidates for merging or removal"
         ));
     }
     if has_monotonic_keys {
@@ -413,8 +404,7 @@ pub fn analyze_throughput_skew(metrics: &[PartitionMetrics]) -> SkewAnalysis {
     }
     if gini > 0.5 {
         recommendations.push(format!(
-            "High Gini coefficient ({:.3}) -- rebalancing strongly recommended",
-            gini
+            "High Gini coefficient ({gini:.3}) -- rebalancing strongly recommended"
         ));
     }
     if recommendations.is_empty() {
@@ -471,8 +461,7 @@ pub fn analyze_key_distribution(keys: &HashMap<String, u64>) -> KeyDistributionA
     let top_k_keys: Vec<(String, u64)> = estimated.into_iter().take(10).collect();
 
     let prefix_clusters = detect_prefix_clusters(keys, total_count);
-    let distribution_type =
-        classify_distribution(keys, &top_k_keys, total_count, &prefix_clusters);
+    let distribution_type = classify_distribution(keys, &top_k_keys, total_count, &prefix_clusters);
 
     KeyDistributionAnalysis {
         estimated_cardinality,
@@ -545,10 +534,7 @@ pub fn predict_rebalance_benefit(
             improvement * 100.0
         )
     } else {
-        format!(
-            "Not recommended: {} partitions would likely increase skew",
-            proposed_partitions
-        )
+        format!("Not recommended: {proposed_partitions} partitions would likely increase skew")
     };
 
     RebalanceBenefit {
@@ -574,17 +560,11 @@ pub fn calculate_health_score(metrics: &[PartitionMetrics], gini: f64) -> Health
     let balance_score = (1.0 - gini).clamp(0.0, 1.0);
 
     // Throughput: fraction of partitions with non-zero traffic
-    let active = metrics
-        .iter()
-        .filter(|m| m.throughput_mps > 0.0)
-        .count() as f64;
+    let active = metrics.iter().filter(|m| m.throughput_mps > 0.0).count() as f64;
     let throughput_score = (active / metrics.len() as f64).clamp(0.0, 1.0);
 
     // Latency: fraction of partitions below the default 100 ms threshold
-    let latency_ok = metrics
-        .iter()
-        .filter(|m| m.p99_latency_ms <= 100.0)
-        .count() as f64;
+    let latency_ok = metrics.iter().filter(|m| m.p99_latency_ms <= 100.0).count() as f64;
     let latency_score = (latency_ok / metrics.len() as f64).clamp(0.0, 1.0);
 
     let overall =
@@ -615,10 +595,7 @@ fn severity_from_gini(gini: f64) -> SkewSeverity {
 }
 
 /// Detect clusters of keys sharing common prefixes.
-fn detect_prefix_clusters(
-    keys: &HashMap<String, u64>,
-    total_count: u64,
-) -> Vec<PrefixCluster> {
+fn detect_prefix_clusters(keys: &HashMap<String, u64>, total_count: u64) -> Vec<PrefixCluster> {
     if total_count == 0 {
         return Vec::new();
     }
@@ -675,10 +652,7 @@ fn classify_distribution(
     }
 
     // Monotonic: >=80% of keys parse as integers
-    let numeric_count = keys
-        .keys()
-        .filter(|k| k.parse::<i64>().is_ok())
-        .count();
+    let numeric_count = keys.keys().filter(|k| k.parse::<i64>().is_ok()).count();
     if numeric_count as f64 / keys.len() as f64 > 0.8 {
         return DistributionType::MonotonicKey;
     }
@@ -793,16 +767,12 @@ impl SkewAnalyzer {
         let hot_count = partition_skews.iter().filter(|p| p.is_hot).count();
         let recommendation = match &severity {
             SkewSeverity::None => "Partitions are well-balanced".to_string(),
-            SkewSeverity::Low => {
-                "Minor imbalance -- monitor but no action needed".to_string()
-            }
+            SkewSeverity::Low => "Minor imbalance -- monitor but no action needed".to_string(),
             SkewSeverity::Medium => format!(
-                "Moderate skew detected ({} hot partitions) -- consider rebalancing",
-                hot_count
+                "Moderate skew detected ({hot_count} hot partitions) -- consider rebalancing"
             ),
             SkewSeverity::High | SkewSeverity::Critical => format!(
-                "Severe skew ({} hot partitions, coefficient {:.2}) -- rebalancing recommended",
-                hot_count, skew_coefficient
+                "Severe skew ({hot_count} hot partitions, coefficient {skew_coefficient:.2}) -- rebalancing recommended"
             ),
         };
 
@@ -937,8 +907,7 @@ mod tests {
         let analysis = analyze_throughput_skew(&metrics);
 
         assert!(
-            analysis.severity == SkewSeverity::High
-                || analysis.severity == SkewSeverity::Critical,
+            analysis.severity == SkewSeverity::High || analysis.severity == SkewSeverity::Critical,
             "severity = {:?}",
             analysis.severity
         );
@@ -969,9 +938,7 @@ mod tests {
 
     #[test]
     fn test_key_distribution_uniform() {
-        let keys: HashMap<String, u64> = (0..100)
-            .map(|i| (format!("key-{i:04}"), 10))
-            .collect();
+        let keys: HashMap<String, u64> = (0..100).map(|i| (format!("key-{i:04}"), 10)).collect();
         let analysis = analyze_key_distribution(&keys);
 
         assert_eq!(analysis.distribution_type, DistributionType::Uniform);
@@ -992,9 +959,7 @@ mod tests {
 
     #[test]
     fn test_key_distribution_monotonic() {
-        let keys: HashMap<String, u64> = (1000..1100)
-            .map(|i| (i.to_string(), 10))
-            .collect();
+        let keys: HashMap<String, u64> = (1000..1100).map(|i| (i.to_string(), 10)).collect();
         let analysis = analyze_key_distribution(&keys);
         assert_eq!(analysis.distribution_type, DistributionType::MonotonicKey);
     }
@@ -1027,9 +992,8 @@ mod tests {
 
     #[test]
     fn test_predict_rebalance_benefit_increase() {
-        let analysis = analyze_throughput_skew(
-            &make_metrics("events", &[800.0, 100.0, 50.0, 50.0]),
-        );
+        let analysis =
+            analyze_throughput_skew(&make_metrics("events", &[800.0, 100.0, 50.0, 50.0]));
         let benefit = predict_rebalance_benefit(&analysis, 8);
 
         assert!(benefit.estimated_skew_improvement > 0.0);
@@ -1038,9 +1002,8 @@ mod tests {
 
     #[test]
     fn test_predict_rebalance_benefit_decrease() {
-        let analysis = analyze_throughput_skew(
-            &make_metrics("events", &[100.0, 100.0, 100.0, 100.0]),
-        );
+        let analysis =
+            analyze_throughput_skew(&make_metrics("events", &[100.0, 100.0, 100.0, 100.0]));
         let benefit = predict_rebalance_benefit(&analysis, 2);
 
         assert_eq!(benefit.risk, RiskLevel::High);
@@ -1048,9 +1011,8 @@ mod tests {
 
     #[test]
     fn test_predict_rebalance_benefit_no_change() {
-        let analysis = analyze_throughput_skew(
-            &make_metrics("events", &[100.0, 100.0, 100.0, 100.0]),
-        );
+        let analysis =
+            analyze_throughput_skew(&make_metrics("events", &[100.0, 100.0, 100.0, 100.0]));
         let benefit = predict_rebalance_benefit(&analysis, 4);
         assert_eq!(benefit.estimated_data_movement_bytes, 0);
     }

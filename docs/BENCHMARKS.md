@@ -140,7 +140,7 @@ Performance benchmarks comparing Streamline against Kafka, Redpanda, and NATS Je
 
 ### Prerequisites
 
-- Rust 1.80+ (for Streamline)
+- Rust 1.88+ (for Streamline)
 - Docker (for Kafka, Redpanda, NATS comparative tests)
 - Linux recommended (for `io_uring` and `sendfile` optimizations)
 

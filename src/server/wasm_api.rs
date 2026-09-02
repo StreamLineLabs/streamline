@@ -116,10 +116,7 @@ pub fn create_wasm_api_router(state: WasmApiState) -> Router {
             "/api/v1/functions",
             get(list_functions).post(deploy_function),
         )
-        .route(
-            "/api/v1/functions/builtins",
-            get(list_builtin_functions),
-        )
+        .route("/api/v1/functions/builtins", get(list_builtin_functions))
         .route(
             "/api/v1/functions/:name",
             get(get_function).delete(remove_function),
@@ -164,7 +161,7 @@ async fn get_transform(
             (
                 StatusCode::NOT_FOUND,
                 Json(WasmErrorResponse {
-                    error: format!("Transform '{}' not found", id),
+                    error: format!("Transform '{id}' not found"),
                 }),
             )
         })
@@ -198,7 +195,7 @@ async fn get_transform_stats(
             (
                 StatusCode::NOT_FOUND,
                 Json(WasmErrorResponse {
-                    error: format!("Transform '{}' not found or no stats available", id),
+                    error: format!("Transform '{id}' not found or no stats available"),
                 }),
             )
         })
@@ -389,7 +386,7 @@ async fn get_function(
             (
                 StatusCode::NOT_FOUND,
                 Json(WasmErrorResponse {
-                    error: format!("Function '{}' not found", name),
+                    error: format!("Function '{name}' not found"),
                 }),
             )
         })
@@ -400,18 +397,14 @@ async fn pause_function(
     State(state): State<WasmApiState>,
     Path(name): Path<String>,
 ) -> Result<Json<StatusResponse>, (StatusCode, Json<WasmErrorResponse>)> {
-    state
-        .function_registry
-        .pause(&name)
-        .await
-        .map_err(|e| {
-            (
-                StatusCode::BAD_REQUEST,
-                Json(WasmErrorResponse {
-                    error: e.to_string(),
-                }),
-            )
-        })?;
+    state.function_registry.pause(&name).await.map_err(|e| {
+        (
+            StatusCode::BAD_REQUEST,
+            Json(WasmErrorResponse {
+                error: e.to_string(),
+            }),
+        )
+    })?;
 
     Ok(Json(StatusResponse {
         name,
@@ -424,18 +417,14 @@ async fn resume_function(
     State(state): State<WasmApiState>,
     Path(name): Path<String>,
 ) -> Result<Json<StatusResponse>, (StatusCode, Json<WasmErrorResponse>)> {
-    state
-        .function_registry
-        .resume(&name)
-        .await
-        .map_err(|e| {
-            (
-                StatusCode::BAD_REQUEST,
-                Json(WasmErrorResponse {
-                    error: e.to_string(),
-                }),
-            )
-        })?;
+    state.function_registry.resume(&name).await.map_err(|e| {
+        (
+            StatusCode::BAD_REQUEST,
+            Json(WasmErrorResponse {
+                error: e.to_string(),
+            }),
+        )
+    })?;
 
     Ok(Json(StatusResponse {
         name,
@@ -448,18 +437,14 @@ async fn remove_function(
     State(state): State<WasmApiState>,
     Path(name): Path<String>,
 ) -> Result<StatusCode, (StatusCode, Json<WasmErrorResponse>)> {
-    state
-        .function_registry
-        .remove(&name)
-        .await
-        .map_err(|e| {
-            (
-                StatusCode::NOT_FOUND,
-                Json(WasmErrorResponse {
-                    error: e.to_string(),
-                }),
-            )
-        })?;
+    state.function_registry.remove(&name).await.map_err(|e| {
+        (
+            StatusCode::NOT_FOUND,
+            Json(WasmErrorResponse {
+                error: e.to_string(),
+            }),
+        )
+    })?;
     Ok(StatusCode::NO_CONTENT)
 }
 

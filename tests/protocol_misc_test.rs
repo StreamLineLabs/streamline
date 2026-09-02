@@ -491,7 +491,7 @@ fn test_sasl_handshake_versions() {
     for version in 0..=1 {
         let mut buf = BytesMut::new();
         let result = request.clone().encode(&mut buf, version);
-        assert!(result.is_ok(), "Failed to encode v{}", version);
+        assert!(result.is_ok(), "Failed to encode v{version}");
     }
 }
 
@@ -502,7 +502,7 @@ fn test_sasl_authenticate_versions() {
     for version in 0..=2 {
         let mut buf = BytesMut::new();
         let result = request.clone().encode(&mut buf, version);
-        assert!(result.is_ok(), "Failed to encode v{}", version);
+        assert!(result.is_ok(), "Failed to encode v{version}");
     }
 }
 
@@ -516,7 +516,7 @@ fn test_describe_groups_versions() {
     for version in 0..=5 {
         let mut buf = BytesMut::new();
         let result = request.clone().encode(&mut buf, version);
-        assert!(result.is_ok(), "Failed to encode v{}", version);
+        assert!(result.is_ok(), "Failed to encode v{version}");
     }
 }
 
@@ -527,7 +527,7 @@ fn test_list_groups_versions() {
     for version in 0..=4 {
         let mut buf = BytesMut::new();
         let result = request.clone().encode(&mut buf, version);
-        assert!(result.is_ok(), "Failed to encode v{}", version);
+        assert!(result.is_ok(), "Failed to encode v{version}");
     }
 }
 

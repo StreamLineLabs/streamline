@@ -815,7 +815,7 @@ fn test_join_group_versions() {
     for version in 0..=9 {
         let mut buf = BytesMut::new();
         let result = request.clone().encode(&mut buf, version);
-        assert!(result.is_ok(), "Failed to encode JoinGroup v{}", version);
+        assert!(result.is_ok(), "Failed to encode JoinGroup v{version}");
     }
 }
 
@@ -826,7 +826,7 @@ fn test_sync_group_versions() {
     for version in 0..=5 {
         let mut buf = BytesMut::new();
         let result = request.clone().encode(&mut buf, version);
-        assert!(result.is_ok(), "Failed to encode SyncGroup v{}", version);
+        assert!(result.is_ok(), "Failed to encode SyncGroup v{version}");
     }
 }
 
@@ -837,7 +837,7 @@ fn test_heartbeat_versions() {
     for version in 0..=4 {
         let mut buf = BytesMut::new();
         let result = request.clone().encode(&mut buf, version);
-        assert!(result.is_ok(), "Failed to encode Heartbeat v{}", version);
+        assert!(result.is_ok(), "Failed to encode Heartbeat v{version}");
     }
 }
 
@@ -848,7 +848,7 @@ fn test_leave_group_versions() {
     for version in 0..=5 {
         let mut buf = BytesMut::new();
         let result = request.clone().encode(&mut buf, version);
-        assert!(result.is_ok(), "Failed to encode LeaveGroup v{}", version);
+        assert!(result.is_ok(), "Failed to encode LeaveGroup v{version}");
     }
 }
 

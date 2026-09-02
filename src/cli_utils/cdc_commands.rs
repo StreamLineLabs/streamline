@@ -78,11 +78,11 @@ pub fn handle_cdc_sources(ctx: &CliContext) -> Result<()> {
 
                 let lag = source["lag_ms"].as_u64().unwrap_or(0);
                 let lag_cell = if lag < 500 {
-                    Cell::new(format!("{} ms", lag)).fg(Color::Green)
+                    Cell::new(format!("{lag} ms")).fg(Color::Green)
                 } else if lag < 2000 {
-                    Cell::new(format!("{} ms", lag)).fg(Color::Yellow)
+                    Cell::new(format!("{lag} ms")).fg(Color::Yellow)
                 } else {
-                    Cell::new(format!("{} ms", lag)).fg(Color::Red)
+                    Cell::new(format!("{lag} ms")).fg(Color::Red)
                 };
 
                 table.add_row(vec![
@@ -114,7 +114,7 @@ pub fn handle_cdc_create(
     topic_prefix: &str,
     ctx: &CliContext,
 ) -> Result<()> {
-    let spinner = ctx.spinner(&format!("Creating CDC source '{}'...", name));
+    let spinner = ctx.spinner(&format!("Creating CDC source '{name}'..."));
 
     // Validate source type
     let valid_types = ["postgres", "mysql", "mongodb", "sqlserver"];
@@ -147,11 +147,11 @@ pub fn handle_cdc_create(
             ctx.println(&serde_json::to_string_pretty(&result)?);
         }
         _ => {
-            ctx.success(&format!("Created CDC source '{}'", name));
-            ctx.println(&format!("  Type:         {}", source_type));
-            ctx.println(&format!("  Connection:   {}", connection));
+            ctx.success(&format!("Created CDC source '{name}'"));
+            ctx.println(&format!("  Type:         {source_type}"));
+            ctx.println(&format!("  Connection:   {connection}"));
             ctx.println(&format!("  Tables:       {}", tables.join(", ")));
-            ctx.println(&format!("  Topic Prefix: {}", topic_prefix));
+            ctx.println(&format!("  Topic Prefix: {topic_prefix}"));
             ctx.info("Use 'streamline-cli cdc start' to begin capturing changes");
         }
     }
@@ -161,19 +161,19 @@ pub fn handle_cdc_create(
 
 /// Handle CDC start command
 pub fn handle_cdc_start(name: &str, ctx: &CliContext) -> Result<()> {
-    let spinner = ctx.spinner(&format!("Starting CDC source '{}'...", name));
+    let spinner = ctx.spinner(&format!("Starting CDC source '{name}'..."));
     std::thread::sleep(std::time::Duration::from_millis(300));
     spinner.finish_with_message("Started");
-    ctx.success(&format!("CDC source '{}' is now running", name));
+    ctx.success(&format!("CDC source '{name}' is now running"));
     Ok(())
 }
 
 /// Handle CDC stop command
 pub fn handle_cdc_stop(name: &str, ctx: &CliContext) -> Result<()> {
-    let spinner = ctx.spinner(&format!("Stopping CDC source '{}'...", name));
+    let spinner = ctx.spinner(&format!("Stopping CDC source '{name}'..."));
     std::thread::sleep(std::time::Duration::from_millis(300));
     spinner.finish_with_message("Stopped");
-    ctx.success(&format!("CDC source '{}' has been stopped", name));
+    ctx.success(&format!("CDC source '{name}' has been stopped"));
     Ok(())
 }
 
@@ -181,8 +181,7 @@ pub fn handle_cdc_stop(name: &str, ctx: &CliContext) -> Result<()> {
 pub fn handle_cdc_delete(name: &str, ctx: &CliContext) -> Result<()> {
     if !ctx.skip_confirm {
         ctx.warn(&format!(
-            "This will delete CDC source '{}' and all its state",
-            name
+            "This will delete CDC source '{name}' and all its state"
         ));
         if !ctx.confirm("Are you sure you want to continue?") {
             ctx.info("Aborted");
@@ -190,10 +189,10 @@ pub fn handle_cdc_delete(name: &str, ctx: &CliContext) -> Result<()> {
         }
     }
 
-    let spinner = ctx.spinner(&format!("Deleting CDC source '{}'...", name));
+    let spinner = ctx.spinner(&format!("Deleting CDC source '{name}'..."));
     std::thread::sleep(std::time::Duration::from_millis(300));
     spinner.finish_with_message("Deleted");
-    ctx.success(&format!("CDC source '{}' has been deleted", name));
+    ctx.success(&format!("CDC source '{name}' has been deleted"));
     Ok(())
 }
 
@@ -340,10 +339,7 @@ pub fn handle_cdc_schema(name: &str, table: Option<&str>, ctx: &CliContext) -> R
             ctx.println(&serde_json::to_string_pretty(&filtered)?);
         }
         _ => {
-            ctx.println(&format!(
-                "Schema Evolution History for CDC Source: {}",
-                name
-            ));
+            ctx.println(&format!("Schema Evolution History for CDC Source: {name}"));
             ctx.println("=".repeat(60).as_str());
 
             if filtered.is_empty() {

@@ -80,8 +80,7 @@ impl CdcHub {
         let mut sources = self.sources.write().await;
         if sources.remove(source_id).is_none() {
             return Err(StreamlineError::Config(format!(
-                "CDC source not found: {}",
-                source_id
+                "CDC source not found: {source_id}"
             )));
         }
         info!("Unregistered CDC source: {}", source_id);
@@ -103,8 +102,7 @@ impl CdcHub {
             let sources = self.sources.read().await;
             if !sources.contains_key(source_id) {
                 return Err(StreamlineError::Config(format!(
-                    "Unknown CDC source: {}",
-                    source_id
+                    "Unknown CDC source: {source_id}"
                 )));
             }
         }
@@ -167,7 +165,7 @@ impl CdcHub {
             .schema_tracker
             .get_latest_schema(source_table)
             .ok_or_else(|| {
-                StreamlineError::Config(format!("Source schema not found: {}", source_table))
+                StreamlineError::Config(format!("Source schema not found: {source_table}"))
             })?;
 
         // Generate target schema from migration
@@ -536,8 +534,7 @@ impl EventTransformer {
                                 _ => None,
                             };
                             n.and_then(|n| {
-                                serde_json::Number::from_f64(n)
-                                    .map(serde_json::Value::Number)
+                                serde_json::Number::from_f64(n).map(serde_json::Value::Number)
                             })
                         }
                         "bool" | "boolean" => {
@@ -554,7 +551,10 @@ impl EventTransformer {
                             b.map(serde_json::Value::Bool)
                         }
                         _ => {
-                            debug!(target_type = target, "Unsupported cast target type; keeping original");
+                            debug!(
+                                target_type = target,
+                                "Unsupported cast target type; keeping original"
+                            );
                             value.clone()
                         }
                     }
@@ -602,7 +602,9 @@ impl EventTransformer {
                     // Clear payload to signal this event is filtered out
                     event.after = None;
                     event.before = None;
-                    event.metadata.insert("_filtered".to_string(), "true".to_string());
+                    event
+                        .metadata
+                        .insert("_filtered".to_string(), "true".to_string());
                 }
             }
         }
@@ -646,7 +648,10 @@ fn evaluate_filter_condition(condition: &str, event: &CdcEvent) -> bool {
     for op in &operators {
         if let Some(pos) = condition.find(op) {
             let col_name = condition[..pos].trim();
-            let raw_value = condition[pos + op.len()..].trim().trim_matches('\'').trim_matches('"');
+            let raw_value = condition[pos + op.len()..]
+                .trim()
+                .trim_matches('\'')
+                .trim_matches('"');
 
             let col_val = match get_column_value(event, col_name) {
                 Some(Some(v)) => v,
@@ -657,17 +662,15 @@ fn evaluate_filter_condition(condition: &str, event: &CdcEvent) -> bool {
             return match *op {
                 "=" => json_equals(&col_val, raw_value),
                 "!=" => !json_equals(&col_val, raw_value),
-                ">" | ">=" | "<" | "<=" => {
-                    json_compare(&col_val, raw_value)
-                        .map(|ord| match *op {
-                            ">" => ord == std::cmp::Ordering::Greater,
-                            ">=" => ord != std::cmp::Ordering::Less,
-                            "<" => ord == std::cmp::Ordering::Less,
-                            "<=" => ord != std::cmp::Ordering::Greater,
-                            _ => false,
-                        })
-                        .unwrap_or(false)
-                }
+                ">" | ">=" | "<" | "<=" => json_compare(&col_val, raw_value)
+                    .map(|ord| match *op {
+                        ">" => ord == std::cmp::Ordering::Greater,
+                        ">=" => ord != std::cmp::Ordering::Less,
+                        "<" => ord == std::cmp::Ordering::Less,
+                        "<=" => ord != std::cmp::Ordering::Greater,
+                        _ => false,
+                    })
+                    .unwrap_or(false),
                 _ => false,
             };
         }
@@ -678,10 +681,7 @@ fn evaluate_filter_condition(condition: &str, event: &CdcEvent) -> bool {
 }
 
 /// Look up a column value in the event (prefer `after`, fallback to `before`).
-fn get_column_value(
-    event: &CdcEvent,
-    col_name: &str,
-) -> Option<Option<serde_json::Value>> {
+fn get_column_value(event: &CdcEvent, col_name: &str) -> Option<Option<serde_json::Value>> {
     let search = |cols: &[super::CdcColumnValue]| -> Option<Option<serde_json::Value>> {
         cols.iter()
             .find(|c| c.name == col_name)
@@ -708,7 +708,7 @@ fn json_equals(val: &serde_json::Value, raw: &str) -> bool {
         serde_json::Value::Number(n) => n.to_string() == raw,
         serde_json::Value::Bool(b) => b.to_string() == raw,
         serde_json::Value::Null => raw == "null" || raw.is_empty(),
-        _ => val.to_string() == raw,
+        _ => val.to_string().as_str() == raw,
     }
 }
 
@@ -1243,7 +1243,10 @@ mod tests {
 
         let event = make_test_event(vec![("deleted_at", "timestamp", serde_json::json!(null))]);
         let result = transformer.transform(event).await.unwrap();
-        assert!(result.after.is_some(), "NULL deleted_at should pass IS NULL");
+        assert!(
+            result.after.is_some(),
+            "NULL deleted_at should pass IS NULL"
+        );
     }
 
     #[tokio::test]
@@ -1258,6 +1261,9 @@ mod tests {
 
         let event = make_test_event(vec![("email", "string", serde_json::json!("a@b.com"))]);
         let result = transformer.transform(event).await.unwrap();
-        assert!(result.after.is_some(), "Non-null email should pass IS NOT NULL");
+        assert!(
+            result.after.is_some(),
+            "Non-null email should pass IS NOT NULL"
+        );
     }
 }

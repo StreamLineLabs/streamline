@@ -27,10 +27,12 @@ pub mod checkpoint;
 pub mod compaction;
 pub mod compression;
 pub mod cross_topic_buffer;
+pub mod deterministic_replay;
 pub mod encryption;
-pub mod key_rotation;
+pub mod hw_acceleration;
 pub mod index;
 pub mod io_backend;
+pub mod key_rotation;
 pub mod mmap;
 pub mod partition;
 pub mod partition_maintenance;
@@ -38,18 +40,16 @@ pub mod partition_read;
 pub mod prefetch;
 pub mod producer_state;
 pub mod record;
+pub mod replay_engine;
 pub mod retention;
 pub mod segment;
 pub mod sendfile;
 pub mod state_store;
 pub mod storage_mode;
-pub mod deterministic_replay;
-pub mod replay_engine;
 pub mod timeseries;
 pub mod timetravel;
 pub mod topic;
 pub mod wal;
-pub mod hw_acceleration;
 pub mod zerocopy;
 
 // Cloud storage modules (require cloud-storage feature)
@@ -120,8 +120,8 @@ pub use replay_engine::{
 
 // Deterministic replay debugger re-exports
 pub use deterministic_replay::{
-    BreakCondition, Breakpoint, DebugSession, DebugStats, DebugStatus,
-    DeterministicReplayEngine, ReplayDebugConfig, StateCapture, StepRecord,
+    BreakCondition, Breakpoint, DebugSession, DebugStats, DebugStatus, DeterministicReplayEngine,
+    ReplayDebugConfig, StateCapture, StepRecord,
 };
 
 // Time-travel re-exports

@@ -329,8 +329,7 @@ impl GeoReplicationManager {
             Ok(())
         } else {
             Err(StreamlineError::Config(format!(
-                "Unknown region: {}",
-                region_id
+                "Unknown region: {region_id}"
             )))
         }
     }
@@ -377,13 +376,14 @@ impl GeoReplicationManager {
                     0.0
                 };
 
-                let health = if r.status == RegionStatus::Unreachable || r.status == RegionStatus::Offline {
-                    RegionHealth::Unhealthy
-                } else if r.replication_lag_ms > 5000 {
-                    RegionHealth::Degraded
-                } else {
-                    RegionHealth::Healthy
-                };
+                let health =
+                    if r.status == RegionStatus::Unreachable || r.status == RegionStatus::Offline {
+                        RegionHealth::Unhealthy
+                    } else if r.replication_lag_ms > 5000 {
+                        RegionHealth::Degraded
+                    } else {
+                        RegionHealth::Healthy
+                    };
 
                 RegionHealthReport {
                     region_id: r.region_id.clone(),

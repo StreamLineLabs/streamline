@@ -23,7 +23,7 @@ pub(crate) async fn dispatch(
         ApiKey::CreateTopics => {
             let request = CreateTopicsRequest::decode(&mut buf, header.request_api_version)
                 .map_err(|e| {
-                    StreamlineError::protocol("decode", format!("Failed to decode request: {}", e))
+                    StreamlineError::protocol("decode", format!("Failed to decode request: {e}"))
                 })?;
 
             handler
@@ -42,7 +42,7 @@ pub(crate) async fn dispatch(
         ApiKey::DeleteTopics => {
             let request = DeleteTopicsRequest::decode(&mut buf, header.request_api_version)
                 .map_err(|e| {
-                    StreamlineError::protocol("decode", format!("Failed to decode request: {}", e))
+                    StreamlineError::protocol("decode", format!("Failed to decode request: {e}"))
                 })?;
 
             handler
@@ -61,7 +61,7 @@ pub(crate) async fn dispatch(
         ApiKey::CreatePartitions => {
             let request = CreatePartitionsRequest::decode(&mut buf, header.request_api_version)
                 .map_err(|e| {
-                    StreamlineError::protocol("decode", format!("Failed to decode request: {}", e))
+                    StreamlineError::protocol("decode", format!("Failed to decode request: {e}"))
                 })?;
 
             let response = handler
@@ -77,7 +77,7 @@ pub(crate) async fn dispatch(
         }
         _ => Err(StreamlineError::protocol(
             "unsupported API key",
-            format!("{:?}", api_key),
+            format!("{api_key:?}"),
         )),
     }
 }

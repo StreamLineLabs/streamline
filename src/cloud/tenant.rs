@@ -106,20 +106,19 @@ pub struct TenantIsolation;
 impl TenantIsolation {
     /// Returns the namespaced topic name for a tenant.
     pub fn namespaced_topic(tenant_id: &str, topic: &str) -> String {
-        format!("{}.{}", tenant_id, topic)
+        format!("{tenant_id}.{topic}")
     }
 
     /// Validates that a tenant is allowed to access the given topic.
     ///
     /// A tenant may only access topics prefixed with its own ID.
     pub fn validate_access(tenant_id: &str, topic: &str) -> Result<()> {
-        let prefix = format!("{}.", tenant_id);
+        let prefix = format!("{tenant_id}.");
         if topic.starts_with(&prefix) {
             Ok(())
         } else {
             Err(StreamlineError::Config(format!(
-                "Tenant '{}' is not allowed to access topic '{}'",
-                tenant_id, topic
+                "Tenant '{tenant_id}' is not allowed to access topic '{topic}'"
             )))
         }
     }
@@ -139,11 +138,7 @@ impl CloudTenantManager {
     }
 
     /// Register a new managed cloud tenant
-    pub async fn create_tenant(
-        &self,
-        name: &str,
-        plan: CloudPlan,
-    ) -> Result<CloudTenant> {
+    pub async fn create_tenant(&self, name: &str, plan: CloudPlan) -> Result<CloudTenant> {
         let id = uuid::Uuid::new_v4().to_string();
         let resource_limits = TenantQuota::for_plan(&plan);
 
@@ -175,15 +170,11 @@ impl CloudTenantManager {
     }
 
     /// Update the quota for an existing tenant
-    pub async fn update_quota(
-        &self,
-        tenant_id: &str,
-        quota: TenantQuota,
-    ) -> Result<CloudTenant> {
+    pub async fn update_quota(&self, tenant_id: &str, quota: TenantQuota) -> Result<CloudTenant> {
         let mut tenants = self.tenants.write().await;
-        let tenant = tenants.get_mut(tenant_id).ok_or_else(|| {
-            StreamlineError::Config(format!("Tenant not found: {}", tenant_id))
-        })?;
+        let tenant = tenants
+            .get_mut(tenant_id)
+            .ok_or_else(|| StreamlineError::Config(format!("Tenant not found: {tenant_id}")))?;
 
         tenant.resource_limits = quota;
         tracing::info!(tenant_id = %tenant_id, "Tenant quota updated");
@@ -191,17 +182,12 @@ impl CloudTenantManager {
     }
 
     /// Validate that a tenant has access to a topic (prefix-based isolation)
-    pub async fn validate_tenant_access(
-        &self,
-        tenant_id: &str,
-        topic: &str,
-    ) -> Result<()> {
+    pub async fn validate_tenant_access(&self, tenant_id: &str, topic: &str) -> Result<()> {
         // Ensure the tenant exists
         let tenants = self.tenants.read().await;
         if !tenants.contains_key(tenant_id) {
             return Err(StreamlineError::Config(format!(
-                "Tenant not found: {}",
-                tenant_id
+                "Tenant not found: {tenant_id}"
             )));
         }
         drop(tenants);
@@ -251,7 +237,10 @@ mod tests {
     #[tokio::test]
     async fn test_create_and_get_tenant() {
         let mgr = CloudTenantManager::new();
-        let tenant = mgr.create_tenant("Acme Corp", CloudPlan::Pro).await.unwrap();
+        let tenant = mgr
+            .create_tenant("Acme Corp", CloudPlan::Pro)
+            .await
+            .unwrap();
 
         assert_eq!(tenant.name, "Acme Corp");
         assert_eq!(tenant.plan, CloudPlan::Pro);
@@ -298,8 +287,17 @@ mod tests {
         let tenant = mgr.create_tenant("Test", CloudPlan::Free).await.unwrap();
 
         let namespaced = TenantIsolation::namespaced_topic(&tenant.id, "events");
-        assert!(mgr.validate_tenant_access(&tenant.id, &namespaced).await.is_ok());
-        assert!(mgr.validate_tenant_access(&tenant.id, "other.events").await.is_err());
-        assert!(mgr.validate_tenant_access("nonexistent", "x.y").await.is_err());
+        assert!(mgr
+            .validate_tenant_access(&tenant.id, &namespaced)
+            .await
+            .is_ok());
+        assert!(mgr
+            .validate_tenant_access(&tenant.id, "other.events")
+            .await
+            .is_err());
+        assert!(mgr
+            .validate_tenant_access("nonexistent", "x.y")
+            .await
+            .is_err());
     }
 }

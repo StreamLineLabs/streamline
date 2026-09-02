@@ -161,17 +161,21 @@ impl ServerlessManager {
     pub async fn create_endpoint(&self, tenant_id: &str) -> Result<ServerlessEndpoint> {
         let endpoint_id = format!(
             "se-{}",
-            uuid::Uuid::new_v4().to_string().split('-').next().unwrap_or("unknown")
+            uuid::Uuid::new_v4()
+                .to_string()
+                .split('-')
+                .next()
+                .unwrap_or("unknown")
         );
         let now = chrono::Utc::now().timestamp_millis();
 
         let endpoint = ServerlessEndpoint {
             id: endpoint_id.clone(),
             tenant_id: tenant_id.to_string(),
-            url: format!("https://{}.serverless.streamline.cloud", endpoint_id),
-            bootstrap_servers: format!("{}.serverless.streamline.cloud:9092", endpoint_id),
-            http_url: format!("https://{}.serverless.streamline.cloud:9094", endpoint_id),
-            ws_url: format!("wss://{}.serverless.streamline.cloud:9094/ws", endpoint_id),
+            url: format!("https://{endpoint_id}.serverless.streamline.cloud"),
+            bootstrap_servers: format!("{endpoint_id}.serverless.streamline.cloud:9092"),
+            http_url: format!("https://{endpoint_id}.serverless.streamline.cloud:9094"),
+            ws_url: format!("wss://{endpoint_id}.serverless.streamline.cloud:9094/ws"),
             status: if self.config.scale_to_zero {
                 ServerlessEndpointStatus::Cold
             } else {
@@ -256,9 +260,9 @@ impl ServerlessManager {
         self.total_requests.fetch_add(1, Ordering::Relaxed);
 
         let mut endpoints = self.endpoints.write().await;
-        let endpoint = endpoints.get_mut(endpoint_id).ok_or_else(|| {
-            StreamlineError::Config(format!("Endpoint not found: {}", endpoint_id))
-        })?;
+        let endpoint = endpoints
+            .get_mut(endpoint_id)
+            .ok_or_else(|| StreamlineError::Config(format!("Endpoint not found: {endpoint_id}")))?;
 
         let now = chrono::Utc::now().timestamp_millis();
         endpoint.last_activity = now;
@@ -296,7 +300,11 @@ impl ServerlessManager {
     async fn start_instance(&self, endpoint_id: &str) -> Result<ServerlessInstance> {
         let instance_id = format!(
             "si-{}",
-            uuid::Uuid::new_v4().to_string().split('-').next().unwrap_or("unknown")
+            uuid::Uuid::new_v4()
+                .to_string()
+                .split('-')
+                .next()
+                .unwrap_or("unknown")
         );
         let now = chrono::Utc::now().timestamp_millis();
 
@@ -342,9 +350,9 @@ impl ServerlessManager {
     /// Scale an endpoint
     pub async fn scale(&self, endpoint_id: &str, target_instances: u32) -> Result<()> {
         let mut endpoints = self.endpoints.write().await;
-        let endpoint = endpoints.get_mut(endpoint_id).ok_or_else(|| {
-            StreamlineError::Config(format!("Endpoint not found: {}", endpoint_id))
-        })?;
+        let endpoint = endpoints
+            .get_mut(endpoint_id)
+            .ok_or_else(|| StreamlineError::Config(format!("Endpoint not found: {endpoint_id}")))?;
 
         let current = endpoint.instances;
         let target = target_instances

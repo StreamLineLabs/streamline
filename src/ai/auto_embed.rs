@@ -8,13 +8,12 @@
 //! searchable by meaning, not just by offset or key.
 
 use crate::error::{Result, StreamlineError};
-use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use tracing::{debug, info, warn};
+use tracing::debug;
 
 /// Configuration for auto-embedding on produce.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -163,7 +162,7 @@ impl AutoEmbedInterceptor {
         if let Some(ref field) = self.config.text_field {
             // Extract specific JSON field
             let json: serde_json::Value = serde_json::from_slice(value).map_err(|e| {
-                StreamlineError::InvalidData(format!("Cannot parse JSON for embedding: {}", e))
+                StreamlineError::InvalidData(format!("Cannot parse JSON for embedding: {e}"))
             })?;
             Ok(json
                 .get(field)
@@ -173,7 +172,7 @@ impl AutoEmbedInterceptor {
         } else {
             // Embed entire value as text
             String::from_utf8(value.to_vec()).map_err(|e| {
-                StreamlineError::InvalidData(format!("Cannot convert to UTF-8 for embedding: {}", e))
+                StreamlineError::InvalidData(format!("Cannot convert to UTF-8 for embedding: {e}"))
             })
         }
     }
@@ -214,7 +213,8 @@ impl AutoEmbedInterceptor {
 
         let count = embeddings.len();
         self.ready.write().await.extend(embeddings);
-        self.total_embedded.fetch_add(count as u64, Ordering::Relaxed);
+        self.total_embedded
+            .fetch_add(count as u64, Ordering::Relaxed);
 
         debug!(count, "Generated embeddings for batch");
         Ok(())
@@ -229,9 +229,9 @@ impl AutoEmbedInterceptor {
         let mut vector = vec![0.0f32; dim];
 
         // Deterministic hash-based embedding for testing
-        let hash = text.bytes().fold(0u64, |acc, b| {
-            acc.wrapping_mul(31).wrapping_add(b as u64)
-        });
+        let hash = text
+            .bytes()
+            .fold(0u64, |acc, b| acc.wrapping_mul(31).wrapping_add(b as u64));
 
         for (i, v) in vector.iter_mut().enumerate() {
             let seed = hash.wrapping_add(i as u64);
@@ -419,7 +419,10 @@ mod tests {
         let vec = interceptor.generate_embedding("test text");
 
         let magnitude: f32 = vec.iter().map(|v| v * v).sum::<f32>().sqrt();
-        assert!((magnitude - 1.0).abs() < 0.01, "Vector should be unit-normalized");
+        assert!(
+            (magnitude - 1.0).abs() < 0.01,
+            "Vector should be unit-normalized"
+        );
     }
 
     #[tokio::test]

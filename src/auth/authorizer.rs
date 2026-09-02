@@ -350,8 +350,7 @@ impl Authorizer {
         {
             AuthorizationResult::Allowed => Ok(()),
             AuthorizationResult::Denied => Err(StreamlineError::AuthorizationFailed(format!(
-                "Principal {} is not authorized to {} on {}:{}",
-                principal, operation, resource_type, resource_name
+                "Principal {principal} is not authorized to {operation} on {resource_type}:{resource_name}"
             ))),
         }
     }
@@ -586,7 +585,7 @@ impl AclBuilder {
 
     /// Set the principal to a user
     pub fn user(mut self, username: &str) -> Self {
-        self.principal = format!("User:{}", username);
+        self.principal = format!("User:{username}");
         self
     }
 

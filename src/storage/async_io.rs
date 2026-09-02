@@ -27,7 +27,7 @@ use tracing::warn;
 pub async fn read_to_string_async(path: PathBuf) -> Result<String> {
     tokio::task::spawn_blocking(move || fs::read_to_string(&path).map_err(StreamlineError::from))
         .await
-        .map_err(|e| StreamlineError::storage_msg(format!("Task join error: {}", e)))?
+        .map_err(|e| StreamlineError::storage_msg(format!("Task join error: {e}")))?
 }
 
 /// Read a file to bytes asynchronously
@@ -36,7 +36,7 @@ pub async fn read_to_string_async(path: PathBuf) -> Result<String> {
 pub async fn read_async(path: PathBuf) -> Result<Vec<u8>> {
     tokio::task::spawn_blocking(move || fs::read(&path).map_err(StreamlineError::from))
         .await
-        .map_err(|e| StreamlineError::storage_msg(format!("Task join error: {}", e)))?
+        .map_err(|e| StreamlineError::storage_msg(format!("Task join error: {e}")))?
 }
 
 /// Write bytes to a file asynchronously
@@ -45,7 +45,7 @@ pub async fn read_async(path: PathBuf) -> Result<Vec<u8>> {
 pub async fn write_async(path: PathBuf, data: Vec<u8>) -> Result<()> {
     tokio::task::spawn_blocking(move || fs::write(&path, &data).map_err(StreamlineError::from))
         .await
-        .map_err(|e| StreamlineError::storage_msg(format!("Task join error: {}", e)))?
+        .map_err(|e| StreamlineError::storage_msg(format!("Task join error: {e}")))?
 }
 
 /// Create directories recursively asynchronously
@@ -54,7 +54,7 @@ pub async fn write_async(path: PathBuf, data: Vec<u8>) -> Result<()> {
 pub async fn create_dir_all_async(path: PathBuf) -> Result<()> {
     tokio::task::spawn_blocking(move || fs::create_dir_all(&path).map_err(StreamlineError::from))
         .await
-        .map_err(|e| StreamlineError::storage_msg(format!("Task join error: {}", e)))?
+        .map_err(|e| StreamlineError::storage_msg(format!("Task join error: {e}")))?
 }
 
 /// Check if a path exists asynchronously
@@ -63,7 +63,7 @@ pub async fn create_dir_all_async(path: PathBuf) -> Result<()> {
 pub async fn exists_async(path: PathBuf) -> Result<bool> {
     tokio::task::spawn_blocking(move || Ok(path.exists()))
         .await
-        .map_err(|e| StreamlineError::storage_msg(format!("Task join error: {}", e)))?
+        .map_err(|e| StreamlineError::storage_msg(format!("Task join error: {e}")))?
 }
 
 /// Remove a file asynchronously
@@ -72,7 +72,7 @@ pub async fn exists_async(path: PathBuf) -> Result<bool> {
 pub async fn remove_file_async(path: PathBuf) -> Result<()> {
     tokio::task::spawn_blocking(move || fs::remove_file(&path).map_err(StreamlineError::from))
         .await
-        .map_err(|e| StreamlineError::storage_msg(format!("Task join error: {}", e)))?
+        .map_err(|e| StreamlineError::storage_msg(format!("Task join error: {e}")))?
 }
 
 /// Remove a directory and all its contents asynchronously
@@ -81,7 +81,7 @@ pub async fn remove_file_async(path: PathBuf) -> Result<()> {
 pub async fn remove_dir_all_async(path: PathBuf) -> Result<()> {
     tokio::task::spawn_blocking(move || fs::remove_dir_all(&path).map_err(StreamlineError::from))
         .await
-        .map_err(|e| StreamlineError::storage_msg(format!("Task join error: {}", e)))?
+        .map_err(|e| StreamlineError::storage_msg(format!("Task join error: {e}")))?
 }
 
 /// Rename a file asynchronously
@@ -90,7 +90,7 @@ pub async fn remove_dir_all_async(path: PathBuf) -> Result<()> {
 pub async fn rename_async(from: PathBuf, to: PathBuf) -> Result<()> {
     tokio::task::spawn_blocking(move || fs::rename(&from, &to).map_err(StreamlineError::from))
         .await
-        .map_err(|e| StreamlineError::storage_msg(format!("Task join error: {}", e)))?
+        .map_err(|e| StreamlineError::storage_msg(format!("Task join error: {e}")))?
 }
 
 /// Atomically write data to a file using temp file + rename pattern (async version)
@@ -104,14 +104,14 @@ pub async fn rename_async(from: PathBuf, to: PathBuf) -> Result<()> {
 pub async fn atomic_write_async(path: PathBuf, data: Vec<u8>) -> Result<()> {
     tokio::task::spawn_blocking(move || atomic_write_blocking(&path, &data))
         .await
-        .map_err(|e| StreamlineError::storage_msg(format!("Task join error: {}", e)))?
+        .map_err(|e| StreamlineError::storage_msg(format!("Task join error: {e}")))?
 }
 
 /// Blocking version of atomic write (used by spawn_blocking)
 fn atomic_write_blocking(path: &Path, data: &[u8]) -> Result<()> {
     // Create temp file in same directory (ensures same filesystem for atomic rename)
     let parent = path.parent().ok_or_else(|| {
-        StreamlineError::storage_msg(format!("Cannot get parent directory of {:?}", path))
+        StreamlineError::storage_msg(format!("Cannot get parent directory of {path:?}"))
     })?;
 
     let temp_name = format!(
@@ -130,21 +130,17 @@ fn atomic_write_blocking(path: &Path, data: &[u8]) -> Result<()> {
             .open(&temp_path)
             .map_err(|e| {
                 StreamlineError::storage_msg(format!(
-                    "Failed to create temp file {:?}: {}",
-                    temp_path, e
+                    "Failed to create temp file {temp_path:?}: {e}"
                 ))
             })?;
 
         file.write_all(data).map_err(|e| {
-            StreamlineError::storage_msg(format!(
-                "Failed to write temp file {:?}: {}",
-                temp_path, e
-            ))
+            StreamlineError::storage_msg(format!("Failed to write temp file {temp_path:?}: {e}"))
         })?;
 
         // fsync to ensure data is on disk before rename
         file.sync_all().map_err(|e| {
-            StreamlineError::storage_msg(format!("Failed to sync temp file {:?}: {}", temp_path, e))
+            StreamlineError::storage_msg(format!("Failed to sync temp file {temp_path:?}: {e}"))
         })?;
     }
 
@@ -152,10 +148,7 @@ fn atomic_write_blocking(path: &Path, data: &[u8]) -> Result<()> {
     #[cfg(unix)]
     fs::rename(&temp_path, path).map_err(|e| {
         let _ = fs::remove_file(&temp_path);
-        StreamlineError::storage_msg(format!(
-            "Failed to rename {:?} to {:?}: {}",
-            temp_path, path, e
-        ))
+        StreamlineError::storage_msg(format!("Failed to rename {temp_path:?} to {path:?}: {e}"))
     })?;
 
     #[cfg(windows)]
@@ -188,13 +181,13 @@ fn atomic_write_blocking(path: &Path, data: &[u8]) -> Result<()> {
 pub async fn sync_file_async(path: PathBuf) -> Result<()> {
     tokio::task::spawn_blocking(move || {
         let file = File::open(&path).map_err(|e| {
-            StreamlineError::storage_msg(format!("Failed to open {:?} for sync: {}", path, e))
+            StreamlineError::storage_msg(format!("Failed to open {path:?} for sync: {e}"))
         })?;
         file.sync_all()
-            .map_err(|e| StreamlineError::storage_msg(format!("Failed to sync {:?}: {}", path, e)))
+            .map_err(|e| StreamlineError::storage_msg(format!("Failed to sync {path:?}: {e}")))
     })
     .await
-    .map_err(|e| StreamlineError::storage_msg(format!("Task join error: {}", e)))?
+    .map_err(|e| StreamlineError::storage_msg(format!("Task join error: {e}")))?
 }
 
 /// Sync a directory to disk asynchronously
@@ -204,17 +197,14 @@ pub async fn sync_file_async(path: PathBuf) -> Result<()> {
 pub async fn sync_dir_async(path: PathBuf) -> Result<()> {
     tokio::task::spawn_blocking(move || {
         let dir = File::open(&path).map_err(|e| {
-            StreamlineError::storage_msg(format!(
-                "Failed to open directory {:?} for sync: {}",
-                path, e
-            ))
+            StreamlineError::storage_msg(format!("Failed to open directory {path:?} for sync: {e}"))
         })?;
         dir.sync_all().map_err(|e| {
-            StreamlineError::storage_msg(format!("Failed to sync directory {:?}: {}", path, e))
+            StreamlineError::storage_msg(format!("Failed to sync directory {path:?}: {e}"))
         })
     })
     .await
-    .map_err(|e| StreamlineError::storage_msg(format!("Task join error: {}", e)))?
+    .map_err(|e| StreamlineError::storage_msg(format!("Task join error: {e}")))?
 }
 
 /// Read directory entries asynchronously
@@ -223,7 +213,7 @@ pub async fn sync_dir_async(path: PathBuf) -> Result<()> {
 pub async fn read_dir_async(path: PathBuf) -> Result<Vec<(PathBuf, bool)>> {
     tokio::task::spawn_blocking(move || {
         let entries = fs::read_dir(&path).map_err(|e| {
-            StreamlineError::storage_msg(format!("Failed to read directory {:?}: {}", path, e))
+            StreamlineError::storage_msg(format!("Failed to read directory {path:?}: {e}"))
         })?;
 
         let mut result = Vec::new();
@@ -234,7 +224,7 @@ pub async fn read_dir_async(path: PathBuf) -> Result<Vec<(PathBuf, bool)>> {
         Ok(result)
     })
     .await
-    .map_err(|e| StreamlineError::storage_msg(format!("Task join error: {}", e)))?
+    .map_err(|e| StreamlineError::storage_msg(format!("Task join error: {e}")))?
 }
 
 #[cfg(test)]

@@ -338,7 +338,7 @@ impl BackendFactory {
                 let wal_path = local_path
                     .join("topics")
                     .join(topic)
-                    .join(format!("partition-{}", partition))
+                    .join(format!("partition-{partition}"))
                     .join("wal");
 
                 std::fs::create_dir_all(&wal_path)?;
@@ -363,7 +363,7 @@ impl BackendFactory {
                 let wal_path = local_path
                     .join("topics")
                     .join(topic)
-                    .join(format!("partition-{}", partition))
+                    .join(format!("partition-{partition}"))
                     .join("wal");
 
                 std::fs::create_dir_all(&wal_path)?;
@@ -429,8 +429,8 @@ impl BackendFactory {
                 let partition_path = local_path
                     .join("topics")
                     .join(topic)
-                    .join(format!("partition-{}", partition));
-                let segment_path = partition_path.join(format!("{:020}.segment", base_offset));
+                    .join(format!("partition-{partition}"));
+                let segment_path = partition_path.join(format!("{base_offset:020}.segment"));
 
                 // Ensure partition directory exists
                 std::fs::create_dir_all(&partition_path)?;
@@ -498,13 +498,12 @@ impl BackendFactory {
                 let segment_path = local_path
                     .join("topics")
                     .join(topic)
-                    .join(format!("partition-{}", partition))
-                    .join(format!("{:020}.segment", base_offset));
+                    .join(format!("partition-{partition}"))
+                    .join(format!("{base_offset:020}.segment"));
 
                 if !segment_path.exists() {
                     return Err(StreamlineError::storage_msg(format!(
-                        "Segment not found: {:?}",
-                        segment_path
+                        "Segment not found: {segment_path:?}"
                     )));
                 }
 
@@ -542,7 +541,7 @@ impl BackendFactory {
         self.config.local_path.as_ref().map(|base| {
             base.join("topics")
                 .join(topic)
-                .join(format!("partition-{}", partition))
+                .join(format!("partition-{partition}"))
         })
     }
 
@@ -578,7 +577,7 @@ impl BackendFactory {
             // List all objects under the topics prefix
             let list_result = store.list(Some(&prefix));
             let objects: Vec<_> = list_result.try_collect().await.map_err(|e| {
-                StreamlineError::storage_msg(format!("Failed to list objects: {}", e))
+                StreamlineError::storage_msg(format!("Failed to list objects: {e}"))
             })?;
 
             // Track unique topic/partition combinations by looking for manifest.json files
@@ -809,7 +808,7 @@ impl BackendFactory {
                     Err(e) => {
                         return PartitionRecoveryInfo {
                             status: RecoveryStatus::Failed,
-                            error: Some(format!("Failed to read manifest: {}", e)),
+                            error: Some(format!("Failed to read manifest: {e}")),
                             ..base_info
                         };
                     }
@@ -831,8 +830,7 @@ impl BackendFactory {
 
                         // Check for WAL manifest
                         let wal_manifest_path = ObjectPath::from(format!(
-                            "v1/topics/{}/partition-{}/wal/manifest.json",
-                            topic, partition
+                            "v1/topics/{topic}/partition-{partition}/wal/manifest.json"
                         ));
                         let has_wal = store.head(&wal_manifest_path).await.is_ok();
 
@@ -850,7 +848,7 @@ impl BackendFactory {
                     }
                     Err(e) => PartitionRecoveryInfo {
                         status: RecoveryStatus::Failed,
-                        error: Some(format!("Failed to parse manifest: {}", e)),
+                        error: Some(format!("Failed to parse manifest: {e}")),
                         ..base_info
                     },
                 }
@@ -858,7 +856,7 @@ impl BackendFactory {
             Err(object_store::Error::NotFound { .. }) => base_info,
             Err(e) => PartitionRecoveryInfo {
                 status: RecoveryStatus::Failed,
-                error: Some(format!("Failed to get manifest: {}", e)),
+                error: Some(format!("Failed to get manifest: {e}")),
                 ..base_info
             },
         }
@@ -944,7 +942,7 @@ impl BackendFactory {
         store
             .put(&path, PutPayload::from_bytes(data))
             .await
-            .map_err(|e| StreamlineError::storage_msg(format!("Failed to save manifest: {}", e)))?;
+            .map_err(|e| StreamlineError::storage_msg(format!("Failed to save manifest: {e}")))?;
 
         info!(
             topic = %manifest.topic,
@@ -967,17 +965,16 @@ impl BackendFactory {
         let path = ObjectPath::from(PartitionManifest::manifest_path(topic, partition));
 
         let result = store.get(&path).await.map_err(|e| match e {
-            object_store::Error::NotFound { .. } => StreamlineError::storage_msg(format!(
-                "Manifest not found for {}/{}",
-                topic, partition
-            )),
-            _ => StreamlineError::storage_msg(format!("Failed to get manifest: {}", e)),
+            object_store::Error::NotFound { .. } => {
+                StreamlineError::storage_msg(format!("Manifest not found for {topic}/{partition}"))
+            }
+            _ => StreamlineError::storage_msg(format!("Failed to get manifest: {e}")),
         })?;
 
         let data = result
             .bytes()
             .await
-            .map_err(|e| StreamlineError::storage_msg(format!("Failed to read manifest: {}", e)))?;
+            .map_err(|e| StreamlineError::storage_msg(format!("Failed to read manifest: {e}")))?;
 
         PartitionManifest::from_json(&data)
     }

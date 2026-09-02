@@ -106,7 +106,7 @@ impl TestReport {
                 TestOutcome::Passed => "✓ PASS",
                 TestOutcome::Failed => "✗ FAIL",
                 TestOutcome::Skipped => "- SKIP",
-                TestOutcome::Error(e) => &format!("! ERR: {}", e),
+                TestOutcome::Error(e) => &format!("! ERR: {e}"),
             };
             out.push_str(&format!(
                 "  {} {} ({}ms, {} messages)\n",
@@ -120,7 +120,7 @@ impl TestReport {
                         assertion.name, assertion.message
                     ));
                     for detail in &assertion.failure_details {
-                        out.push_str(&format!("        - {}\n", detail));
+                        out.push_str(&format!("        - {detail}\n"));
                     }
                 }
             }
@@ -168,14 +168,13 @@ impl TestReport {
                         .collect::<Vec<_>>()
                         .join("; ");
                     xml.push_str(&format!(
-                        "    <failure message=\"{}\">{}</failure>\n",
-                        failure_msg, failure_msg
+                        "    <failure message=\"{failure_msg}\">{failure_msg}</failure>\n"
                     ));
                     xml.push_str("  </testcase>\n");
                 }
                 TestOutcome::Error(e) => {
                     xml.push_str(">\n");
-                    xml.push_str(&format!("    <error message=\"{}\">{}</error>\n", e, e));
+                    xml.push_str(&format!("    <error message=\"{e}\">{e}</error>\n"));
                     xml.push_str("  </testcase>\n");
                 }
                 TestOutcome::Skipped => {
@@ -252,7 +251,7 @@ impl ContractRunner {
                 return TestResult {
                     contract_name: contract.name.clone(),
                     topic: contract.topic.clone(),
-                    outcome: TestOutcome::Error(format!("Failed to create topic: {}", e)),
+                    outcome: TestOutcome::Error(format!("Failed to create topic: {e}")),
                     assertions: Vec::new(),
                     duration_ms: start.elapsed().as_millis() as u64,
                     messages_produced: 0,
@@ -284,7 +283,7 @@ impl ContractRunner {
                                 return TestResult {
                                     contract_name: contract.name.clone(),
                                     topic: contract.topic.clone(),
-                                    outcome: TestOutcome::Error(format!("Produce failed: {}", e)),
+                                    outcome: TestOutcome::Error(format!("Produce failed: {e}")),
                                     assertions: Vec::new(),
                                     duration_ms: start.elapsed().as_millis() as u64,
                                     messages_produced,
@@ -298,7 +297,7 @@ impl ContractRunner {
                         return TestResult {
                             contract_name: contract.name.clone(),
                             topic: contract.topic.clone(),
-                            outcome: TestOutcome::Error(format!("Mock generation failed: {}", e)),
+                            outcome: TestOutcome::Error(format!("Mock generation failed: {e}")),
                             assertions: Vec::new(),
                             duration_ms: start.elapsed().as_millis() as u64,
                             messages_produced: 0,
@@ -317,7 +316,7 @@ impl ContractRunner {
                     return TestResult {
                         contract_name: contract.name.clone(),
                         topic: contract.topic.clone(),
-                        outcome: TestOutcome::Error(format!("Consume failed: {}", e)),
+                        outcome: TestOutcome::Error(format!("Consume failed: {e}")),
                         assertions: Vec::new(),
                         duration_ms: start.elapsed().as_millis() as u64,
                         messages_produced,

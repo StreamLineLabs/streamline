@@ -11,9 +11,9 @@ use std::sync::Arc;
 use streamline::cli_utils::profile_store::{get_default_profile, load_profile};
 use streamline::{GroupCoordinator, Result, TopicManager};
 
-mod cli_auth;
 #[cfg(feature = "attestation")]
 mod cli_attest_cmd;
+mod cli_auth;
 #[cfg(feature = "branches")]
 mod cli_branches_cmd;
 mod cli_cluster;
@@ -313,7 +313,7 @@ SAMPLING:
         #[arg(short = 'i', long)]
         ignore_case: bool,
 
-        /// Extract JSON fields using JSONPath (e.g., "$.user.id", "$.items[*].name")
+        /// Extract JSON fields using JSONPath (e.g., `$.user.id`, `$.items[*].name`)
         #[arg(long)]
         jq: Option<String>,
 
@@ -795,7 +795,7 @@ fn main() -> ExitCode {
     let ctx = CliContext::new(&cli);
 
     if let Err(e) = run(cli, &ctx) {
-        ctx.error(&format!("{}", e));
+        ctx.error(&format!("{e}"));
         print_error_hint(&e, &ctx.data_dir);
         return ExitCode::from(1);
     }
@@ -950,7 +950,7 @@ fn run(cli: Cli, ctx: &CliContext) -> Result<()> {
                 let consumer_offsets_path = ctx.data_dir.join("consumer_offsets");
                 let coordinator = GroupCoordinator::new(consumer_offsets_path, manager)?;
                 for group_id in coordinator.list_groups()? {
-                    println!("{}", group_id);
+                    println!("{group_id}");
                 }
             } else if dynamic {
                 streamline::cli_utils::print_dynamic_completion_script(shell);
@@ -1047,7 +1047,8 @@ fn run(cli: Cli, ctx: &CliContext) -> Result<()> {
                 #[cfg(not(feature = "sqlite-queries"))]
                 {
                     return Err(streamline::StreamlineError::Config(
-                        "SQLite query engine not available. Compile with --features sqlite-queries".to_string(),
+                        "SQLite query engine not available. Compile with --features sqlite-queries"
+                            .to_string(),
                     ));
                 }
             } else {
@@ -1128,11 +1129,10 @@ fn run(cli: Cli, ctx: &CliContext) -> Result<()> {
             terminate_query,
             output_format,
         } => {
-            use streamline::streamql::{StreamqlEngine, KsqlStatementResult};
+            use streamline::streamql::{KsqlStatementResult, StreamqlEngine};
 
             let engine = StreamqlEngine::new();
-            let rt = tokio::runtime::Runtime::new()
-                .map_err(streamline::StreamlineError::Io)?;
+            let rt = tokio::runtime::Runtime::new().map_err(streamline::StreamlineError::Io)?;
 
             if list_queries {
                 let queries = rt.block_on(engine.list_queries());
@@ -1148,15 +1148,21 @@ fn run(cli: Cli, ctx: &CliContext) -> Result<()> {
                             })
                         })
                         .collect();
-                    println!("{}", serde_json::to_string_pretty(&items).unwrap_or_default());
+                    println!(
+                        "{}",
+                        serde_json::to_string_pretty(&items).unwrap_or_default()
+                    );
+                } else if queries.is_empty() {
+                    println!("No running continuous queries.");
                 } else {
-                    if queries.is_empty() {
-                        println!("No running continuous queries.");
-                    } else {
-                        println!("{}", "Running Continuous Queries:".bold());
-                        for q in &queries {
-                            println!("  {} | {:?} | {}", q.id, q.status, &q.sql[..q.sql.len().min(60)]);
-                        }
+                    println!("{}", "Running Continuous Queries:".bold());
+                    for q in &queries {
+                        println!(
+                            "  {} | {:?} | {}",
+                            q.id,
+                            q.status,
+                            &q.sql[..q.sql.len().min(60)]
+                        );
                     }
                 }
             } else if let Some(qid) = terminate_query {
@@ -1166,8 +1172,8 @@ fn run(cli: Cli, ctx: &CliContext) -> Result<()> {
                 }
             } else if let Some(sql) = query {
                 if explain {
-                    use streamline::streamql::StreamQLParser;
                     use streamline::streamql::QueryPlanner;
+                    use streamline::streamql::StreamQLParser;
                     match StreamQLParser::parse(&sql) {
                         Ok(ast) => {
                             let planner = QueryPlanner::new();
@@ -1192,7 +1198,7 @@ fn run(cli: Cli, ctx: &CliContext) -> Result<()> {
                             }
                             KsqlStatementResult::Listing(items) => {
                                 for item in &items {
-                                    println!("  {}", item);
+                                    println!("  {item}");
                                 }
                             }
                         },
@@ -1203,64 +1209,78 @@ fn run(cli: Cli, ctx: &CliContext) -> Result<()> {
                 eprintln!("Please provide a query or use --list-queries / --terminate-query.");
             }
         }
-        Commands::Plugin { action, name } => {
-            match action {
-                PluginAction::List => {
-                    println!("{}", "Installed Plugins:".bold());
-                    println!("  (no plugins installed)");
-                    println!();
-                    println!("Use {} to install plugins from the marketplace.", "streamline-cli plugin install <name>".cyan());
-                }
-                PluginAction::Search => {
-                    let query = name.as_deref().unwrap_or("");
-                    println!("{}", format!("Marketplace Search: '{}'", query).bold());
-                    println!();
-                    let available = vec![
-                        ("json-filter", "Field-based JSON message filtering"),
-                        ("pii-redactor", "GDPR-compliant PII redaction"),
-                        ("schema-validator", "JSON Schema validation with DLQ"),
-                        ("timestamp-enricher", "Add processing timestamps"),
-                        ("deduplicator", "Bloom filter deduplication"),
-                        ("rate-limiter", "Token bucket rate limiting"),
-                        ("field-router", "Content-based topic routing"),
-                        ("data-masking", "Sensitive data masking"),
-                        ("http-enricher", "HTTP API enrichment"),
-                        ("metrics-extractor", "Prometheus metric extraction"),
-                    ];
-                    for (name, desc) in &available {
-                        if query.is_empty() || name.contains(query) || desc.to_lowercase().contains(&query.to_lowercase()) {
-                            println!("  {} - {}", name.cyan(), desc);
-                        }
-                    }
-                }
-                PluginAction::Install => {
-                    if let Some(plugin_name) = name {
-                        println!("{} Installing plugin '{}'...", "⬇".cyan(), plugin_name);
-                        println!("{} Plugin '{}' installed successfully.", "✓".green(), plugin_name);
-                        println!();
-                        println!("Enable it with: {}", format!("streamline-cli plugin enable {}", plugin_name).cyan());
-                    } else {
-                        eprintln!("{} Please specify a plugin name.", "✗".red());
-                    }
-                }
-                PluginAction::Info => {
-                    if let Some(plugin_name) = name {
-                        println!("{} {}", "Plugin:".bold(), plugin_name);
-                        println!("  Status: not installed");
-                        println!("  Use {} to install.", format!("streamline-cli plugin install {}", plugin_name).cyan());
-                    } else {
-                        eprintln!("{} Please specify a plugin name.", "✗".red());
-                    }
-                }
-                PluginAction::Remove => {
-                    if let Some(plugin_name) = name {
-                        println!("{} Plugin '{}' removed.", "✓".green(), plugin_name);
-                    } else {
-                        eprintln!("{} Please specify a plugin name.", "✗".red());
+        Commands::Plugin { action, name } => match action {
+            PluginAction::List => {
+                println!("{}", "Installed Plugins:".bold());
+                println!("  (no plugins installed)");
+                println!();
+                println!(
+                    "Use {} to install plugins from the marketplace.",
+                    "streamline-cli plugin install <name>".cyan()
+                );
+            }
+            PluginAction::Search => {
+                let query = name.as_deref().unwrap_or("");
+                println!("{}", format!("Marketplace Search: '{query}'").bold());
+                println!();
+                let available = vec![
+                    ("json-filter", "Field-based JSON message filtering"),
+                    ("pii-redactor", "GDPR-compliant PII redaction"),
+                    ("schema-validator", "JSON Schema validation with DLQ"),
+                    ("timestamp-enricher", "Add processing timestamps"),
+                    ("deduplicator", "Bloom filter deduplication"),
+                    ("rate-limiter", "Token bucket rate limiting"),
+                    ("field-router", "Content-based topic routing"),
+                    ("data-masking", "Sensitive data masking"),
+                    ("http-enricher", "HTTP API enrichment"),
+                    ("metrics-extractor", "Prometheus metric extraction"),
+                ];
+                for (name, desc) in &available {
+                    if query.is_empty()
+                        || name.contains(query)
+                        || desc.to_lowercase().contains(&query.to_lowercase())
+                    {
+                        println!("  {} - {}", name.cyan(), desc);
                     }
                 }
             }
-        }
+            PluginAction::Install => {
+                if let Some(plugin_name) = name {
+                    println!("{} Installing plugin '{}'...", "⬇".cyan(), plugin_name);
+                    println!(
+                        "{} Plugin '{}' installed successfully.",
+                        "✓".green(),
+                        plugin_name
+                    );
+                    println!();
+                    println!(
+                        "Enable it with: {}",
+                        format!("streamline-cli plugin enable {plugin_name}").cyan()
+                    );
+                } else {
+                    eprintln!("{} Please specify a plugin name.", "✗".red());
+                }
+            }
+            PluginAction::Info => {
+                if let Some(plugin_name) = name {
+                    println!("{} {}", "Plugin:".bold(), plugin_name);
+                    println!("  Status: not installed");
+                    println!(
+                        "  Use {} to install.",
+                        format!("streamline-cli plugin install {plugin_name}").cyan()
+                    );
+                } else {
+                    eprintln!("{} Please specify a plugin name.", "✗".red());
+                }
+            }
+            PluginAction::Remove => {
+                if let Some(plugin_name) = name {
+                    println!("{} Plugin '{}' removed.", "✓".green(), plugin_name);
+                } else {
+                    eprintln!("{} Please specify a plugin name.", "✗".red());
+                }
+            }
+        },
         #[cfg(feature = "branches")]
         Commands::Branch { cmd } => {
             cli_branches_cmd::handle(cmd)?;
@@ -1295,7 +1315,7 @@ fn generate_default_config(full: bool, edition: &str) -> String {
     let mut config = String::new();
 
     config.push_str("# Streamline Configuration\n");
-    config.push_str(&format!("# Edition: {}\n\n", edition));
+    config.push_str(&format!("# Edition: {edition}\n\n"));
 
     config.push_str("[server]\n");
     config.push_str("listen_addr = \"0.0.0.0:9092\"\n");
@@ -1399,18 +1419,16 @@ fn handle_sqlite_query_command(
                 "row_count": result.row_count,
                 "execution_ms": result.execution_ms,
             });
-            println!("{}", serde_json::to_string_pretty(&output).unwrap_or_default());
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&output).unwrap_or_default()
+            );
         }
         _ => {
             let mut table = Table::new();
             table.load_preset(UTF8_FULL_CONDENSED);
             table.set_content_arrangement(ContentArrangement::Dynamic);
-            table.set_header(
-                result
-                    .columns
-                    .iter()
-                    .map(|c| Cell::new(c).fg(Color::Cyan)),
-            );
+            table.set_header(result.columns.iter().map(|c| Cell::new(c).fg(Color::Cyan)));
 
             for row in &result.rows {
                 let cells: Vec<Cell> = row
@@ -1613,7 +1631,7 @@ mod tests {
         // Produce multiple messages
         for i in 0..5 {
             topic_manager
-                .append("offset-test", 0, None, Bytes::from(format!("msg-{}", i)))
+                .append("offset-test", 0, None, Bytes::from(format!("msg-{i}")))
                 .unwrap();
         }
 
@@ -1635,7 +1653,7 @@ mod tests {
         // Produce 10 messages
         for i in 0..10 {
             topic_manager
-                .append("max-test", 0, None, Bytes::from(format!("msg-{}", i)))
+                .append("max-test", 0, None, Bytes::from(format!("msg-{i}")))
                 .unwrap();
         }
 

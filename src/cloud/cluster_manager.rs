@@ -143,7 +143,7 @@ impl CloudCluster {
     /// Create a new cluster definition
     pub fn new(id: &str, tenant_id: &str, region: &str, vcpu: u32, memory_mb: u32) -> Self {
         let now = chrono::Utc::now().timestamp_millis();
-        let namespace = format!("streamline-{}", id);
+        let namespace = format!("streamline-{id}");
 
         Self {
             id: id.to_string(),
@@ -196,15 +196,19 @@ impl ClusterManager {
     ) -> Result<CloudCluster> {
         let cluster_id = format!(
             "cl-{}",
-            uuid::Uuid::new_v4().to_string().split('-').next().unwrap_or("unknown")
+            uuid::Uuid::new_v4()
+                .to_string()
+                .split('-')
+                .next()
+                .unwrap_or("unknown")
         );
         let mut cluster = CloudCluster::new(&cluster_id, tenant_id, region, vcpu, memory_mb);
 
         // In a real implementation, this would call the Kubernetes API
         // For now, we simulate cluster creation
         cluster.namespace = format!("{}{}", self.config.namespace_prefix, cluster_id);
-        cluster.bootstrap_servers = format!("{}.streamline.cloud:9092", cluster_id);
-        cluster.http_endpoint = format!("https://{}.streamline.cloud:9094", cluster_id);
+        cluster.bootstrap_servers = format!("{cluster_id}.streamline.cloud:9092");
+        cluster.http_endpoint = format!("https://{cluster_id}.streamline.cloud:9094");
         cluster.state = ClusterState::Running;
         cluster.stats.replicas = 1;
         cluster.stats.ready_replicas = 1;
@@ -243,7 +247,7 @@ impl ClusterManager {
 
         let cluster = clusters
             .get_mut(cluster_id)
-            .ok_or_else(|| StreamlineError::Config(format!("Cluster not found: {}", cluster_id)))?;
+            .ok_or_else(|| StreamlineError::Config(format!("Cluster not found: {cluster_id}")))?;
 
         cluster.state = ClusterState::Scaling;
         cluster.cpu_millicores = vcpu * 1000;
@@ -269,7 +273,7 @@ impl ClusterManager {
 
         let cluster = clusters
             .get_mut(cluster_id)
-            .ok_or_else(|| StreamlineError::Config(format!("Cluster not found: {}", cluster_id)))?;
+            .ok_or_else(|| StreamlineError::Config(format!("Cluster not found: {cluster_id}")))?;
 
         cluster.state = ClusterState::Scaling;
         cluster.desired_replicas = replicas;
@@ -289,7 +293,7 @@ impl ClusterManager {
 
         let cluster = clusters
             .get_mut(cluster_id)
-            .ok_or_else(|| StreamlineError::Config(format!("Cluster not found: {}", cluster_id)))?;
+            .ok_or_else(|| StreamlineError::Config(format!("Cluster not found: {cluster_id}")))?;
 
         cluster.state = ClusterState::Deleting;
         cluster.updated_at = chrono::Utc::now().timestamp_millis();
@@ -308,7 +312,7 @@ impl ClusterManager {
 
         let cluster = clusters
             .get_mut(cluster_id)
-            .ok_or_else(|| StreamlineError::Config(format!("Cluster not found: {}", cluster_id)))?;
+            .ok_or_else(|| StreamlineError::Config(format!("Cluster not found: {cluster_id}")))?;
 
         cluster.stats = stats;
         cluster.updated_at = chrono::Utc::now().timestamp_millis();

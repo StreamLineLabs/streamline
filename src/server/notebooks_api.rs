@@ -39,6 +39,12 @@ pub struct NotebooksApiState {
     pub shared: Arc<RwLock<HashMap<String, String>>>,
 }
 
+impl Default for NotebooksApiState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl NotebooksApiState {
     pub fn new() -> Self {
         Self {
@@ -210,9 +216,7 @@ async fn create_notebook(
     (StatusCode::CREATED, Json(notebook))
 }
 
-async fn list_notebooks(
-    State(state): State<NotebooksApiState>,
-) -> Json<Vec<Notebook>> {
+async fn list_notebooks(State(state): State<NotebooksApiState>) -> Json<Vec<Notebook>> {
     let notebooks = state.notebooks.read();
     Json(notebooks.values().cloned().collect())
 }
@@ -373,18 +377,26 @@ async fn export_notebook(
         "markdown" => {
             let mut md = format!("# {}\n\n", notebook.title);
             if let Some(desc) = &notebook.description {
-                md.push_str(&format!("{}\n\n", desc));
+                md.push_str(&format!("{desc}\n\n"));
             }
             for (i, cell) in notebook.cells.iter().enumerate() {
                 match cell.cell_type {
                     CellType::Sql => {
-                        md.push_str(&format!("## Cell {} (SQL)\n\n```sql\n{}\n```\n\n", i + 1, cell.source));
+                        md.push_str(&format!(
+                            "## Cell {} (SQL)\n\n```sql\n{}\n```\n\n",
+                            i + 1,
+                            cell.source
+                        ));
                     }
                     CellType::Markdown => {
                         md.push_str(&format!("{}\n\n", cell.source));
                     }
                     CellType::Code => {
-                        md.push_str(&format!("## Cell {} (Code)\n\n```\n{}\n```\n\n", i + 1, cell.source));
+                        md.push_str(&format!(
+                            "## Cell {} (Code)\n\n```\n{}\n```\n\n",
+                            i + 1,
+                            cell.source
+                        ));
                     }
                 }
             }
@@ -417,7 +429,7 @@ async fn share_notebook(
     Ok((
         StatusCode::CREATED,
         Json(ShareResponse {
-            url: format!("/api/v1/notebooks/shared/{}", token),
+            url: format!("/api/v1/notebooks/shared/{token}"),
             token,
         }),
     ))
@@ -611,7 +623,7 @@ mod tests {
         let resp = app
             .oneshot(
                 Request::builder()
-                    .uri(&format!("/api/v1/notebooks/{}", nb.id))
+                    .uri(format!("/api/v1/notebooks/{}", nb.id))
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -630,7 +642,7 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .method("PUT")
-                    .uri(&format!("/api/v1/notebooks/{}", nb.id))
+                    .uri(format!("/api/v1/notebooks/{}", nb.id))
                     .header("content-type", "application/json")
                     .body(Body::from(serde_json::to_vec(&body).unwrap()))
                     .unwrap(),
@@ -649,7 +661,7 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .method("DELETE")
-                    .uri(&format!("/api/v1/notebooks/{}", nb.id))
+                    .uri(format!("/api/v1/notebooks/{}", nb.id))
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -683,7 +695,7 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .method("POST")
-                    .uri(&format!("/api/v1/notebooks/{}/cells/0/execute", nb.id))
+                    .uri(format!("/api/v1/notebooks/{}/cells/0/execute", nb.id))
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -701,7 +713,7 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .method("POST")
-                    .uri(&format!("/api/v1/notebooks/{}/cells/99/execute", nb.id))
+                    .uri(format!("/api/v1/notebooks/{}/cells/99/execute", nb.id))
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -719,7 +731,7 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .method("POST")
-                    .uri(&format!("/api/v1/notebooks/{}/run-all", nb.id))
+                    .uri(format!("/api/v1/notebooks/{}/run-all", nb.id))
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -738,7 +750,7 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .method("POST")
-                    .uri(&format!("/api/v1/notebooks/{}/export", nb.id))
+                    .uri(format!("/api/v1/notebooks/{}/export", nb.id))
                     .header("content-type", "application/json")
                     .body(Body::from(serde_json::to_vec(&body).unwrap()))
                     .unwrap(),
@@ -758,7 +770,7 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .method("POST")
-                    .uri(&format!("/api/v1/notebooks/{}/export", nb.id))
+                    .uri(format!("/api/v1/notebooks/{}/export", nb.id))
                     .header("content-type", "application/json")
                     .body(Body::from(serde_json::to_vec(&body).unwrap()))
                     .unwrap(),
@@ -778,7 +790,7 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .method("POST")
-                    .uri(&format!("/api/v1/notebooks/{}/export", nb.id))
+                    .uri(format!("/api/v1/notebooks/{}/export", nb.id))
                     .header("content-type", "application/json")
                     .body(Body::from(serde_json::to_vec(&body).unwrap()))
                     .unwrap(),
@@ -800,7 +812,7 @@ mod tests {
         let resp = app
             .oneshot(
                 Request::builder()
-                    .uri(&format!("/api/v1/notebooks/shared/{}", token))
+                    .uri(format!("/api/v1/notebooks/shared/{token}"))
                     .body(Body::empty())
                     .unwrap(),
             )

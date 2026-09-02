@@ -33,8 +33,8 @@ thread_local! {
 /// Store an error message in thread-local storage so the caller can
 /// retrieve it with [`streamline_last_error`].
 fn set_last_error(msg: &str) {
-    let c =
-        CString::new(msg).unwrap_or_else(|_| CString::new("(error contained null byte)").unwrap_or_default());
+    let c = CString::new(msg)
+        .unwrap_or_else(|_| CString::new("(error contained null byte)").unwrap_or_default());
     LAST_ERROR.with(|cell| {
         *cell.borrow_mut() = Some(c);
     });

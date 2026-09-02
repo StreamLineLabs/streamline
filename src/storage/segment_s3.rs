@@ -297,7 +297,7 @@ impl S3Segment {
         match self.store.get(&path).await {
             Ok(result) => {
                 let data = result.bytes().await.map_err(|e| {
-                    StreamlineError::storage_msg(format!("Failed to read manifest: {}", e))
+                    StreamlineError::storage_msg(format!("Failed to read manifest: {e}"))
                 })?;
 
                 let manifest: PartitionManifest = serde_json::from_slice(&data)?;
@@ -323,8 +323,7 @@ impl S3Segment {
             }
             Err(e) => {
                 return Err(StreamlineError::storage_msg(format!(
-                    "Failed to load manifest: {}",
-                    e
+                    "Failed to load manifest: {e}"
                 )));
             }
         }
@@ -341,7 +340,7 @@ impl S3Segment {
         self.store
             .put(&path, PutPayload::from_bytes(Bytes::from(data)))
             .await
-            .map_err(|e| StreamlineError::storage_msg(format!("Failed to save manifest: {}", e)))?;
+            .map_err(|e| StreamlineError::storage_msg(format!("Failed to save manifest: {e}")))?;
 
         debug!(
             topic = %self.topic,
@@ -508,9 +507,7 @@ impl S3Segment {
         self.store
             .put(&path, PutPayload::from_bytes(data))
             .await
-            .map_err(|e| {
-                StreamlineError::storage_msg(format!("Failed to upload segment: {}", e))
-            })?;
+            .map_err(|e| StreamlineError::storage_msg(format!("Failed to upload segment: {e}")))?;
 
         // Update stats
         self.stats.uploads.fetch_add(1, Ordering::Relaxed);
@@ -581,13 +578,13 @@ impl S3Segment {
         let path = ObjectPath::from(entry.object_path.clone());
 
         let result = self.store.get(&path).await.map_err(|e| {
-            StreamlineError::storage_msg(format!("Failed to download segment: {}", e))
+            StreamlineError::storage_msg(format!("Failed to download segment: {e}"))
         })?;
 
         let data = result
             .bytes()
             .await
-            .map_err(|e| StreamlineError::storage_msg(format!("Failed to read segment: {}", e)))?;
+            .map_err(|e| StreamlineError::storage_msg(format!("Failed to read segment: {e}")))?;
 
         self.stats.downloads.fetch_add(1, Ordering::Relaxed);
         self.stats
@@ -898,12 +895,12 @@ fn create_object_store(backend: &TieringBackend) -> Result<Arc<dyn ObjectStore>>
     match backend {
         TieringBackend::Local { path } => {
             std::fs::create_dir_all(path).map_err(|e| {
-                StreamlineError::storage_msg(format!("Failed to create segment directory: {}", e))
+                StreamlineError::storage_msg(format!("Failed to create segment directory: {e}"))
             })?;
 
             let store =
                 object_store::local::LocalFileSystem::new_with_prefix(path).map_err(|e| {
-                    StreamlineError::storage_msg(format!("Failed to create local store: {}", e))
+                    StreamlineError::storage_msg(format!("Failed to create local store: {e}"))
                 })?;
 
             Ok(Arc::new(store))
@@ -933,7 +930,7 @@ fn create_object_store(backend: &TieringBackend) -> Result<Arc<dyn ObjectStore>>
             }
 
             let store = builder.build().map_err(|e| {
-                StreamlineError::storage_msg(format!("Failed to create S3 store: {}", e))
+                StreamlineError::storage_msg(format!("Failed to create S3 store: {e}"))
             })?;
 
             Ok(Arc::new(store))
@@ -953,7 +950,7 @@ fn create_object_store(backend: &TieringBackend) -> Result<Arc<dyn ObjectStore>>
             }
 
             let store = builder.build().map_err(|e| {
-                StreamlineError::storage_msg(format!("Failed to create Azure store: {}", e))
+                StreamlineError::storage_msg(format!("Failed to create Azure store: {e}"))
             })?;
 
             Ok(Arc::new(store))
@@ -971,7 +968,7 @@ fn create_object_store(backend: &TieringBackend) -> Result<Arc<dyn ObjectStore>>
             }
 
             let store = builder.build().map_err(|e| {
-                StreamlineError::storage_msg(format!("Failed to create GCS store: {}", e))
+                StreamlineError::storage_msg(format!("Failed to create GCS store: {e}"))
             })?;
 
             Ok(Arc::new(store))
@@ -1325,7 +1322,7 @@ impl S3SegmentStateless {
 
         for result in list_result {
             let meta = result.map_err(|e| {
-                StreamlineError::storage_msg(format!("Failed to list segments: {}", e))
+                StreamlineError::storage_msg(format!("Failed to list segments: {e}"))
             })?;
 
             // Parse segment file name to get offset range
@@ -1374,12 +1371,12 @@ impl S3SegmentStateless {
                 .get(&meta.location)
                 .await
                 .map_err(|e| {
-                    StreamlineError::storage_msg(format!("Failed to download segment: {}", e))
+                    StreamlineError::storage_msg(format!("Failed to download segment: {e}"))
                 })?
                 .bytes()
                 .await
                 .map_err(|e| {
-                    StreamlineError::storage_msg(format!("Failed to read segment: {}", e))
+                    StreamlineError::storage_msg(format!("Failed to read segment: {e}"))
                 })?;
 
             // Cache the segment data
@@ -1456,8 +1453,8 @@ mod tests {
             let record = Record {
                 offset: base_offset + i as i64,
                 timestamp: chrono::Utc::now().timestamp_millis(),
-                key: Some(Bytes::from(format!("key-{}", i))),
-                value: Bytes::from(format!("value-{}", i)),
+                key: Some(Bytes::from(format!("key-{i}"))),
+                value: Bytes::from(format!("value-{i}")),
                 headers: Vec::new(),
                 crc: None,
             };

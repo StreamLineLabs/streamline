@@ -33,7 +33,9 @@ fn rand_vec(seed: u64, dim: usize) -> Vec<f32> {
     let mut s = seed;
     (0..dim)
         .map(|_| {
-            s = s.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            s = s
+                .wrapping_mul(6364136223846793005)
+                .wrapping_add(1442695040888963407);
             ((s >> 11) as f64 / (1u64 << 53) as f64) as f32 - 0.5
         })
         .collect()
@@ -83,9 +85,12 @@ fn search_index(idx: &StubIndex, q: &[f32], k: usize, _ef_search: usize) -> Vec<
 }
 
 fn bench_hnsw_recall(c: &mut Criterion) {
-    let corpus: Vec<Vec<f32>> = (0..N_VECTORS).map(|i| rand_vec(i as u64 + 1, DIM)).collect();
-    let queries: Vec<Vec<f32>> =
-        (0..N_QUERIES).map(|i| rand_vec((i + 999) as u64, DIM)).collect();
+    let corpus: Vec<Vec<f32>> = (0..N_VECTORS)
+        .map(|i| rand_vec(i as u64 + 1, DIM))
+        .collect();
+    let queries: Vec<Vec<f32>> = (0..N_QUERIES)
+        .map(|i| rand_vec((i + 999) as u64, DIM))
+        .collect();
 
     // Ground truth (brute force).
     let gt: Vec<Vec<usize>> = queries.iter().map(|q| brute_topk(&corpus, q, K)).collect();

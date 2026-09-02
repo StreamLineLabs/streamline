@@ -297,7 +297,10 @@ impl GovernanceEngine {
                                     rule_name: rule.rule_name.clone(),
                                     field: rule.field.clone(),
                                     actual_value: val.to_string(),
-                                    expected_constraint: format!("value in range {}", rule.expression),
+                                    expected_constraint: format!(
+                                        "value in range {}",
+                                        rule.expression
+                                    ),
                                     severity: rule.severity,
                                 });
                             }
@@ -315,7 +318,10 @@ impl GovernanceEngine {
                             actual_value: field_value
                                 .map(|v| v.to_string())
                                 .unwrap_or_else(|| "missing".to_string()),
-                            expected_constraint: format!("numeric value in range {}", rule.expression),
+                            expected_constraint: format!(
+                                "numeric value in range {}",
+                                rule.expression
+                            ),
                             severity: rule.severity,
                         });
                     }
@@ -352,7 +358,10 @@ impl GovernanceEngine {
                             actual_value: field_value
                                 .map(|v| v.to_string())
                                 .unwrap_or_else(|| "missing".to_string()),
-                            expected_constraint: format!("string matching regex: {}", rule.expression),
+                            expected_constraint: format!(
+                                "string matching regex: {}",
+                                rule.expression
+                            ),
                             severity: rule.severity,
                         });
                     }
@@ -682,7 +691,10 @@ mod tests {
     async fn test_remove_contract() {
         let engine = GovernanceEngine::new();
         engine.register_contract(sample_contract()).await.unwrap();
-        engine.remove_contract("user-events-contract").await.unwrap();
+        engine
+            .remove_contract("user-events-contract")
+            .await
+            .unwrap();
 
         assert!(engine.get_contract("user-events-contract").await.is_err());
     }
@@ -746,7 +758,10 @@ mod tests {
         });
 
         let violations = GovernanceEngine::evaluate_contract(&data, &contract);
-        assert!(violations.is_empty(), "Expected no violations: {violations:?}");
+        assert!(
+            violations.is_empty(),
+            "Expected no violations: {violations:?}"
+        );
     }
 
     #[test]
@@ -887,7 +902,10 @@ mod tests {
         }"#;
 
         let violations = GovernanceEngine::evaluate_policy(schema, SchemaType::Avro, &policy);
-        assert!(violations.is_empty(), "Expected no violations: {violations:?}");
+        assert!(
+            violations.is_empty(),
+            "Expected no violations: {violations:?}"
+        );
     }
 
     #[test]
@@ -1019,7 +1037,10 @@ mod tests {
         assert!(!matches_convention("userId", NamingConvention::SnakeCase));
         assert!(!matches_convention("UserId", NamingConvention::SnakeCase));
         assert!(!matches_convention("_leading", NamingConvention::SnakeCase));
-        assert!(!matches_convention("trailing_", NamingConvention::SnakeCase));
+        assert!(!matches_convention(
+            "trailing_",
+            NamingConvention::SnakeCase
+        ));
         assert!(!matches_convention("", NamingConvention::SnakeCase));
     }
 

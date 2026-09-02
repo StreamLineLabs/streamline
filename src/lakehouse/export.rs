@@ -94,7 +94,7 @@ impl ExportManager {
 
         let job = jobs
             .get_mut(job_id)
-            .ok_or_else(|| StreamlineError::Config(format!("Export job '{}' not found", job_id)))?;
+            .ok_or_else(|| StreamlineError::Config(format!("Export job '{job_id}' not found")))?;
 
         if !matches!(job.status, ExportStatus::Pending | ExportStatus::Failed) {
             return Err(StreamlineError::Config(format!(
@@ -133,7 +133,7 @@ impl ExportManager {
 
         let job = jobs
             .get_mut(job_id)
-            .ok_or_else(|| StreamlineError::Config(format!("Export job '{}' not found", job_id)))?;
+            .ok_or_else(|| StreamlineError::Config(format!("Export job '{job_id}' not found")))?;
 
         if !matches!(job.status, ExportStatus::Running | ExportStatus::Pending) {
             return Err(StreamlineError::Config(format!(
@@ -171,7 +171,7 @@ impl ExportManager {
             let jobs = jobs.read().await;
             let job = jobs
                 .get(job_id)
-                .ok_or_else(|| StreamlineError::Config(format!("Job '{}' not found", job_id)))?;
+                .ok_or_else(|| StreamlineError::Config(format!("Job '{job_id}' not found")))?;
             (
                 job.config.topic.clone(),
                 job.config.destination.clone(),
@@ -186,7 +186,7 @@ impl ExportManager {
                 .get(&destination_name)
                 .cloned()
                 .ok_or_else(|| {
-                    StreamlineError::Config(format!("Destination '{}' not found", destination_name))
+                    StreamlineError::Config(format!("Destination '{destination_name}' not found"))
                 })?
         };
 
@@ -336,7 +336,7 @@ impl ExportManager {
 
         // Create directory
         std::fs::create_dir_all(path).map_err(|e| {
-            StreamlineError::storage_msg(format!("Failed to create export directory: {}", e))
+            StreamlineError::storage_msg(format!("Failed to create export directory: {e}"))
         })?;
 
         // Update progress
@@ -363,7 +363,7 @@ impl ExportManager {
     ) -> Result<ExportedFile> {
         let destinations = self.destinations.read().await;
         let dest = destinations.get(destination).ok_or_else(|| {
-            StreamlineError::Config(format!("Destination '{}' not found", destination))
+            StreamlineError::Config(format!("Destination '{destination}' not found"))
         })?;
 
         let file = match dest {
@@ -371,7 +371,7 @@ impl ExportManager {
                 let dest_path = path.join(format!("{}_{}.parquet", segment.topic, segment.id));
 
                 std::fs::copy(&segment.path, &dest_path).map_err(|e| {
-                    StreamlineError::storage_msg(format!("Failed to copy segment: {}", e))
+                    StreamlineError::storage_msg(format!("Failed to copy segment: {e}"))
                 })?;
 
                 ExportedFile {
@@ -627,12 +627,11 @@ impl ExportManifest {
     /// Save manifest to file
     pub fn save(&self, path: &PathBuf) -> Result<()> {
         let json = serde_json::to_string_pretty(self).map_err(|e| {
-            StreamlineError::storage_msg(format!("Failed to serialize manifest: {}", e))
+            StreamlineError::storage_msg(format!("Failed to serialize manifest: {e}"))
         })?;
 
-        std::fs::write(path, json).map_err(|e| {
-            StreamlineError::storage_msg(format!("Failed to write manifest: {}", e))
-        })?;
+        std::fs::write(path, json)
+            .map_err(|e| StreamlineError::storage_msg(format!("Failed to write manifest: {e}")))?;
 
         Ok(())
     }
@@ -640,10 +639,10 @@ impl ExportManifest {
     /// Load manifest from file
     pub fn load(path: &PathBuf) -> Result<Self> {
         let content = std::fs::read_to_string(path)
-            .map_err(|e| StreamlineError::storage_msg(format!("Failed to read manifest: {}", e)))?;
+            .map_err(|e| StreamlineError::storage_msg(format!("Failed to read manifest: {e}")))?;
 
         serde_json::from_str(&content)
-            .map_err(|e| StreamlineError::storage_msg(format!("Failed to parse manifest: {}", e)))
+            .map_err(|e| StreamlineError::storage_msg(format!("Failed to parse manifest: {e}")))
     }
 }
 

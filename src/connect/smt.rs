@@ -35,12 +35,17 @@ pub struct InsertField {
 
 impl InsertField {
     pub fn new(field_name: String, field_value: Value) -> Self {
-        Self { field_name, field_value }
+        Self {
+            field_name,
+            field_value,
+        }
     }
 }
 
 impl Transform for InsertField {
-    fn name(&self) -> &str { "InsertField" }
+    fn name(&self) -> &str {
+        "InsertField"
+    }
 
     fn apply(&self, mut record: ConnectRecord) -> Result<ConnectRecord, String> {
         if let Some(Value::Object(ref mut map)) = record.value {
@@ -63,7 +68,9 @@ impl ReplaceField {
 }
 
 impl Transform for ReplaceField {
-    fn name(&self) -> &str { "ReplaceField" }
+    fn name(&self) -> &str {
+        "ReplaceField"
+    }
 
     fn apply(&self, mut record: ConnectRecord) -> Result<ConnectRecord, String> {
         if let Some(Value::Object(ref mut map)) = record.value {
@@ -92,7 +99,9 @@ impl MaskField {
 }
 
 impl Transform for MaskField {
-    fn name(&self) -> &str { "MaskField" }
+    fn name(&self) -> &str {
+        "MaskField"
+    }
 
     fn apply(&self, mut record: ConnectRecord) -> Result<ConnectRecord, String> {
         if let Some(Value::Object(ref mut map)) = record.value {
@@ -124,14 +133,16 @@ impl TimestampRouter {
 }
 
 impl Transform for TimestampRouter {
-    fn name(&self) -> &str { "TimestampRouter" }
+    fn name(&self) -> &str {
+        "TimestampRouter"
+    }
 
     fn apply(&self, mut record: ConnectRecord) -> Result<ConnectRecord, String> {
         if let Some(ts) = record.timestamp {
-            let dt = chrono::DateTime::from_timestamp(ts / 1000, 0)
-                .unwrap_or_default();
+            let dt = chrono::DateTime::from_timestamp(ts / 1000, 0).unwrap_or_default();
             let date_str = dt.format("%Y-%m-%d").to_string();
-            record.topic = self.topic_format
+            record.topic = self
+                .topic_format
                 .replace("{topic}", &record.topic)
                 .replace("{timestamp:yyyy-MM-dd}", &date_str);
         }
@@ -155,10 +166,15 @@ impl RegexRouter {
 }
 
 impl Transform for RegexRouter {
-    fn name(&self) -> &str { "RegexRouter" }
+    fn name(&self) -> &str {
+        "RegexRouter"
+    }
 
     fn apply(&self, mut record: ConnectRecord) -> Result<ConnectRecord, String> {
-        record.topic = self.pattern.replace(&record.topic, &self.replacement).to_string();
+        record.topic = self
+            .pattern
+            .replace(&record.topic, &self.replacement)
+            .to_string();
         Ok(record)
     }
 }
@@ -170,7 +186,9 @@ pub struct TransformChain {
 
 impl TransformChain {
     pub fn new() -> Self {
-        Self { transforms: Vec::new() }
+        Self {
+            transforms: Vec::new(),
+        }
     }
 
     pub fn add(mut self, transform: Box<dyn Transform>) -> Self {
@@ -225,7 +243,8 @@ mod tests {
 
     #[test]
     fn test_replace_field_exclude() {
-        let transform = ReplaceField::new(std::collections::HashMap::new(), vec!["email".to_string()]);
+        let transform =
+            ReplaceField::new(std::collections::HashMap::new(), vec!["email".to_string()]);
         let result = transform.apply(sample_record()).unwrap();
         let map = result.value.unwrap();
         assert!(map.get("email").is_none());
@@ -260,7 +279,10 @@ mod tests {
     #[test]
     fn test_transform_chain() {
         let chain = TransformChain::new()
-            .add(Box::new(InsertField::new("source".to_string(), json!("test"))))
+            .add(Box::new(InsertField::new(
+                "source".to_string(),
+                json!("test"),
+            )))
             .add(Box::new(MaskField::new(vec!["email".to_string()])));
         let result = chain.apply(sample_record()).unwrap();
         let map = result.value.unwrap();

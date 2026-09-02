@@ -91,7 +91,7 @@ pub struct ChannelStats {
 }
 
 /// Configuration for an individual channel
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct ChannelConfig {
     /// Maximum number of subscribers (0 = unlimited)
     pub max_subscribers: usize,
@@ -101,17 +101,6 @@ pub struct ChannelConfig {
     pub history_size: usize,
     /// Auto-expire channel after this many ms of inactivity (0 = no expiry)
     pub idle_timeout_ms: u64,
-}
-
-impl Default for ChannelConfig {
-    fn default() -> Self {
-        Self {
-            max_subscribers: 0,
-            message_ttl_ms: 0,
-            history_size: 0,
-            idle_timeout_ms: 0,
-        }
-    }
 }
 
 /// Channel state including broadcast sender and stats
@@ -126,18 +115,16 @@ struct ChannelState {
     history_capacity: usize,
     /// Per-channel configuration (if created with explicit config)
     channel_config: Option<ChannelConfig>,
-    /// Timestamp when the channel was created (Unix millis)
-    created_at: u64,
     /// Timestamp of the last publish or subscribe activity (Unix millis)
     last_activity: AtomicU64,
 }
 
 impl ChannelState {
-    fn new(capacity: usize) -> Self {
-        Self::with_options(capacity, 0, None)
-    }
-
-    fn with_options(capacity: usize, history_capacity: usize, channel_config: Option<ChannelConfig>) -> Self {
+    fn with_options(
+        capacity: usize,
+        history_capacity: usize,
+        channel_config: Option<ChannelConfig>,
+    ) -> Self {
         let (sender, _) = broadcast::channel(capacity);
         let now = now_millis();
         Self {
@@ -146,7 +133,6 @@ impl ChannelState {
             history: Mutex::new(VecDeque::with_capacity(history_capacity)),
             history_capacity,
             channel_config,
-            created_at: now,
             last_activity: AtomicU64::new(now),
         }
     }
@@ -302,7 +288,11 @@ impl PubSubManager {
                 .entry(channel.to_string())
                 .or_insert_with(|| {
                     info!(channel, "Created new pub/sub channel");
-                    Arc::new(ChannelState::with_options(self.config.channel_capacity, history_size, None))
+                    Arc::new(ChannelState::with_options(
+                        self.config.channel_capacity,
+                        history_size,
+                        None,
+                    ))
                 })
                 .clone();
 
@@ -352,7 +342,12 @@ impl PubSubManager {
             self.total_messages.fetch_add(1, Ordering::Relaxed);
             drop(channels);
             let pattern_count = self.fan_out_to_patterns(channel, &message).await;
-            debug!(channel, subscribers = count, pattern_subscribers = pattern_count, "Published message to channel");
+            debug!(
+                channel,
+                subscribers = count,
+                pattern_subscribers = pattern_count,
+                "Published message to channel"
+            );
             return count + pattern_count;
         }
         drop(channels);
@@ -371,7 +366,11 @@ impl PubSubManager {
                 .entry(channel.to_string())
                 .or_insert_with(|| {
                     info!(channel, "Created new pub/sub channel on publish");
-                    Arc::new(ChannelState::with_options(self.config.channel_capacity, history_size, None))
+                    Arc::new(ChannelState::with_options(
+                        self.config.channel_capacity,
+                        history_size,
+                        None,
+                    ))
                 })
                 .clone();
 
@@ -382,7 +381,12 @@ impl PubSubManager {
             self.total_messages.fetch_add(1, Ordering::Relaxed);
             drop(channels);
             let pattern_count = self.fan_out_to_patterns(channel, &message).await;
-            debug!(channel, subscribers = count, pattern_subscribers = pattern_count, "Published message to channel");
+            debug!(
+                channel,
+                subscribers = count,
+                pattern_subscribers = pattern_count,
+                "Published message to channel"
+            );
             count + pattern_count
         } else {
             0
@@ -526,14 +530,17 @@ impl PubSubManager {
         // Use a single write lock for the read-update cycle to avoid race conditions
         let last_seen = {
             let mut subs = self.persistent_subs.write().await;
-            let state = subs
-                .entry(subscriber_id.to_string())
-                .or_insert_with(|| PersistentSubscriptionState {
+            let state = subs.entry(subscriber_id.to_string()).or_insert_with(|| {
+                PersistentSubscriptionState {
                     subscriber_id: subscriber_id.to_string(),
                     channel_offsets: HashMap::new(),
                     created_at: now_millis(),
-                });
-            *state.channel_offsets.entry(channel.to_string()).or_insert(0)
+                }
+            });
+            *state
+                .channel_offsets
+                .entry(channel.to_string())
+                .or_insert(0)
         };
 
         // Replay from history
@@ -567,15 +574,13 @@ impl PubSubManager {
     /// Acknowledge that a persistent subscriber has processed messages up to
     /// (and including) the given message ID on the specified channel.
     /// Returns `true` if the acknowledgment was recorded.
-    pub async fn acknowledge(
-        &self,
-        subscriber_id: &str,
-        channel: &str,
-        message_id: u64,
-    ) -> bool {
+    pub async fn acknowledge(&self, subscriber_id: &str, channel: &str, message_id: u64) -> bool {
         let mut subs = self.persistent_subs.write().await;
         if let Some(state) = subs.get_mut(subscriber_id) {
-            let offset = state.channel_offsets.entry(channel.to_string()).or_insert(0);
+            let offset = state
+                .channel_offsets
+                .entry(channel.to_string())
+                .or_insert(0);
             if message_id > *offset {
                 *offset = message_id;
                 debug!(subscriber_id, channel, message_id, "Acknowledged message");
@@ -625,7 +630,10 @@ impl PubSubManager {
         }
 
         if total_removed > 0 {
-            debug!(total_removed, "Cleaned up expired messages from history buffers");
+            debug!(
+                total_removed,
+                "Cleaned up expired messages from history buffers"
+            );
         }
         total_removed
     }
@@ -664,7 +672,11 @@ impl PubSubManager {
 
         let capacity = self.config.channel_capacity;
         let history_size = config.history_size;
-        let state = Arc::new(ChannelState::with_options(capacity, history_size, Some(config)));
+        let state = Arc::new(ChannelState::with_options(
+            capacity,
+            history_size,
+            Some(config),
+        ));
         channels.insert(name.to_string(), state);
         info!(name, "Created pub/sub channel with custom config");
         true
@@ -1142,7 +1154,10 @@ mod tests {
         manager.publish("h", "msg1").await;
         manager.publish("h", "msg2").await;
         let history = manager.get_history("h", 10).await;
-        assert!(history.is_empty(), "history should be empty when history_size=0");
+        assert!(
+            history.is_empty(),
+            "history should be empty when history_size=0"
+        );
     }
 
     #[tokio::test]
@@ -1287,7 +1302,10 @@ mod tests {
         assert_eq!(sub.subscriber_id, "viewer");
         assert!(sub.channels.contains(&"ps".to_string()));
 
-        assert!(manager.get_persistent_subscription("nonexistent").await.is_none());
+        assert!(manager
+            .get_persistent_subscription("nonexistent")
+            .await
+            .is_none());
     }
 
     #[tokio::test]
@@ -1316,7 +1334,11 @@ mod tests {
         assert!(created);
 
         // Creating the same channel again should return false
-        assert!(!manager.create_channel("custom", ChannelConfig::default()).await);
+        assert!(
+            !manager
+                .create_channel("custom", ChannelConfig::default())
+                .await
+        );
 
         // Channel should be listed
         let channels = manager.list_channels().await;
@@ -1331,8 +1353,16 @@ mod tests {
         };
         let manager = PubSubManager::with_config(config);
 
-        assert!(manager.create_channel("first", ChannelConfig::default()).await);
-        assert!(!manager.create_channel("second", ChannelConfig::default()).await);
+        assert!(
+            manager
+                .create_channel("first", ChannelConfig::default())
+                .await
+        );
+        assert!(
+            !manager
+                .create_channel("second", ChannelConfig::default())
+                .await
+        );
     }
 
     #[tokio::test]
@@ -1359,7 +1389,9 @@ mod tests {
     #[tokio::test]
     async fn test_cleanup_idle_channels() {
         let manager = PubSubManager::new();
-        manager.create_channel("idle-ch", ChannelConfig::default()).await;
+        manager
+            .create_channel("idle-ch", ChannelConfig::default())
+            .await;
 
         // Artificially age the channel by setting last_activity far in the past
         {
@@ -1605,7 +1637,11 @@ mod tests {
         handle.abort();
 
         let history = manager.get_history("task-ch", 100).await;
-        assert_eq!(history.len(), 0, "expired messages should have been cleaned up by the task");
+        assert_eq!(
+            history.len(),
+            0,
+            "expired messages should have been cleaned up by the task"
+        );
     }
 
     // ── Persistent Subscription Concurrency Tests ──
@@ -1621,7 +1657,7 @@ mod tests {
 
         // Publish some messages so there's history to replay
         for i in 0..10 {
-            manager.publish("conc-ch", format!("msg-{}", i)).await;
+            manager.publish("conc-ch", format!("msg-{i}")).await;
         }
 
         // Spawn multiple concurrent persistent subscribers with the same ID
@@ -1642,7 +1678,7 @@ mod tests {
         // All should get a consistent replay (10 messages the first time,
         // possibly 0 if another task acknowledged — but no panics or data corruption)
         for count in &replay_counts {
-            assert!(*count <= 10, "replay count should be <= 10, got {}", count);
+            assert!(*count <= 10, "replay count should be <= 10, got {count}");
         }
 
         // Verify subscription state is consistent

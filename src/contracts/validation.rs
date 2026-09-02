@@ -236,12 +236,8 @@ impl ContractValidator {
                 violations.push(Violation {
                     field: "<message>".to_string(),
                     violation_type: ViolationType::SizeExceeded,
-                    message: format!(
-                        "Message size {} exceeds limit {}",
-                        message.len(),
-                        max_size
-                    ),
-                    expected: Some(format!("<= {}", max_size)),
+                    message: format!("Message size {} exceeds limit {}", message.len(), max_size),
+                    expected: Some(format!("<= {max_size}")),
                     actual: Some(message.len().to_string()),
                 });
             }
@@ -251,9 +247,9 @@ impl ContractValidator {
         for required_header in &spec.required_headers {
             if !headers.iter().any(|(k, _)| k == required_header) {
                 violations.push(Violation {
-                    field: format!("header:{}", required_header),
+                    field: format!("header:{required_header}"),
                     violation_type: ViolationType::MissingHeader,
-                    message: format!("Required header '{}' is missing", required_header),
+                    message: format!("Required header '{required_header}' is missing"),
                     expected: Some(required_header.clone()),
                     actual: None,
                 });
@@ -271,7 +267,7 @@ impl ContractValidator {
                 violations.push(Violation {
                     field: "<root>".to_string(),
                     violation_type: ViolationType::ParseError,
-                    message: format!("Failed to parse message as JSON: {}", e),
+                    message: format!("Failed to parse message as JSON: {e}"),
                     expected: Some("valid JSON".to_string()),
                     actual: None,
                 });
@@ -370,7 +366,7 @@ impl ContractValidator {
                             "Field '{}' value {} is below minimum {}",
                             field.name, num, min
                         ),
-                        expected: Some(format!(">= {}", min)),
+                        expected: Some(format!(">= {min}")),
                         actual: Some(num.to_string()),
                     });
                 }
@@ -384,7 +380,7 @@ impl ContractValidator {
                             "Field '{}' value {} exceeds maximum {}",
                             field.name, num, max
                         ),
-                        expected: Some(format!("<= {}", max)),
+                        expected: Some(format!("<= {max}")),
                         actual: Some(num.to_string()),
                     });
                 }
@@ -460,10 +456,18 @@ pub enum ChangeType {
 pub fn diff_contracts(old: &StreamContract, new: &StreamContract) -> Vec<ContractChange> {
     let mut changes = Vec::new();
 
-    let old_fields: HashMap<&str, &ContractField> =
-        old.spec.fields.iter().map(|f| (f.name.as_str(), f)).collect();
-    let new_fields: HashMap<&str, &ContractField> =
-        new.spec.fields.iter().map(|f| (f.name.as_str(), f)).collect();
+    let old_fields: HashMap<&str, &ContractField> = old
+        .spec
+        .fields
+        .iter()
+        .map(|f| (f.name.as_str(), f))
+        .collect();
+    let new_fields: HashMap<&str, &ContractField> = new
+        .spec
+        .fields
+        .iter()
+        .map(|f| (f.name.as_str(), f))
+        .collect();
 
     // Removed fields
     for (name, field) in &old_fields {
@@ -471,7 +475,7 @@ pub fn diff_contracts(old: &StreamContract, new: &StreamContract) -> Vec<Contrac
             changes.push(ContractChange {
                 change_type: ChangeType::FieldRemoved,
                 field: name.to_string(),
-                description: format!("Field '{}' was removed", name),
+                description: format!("Field '{name}' was removed"),
                 breaking: field.required,
             });
         }
@@ -483,7 +487,7 @@ pub fn diff_contracts(old: &StreamContract, new: &StreamContract) -> Vec<Contrac
             changes.push(ContractChange {
                 change_type: ChangeType::FieldAdded,
                 field: name.to_string(),
-                description: format!("Field '{}' was added", name),
+                description: format!("Field '{name}' was added"),
                 breaking: field.required, // Adding a required field is breaking
             });
         }
@@ -545,17 +549,15 @@ mod tests {
     #[tokio::test]
     async fn test_validator_valid_message() {
         let validator = ContractValidator::new(EnforcementMode::Enforce);
-        let contract = make_contract(vec![
-            ContractField {
-                name: "name".to_string(),
-                field_type: FieldType::String,
-                required: true,
-                description: String::new(),
-                pattern: None,
-                min: None,
-                max: None,
-            },
-        ]);
+        let contract = make_contract(vec![ContractField {
+            name: "name".to_string(),
+            field_type: FieldType::String,
+            required: true,
+            description: String::new(),
+            pattern: None,
+            min: None,
+            max: None,
+        }]);
 
         validator.register(contract, None).await.unwrap();
 
@@ -568,17 +570,15 @@ mod tests {
     #[tokio::test]
     async fn test_validator_missing_required_field() {
         let validator = ContractValidator::new(EnforcementMode::Enforce);
-        let contract = make_contract(vec![
-            ContractField {
-                name: "id".to_string(),
-                field_type: FieldType::Integer,
-                required: true,
-                description: String::new(),
-                pattern: None,
-                min: None,
-                max: None,
-            },
-        ]);
+        let contract = make_contract(vec![ContractField {
+            name: "id".to_string(),
+            field_type: FieldType::Integer,
+            required: true,
+            description: String::new(),
+            pattern: None,
+            min: None,
+            max: None,
+        }]);
 
         validator.register(contract, None).await.unwrap();
 
@@ -595,17 +595,15 @@ mod tests {
     #[tokio::test]
     async fn test_validator_type_mismatch() {
         let validator = ContractValidator::new(EnforcementMode::Enforce);
-        let contract = make_contract(vec![
-            ContractField {
-                name: "age".to_string(),
-                field_type: FieldType::Integer,
-                required: true,
-                description: String::new(),
-                pattern: None,
-                min: None,
-                max: None,
-            },
-        ]);
+        let contract = make_contract(vec![ContractField {
+            name: "age".to_string(),
+            field_type: FieldType::Integer,
+            required: true,
+            description: String::new(),
+            pattern: None,
+            min: None,
+            max: None,
+        }]);
 
         validator.register(contract, None).await.unwrap();
 
@@ -621,17 +619,15 @@ mod tests {
     #[tokio::test]
     async fn test_validator_range_check() {
         let validator = ContractValidator::new(EnforcementMode::Enforce);
-        let contract = make_contract(vec![
-            ContractField {
-                name: "score".to_string(),
-                field_type: FieldType::Float,
-                required: true,
-                description: String::new(),
-                pattern: None,
-                min: Some(0.0),
-                max: Some(100.0),
-            },
-        ]);
+        let contract = make_contract(vec![ContractField {
+            name: "score".to_string(),
+            field_type: FieldType::Float,
+            required: true,
+            description: String::new(),
+            pattern: None,
+            min: Some(0.0),
+            max: Some(100.0),
+        }]);
 
         validator.register(contract, None).await.unwrap();
 

@@ -42,13 +42,12 @@ impl JsonSchemaValidator {
             .map_err(|e| SchemaError::InvalidSchema(format!("Invalid JSON Schema: {}", e)))?;
 
         let data_value: Value = serde_json::from_slice(data)
-            .map_err(|e| SchemaError::InvalidSchema(format!("Invalid JSON data: {}", e)))?;
+            .map_err(|e| SchemaError::InvalidSchema(format!("Invalid JSON data: {e}")))?;
 
         let result = compiled.validate(&data_value);
         if let Err(error) = result {
             return Err(SchemaError::InvalidSchema(format!(
-                "Data validation failed: {}",
-                error
+                "Data validation failed: {error}"
             )));
         }
 
@@ -96,8 +95,7 @@ impl JsonSchemaValidator {
 
         if !self.types_compatible(&new_type, &existing_type) {
             messages.push(format!(
-                "Type changed from {:?} to {:?}",
-                existing_type, new_type
+                "Type changed from {existing_type:?} to {new_type:?}"
             ));
         }
 
@@ -135,8 +133,7 @@ impl JsonSchemaValidator {
 
         if !self.types_compatible(&existing_type, &new_type) {
             messages.push(format!(
-                "Type changed from {:?} to {:?} (not forward compatible)",
-                existing_type, new_type
+                "Type changed from {existing_type:?} to {new_type:?} (not forward compatible)"
             ));
         }
 
@@ -180,7 +177,7 @@ impl JsonSchemaValidator {
         // Check for removed properties that were in existing schema
         for (prop_name, _) in &existing_properties {
             if !new_properties.contains_key(prop_name) {
-                messages.push(format!("Property '{}' was removed", prop_name));
+                messages.push(format!("Property '{prop_name}' was removed"));
             }
         }
 
@@ -188,8 +185,7 @@ impl JsonSchemaValidator {
         for req in &new_required {
             if !existing_properties.contains_key(req) {
                 messages.push(format!(
-                    "New required property '{}' added without default",
-                    req
+                    "New required property '{req}' added without default"
                 ));
             }
         }
@@ -202,8 +198,7 @@ impl JsonSchemaValidator {
 
                 if !self.types_compatible(&new_type, &existing_type) {
                     messages.push(format!(
-                        "Property '{}' type changed from {:?} to {:?}",
-                        prop_name, existing_type, new_type
+                        "Property '{prop_name}' type changed from {existing_type:?} to {new_type:?}"
                     ));
                 }
             }
@@ -245,8 +240,7 @@ impl JsonSchemaValidator {
         for req in &existing_required {
             if !new_properties.contains_key(req) {
                 messages.push(format!(
-                    "Required property '{}' was removed (not forward compatible)",
-                    req
+                    "Required property '{req}' was removed (not forward compatible)"
                 ));
             }
         }
@@ -261,8 +255,7 @@ impl JsonSchemaValidator {
             for prop_name in new_properties.keys() {
                 if !existing_properties.contains_key(prop_name) {
                     messages.push(format!(
-                        "New property '{}' added but additionalProperties is false",
-                        prop_name
+                        "New property '{prop_name}' added but additionalProperties is false"
                     ));
                 }
             }
@@ -286,8 +279,7 @@ impl JsonSchemaValidator {
 
             if !self.types_compatible(&new_type, &existing_type) {
                 messages.push(format!(
-                    "Array items type changed from {:?} to {:?}",
-                    existing_type, new_type
+                    "Array items type changed from {existing_type:?} to {new_type:?}"
                 ));
             }
         }
@@ -299,8 +291,7 @@ impl JsonSchemaValidator {
         if let (Some(new_min), Some(existing_min)) = (new_min, existing_min) {
             if new_min > existing_min {
                 messages.push(format!(
-                    "minItems increased from {} to {} (not backward compatible)",
-                    existing_min, new_min
+                    "minItems increased from {existing_min} to {new_min} (not backward compatible)"
                 ));
             }
         }
@@ -311,8 +302,7 @@ impl JsonSchemaValidator {
         if let (Some(new_max), Some(existing_max)) = (new_max, existing_max) {
             if new_max < existing_max {
                 messages.push(format!(
-                    "maxItems decreased from {} to {} (not backward compatible)",
-                    existing_max, new_max
+                    "maxItems decreased from {existing_max} to {new_max} (not backward compatible)"
                 ));
             }
         }
@@ -339,7 +329,7 @@ impl JsonSchemaValidator {
         // Check for removed enum values
         for value in &existing_values {
             if !new_values.contains(value) {
-                messages.push(format!("Enum value {} was removed", value));
+                messages.push(format!("Enum value {value} was removed"));
             }
         }
     }

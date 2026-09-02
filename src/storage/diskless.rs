@@ -321,8 +321,7 @@ impl DisklessSegment {
                 Err(e) => {
                     self.stats.write().failed_uploads += 1;
                     return Err(StreamlineError::storage_msg(format!(
-                        "Upload failed after {} retries: {}",
-                        max_retries, e
+                        "Upload failed after {max_retries} retries: {e}"
                     )));
                 }
             }
@@ -337,7 +336,7 @@ impl DisklessSegment {
 
         // Acquire semaphore permit to limit concurrent uploads
         let _permit = self.upload_semaphore.acquire().await.map_err(|e| {
-            StreamlineError::storage_msg(format!("Failed to acquire upload semaphore: {}", e))
+            StreamlineError::storage_msg(format!("Failed to acquire upload semaphore: {e}"))
         })?;
 
         // Check if we should use multipart upload
@@ -354,7 +353,7 @@ impl DisklessSegment {
                 .put(&object_path, payload)
                 .await
                 .map_err(|e| {
-                    StreamlineError::storage_msg(format!("Failed to upload to S3: {}", e))
+                    StreamlineError::storage_msg(format!("Failed to upload to S3: {e}"))
                 })?;
         }
 
@@ -382,7 +381,7 @@ impl DisklessSegment {
             .put_multipart(&object_path)
             .await
             .map_err(|e| {
-                StreamlineError::storage_msg(format!("Failed to start multipart upload: {}", e))
+                StreamlineError::storage_msg(format!("Failed to start multipart upload: {e}"))
             })?;
 
         let mut part_number = 0;
@@ -396,8 +395,7 @@ impl DisklessSegment {
             let part_payload = PutPayload::from(part_data);
             upload_id.put_part(part_payload).await.map_err(|e| {
                 StreamlineError::storage_msg(format!(
-                    "Failed to upload part {} of multipart upload: {}",
-                    part_number, e
+                    "Failed to upload part {part_number} of multipart upload: {e}"
                 ))
             })?;
 
@@ -414,7 +412,7 @@ impl DisklessSegment {
 
         // Complete multipart upload
         upload_id.complete().await.map_err(|e| {
-            StreamlineError::storage_msg(format!("Failed to complete multipart upload: {}", e))
+            StreamlineError::storage_msg(format!("Failed to complete multipart upload: {e}"))
         })?;
 
         info!(
@@ -457,8 +455,7 @@ impl DisklessSegment {
                 Err(e) => {
                     self.stats.write().failed_downloads += 1;
                     return Err(StreamlineError::storage_msg(format!(
-                        "Download failed after {} retries: {}",
-                        max_retries, e
+                        "Download failed after {max_retries} retries: {e}"
                     )));
                 }
             }
@@ -472,11 +469,11 @@ impl DisklessSegment {
         let object_path = object_store::path::Path::from(path);
 
         let result = self.object_store.get(&object_path).await.map_err(|e| {
-            StreamlineError::storage_msg(format!("Failed to download from S3: {}", e))
+            StreamlineError::storage_msg(format!("Failed to download from S3: {e}"))
         })?;
 
         let data = result.bytes().await.map_err(|e| {
-            StreamlineError::storage_msg(format!("Failed to read S3 response: {}", e))
+            StreamlineError::storage_msg(format!("Failed to read S3 response: {e}"))
         })?;
 
         self.stats.write().bytes_read += data.len() as u64;
@@ -605,14 +602,12 @@ impl DisklessSegment {
                                     let result =
                                         object_store.get(&object_path).await.map_err(|e| {
                                             StreamlineError::storage_msg(format!(
-                                                "Failed to prefetch from S3: {}",
-                                                e
+                                                "Failed to prefetch from S3: {e}"
                                             ))
                                         })?;
                                     result.bytes().await.map_err(|e| {
                                         StreamlineError::storage_msg(format!(
-                                            "Failed to read prefetch response: {}",
-                                            e
+                                            "Failed to read prefetch response: {e}"
                                         ))
                                     })
                                 }
@@ -727,7 +722,7 @@ impl SegmentBackend for DisklessSegment {
         let (path, base_offset, end_offset) = {
             let manifest = self.manifest.read();
             let segment = manifest.find_segment(offset).ok_or_else(|| {
-                StreamlineError::storage_msg(format!("Segment not found for offset {}", offset))
+                StreamlineError::storage_msg(format!("Segment not found for offset {offset}"))
             })?;
 
             (

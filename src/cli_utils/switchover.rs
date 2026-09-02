@@ -71,7 +71,7 @@ impl std::fmt::Display for SwitchoverPhase {
             Self::VerifyingHealth => write!(f, "Verifying Health"),
             Self::Complete => write!(f, "Complete"),
             Self::RolledBack => write!(f, "Rolled Back"),
-            Self::Failed(msg) => write!(f, "Failed: {}", msg),
+            Self::Failed(msg) => write!(f, "Failed: {msg}"),
         }
     }
 }
@@ -392,7 +392,7 @@ fn print_banner() {
 fn print_phase(num: u32, name: &str, description: &str) {
     println!(
         "  {} {} - {}",
-        format!("Phase {}", num).cyan().bold(),
+        format!("Phase {num}").cyan().bold(),
         name.bold(),
         description.dimmed()
     );

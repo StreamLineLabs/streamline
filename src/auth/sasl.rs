@@ -212,8 +212,7 @@ impl ScramAuthenticator {
             ChannelBindingType::TlsUnique | ChannelBindingType::TlsExporter => {
                 // These channel binding types are not yet supported
                 return Err(StreamlineError::AuthenticationFailed(format!(
-                    "Channel binding type '{}' is not supported. Use tls-server-end-point instead.",
-                    gs2_flag
+                    "Channel binding type '{gs2_flag}' is not supported. Use tls-server-end-point instead."
                 )));
             }
             ChannelBindingType::Supported => {
@@ -252,7 +251,7 @@ impl ScramAuthenticator {
 
         // Generate server nonce (append to client nonce)
         let server_nonce_part = Self::generate_nonce();
-        let combined_nonce = format!("{}{}", client_nonce, server_nonce_part);
+        let combined_nonce = format!("{client_nonce}{server_nonce_part}");
 
         // Build server-first message
         let server_first = format!(
@@ -314,7 +313,7 @@ impl ScramAuthenticator {
         let creds = self.get_scram_credentials(user)?;
 
         // Build client-final-message-without-proof
-        let client_final_without_proof = format!("c={},r={}", channel_binding_b64, nonce);
+        let client_final_without_proof = format!("c={channel_binding_b64},r={nonce}");
 
         // Build auth message: client-first-bare,server-first,client-final-without-proof
         let auth_message = format!(
@@ -695,7 +694,7 @@ pub mod scram_test_utils {
 
     /// Encode client-first message
     pub fn encode_client_first(username: &str, client_nonce: &str) -> Vec<u8> {
-        format!("n,,n={},r={}", username, client_nonce).into_bytes()
+        format!("n,,n={username},r={client_nonce}").into_bytes()
     }
 
     /// Encode client-final message

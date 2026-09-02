@@ -206,7 +206,7 @@ impl LogBuffer {
         entries
             .iter()
             .filter(|e| e.level.matches_filter(min_level))
-            .filter(|e| after_id.map_or(true, |id| e.id > id))
+            .filter(|e| after_id.is_none_or(|id| e.id > id))
             .rev() // Most recent first
             .take(limit)
             .cloned()
@@ -310,7 +310,7 @@ mod tests {
         let buffer = LogBuffer::with_config(config);
 
         for i in 0..5 {
-            buffer.log(LogLevel::Info, "test", &format!("Message {}", i));
+            buffer.log(LogLevel::Info, "test", &format!("Message {i}"));
         }
 
         let entries = buffer.get_entries(None, 10, None);

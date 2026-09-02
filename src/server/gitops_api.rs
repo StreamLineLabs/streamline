@@ -142,7 +142,7 @@ async fn apply_manifest(
             (
                 StatusCode::BAD_REQUEST,
                 Json(GitOpsErrorResponse {
-                    error: format!("Invalid manifest: {}", e),
+                    error: format!("Invalid manifest: {e}"),
                 }),
             )
         })?;
@@ -230,7 +230,7 @@ async fn validate_manifest(
             }
         }
         Err(e) => {
-            errors.push(format!("Parse error: {}", e));
+            errors.push(format!("Parse error: {e}"));
         }
     }
 
@@ -252,7 +252,7 @@ async fn diff_manifest(
             (
                 StatusCode::BAD_REQUEST,
                 Json(GitOpsErrorResponse {
-                    error: format!("Invalid manifest: {}", e),
+                    error: format!("Invalid manifest: {e}"),
                 }),
             )
         })?;

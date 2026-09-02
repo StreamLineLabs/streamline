@@ -97,22 +97,82 @@ mod analytics_tests {
         ) -> streamline_analytics::error::Result<Vec<AnalyticsRecord>> {
             match (topic, partition) {
                 ("events", 0) => Ok(vec![
-                    record(0, 1700000000000, Some("u1"), r#"{"user_id":"u1","action":"click","amount":10}"#),
-                    record(1, 1700000001000, Some("u2"), r#"{"user_id":"u2","action":"view","amount":20}"#),
-                    record(2, 1700000002000, Some("u1"), r#"{"user_id":"u1","action":"purchase","amount":100}"#),
-                    record(3, 1700000003000, Some("u3"), r#"{"user_id":"u3","action":"click","amount":5}"#),
-                    record(4, 1700000004000, Some("u2"), r#"{"user_id":"u2","action":"purchase","amount":50}"#),
+                    record(
+                        0,
+                        1700000000000,
+                        Some("u1"),
+                        r#"{"user_id":"u1","action":"click","amount":10}"#,
+                    ),
+                    record(
+                        1,
+                        1700000001000,
+                        Some("u2"),
+                        r#"{"user_id":"u2","action":"view","amount":20}"#,
+                    ),
+                    record(
+                        2,
+                        1700000002000,
+                        Some("u1"),
+                        r#"{"user_id":"u1","action":"purchase","amount":100}"#,
+                    ),
+                    record(
+                        3,
+                        1700000003000,
+                        Some("u3"),
+                        r#"{"user_id":"u3","action":"click","amount":5}"#,
+                    ),
+                    record(
+                        4,
+                        1700000004000,
+                        Some("u2"),
+                        r#"{"user_id":"u2","action":"purchase","amount":50}"#,
+                    ),
                 ]),
                 ("events", 1) => Ok(vec![
-                    record(0, 1700000005000, Some("u4"), r#"{"user_id":"u4","action":"view","amount":15}"#),
-                    record(1, 1700000006000, Some("u1"), r#"{"user_id":"u1","action":"view","amount":8}"#),
-                    record(2, 1700000007000, Some("u5"), r#"{"user_id":"u5","action":"click","amount":12}"#),
+                    record(
+                        0,
+                        1700000005000,
+                        Some("u4"),
+                        r#"{"user_id":"u4","action":"view","amount":15}"#,
+                    ),
+                    record(
+                        1,
+                        1700000006000,
+                        Some("u1"),
+                        r#"{"user_id":"u1","action":"view","amount":8}"#,
+                    ),
+                    record(
+                        2,
+                        1700000007000,
+                        Some("u5"),
+                        r#"{"user_id":"u5","action":"click","amount":12}"#,
+                    ),
                 ]),
                 ("metrics", 0) => Ok(vec![
-                    record(0, 1700000000000, None, r#"{"host":"h1","cpu":45.5,"mem":1024}"#),
-                    record(1, 1700000001000, None, r#"{"host":"h2","cpu":78.2,"mem":2048}"#),
-                    record(2, 1700000002000, None, r#"{"host":"h1","cpu":52.0,"mem":1536}"#),
-                    record(3, 1700000003000, None, r#"{"host":"h2","cpu":30.1,"mem":4096}"#),
+                    record(
+                        0,
+                        1700000000000,
+                        None,
+                        r#"{"host":"h1","cpu":45.5,"mem":1024}"#,
+                    ),
+                    record(
+                        1,
+                        1700000001000,
+                        None,
+                        r#"{"host":"h2","cpu":78.2,"mem":2048}"#,
+                    ),
+                    record(
+                        2,
+                        1700000002000,
+                        None,
+                        r#"{"host":"h1","cpu":52.0,"mem":1536}"#,
+                    ),
+                    record(
+                        3,
+                        1700000003000,
+                        None,
+                        r#"{"host":"h2","cpu":30.1,"mem":4096}"#,
+                    ),
                 ]),
                 _ => Ok(vec![]),
             }
@@ -333,8 +393,7 @@ mod analytics_tests {
         let err = result.unwrap_err();
         assert!(
             matches!(err, AnalyticsError::InvalidSql(_)),
-            "Expected InvalidSql, got: {:?}",
-            err
+            "Expected InvalidSql, got: {err:?}"
         );
     }
 
@@ -365,8 +424,7 @@ mod analytics_tests {
         let err = result.unwrap_err();
         assert!(
             matches!(err, AnalyticsError::TopicNotFound(_)),
-            "Expected TopicNotFound, got: {:?}",
-            err
+            "Expected TopicNotFound, got: {err:?}"
         );
     }
 
@@ -381,7 +439,7 @@ mod analytics_tests {
         for i in 0..10 {
             let eng = engine.clone();
             handles.push(tokio::spawn(async move {
-                eng.execute_query(&format!("SELECT {} AS val", i), no_cache_opts())
+                eng.execute_query(&format!("SELECT {i} AS val"), no_cache_opts())
                     .await
             }));
         }
@@ -729,10 +787,7 @@ mod analytics_tests {
         let engine = DuckDBEngine::new(Arc::new(TestSource) as Arc<dyn TopicDataSource>).unwrap();
 
         let result = engine
-            .execute_query(
-                "SELECT * FROM streamline_topic_events",
-                no_cache_opts(),
-            )
+            .execute_query("SELECT * FROM streamline_topic_events", no_cache_opts())
             .await
             .unwrap();
 

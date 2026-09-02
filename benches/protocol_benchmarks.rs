@@ -35,7 +35,7 @@ fn create_produce_request(num_records: usize, record_size: usize) -> ProduceRequ
     // For benchmarking purposes, we'll create pre-encoded data
     for i in 0..num_records {
         // Simple record format: length + key + value
-        let key = format!("key-{}", i);
+        let key = format!("key-{i}");
         batch_buf.extend_from_slice(&(key.len() as u32).to_be_bytes());
         batch_buf.extend_from_slice(key.as_bytes());
         batch_buf.extend_from_slice(&(record_value.len() as u32).to_be_bytes());
@@ -68,7 +68,7 @@ fn create_fetch_response(num_records: usize, record_size: usize) -> FetchRespons
     let mut batch_buf = BytesMut::with_capacity(num_records * (record_size + 50));
 
     for i in 0..num_records {
-        let key = format!("key-{}", i);
+        let key = format!("key-{i}");
         batch_buf.extend_from_slice(&(key.len() as u32).to_be_bytes());
         batch_buf.extend_from_slice(key.as_bytes());
         batch_buf.extend_from_slice(&(record_value.len() as u32).to_be_bytes());
@@ -92,7 +92,7 @@ fn bench_produce_request_encode(c: &mut Criterion) {
 
         group.throughput(Throughput::Bytes(total_bytes as u64));
         group.bench_with_input(
-            BenchmarkId::new("records_size", format!("{}x{}", num_records, record_size)),
+            BenchmarkId::new("records_size", format!("{num_records}x{record_size}")),
             &request,
             |b, req| {
                 b.iter(|| {
@@ -122,7 +122,7 @@ fn bench_produce_request_decode(c: &mut Criterion) {
 
         group.throughput(Throughput::Bytes(total_bytes as u64));
         group.bench_with_input(
-            BenchmarkId::new("records_size", format!("{}x{}", num_records, record_size)),
+            BenchmarkId::new("records_size", format!("{num_records}x{record_size}")),
             &encoded,
             |b, bytes| {
                 b.iter(|| {
@@ -146,7 +146,7 @@ fn bench_fetch_response_encode(c: &mut Criterion) {
 
         group.throughput(Throughput::Bytes(total_bytes as u64));
         group.bench_with_input(
-            BenchmarkId::new("records_size", format!("{}x{}", num_records, record_size)),
+            BenchmarkId::new("records_size", format!("{num_records}x{record_size}")),
             &response,
             |b, resp| {
                 b.iter(|| {
@@ -176,7 +176,7 @@ fn bench_fetch_response_decode(c: &mut Criterion) {
 
         group.throughput(Throughput::Bytes(total_bytes as u64));
         group.bench_with_input(
-            BenchmarkId::new("records_size", format!("{}x{}", num_records, record_size)),
+            BenchmarkId::new("records_size", format!("{num_records}x{record_size}")),
             &encoded,
             |b, bytes| {
                 b.iter(|| {
@@ -252,7 +252,7 @@ fn bench_metadata(c: &mut Criterion) {
     };
     for i in 0..10 {
         let mut topic = MetadataResponseTopic::default();
-        topic.name = Some(TopicName(StrBytes::from_string(format!("topic-{}", i))));
+        topic.name = Some(TopicName(StrBytes::from_string(format!("topic-{i}"))));
         topic.error_code = 0;
 
         for p in 0..4 {

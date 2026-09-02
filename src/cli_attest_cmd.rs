@@ -1,8 +1,6 @@
 //! `streamline-cli attest sign|verify` — wrap the broker's attestation
 //! HTTP API for human/script use.
 
-#![cfg(feature = "attestation")]
-
 use base64::Engine;
 use clap::Subcommand;
 use serde::{Deserialize, Serialize};
@@ -121,10 +119,7 @@ fn now_ms() -> i64 {
         .unwrap_or(0)
 }
 
-fn validate_value(
-    value: &Option<String>,
-    value_b64: &Option<String>,
-) -> Result<()> {
+fn validate_value(value: &Option<String>, value_b64: &Option<String>) -> Result<()> {
     match (value, value_b64) {
         (Some(_), None) | (None, Some(_)) => Ok(()),
         _ => Err(StreamlineError::Server(
@@ -192,13 +187,15 @@ pub(crate) fn handle(cmd: AttestCli) -> Result<ExitCode> {
                 algorithm: &algorithm,
                 signature_b64: &signature_b64,
             };
-            let resp: VerifyResponse =
-                cli_http::post_json(&base, "/api/v1/attest/verify", &body)?;
+            let resp: VerifyResponse = cli_http::post_json(&base, "/api/v1/attest/verify", &body)?;
             if resp.valid {
                 println!("valid (key_id={}, alg={})", resp.key_id, resp.algorithm);
                 Ok(ExitCode::SUCCESS)
             } else {
-                eprintln!("INVALID signature for key_id={} alg={}", resp.key_id, resp.algorithm);
+                eprintln!(
+                    "INVALID signature for key_id={} alg={}",
+                    resp.key_id, resp.algorithm
+                );
                 Ok(ExitCode::from(3))
             }
         }

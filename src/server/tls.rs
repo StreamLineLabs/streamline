@@ -55,7 +55,7 @@ pub fn load_tls_config(config: &TlsConfig) -> Result<TlsAcceptor> {
     let rustls_config = RustlsServerConfig::builder_with_protocol_versions(&versions)
         .with_no_client_auth()
         .with_single_cert(certs, key)
-        .map_err(|e| StreamlineError::Config(format!("Invalid TLS configuration: {}", e)))?;
+        .map_err(|e| StreamlineError::Config(format!("Invalid TLS configuration: {e}")))?;
 
     info!(
         min_version = %config.min_version,
@@ -111,7 +111,7 @@ pub fn load_mtls_config(config: &TlsConfig) -> Result<TlsAcceptor> {
     for cert in ca_certs {
         root_store
             .add(cert)
-            .map_err(|e| StreamlineError::Config(format!("Failed to add CA certificate: {}", e)))?;
+            .map_err(|e| StreamlineError::Config(format!("Failed to add CA certificate: {e}")))?;
     }
 
     let client_verifier = rustls::server::WebPkiClientVerifier::builder(Arc::new(root_store))
@@ -123,7 +123,7 @@ pub fn load_mtls_config(config: &TlsConfig) -> Result<TlsAcceptor> {
     let rustls_config = RustlsServerConfig::builder_with_protocol_versions(&versions)
         .with_client_cert_verifier(client_verifier)
         .with_single_cert(certs, key)
-        .map_err(|e| StreamlineError::Config(format!("Invalid mTLS configuration: {}", e)))?;
+        .map_err(|e| StreamlineError::Config(format!("Invalid mTLS configuration: {e}")))?;
 
     info!(
         min_version = %config.min_version,
@@ -141,7 +141,7 @@ fn load_certs(path: &std::path::Path) -> Result<Vec<CertificateDer<'static>>> {
     let mut reader = BufReader::new(file);
     let certs = rustls_pemfile::certs(&mut reader)
         .collect::<std::result::Result<Vec<_>, _>>()
-        .map_err(|e| StreamlineError::Config(format!("Failed to parse certificates: {}", e)))?;
+        .map_err(|e| StreamlineError::Config(format!("Failed to parse certificates: {e}")))?;
 
     if certs.is_empty() {
         return Err(StreamlineError::Config(

@@ -254,15 +254,15 @@ pub enum DslError {
 impl std::fmt::Display for DslError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            DslError::Parse(msg) => write!(f, "Parse error: {}", msg),
-            DslError::InvalidExpression(msg) => write!(f, "Invalid expression: {}", msg),
+            DslError::Parse(msg) => write!(f, "Parse error: {msg}"),
+            DslError::InvalidExpression(msg) => write!(f, "Invalid expression: {msg}"),
             DslError::TypeMismatch { expected, found } => {
-                write!(f, "Type mismatch: expected {}, found {}", expected, found)
+                write!(f, "Type mismatch: expected {expected}, found {found}")
             }
-            DslError::FieldNotFound(field) => write!(f, "Field not found: {}", field),
-            DslError::InvalidOperator(op) => write!(f, "Invalid operator: {}", op),
-            DslError::WindowError(msg) => write!(f, "Window error: {}", msg),
-            DslError::ExecutionError(msg) => write!(f, "Execution error: {}", msg),
+            DslError::FieldNotFound(field) => write!(f, "Field not found: {field}"),
+            DslError::InvalidOperator(op) => write!(f, "Invalid operator: {op}"),
+            DslError::WindowError(msg) => write!(f, "Window error: {msg}"),
+            DslError::ExecutionError(msg) => write!(f, "Execution error: {msg}"),
         }
     }
 }

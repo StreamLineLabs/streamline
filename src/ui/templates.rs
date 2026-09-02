@@ -29,7 +29,7 @@ impl Templates {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{title} - Streamline</title>
     <style>
-        {css}
+        {CSS}
     </style>
 </head>
 <body>
@@ -128,15 +128,10 @@ impl Templates {
         </div>
     </div>
     <script>
-        {js}
+        {JS}
     </script>
 </body>
 </html>"#,
-            title = title,
-            css = CSS,
-            nav = nav,
-            content = content,
-            js = JS,
         )
     }
 
@@ -158,19 +153,16 @@ impl Templates {
             ("benchmark", "Benchmark", "/benchmark"),
         ];
 
-        let links: Vec<String> = items
-            .iter()
-            .map(|(id, label, href)| {
-                let class = if *id == active { "active" } else { "" };
-                format!(
-                    r#"<a href="{href}" class="nav-link {class}" data-page="{id}">{label}</a>"#,
-                    href = href,
-                    class = class,
-                    id = id,
-                    label = label,
-                )
-            })
-            .collect();
+        let links: Vec<String> =
+            items
+                .iter()
+                .map(|(id, label, href)| {
+                    let class = if *id == active { "active" } else { "" };
+                    format!(
+                        r#"<a href="{href}" class="nav-link {class}" data-page="{id}">{label}</a>"#,
+                    )
+                })
+                .collect();
 
         format!(r#"<div class="nav-links">{}</div>"#, links.join("\n"))
     }
@@ -473,7 +465,7 @@ impl Templates {
         let config_rows: Vec<String> = topic
             .config
             .iter()
-            .map(|(k, v)| format!(r#"<tr><td>{}</td><td>{}</td></tr>"#, k, v))
+            .map(|(k, v)| format!(r#"<tr><td>{k}</td><td>{v}</td></tr>"#))
             .collect();
 
         let content = format!(
@@ -608,7 +600,7 @@ impl Templates {
                         } else {
                             r.headers
                                 .iter()
-                                .map(|(k, v)| format!("{}: {}", k, v))
+                                .map(|(k, v)| format!("{k}: {v}"))
                                 .collect::<Vec<_>>()
                                 .join(", ")
                         };
@@ -963,10 +955,6 @@ document.addEventListener('DOMContentLoaded', function() {{
                             {badge}
                         </td>
                     </tr>"#,
-                    key = key,
-                    description = description,
-                    display_value = display_value,
-                    badge = badge,
                 )
             })
             .collect();
@@ -1377,7 +1365,7 @@ document.addEventListener('DOMContentLoaded', function() {{
                 ""
             },
             lag_rows = lag_rows.join("\n"),
-            empty_lag = if lag.as_ref().map_or(true, |l| l.partitions.is_empty()) {
+            empty_lag = if lag.as_ref().is_none_or(|l| l.partitions.is_empty()) {
                 r#"<tr><td colspan="6">
                     <div class="empty-state-container" style="padding: 24px;">
                         <div class="empty-state-icon">📊</div>
@@ -1664,12 +1652,7 @@ document.addEventListener('DOMContentLoaded', function() {{
         let header_cells: Vec<String> = data
             .topics
             .iter()
-            .map(|topic| {
-                format!(
-                    r#"<th class="heatmap-header" title="{topic}">{topic}</th>"#,
-                    topic = topic
-                )
-            })
+            .map(|topic| format!(r#"<th class="heatmap-header" title="{topic}">{topic}</th>"#))
             .collect();
         let header_row = format!(
             r#"<tr><th class="heatmap-corner"></th>{}</tr>"#,
@@ -3017,7 +3000,7 @@ function escapeHtml(text) {{
             topic = html_escape(topic)
         );
 
-        self.layout(&format!("DLQ: {}", topic), &content, "dlq")
+        self.layout(&format!("DLQ: {topic}"), &content, "dlq")
     }
 
     /// Render topic comparison page.
@@ -3130,9 +3113,6 @@ document.getElementById('compare-form').addEventListener('submit', function(e) {
 }});
 </script>
 "#,
-            topic1_options = topic1_options,
-            topic2_options = topic2_options,
-            comparison_html = comparison_html,
         );
 
         self.layout("Topic Comparison", &content, "topics")
@@ -3318,7 +3298,7 @@ document.getElementById('compare-form').addEventListener('submit', function(e) {
             t2_internal = if t2.is_internal { "Yes" } else { "No" },
         );
 
-        format!("{}{}{}", metrics_html, config_html, details_html)
+        format!("{metrics_html}{config_html}{details_html}")
     }
 
     /// Render benchmark page.
@@ -3405,8 +3385,7 @@ document.getElementById('compare-form').addEventListener('submit', function(e) {
                             </tr>
                         </thead>
                         <tbody>{rows}</tbody>
-                    </table>"#,
-                    rows = rows
+                    </table>"#
                 )
             }
         } else {
@@ -3744,8 +3723,6 @@ function closeModal() {{
 }}
 </script>
 "##,
-            topic_options = topic_options,
-            benchmarks_html = benchmarks_html,
         );
 
         self.layout("Benchmark", &content, "benchmark")
@@ -4045,7 +4022,7 @@ function escapeHtml(text) {{
             subject = html_escape(subject)
         );
 
-        self.layout(&format!("Schema: {}", subject), &content, "schemas")
+        self.layout(&format!("Schema: {subject}"), &content, "schemas")
     }
 
     /// Render schema diff page.
@@ -4201,7 +4178,7 @@ function escapeHtml(text) {{
         );
 
         self.layout(
-            &format!("Schema Diff: {} v{} vs v{}", subject, v1, v2),
+            &format!("Schema Diff: {subject} v{v1} vs v{v2}"),
             &content,
             "schemas",
         )
@@ -5256,15 +5233,10 @@ function formatTime(dateStr) {{
     return date.toLocaleTimeString();
 }}
 </script>
-"##,
-            group_id = group_id
+"##
         );
 
-        self.layout(
-            &format!("Rebalances - {}", group_id),
-            &content,
-            "rebalances",
-        )
+        self.layout(&format!("Rebalances - {group_id}"), &content, "rebalances")
     }
 
     /// Render error page.
@@ -5277,8 +5249,6 @@ function formatTime(dateStr) {{
     <a href="/" class="btn btn-primary">Go to Dashboard</a>
 </div>
 "#,
-            title = title,
-            message = message,
         );
 
         self.layout(title, &content, "")
@@ -5326,11 +5296,7 @@ function formatTime(dateStr) {{
                     })
                     .collect::<Vec<_>>()
                     .join(" ");
-                format!(
-                    r#"<a href="{link}" class="btn btn-secondary">{label}</a>"#,
-                    link = link,
-                    label = label,
-                )
+                format!(r#"<a href="{link}" class="btn btn-secondary">{label}</a>"#,)
             })
             .collect::<Vec<_>>()
             .join("\n        ");
@@ -5353,10 +5319,6 @@ function formatTime(dateStr) {{
     </div>
 </div>
 "#,
-            subtitle = subtitle,
-            description = description,
-            stats_html = stats_html,
-            links_html = links_html,
         );
 
         self.layout(title, &content, &title.to_lowercase().replace(' ', "-"))
@@ -5418,8 +5380,6 @@ function formatTime(dateStr) {{
     </div>
 </div>
 "#,
-            description = description,
-            items_html = items_html,
         );
 
         self.layout(title, &content, "")
@@ -5453,7 +5413,6 @@ function formatTime(dateStr) {{
     </div>
 </div>
 "#,
-            details_html = details_html,
         );
 
         self.layout(title, &content, "")
@@ -5463,7 +5422,7 @@ function formatTime(dateStr) {{
     pub fn search_page(&self, title: &str, description: &str, topics: &[&str]) -> String {
         let topic_options: String = topics
             .iter()
-            .map(|t| format!(r#"<option value="{t}">{t}</option>"#, t = t))
+            .map(|t| format!(r#"<option value="{t}">{t}</option>"#))
             .collect::<Vec<_>>()
             .join("\n                ");
 
@@ -5532,8 +5491,6 @@ async function performSemanticSearch() {{
 }}
 </script>
 "#,
-            description = description,
-            topic_options = topic_options,
         );
 
         self.layout(title, &content, "ai")
@@ -5580,7 +5537,6 @@ async function performSemanticSearch() {{
     </div>
 </div>
 "#,
-            anomalies_html = anomalies_html,
         );
 
         self.layout(title, &content, "ai")
@@ -5599,7 +5555,7 @@ async function performSemanticSearch() {{
                     _ => "muted",
                 };
                 let pending_str = if *pending > 0 {
-                    format!("{} pending", pending)
+                    format!("{pending} pending")
                 } else {
                     "All synced".to_string()
                 };
@@ -5643,7 +5599,6 @@ async function performSemanticSearch() {{
     </div>
 </div>
 "#,
-            nodes_html = nodes_html,
         );
 
         self.layout(title, &content, "edge")
@@ -5759,7 +5714,6 @@ function submitResolution(strategy) {{
 }}
 </script>
 "#,
-            conflicts_html = conflicts_html,
         );
 
         self.layout(title, &content, "edge")
@@ -5874,11 +5828,6 @@ function clearQuery() {{
         <div class="stage-component muted">{component}</div>
     </div>
     {connector}"#,
-                    stage_name = stage_name,
-                    status_class = status_class,
-                    status = status,
-                    component = component,
-                    connector = connector,
                 )
             })
             .collect();
@@ -5892,8 +5841,6 @@ function clearQuery() {{
         <span class="metric-label">{label}</span>
         <span class="metric-value">{value}</span>
     </div>"#,
-                    label = label,
-                    value = value,
                 )
             })
             .collect();
@@ -5937,7 +5884,7 @@ function stopPipeline(name) {{
             metrics_html = metrics_html,
         );
 
-        self.layout(&format!("Pipeline: {}", name), &content, "pipelines")
+        self.layout(&format!("Pipeline: {name}"), &content, "pipelines")
     }
 }
 
@@ -5964,7 +5911,7 @@ fn format_bytes(bytes: u64) -> String {
     } else if bytes >= KB {
         format!("{:.2} KB", bytes as f64 / KB as f64)
     } else {
-        format!("{} B", bytes)
+        format!("{bytes} B")
     }
 }
 
@@ -5980,7 +5927,7 @@ fn format_bytes_per_sec(bytes: f64) -> String {
     } else if bytes >= KB {
         format!("{:.2} KB/s", bytes / KB)
     } else {
-        format!("{:.0} B/s", bytes)
+        format!("{bytes:.0} B/s")
     }
 }
 
@@ -6090,7 +6037,7 @@ fn format_config_value(value: &str, unit: &str) -> String {
         "ms" => {
             if let Ok(ms) = value.parse::<i64>() {
                 if ms < 0 {
-                    format!("{} (forever)", value)
+                    format!("{value} (forever)")
                 } else if ms >= 86_400_000 {
                     let days = ms / 86_400_000;
                     format!(
@@ -6124,7 +6071,7 @@ fn format_config_value(value: &str, unit: &str) -> String {
                         if secs == 1 { "" } else { "s" }
                     )
                 } else {
-                    format!("{} ms", value)
+                    format!("{value} ms")
                 }
             } else {
                 value.to_string()
@@ -6133,7 +6080,7 @@ fn format_config_value(value: &str, unit: &str) -> String {
         "bytes" => {
             if let Ok(bytes) = value.parse::<i64>() {
                 if bytes < 0 {
-                    format!("{} (unlimited)", value)
+                    format!("{value} (unlimited)")
                 } else if bytes >= 1_073_741_824 {
                     format!("{} ({:.1} GB)", value, bytes as f64 / 1_073_741_824.0)
                 } else if bytes >= 1_048_576 {
@@ -6141,7 +6088,7 @@ fn format_config_value(value: &str, unit: &str) -> String {
                 } else if bytes >= 1024 {
                     format!("{} ({:.1} KB)", value, bytes as f64 / 1024.0)
                 } else {
-                    format!("{} bytes", value)
+                    format!("{value} bytes")
                 }
             } else {
                 value.to_string()

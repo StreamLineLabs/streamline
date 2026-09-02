@@ -312,7 +312,7 @@ impl DelegationTokenManager {
 
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .map_err(|e| StreamlineError::protocol_msg(format!("Time error: {}", e)))?
+            .map_err(|e| StreamlineError::protocol_msg(format!("Time error: {e}")))?
             .as_millis() as u64;
 
         // Calculate timestamps
@@ -399,7 +399,7 @@ impl DelegationTokenManager {
 
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .map_err(|e| StreamlineError::protocol_msg(format!("Time error: {}", e)))?
+            .map_err(|e| StreamlineError::protocol_msg(format!("Time error: {e}")))?
             .as_millis() as u64;
 
         // Calculate new expiry
@@ -609,7 +609,7 @@ impl DelegationTokenManager {
 
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .map_err(|e| StreamlineError::protocol_msg(format!("Time error: {}", e)))?
+            .map_err(|e| StreamlineError::protocol_msg(format!("Time error: {e}")))?
             .as_millis() as u64;
 
         let max_lifetime = max_lifetime_ms
@@ -689,7 +689,7 @@ impl DelegationTokenManager {
 
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .map_err(|e| StreamlineError::protocol_msg(format!("Time error: {}", e)))?
+            .map_err(|e| StreamlineError::protocol_msg(format!("Time error: {e}")))?
             .as_millis() as u64;
 
         let renew_period = renew_period_ms.unwrap_or(DEFAULT_TOKEN_RENEW_PERIOD_MS);
@@ -815,13 +815,10 @@ impl DelegationTokenManager {
         issue_timestamp: u64,
         expiry_timestamp: u64,
     ) -> Result<Vec<u8>> {
-        let message = format!(
-            "{}:{}:{}:{}",
-            token_id, owner, issue_timestamp, expiry_timestamp
-        );
+        let message = format!("{token_id}:{owner}:{issue_timestamp}:{expiry_timestamp}");
 
         let mut mac = Hmac::<Sha256>::new_from_slice(&self.secret_key)
-            .map_err(|e| StreamlineError::protocol_msg(format!("HMAC error: {}", e)))?;
+            .map_err(|e| StreamlineError::protocol_msg(format!("HMAC error: {e}")))?;
         mac.update(message.as_bytes());
 
         Ok(mac.finalize().into_bytes().to_vec())

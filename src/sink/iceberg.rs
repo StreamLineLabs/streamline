@@ -1061,8 +1061,12 @@ impl IcebergSink {
         debug!(sink = %name, records = total_records, "Committing buffer to Iceberg");
 
         // Check schema evolution policy against incoming records
-        let _new_fields =
-            Self::check_schema_evolution(arrow_schema, &all_records, &config.schema_evolution, name)?;
+        let _new_fields = Self::check_schema_evolution(
+            arrow_schema,
+            &all_records,
+            &config.schema_evolution,
+            name,
+        )?;
 
         // Convert records to Arrow RecordBatch
         let batch = Self::records_to_arrow_batch(&all_records, arrow_schema, config)?;
@@ -2111,8 +2115,7 @@ mod tests {
 
         /// Write records to a Parquet file and return `(file_path, rows_written)`.
         fn write_records(&self, records: &[Record]) -> Result<(String, u64)> {
-            let batch =
-                IcebergSink::records_to_arrow_batch(records, &self.schema, &self.config)?;
+            let batch = IcebergSink::records_to_arrow_batch(records, &self.schema, &self.config)?;
             let partition = records
                 .first()
                 .and_then(|r| IcebergSink::get_partition_value(r, &self.config.partitioning));
@@ -2143,9 +2146,7 @@ mod tests {
         use crate::sink::config::IcebergSchemaEvolution;
 
         let schema = Arc::new(IcebergSink::create_arrow_schema());
-        let records = make_record_batch_for_test(&[
-            r#"{"new_field": "value", "another": 42}"#,
-        ]);
+        let records = make_record_batch_for_test(&[r#"{"new_field": "value", "another": 42}"#]);
 
         let result = IcebergSink::check_schema_evolution(
             &schema,
@@ -2164,9 +2165,7 @@ mod tests {
         use crate::sink::config::IcebergSchemaEvolution;
 
         let schema = Arc::new(IcebergSink::create_arrow_schema());
-        let records = make_record_batch_for_test(&[
-            r#"{"region": "us-west-2", "count": 5}"#,
-        ]);
+        let records = make_record_batch_for_test(&[r#"{"region": "us-west-2", "count": 5}"#]);
 
         let result = IcebergSink::check_schema_evolution(
             &schema,
@@ -2188,9 +2187,7 @@ mod tests {
         use crate::sink::config::IcebergSchemaEvolution;
 
         let schema = Arc::new(IcebergSink::create_arrow_schema());
-        let records = make_record_batch_for_test(&[
-            r#"{"temperature": 98.6, "active": true}"#,
-        ]);
+        let records = make_record_batch_for_test(&[r#"{"temperature": 98.6, "active": true}"#]);
 
         let result = IcebergSink::check_schema_evolution(
             &schema,
@@ -2330,8 +2327,12 @@ mod tests {
 
         // Verify status messages are non-empty and descriptive
         assert!(!CatalogType::Rest.status_message().is_empty());
-        assert!(CatalogType::Hive.status_message().contains("hive_metastore"));
-        assert!(CatalogType::Glue.status_message().contains("hive_metastore"));
+        assert!(CatalogType::Hive
+            .status_message()
+            .contains("hive_metastore"));
+        assert!(CatalogType::Glue
+            .status_message()
+            .contains("hive_metastore"));
     }
 
     // ---- Mock integration tests ----

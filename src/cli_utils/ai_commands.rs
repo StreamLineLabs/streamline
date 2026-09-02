@@ -17,11 +17,10 @@ pub fn handle_ai_enrich(
 ) -> Result<()> {
     let output = output_topic
         .map(|s| s.to_string())
-        .unwrap_or_else(|| format!("{}-enriched", topic));
+        .unwrap_or_else(|| format!("{topic}-enriched"));
 
     let spinner = ctx.spinner(&format!(
-        "Setting up AI enrichment pipeline for '{}'...",
-        topic
+        "Setting up AI enrichment pipeline for '{topic}'..."
     ));
     std::thread::sleep(std::time::Duration::from_millis(500));
     spinner.finish_with_message("Created");
@@ -41,10 +40,10 @@ pub fn handle_ai_enrich(
         }
         _ => {
             ctx.success("AI enrichment pipeline created");
-            ctx.println(&format!("  Input Topic:  {}", topic));
-            ctx.println(&format!("  Output Topic: {}", output));
-            ctx.println(&format!("  Model:        {}", model));
-            ctx.println(&format!("  Prompt:       {}", prompt));
+            ctx.println(&format!("  Input Topic:  {topic}"));
+            ctx.println(&format!("  Output Topic: {output}"));
+            ctx.println(&format!("  Model:        {model}"));
+            ctx.println(&format!("  Prompt:       {prompt}"));
             ctx.info("Enriched messages will be written to the output topic");
         }
     }
@@ -102,7 +101,7 @@ pub fn handle_ai_search(
             ctx.println(&serde_json::to_string_pretty(&filtered)?);
         }
         _ => {
-            ctx.println(&format!("Semantic Search Results for: \"{}\"", query));
+            ctx.println(&format!("Semantic Search Results for: \"{query}\""));
             ctx.println("=".repeat(60).as_str());
 
             if filtered.is_empty() {
@@ -155,7 +154,7 @@ pub fn handle_ai_anomalies(
     sensitivity: f64,
     ctx: &CliContext,
 ) -> Result<()> {
-    let spinner = ctx.spinner(&format!("Analyzing anomalies in '{}'...", topic));
+    let spinner = ctx.spinner(&format!("Analyzing anomalies in '{topic}'..."));
     std::thread::sleep(std::time::Duration::from_millis(600));
     spinner.finish_with_message("Complete");
 
@@ -197,7 +196,7 @@ pub fn handle_ai_anomalies(
             ctx.println(&serde_json::to_string_pretty(&anomalies)?);
         }
         _ => {
-            ctx.println(&format!("Anomaly Detection Results for: {}", topic));
+            ctx.println(&format!("Anomaly Detection Results for: {topic}"));
             ctx.println(&format!(
                 "Detector: {} | Sensitivity: {:.0}%",
                 detector,
@@ -255,11 +254,10 @@ pub fn handle_ai_classify(
 ) -> Result<()> {
     let output = output_topic
         .map(|s| s.to_string())
-        .unwrap_or_else(|| format!("{}-classified", topic));
+        .unwrap_or_else(|| format!("{topic}-classified"));
 
     let spinner = ctx.spinner(&format!(
-        "Setting up classification pipeline for '{}'...",
-        topic
+        "Setting up classification pipeline for '{topic}'..."
     ));
     std::thread::sleep(std::time::Duration::from_millis(400));
     spinner.finish_with_message("Created");
@@ -278,8 +276,8 @@ pub fn handle_ai_classify(
         }
         _ => {
             ctx.success("Classification pipeline created");
-            ctx.println(&format!("  Input Topic:  {}", topic));
-            ctx.println(&format!("  Output Topic: {}", output));
+            ctx.println(&format!("  Input Topic:  {topic}"));
+            ctx.println(&format!("  Output Topic: {output}"));
             ctx.println(&format!("  Categories:   {}", categories.join(", ")));
             ctx.info("Messages will be classified and routed to the output topic");
         }
@@ -308,7 +306,7 @@ pub fn handle_ai_embeddings(topic: &str, action: &str, ctx: &CliContext) -> Resu
                     ctx.println(&serde_json::to_string_pretty(&status)?);
                 }
                 _ => {
-                    ctx.println(&format!("Embeddings Status for: {}", topic));
+                    ctx.println(&format!("Embeddings Status for: {topic}"));
                     ctx.println("=".repeat(40).as_str());
                     ctx.println(&format!("Model:          {}", status["embedding_model"]));
                     ctx.println(&format!("Index Type:     {}", status["index_type"]));
@@ -333,16 +331,15 @@ pub fn handle_ai_embeddings(topic: &str, action: &str, ctx: &CliContext) -> Resu
             ctx.success("Embedding index rebuilt successfully");
         }
         "enable" => {
-            ctx.success(&format!("Embeddings enabled for topic '{}'", topic));
+            ctx.success(&format!("Embeddings enabled for topic '{topic}'"));
             ctx.info("Messages will be automatically embedded using text-embedding-ada-002");
         }
         "disable" => {
-            ctx.success(&format!("Embeddings disabled for topic '{}'", topic));
+            ctx.success(&format!("Embeddings disabled for topic '{topic}'"));
         }
         _ => {
             ctx.error(&format!(
-                "Unknown action '{}'. Valid actions: status, rebuild, enable, disable",
-                action
+                "Unknown action '{action}'. Valid actions: status, rebuild, enable, disable"
             ));
         }
     }
@@ -382,10 +379,7 @@ pub fn handle_ai_route(input_topic: &str, rules: &[String], ctx: &CliContext) ->
             ctx.println(&serde_json::to_string_pretty(&result)?);
         }
         _ => {
-            ctx.success(&format!(
-                "Semantic routing configured for '{}'",
-                input_topic
-            ));
+            ctx.success(&format!("Semantic routing configured for '{input_topic}'"));
             ctx.println("\nRouting Rules:");
             for (i, rule) in parsed_rules.iter().enumerate() {
                 ctx.println(&format!(

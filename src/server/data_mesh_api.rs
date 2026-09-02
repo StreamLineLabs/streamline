@@ -39,6 +39,12 @@ pub struct DataMeshApiState {
     pub policies: Arc<RwLock<Vec<GovernancePolicy>>>,
 }
 
+impl Default for DataMeshApiState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl DataMeshApiState {
     pub fn new() -> Self {
         Self {
@@ -216,14 +222,8 @@ pub fn create_data_mesh_api_router(state: DataMeshApiState) -> Router {
         .route("/api/v1/mesh/products", get(list_all_products))
         .route("/api/v1/mesh/products/:id", get(get_product))
         // Governance
-        .route(
-            "/api/v1/mesh/governance/policies",
-            post(create_policy),
-        )
-        .route(
-            "/api/v1/mesh/governance/policies",
-            get(list_policies),
-        )
+        .route("/api/v1/mesh/governance/policies", post(create_policy))
+        .route("/api/v1/mesh/governance/policies", get(list_policies))
         .with_state(state)
 }
 
@@ -303,10 +303,7 @@ async fn delete_domain(
     let removed = state.domains.write().remove(&name);
     if removed.is_some() {
         // Clean up products belonging to this domain
-        state
-            .products
-            .write()
-            .retain(|_, p| p.domain != name);
+        state.products.write().retain(|_, p| p.domain != name);
         info!(name = %name, "Deleted data mesh domain");
         StatusCode::NO_CONTENT
     } else {
@@ -587,10 +584,7 @@ mod tests {
     #[tokio::test]
     async fn test_delete_nonexistent_domain() {
         let resp = app()
-            .oneshot(empty_request(
-                Method::DELETE,
-                "/api/v1/mesh/domains/nope",
-            ))
+            .oneshot(empty_request(Method::DELETE, "/api/v1/mesh/domains/nope"))
             .await
             .unwrap();
         assert_eq!(resp.status(), StatusCode::NOT_FOUND);
@@ -810,10 +804,7 @@ mod tests {
 
         router
             .clone()
-            .oneshot(empty_request(
-                Method::DELETE,
-                "/api/v1/mesh/domains/temp",
-            ))
+            .oneshot(empty_request(Method::DELETE, "/api/v1/mesh/domains/temp"))
             .await
             .unwrap();
 
@@ -823,9 +814,7 @@ mod tests {
 
     // -- Helpers -------------------------------------------------------------
 
-    async fn parse_body<T: serde::de::DeserializeOwned>(
-        resp: axum::http::Response<Body>,
-    ) -> T {
+    async fn parse_body<T: serde::de::DeserializeOwned>(resp: axum::http::Response<Body>) -> T {
         let bytes = axum::body::to_bytes(resp.into_body(), usize::MAX)
             .await
             .unwrap();

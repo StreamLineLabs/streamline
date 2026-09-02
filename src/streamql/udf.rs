@@ -23,10 +23,10 @@ impl std::fmt::Display for UdfValue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Null => write!(f, "NULL"),
-            Self::Bool(b) => write!(f, "{}", b),
-            Self::Int(i) => write!(f, "{}", i),
-            Self::Float(v) => write!(f, "{}", v),
-            Self::String(s) => write!(f, "'{}'", s),
+            Self::Bool(b) => write!(f, "{b}"),
+            Self::Int(i) => write!(f, "{i}"),
+            Self::Float(v) => write!(f, "{v}"),
+            Self::String(s) => write!(f, "'{s}'"),
             Self::Bytes(b) => write!(f, "0x{}", hex::encode(b)),
         }
     }
@@ -152,8 +152,7 @@ impl UdfRegistry {
         let name_lower = name.to_lowercase();
         if self.functions.contains_key(&name_lower) {
             return Err(StreamlineError::Query(format!(
-                "UDF '{}' already registered",
-                name
+                "UDF '{name}' already registered"
             )));
         }
 
@@ -183,8 +182,7 @@ impl UdfRegistry {
         let name_lower = name.to_lowercase();
         if self.functions.contains_key(&name_lower) {
             return Err(StreamlineError::Query(format!(
-                "UDF '{}' already registered",
-                name
+                "UDF '{name}' already registered"
             )));
         }
 
@@ -217,20 +215,19 @@ impl UdfRegistry {
         self.functions
             .remove(&name.to_lowercase())
             .map(|_| ())
-            .ok_or_else(|| StreamlineError::Query(format!("UDF '{}' not found", name)))
+            .ok_or_else(|| StreamlineError::Query(format!("UDF '{name}' not found")))
     }
 
     /// Call a scalar UDF
     pub fn call_scalar(&self, name: &str, args: &[UdfValue]) -> Result<UdfValue> {
         let def = self
             .get(name)
-            .ok_or_else(|| StreamlineError::Query(format!("Unknown function: {}", name)))?;
+            .ok_or_else(|| StreamlineError::Query(format!("Unknown function: {name}")))?;
 
         match &def.kind {
             UdfKind::Scalar(func) => func(args),
             UdfKind::Aggregate(_) => Err(StreamlineError::Query(format!(
-                "'{}' is an aggregate function, not scalar",
-                name
+                "'{name}' is an aggregate function, not scalar"
             ))),
         }
     }
@@ -397,7 +394,7 @@ impl QueryExplainPlan {
         // Build logical plan bottom-up
         plan_nodes.push(PlanNode {
             operator: "StreamScan".to_string(),
-            description: format!("Scan from {:?}", source_topics),
+            description: format!("Scan from {source_topics:?}"),
             estimated_rows: None,
             children: Vec::new(),
         });
@@ -505,9 +502,9 @@ impl std::fmt::Display for LateArrivalPolicy {
         match self {
             Self::Drop => write!(f, "drop"),
             Self::Include => write!(f, "include"),
-            Self::Redirect { dlq_topic } => write!(f, "redirect({})", dlq_topic),
+            Self::Redirect { dlq_topic } => write!(f, "redirect({dlq_topic})"),
             Self::AllowedLateness { max_lateness_ms } => {
-                write!(f, "allowed-lateness({}ms)", max_lateness_ms)
+                write!(f, "allowed-lateness({max_lateness_ms}ms)")
             }
         }
     }

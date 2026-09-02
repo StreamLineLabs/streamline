@@ -30,7 +30,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, info, warn};
 
 /// Configuration for the connector watcher.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -50,11 +50,7 @@ impl Default for WatcherConfig {
         Self {
             watch_dir: PathBuf::from("/etc/streamline/connectors"),
             poll_interval_ms: 5000,
-            extensions: vec![
-                "yaml".to_string(),
-                "yml".to_string(),
-                "json".to_string(),
-            ],
+            extensions: vec!["yaml".to_string(), "yml".to_string(), "json".to_string()],
             dry_run: false,
         }
     }
@@ -159,7 +155,7 @@ impl ConnectorWatcher {
 
         // Read all manifest files in the directory
         let entries = std::fs::read_dir(dir)
-            .map_err(|e| StreamlineError::storage_msg(format!("Failed to read dir: {}", e)))?;
+            .map_err(|e| StreamlineError::storage_msg(format!("Failed to read dir: {e}")))?;
 
         for entry in entries.flatten() {
             let path = entry.path();
@@ -354,10 +350,7 @@ impl ConnectorWatcher {
 
     /// Start the background polling loop.
     pub async fn start(&self) -> Result<()> {
-        if self
-            .running
-            .swap(true, std::sync::atomic::Ordering::SeqCst)
-        {
+        if self.running.swap(true, std::sync::atomic::Ordering::SeqCst) {
             return Ok(()); // Already running
         }
 
@@ -371,7 +364,10 @@ impl ConnectorWatcher {
         match self.scan().await {
             Ok(events) => {
                 if !events.is_empty() {
-                    info!(count = events.len(), "Initial scan found connector manifests");
+                    info!(
+                        count = events.len(),
+                        "Initial scan found connector manifests"
+                    );
                 }
             }
             Err(e) => {
@@ -410,8 +406,9 @@ impl ConnectorWatcher {
     // -----------------------------------------------------------------------
 
     fn parse_manifest(&self, path: &Path) -> Result<ConnectorManifest> {
-        let content = std::fs::read_to_string(path)
-            .map_err(|e| StreamlineError::Config(format!("Failed to read {}: {}", path.display(), e)))?;
+        let content = std::fs::read_to_string(path).map_err(|e| {
+            StreamlineError::Config(format!("Failed to read {}: {}", path.display(), e))
+        })?;
 
         let ext = path
             .extension()
@@ -421,13 +418,12 @@ impl ConnectorWatcher {
 
         let manifest: ConnectorManifest = match ext.as_str() {
             "json" => serde_json::from_str(&content)
-                .map_err(|e| StreamlineError::Config(format!("Invalid JSON manifest: {}", e)))?,
+                .map_err(|e| StreamlineError::Config(format!("Invalid JSON manifest: {e}")))?,
             "yaml" | "yml" => serde_yaml::from_str(&content)
-                .map_err(|e| StreamlineError::Config(format!("Invalid YAML manifest: {}", e)))?,
+                .map_err(|e| StreamlineError::Config(format!("Invalid YAML manifest: {e}")))?,
             _ => {
                 return Err(StreamlineError::Config(format!(
-                    "Unsupported manifest format: {}",
-                    ext
+                    "Unsupported manifest format: {ext}"
                 )));
             }
         };

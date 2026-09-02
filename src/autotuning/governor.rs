@@ -133,16 +133,16 @@ impl std::fmt::Display for GovernorAction {
                 from_bytes,
                 to_bytes,
             } => {
-                write!(f, "reduced buffers {}→{} bytes", from_bytes, to_bytes)
+                write!(f, "reduced buffers {from_bytes}→{to_bytes} bytes")
             }
             Self::TriggeredCompaction { topic } => {
-                write!(f, "triggered compaction on '{}'", topic)
+                write!(f, "triggered compaction on '{topic}'")
             }
             Self::TriggeredTiering { topic, bytes } => {
-                write!(f, "tiering {} bytes from '{}'", bytes, topic)
+                write!(f, "tiering {bytes} bytes from '{topic}'")
             }
             Self::RejectedWrite { reason } => {
-                write!(f, "rejected write: {}", reason)
+                write!(f, "rejected write: {reason}")
             }
             Self::RecommendedPartitionSplit(rec) => {
                 write!(
@@ -155,7 +155,7 @@ impl std::fmt::Display for GovernorAction {
                 from_bytes,
                 to_bytes,
             } => {
-                write!(f, "increased buffers {}→{} bytes", from_bytes, to_bytes)
+                write!(f, "increased buffers {from_bytes}→{to_bytes} bytes")
             }
         }
     }
@@ -258,7 +258,7 @@ impl ResourceGovernor {
         // Disk pressure handling
         if disk_pct >= self.config.disk_critical_watermark_pct as f64 {
             actions.push(GovernorAction::RejectedWrite {
-                reason: format!("disk usage critical at {:.1}%", disk_pct),
+                reason: format!("disk usage critical at {disk_pct:.1}%"),
             });
         } else if disk_pct >= self.config.disk_high_watermark_pct as f64
             && self.config.auto_tier_on_disk_pressure
@@ -314,8 +314,7 @@ impl ResourceGovernor {
                         current_partitions: current,
                         recommended_partitions: recommended,
                         reason: format!(
-                            "throughput {:.0} msg/s exceeds threshold {:.0}",
-                            throughput, threshold
+                            "throughput {throughput:.0} msg/s exceeds threshold {threshold:.0}"
                         ),
                         throughput_per_partition: throughput / current as f64,
                     })

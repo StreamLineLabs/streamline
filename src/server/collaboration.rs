@@ -4,11 +4,11 @@
 //! pipelines, dashboards, queries, schemas) with live cursor tracking,
 //! conflict resolution, and operation history.
 
+use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
-use parking_lot::RwLock;
 use tracing::{debug, info, warn};
 
 // ---------------------------------------------------------------------------
@@ -49,10 +49,18 @@ pub struct CollabConfig {
     pub conflict_resolution: ConflictStrategy,
 }
 
-fn default_max_users() -> usize { 20 }
-fn default_max_sessions() -> usize { 1000 }
-fn default_idle_timeout() -> u64 { 1800 }
-fn default_sync_interval() -> u64 { 100 }
+fn default_max_users() -> usize {
+    20
+}
+fn default_max_sessions() -> usize {
+    1000
+}
+fn default_idle_timeout() -> u64 {
+    1800
+}
+fn default_sync_interval() -> u64 {
+    100
+}
 
 impl Default for CollabConfig {
     fn default() -> Self {
@@ -227,22 +235,26 @@ impl CollaborationEngine {
     }
 
     /// Add a participant to an existing session.
-    pub fn join_session(
-        &self,
-        session_id: &str,
-        user: Participant,
-    ) -> Result<(), CollabError> {
+    pub fn join_session(&self, session_id: &str, user: Participant) -> Result<(), CollabError> {
         let mut sessions = self.sessions.write();
         let session = sessions
             .get_mut(session_id)
             .ok_or(CollabError::SessionNotFound)?;
 
         if session.participants.len() >= self.config.max_users_per_session {
-            warn!(session_id, limit = self.config.max_users_per_session, "participant limit reached");
+            warn!(
+                session_id,
+                limit = self.config.max_users_per_session,
+                "participant limit reached"
+            );
             return Err(CollabError::ParticipantLimitReached);
         }
 
-        if session.participants.iter().any(|p| p.user_id == user.user_id) {
+        if session
+            .participants
+            .iter()
+            .any(|p| p.user_id == user.user_id)
+        {
             return Err(CollabError::AlreadyInSession);
         }
 
@@ -254,11 +266,7 @@ impl CollaborationEngine {
     }
 
     /// Remove a participant from a session.
-    pub fn leave_session(
-        &self,
-        session_id: &str,
-        user_id: &str,
-    ) -> Result<(), CollabError> {
+    pub fn leave_session(&self, session_id: &str, user_id: &str) -> Result<(), CollabError> {
         let mut sessions = self.sessions.write();
         let session = sessions
             .get_mut(session_id)
@@ -334,7 +342,9 @@ impl CollaborationEngine {
         if self.config.conflict_resolution == ConflictStrategy::LastWriterWins {
             if let Some(prev) = session.operations.last() {
                 if prev.path == op.path && prev.user_id != op.user_id {
-                    self.stats.conflicts_resolved.fetch_add(1, Ordering::Relaxed);
+                    self.stats
+                        .conflicts_resolved
+                        .fetch_add(1, Ordering::Relaxed);
                     debug!(session_id, path = %op.path, "conflict resolved (last-writer-wins)");
                 }
             }
@@ -507,10 +517,18 @@ mod tests {
         };
         let engine = CollaborationEngine::new(config);
         let _ = engine
-            .create_session(ResourceType::Pipeline, "p1", make_participant("a", CollabRole::Owner))
+            .create_session(
+                ResourceType::Pipeline,
+                "p1",
+                make_participant("a", CollabRole::Owner),
+            )
             .unwrap();
         let err = engine
-            .create_session(ResourceType::Pipeline, "p2", make_participant("b", CollabRole::Owner))
+            .create_session(
+                ResourceType::Pipeline,
+                "p2",
+                make_participant("b", CollabRole::Owner),
+            )
             .unwrap_err();
         assert_eq!(err, CollabError::SessionLimitReached);
     }
@@ -519,7 +537,11 @@ mod tests {
     fn test_get_session() {
         let engine = default_engine();
         let sid = engine
-            .create_session(ResourceType::Dashboard, "d-1", make_participant("alice", CollabRole::Owner))
+            .create_session(
+                ResourceType::Dashboard,
+                "d-1",
+                make_participant("alice", CollabRole::Owner),
+            )
             .unwrap();
         let session = engine.get_session(&sid).unwrap();
         assert_eq!(session.resource_type, ResourceType::Dashboard);
@@ -538,7 +560,11 @@ mod tests {
     fn test_join_session() {
         let engine = default_engine();
         let sid = engine
-            .create_session(ResourceType::Query, "q1", make_participant("alice", CollabRole::Owner))
+            .create_session(
+                ResourceType::Query,
+                "q1",
+                make_participant("alice", CollabRole::Owner),
+            )
             .unwrap();
         engine
             .join_session(&sid, make_participant("bob", CollabRole::Editor))
@@ -552,7 +578,11 @@ mod tests {
     fn test_join_session_duplicate() {
         let engine = default_engine();
         let sid = engine
-            .create_session(ResourceType::Schema, "s1", make_participant("alice", CollabRole::Owner))
+            .create_session(
+                ResourceType::Schema,
+                "s1",
+                make_participant("alice", CollabRole::Owner),
+            )
             .unwrap();
         let err = engine
             .join_session(&sid, make_participant("alice", CollabRole::Editor))
@@ -568,7 +598,11 @@ mod tests {
         };
         let engine = CollaborationEngine::new(config);
         let sid = engine
-            .create_session(ResourceType::Notebook, "nb", make_participant("alice", CollabRole::Owner))
+            .create_session(
+                ResourceType::Notebook,
+                "nb",
+                make_participant("alice", CollabRole::Owner),
+            )
             .unwrap();
         let err = engine
             .join_session(&sid, make_participant("bob", CollabRole::Editor))
@@ -580,9 +614,15 @@ mod tests {
     fn test_leave_session() {
         let engine = default_engine();
         let sid = engine
-            .create_session(ResourceType::Notebook, "nb", make_participant("alice", CollabRole::Owner))
+            .create_session(
+                ResourceType::Notebook,
+                "nb",
+                make_participant("alice", CollabRole::Owner),
+            )
             .unwrap();
-        engine.join_session(&sid, make_participant("bob", CollabRole::Editor)).unwrap();
+        engine
+            .join_session(&sid, make_participant("bob", CollabRole::Editor))
+            .unwrap();
         engine.leave_session(&sid, "bob").unwrap();
         assert_eq!(engine.get_participants(&sid).unwrap().len(), 1);
         assert_eq!(engine.stats().participants, 1);
@@ -592,7 +632,11 @@ mod tests {
     fn test_leave_session_user_not_found() {
         let engine = default_engine();
         let sid = engine
-            .create_session(ResourceType::Notebook, "nb", make_participant("alice", CollabRole::Owner))
+            .create_session(
+                ResourceType::Notebook,
+                "nb",
+                make_participant("alice", CollabRole::Owner),
+            )
             .unwrap();
         let err = engine.leave_session(&sid, "ghost").unwrap_err();
         assert_eq!(err, CollabError::UserNotInSession);
@@ -604,7 +648,11 @@ mod tests {
     fn test_update_cursor() {
         let engine = default_engine();
         let sid = engine
-            .create_session(ResourceType::Notebook, "nb", make_participant("alice", CollabRole::Owner))
+            .create_session(
+                ResourceType::Notebook,
+                "nb",
+                make_participant("alice", CollabRole::Owner),
+            )
             .unwrap();
         let pos = CursorPosition {
             line: 10,
@@ -621,9 +669,18 @@ mod tests {
     fn test_update_cursor_user_not_in_session() {
         let engine = default_engine();
         let sid = engine
-            .create_session(ResourceType::Notebook, "nb", make_participant("alice", CollabRole::Owner))
+            .create_session(
+                ResourceType::Notebook,
+                "nb",
+                make_participant("alice", CollabRole::Owner),
+            )
             .unwrap();
-        let pos = CursorPosition { line: 0, column: 0, selection_start: None, selection_end: None };
+        let pos = CursorPosition {
+            line: 0,
+            column: 0,
+            selection_start: None,
+            selection_end: None,
+        };
         let err = engine.update_cursor(&sid, "ghost", pos).unwrap_err();
         assert_eq!(err, CollabError::UserNotInSession);
     }
@@ -634,7 +691,11 @@ mod tests {
     fn test_apply_operation() {
         let engine = default_engine();
         let sid = engine
-            .create_session(ResourceType::Notebook, "nb", make_participant("alice", CollabRole::Owner))
+            .create_session(
+                ResourceType::Notebook,
+                "nb",
+                make_participant("alice", CollabRole::Owner),
+            )
             .unwrap();
         let op = make_op("alice", OpType::Insert, "/cells/0");
         let ver = engine.apply_operation(&sid, op).unwrap();
@@ -646,9 +707,15 @@ mod tests {
     fn test_apply_operation_viewer_rejected() {
         let engine = default_engine();
         let sid = engine
-            .create_session(ResourceType::Notebook, "nb", make_participant("alice", CollabRole::Owner))
+            .create_session(
+                ResourceType::Notebook,
+                "nb",
+                make_participant("alice", CollabRole::Owner),
+            )
             .unwrap();
-        engine.join_session(&sid, make_participant("viewer", CollabRole::Viewer)).unwrap();
+        engine
+            .join_session(&sid, make_participant("viewer", CollabRole::Viewer))
+            .unwrap();
         let op = make_op("viewer", OpType::Update, "/cells/0");
         let err = engine.apply_operation(&sid, op).unwrap_err();
         assert_eq!(err, CollabError::InsufficientRole);
@@ -658,10 +725,18 @@ mod tests {
     fn test_apply_operation_increments_version() {
         let engine = default_engine();
         let sid = engine
-            .create_session(ResourceType::Pipeline, "p1", make_participant("alice", CollabRole::Owner))
+            .create_session(
+                ResourceType::Pipeline,
+                "p1",
+                make_participant("alice", CollabRole::Owner),
+            )
             .unwrap();
-        let v1 = engine.apply_operation(&sid, make_op("alice", OpType::Insert, "/a")).unwrap();
-        let v2 = engine.apply_operation(&sid, make_op("alice", OpType::Update, "/a")).unwrap();
+        let v1 = engine
+            .apply_operation(&sid, make_op("alice", OpType::Insert, "/a"))
+            .unwrap();
+        let v2 = engine
+            .apply_operation(&sid, make_op("alice", OpType::Update, "/a"))
+            .unwrap();
         assert_eq!(v1, 1);
         assert_eq!(v2, 2);
     }
@@ -672,11 +747,21 @@ mod tests {
     fn test_conflict_detected_last_writer_wins() {
         let engine = default_engine();
         let sid = engine
-            .create_session(ResourceType::Notebook, "nb", make_participant("alice", CollabRole::Owner))
+            .create_session(
+                ResourceType::Notebook,
+                "nb",
+                make_participant("alice", CollabRole::Owner),
+            )
             .unwrap();
-        engine.join_session(&sid, make_participant("bob", CollabRole::Editor)).unwrap();
-        engine.apply_operation(&sid, make_op("alice", OpType::Update, "/title")).unwrap();
-        engine.apply_operation(&sid, make_op("bob", OpType::Update, "/title")).unwrap();
+        engine
+            .join_session(&sid, make_participant("bob", CollabRole::Editor))
+            .unwrap();
+        engine
+            .apply_operation(&sid, make_op("alice", OpType::Update, "/title"))
+            .unwrap();
+        engine
+            .apply_operation(&sid, make_op("bob", OpType::Update, "/title"))
+            .unwrap();
         assert_eq!(engine.stats().conflicts_resolved, 1);
     }
 

@@ -105,8 +105,7 @@ impl TryFrom<u8> for WalEntryType {
             2 => Ok(WalEntryType::Checkpoint),
             3 => Ok(WalEntryType::Truncate),
             _ => Err(StreamlineError::CorruptedData(format!(
-                "Invalid WAL entry type: {}",
-                value
+                "Invalid WAL entry type: {value}"
             ))),
         }
     }
@@ -819,7 +818,7 @@ impl WalWriter {
 
         // Archive current file
         let timestamp = chrono::Utc::now().timestamp_millis();
-        let archived_name = format!("{:020}.wal", timestamp);
+        let archived_name = format!("{timestamp:020}.wal");
         let archived_path = self.wal_dir.join(&archived_name);
 
         fs::rename(&self.current_path, &archived_path)?;
@@ -828,12 +827,11 @@ impl WalWriter {
         // This is CRITICAL for crash consistency on Linux/POSIX - directory fsync is REQUIRED
         // to persist file renames. Without this, the rename could be lost on power failure.
         let dir = fs::File::open(&self.wal_dir).map_err(|e| {
-            StreamlineError::storage_msg(format!("Failed to open WAL directory for sync: {}", e))
+            StreamlineError::storage_msg(format!("Failed to open WAL directory for sync: {e}"))
         })?;
         dir.sync_all().map_err(|e| {
             StreamlineError::storage_msg(format!(
-                "Failed to sync WAL directory - rename durability not guaranteed: {}",
-                e
+                "Failed to sync WAL directory - rename durability not guaranteed: {e}"
             ))
         })?;
 
@@ -1211,7 +1209,7 @@ impl ShardedWalWriter {
 
         // Create or open each shard
         for shard_id in 0..shard_count {
-            let shard_dir = wal_dir.join(format!("shard-{:02}", shard_id));
+            let shard_dir = wal_dir.join(format!("shard-{shard_id:02}"));
 
             // Use with_wal_dir to create WalWriter directly in the shard directory
             // (without creating a nested `wal` subdirectory)
@@ -1583,7 +1581,7 @@ mod tests {
         // Write enough to trigger rotation
         for i in 0..10 {
             writer
-                .append_record("topic1", 0, None, &Bytes::from(format!("value-{}", i)))
+                .append_record("topic1", 0, None, &Bytes::from(format!("value-{i}")))
                 .unwrap();
         }
 
@@ -1632,7 +1630,7 @@ mod tests {
         // Write up to the limit (5 writes)
         for i in 0..5 {
             writer
-                .append_record("topic1", 0, None, &Bytes::from(format!("value-{}", i)))
+                .append_record("topic1", 0, None, &Bytes::from(format!("value-{i}")))
                 .unwrap();
         }
 
@@ -1642,8 +1640,7 @@ mod tests {
         let err_msg = result.unwrap_err().to_string();
         assert!(
             err_msg.contains("backpressure"),
-            "Expected backpressure error, got: {}",
-            err_msg
+            "Expected backpressure error, got: {err_msg}"
         );
 
         // After sync, writes should succeed again
@@ -1676,7 +1673,7 @@ mod tests {
         // so we should be able to write many more than the limit
         for i in 0..20 {
             writer
-                .append_record("topic1", 0, None, &Bytes::from(format!("value-{}", i)))
+                .append_record("topic1", 0, None, &Bytes::from(format!("value-{i}")))
                 .unwrap();
         }
 

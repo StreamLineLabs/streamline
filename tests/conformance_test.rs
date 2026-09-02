@@ -10,24 +10,30 @@
 //! cargo test --test conformance_test --features compatibility-tests
 //! ```
 
+#[cfg(feature = "compatibility-tests")]
 #[path = "common/mod.rs"]
 mod common;
 
+#[cfg(feature = "compatibility-tests")]
 use bytes::BytesMut;
+#[cfg(feature = "compatibility-tests")]
 use common::*;
+#[cfg(feature = "compatibility-tests")]
 use kafka_protocol::messages::*;
-use kafka_protocol::protocol::{Decodable, StrBytes};
+#[cfg(feature = "compatibility-tests")]
+use kafka_protocol::protocol::Decodable;
+#[cfg(feature = "compatibility-tests")]
 use std::io::{Read, Write};
+#[cfg(feature = "compatibility-tests")]
 use std::net::TcpStream;
+#[cfg(feature = "compatibility-tests")]
 use std::time::Duration;
 
 /// Send a raw Kafka protocol request and read the response
+#[cfg(feature = "compatibility-tests")]
 fn send_request(port: u16, request_bytes: &[u8]) -> Vec<u8> {
-    let mut stream =
-        TcpStream::connect(format!("127.0.0.1:{}", port)).expect("Failed to connect");
-    stream
-        .set_read_timeout(Some(Duration::from_secs(5)))
-        .ok();
+    let mut stream = TcpStream::connect(format!("127.0.0.1:{port}")).expect("Failed to connect");
+    stream.set_read_timeout(Some(Duration::from_secs(5))).ok();
     stream.write_all(request_bytes).expect("Failed to write");
 
     let mut size_buf = [0u8; 4];
@@ -37,9 +43,7 @@ fn send_request(port: u16, request_bytes: &[u8]) -> Vec<u8> {
     let size = u32::from_be_bytes(size_buf) as usize;
 
     let mut body = vec![0u8; size];
-    stream
-        .read_exact(&mut body)
-        .expect("Failed to read body");
+    stream.read_exact(&mut body).expect("Failed to read body");
     body
 }
 
@@ -106,8 +110,7 @@ mod conformance {
         let mut buf = BytesMut::from(&response_body[..]);
         let _header =
             ResponseHeader::decode(&mut buf, header_version).expect("Failed to decode header");
-        let create_response =
-            CreateTopicsResponse::decode(&mut buf, 5).expect("Failed to decode");
+        let create_response = CreateTopicsResponse::decode(&mut buf, 5).expect("Failed to decode");
 
         assert_eq!(
             create_response.topics.len(),
@@ -126,8 +129,8 @@ mod conformance {
         let response_body2 = send_request(server.kafka_port, &req2);
 
         let mut buf2 = BytesMut::from(&response_body2[..]);
-        let _header2 = ResponseHeader::decode(&mut buf2, header_version)
-            .expect("Failed to decode header");
+        let _header2 =
+            ResponseHeader::decode(&mut buf2, header_version).expect("Failed to decode header");
         let create_response2 =
             CreateTopicsResponse::decode(&mut buf2, 5).expect("Failed to decode");
 
@@ -168,9 +171,7 @@ mod conformance {
         for (api_key, name) in &required_apis {
             assert!(
                 api_map.contains_key(api_key),
-                "Required API {} ({}) missing from ApiVersions response",
-                name,
-                api_key
+                "Required API {name} ({api_key}) missing from ApiVersions response"
             );
         }
     }
@@ -191,38 +192,96 @@ enum StabilityLevel {
 #[allow(dead_code)]
 fn stability_matrix() -> Vec<(&'static str, StabilityLevel, &'static str)> {
     vec![
-        ("server", StabilityLevel::Stable, "TCP server, connection handling, HTTP API"),
-        ("storage", StabilityLevel::Stable, "Segment-based persistent storage"),
-        ("protocol", StabilityLevel::Stable, "Kafka wire protocol (50 APIs)"),
-        ("consumer", StabilityLevel::Stable, "Consumer groups, offset management"),
-        ("config", StabilityLevel::Stable, "Server configuration, CLI args"),
-        ("error", StabilityLevel::Stable, "Error types and Result alias"),
+        (
+            "server",
+            StabilityLevel::Stable,
+            "TCP server, connection handling, HTTP API",
+        ),
+        (
+            "storage",
+            StabilityLevel::Stable,
+            "Segment-based persistent storage",
+        ),
+        (
+            "protocol",
+            StabilityLevel::Stable,
+            "Kafka wire protocol (50 APIs)",
+        ),
+        (
+            "consumer",
+            StabilityLevel::Stable,
+            "Consumer groups, offset management",
+        ),
+        (
+            "config",
+            StabilityLevel::Stable,
+            "Server configuration, CLI args",
+        ),
+        (
+            "error",
+            StabilityLevel::Stable,
+            "Error types and Result alias",
+        ),
         ("embedded", StabilityLevel::Stable, "Embedded library mode"),
         ("analytics", StabilityLevel::Stable, "DuckDB SQL analytics"),
-        ("transaction", StabilityLevel::Beta, "Transaction coordinator"),
+        (
+            "transaction",
+            StabilityLevel::Beta,
+            "Transaction coordinator",
+        ),
         ("cluster", StabilityLevel::Beta, "Raft-based clustering"),
         ("replication", StabilityLevel::Beta, "Data replication, ISR"),
         ("schema", StabilityLevel::Beta, "Schema Registry"),
         ("auth", StabilityLevel::Beta, "SASL/OAuth, ACLs"),
         ("tenant", StabilityLevel::Beta, "Multi-tenancy framework"),
-        ("connect", StabilityLevel::Beta, "Kafka Connect compatibility"),
-        ("ai", StabilityLevel::Experimental, "AI/ML streaming pipeline"),
+        (
+            "connect",
+            StabilityLevel::Beta,
+            "Kafka Connect compatibility",
+        ),
+        (
+            "ai",
+            StabilityLevel::Experimental,
+            "AI/ML streaming pipeline",
+        ),
         ("faas", StabilityLevel::Experimental, "Serverless functions"),
         ("cdc", StabilityLevel::Experimental, "Change Data Capture"),
         ("sink", StabilityLevel::Experimental, "Lakehouse connectors"),
-        ("streamql", StabilityLevel::Experimental, "Continuous query engine"),
+        (
+            "streamql",
+            StabilityLevel::Experimental,
+            "Continuous query engine",
+        ),
         ("edge", StabilityLevel::Experimental, "Edge deployment"),
-        ("cloud", StabilityLevel::Experimental, "Managed cloud service"),
+        (
+            "cloud",
+            StabilityLevel::Experimental,
+            "Managed cloud service",
+        ),
         ("wasm", StabilityLevel::Experimental, "WASM transforms"),
-        ("marketplace", StabilityLevel::Experimental, "Transform registry"),
+        (
+            "marketplace",
+            StabilityLevel::Experimental,
+            "Transform registry",
+        ),
     ]
 }
 
 #[test]
 fn test_stability_matrix_completeness() {
     let matrix = stability_matrix();
-    assert!(matrix.len() >= 24, "Must cover at least 24 modules, got {}", matrix.len());
+    assert!(
+        matrix.len() >= 24,
+        "Must cover at least 24 modules, got {}",
+        matrix.len()
+    );
 
-    let stable_count = matrix.iter().filter(|(_, l, _)| *l == StabilityLevel::Stable).count();
-    assert!(stable_count >= 8, "v1.0 must have at least 8 stable modules, got {}", stable_count);
+    let stable_count = matrix
+        .iter()
+        .filter(|(_, l, _)| *l == StabilityLevel::Stable)
+        .count();
+    assert!(
+        stable_count >= 8,
+        "v1.0 must have at least 8 stable modules, got {stable_count}"
+    );
 }

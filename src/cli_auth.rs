@@ -59,10 +59,7 @@ fn list_users(users_file: &Path, ctx: &CliContext) -> Result<()> {
                     })
                 })
                 .collect();
-            println!(
-                "{}",
-                serde_json::to_string_pretty(&data)?
-            );
+            println!("{}", serde_json::to_string_pretty(&data)?);
         }
         _ => {
             if usernames.is_empty() {
@@ -85,7 +82,7 @@ fn list_users(users_file: &Path, ctx: &CliContext) -> Result<()> {
                     }
                 }
 
-                println!("{}", table);
+                println!("{table}");
             }
         }
     }
@@ -110,8 +107,7 @@ fn add_user(
     // Check if user already exists
     if store.get_user(username).is_some() {
         return Err(streamline::StreamlineError::Config(format!(
-            "User '{}' already exists. Remove it first to update.",
-            username
+            "User '{username}' already exists. Remove it first to update."
         )));
     }
 
@@ -148,7 +144,7 @@ fn remove_user(users_file: &Path, username: &str, ctx: &CliContext) -> Result<()
         )));
     }
 
-    if !ctx.confirm(&format!("Remove user '{}'?", username)) {
+    if !ctx.confirm(&format!("Remove user '{username}'?")) {
         ctx.info("Cancelled.");
         return Ok(());
     }
@@ -173,8 +169,7 @@ fn remove_user(users_file: &Path, username: &str, ctx: &CliContext) -> Result<()
         }
     } else {
         return Err(streamline::StreamlineError::Config(format!(
-            "User '{}' not found.",
-            username
+            "User '{username}' not found."
         )));
     }
 
@@ -254,10 +249,7 @@ fn list_acls(acl_file: &Path, ctx: &CliContext) -> Result<()> {
                     })
                 })
                 .collect();
-            println!(
-                "{}",
-                serde_json::to_string_pretty(&data)?
-            );
+            println!("{}", serde_json::to_string_pretty(&data)?);
         }
         _ => {
             if acls.is_empty() {
@@ -292,7 +284,7 @@ fn list_acls(acl_file: &Path, ctx: &CliContext) -> Result<()> {
                     ]);
                 }
 
-                println!("{}", table);
+                println!("{table}");
             }
         }
     }
@@ -315,32 +307,28 @@ fn add_acl(
     // Parse resource type
     let resource_type = ResourceType::parse(resource_type).ok_or_else(|| {
         streamline::StreamlineError::Config(format!(
-            "Invalid resource type: {}. Valid types: topic, group, cluster",
-            resource_type
+            "Invalid resource type: {resource_type}. Valid types: topic, group, cluster"
         ))
     })?;
 
     // Parse pattern type
     let pattern_type = PatternType::parse(pattern_type).ok_or_else(|| {
         streamline::StreamlineError::Config(format!(
-            "Invalid pattern type: {}. Valid types: literal, prefixed",
-            pattern_type
+            "Invalid pattern type: {pattern_type}. Valid types: literal, prefixed"
         ))
     })?;
 
     // Parse operation
     let operation = Operation::parse(operation).ok_or_else(|| {
         streamline::StreamlineError::Config(format!(
-            "Invalid operation: {}. Valid operations: read, write, create, delete, alter, describe, all",
-            operation
+            "Invalid operation: {operation}. Valid operations: read, write, create, delete, alter, describe, all"
         ))
     })?;
 
     // Parse permission
     let permission = Permission::parse(permission).ok_or_else(|| {
         streamline::StreamlineError::Config(format!(
-            "Invalid permission: {}. Valid permissions: allow, deny",
-            permission
+            "Invalid permission: {permission}. Valid permissions: allow, deny"
         ))
     })?;
 
@@ -379,7 +367,7 @@ fn add_acl(
         }
         _ => {
             ctx.success("ACL added successfully:");
-            println!("  {}", acl);
+            println!("  {acl}");
         }
     }
     Ok(())
@@ -415,8 +403,7 @@ fn remove_acls(
             filter = filter.with_resource_type(parsed);
         } else {
             return Err(streamline::StreamlineError::Config(format!(
-                "Invalid resource type: {}",
-                rt
+                "Invalid resource type: {rt}"
             )));
         }
     }
@@ -434,8 +421,7 @@ fn remove_acls(
             filter = filter.with_operation(parsed);
         } else {
             return Err(streamline::StreamlineError::Config(format!(
-                "Invalid operation: {}",
-                op
+                "Invalid operation: {op}"
             )));
         }
     }

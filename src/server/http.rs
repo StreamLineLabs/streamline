@@ -714,7 +714,7 @@ pub async fn start_http_server(
                 port + 100
             )
         } else {
-            format!("Failed to bind HTTP server to {}: {}", addr, e)
+            format!("Failed to bind HTTP server to {addr}: {e}")
         }
     })?;
     axum::serve(listener, app).await?;
@@ -790,7 +790,7 @@ async fn readiness_handler(State(state): State<HttpServerState>) -> Response {
     let storage_ok = checks
         .iter()
         .find(|c| c.name == "storage")
-        .map_or(false, |c| c.status == "ok");
+        .is_some_and(|c| c.status == "ok");
     let all_ready = checks.iter().all(|c| c.status == "ok");
 
     // Protocol and HTTP are ready if this handler is reachable
@@ -1021,7 +1021,7 @@ fn perform_health_checks(state: &HttpServerState) -> Vec<HealthCheck> {
         Err(e) => HealthCheck {
             name: "storage".to_string(),
             status: "failed".to_string(),
-            message: Some(format!("Storage error: {}", e)),
+            message: Some(format!("Storage error: {e}")),
         },
     };
     checks.push(storage_check);
@@ -1161,7 +1161,8 @@ async fn metrics_sampling_task(
 // }
 
 // Tests require metrics and auth features for full functionality
-#[cfg(all(test, feature = "metrics", feature = "auth"))]
+#[cfg(test)]
+#[cfg(all(feature = "metrics", feature = "auth"))]
 mod tests {
     use super::*;
     use crate::metrics;
@@ -1183,6 +1184,12 @@ mod tests {
             limits: crate::server::limits::LimitsConfig::default(),
             shutdown: crate::server::shutdown::ShutdownConfig::default(),
             quotas: crate::server::limits::QuotaConfig::default(),
+            // `ServerConfig::cluster` only exists under `clustering`, but this
+            // test module is gated on `metrics` + `auth`. Without this cfg the
+            // whole module fails to compile in any configuration that enables
+            // `auth` without `clustering` (for example `--features auth`, since
+            // the default `lite` edition already brings `metrics` in).
+            #[cfg(feature = "clustering")]
             cluster: None,
             simple: crate::config::SimpleProtocolConfig::default(),
             auto_create_topics: crate::config::DEFAULT_AUTO_CREATE_TOPICS,

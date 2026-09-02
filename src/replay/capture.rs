@@ -355,7 +355,7 @@ impl TrafficRecorder {
         for pattern in &self.topic_filter {
             if pattern.contains('*') {
                 let regex_pattern = pattern.replace('*', ".*");
-                if regex::Regex::new(&format!("^{}$", regex_pattern))
+                if regex::Regex::new(&format!("^{regex_pattern}$"))
                     .map(|r| r.is_match(topic))
                     .unwrap_or(false)
                 {
@@ -450,7 +450,7 @@ mod tests {
                 i,
                 chrono::Utc::now().timestamp_millis(),
                 None,
-                Bytes::from(format!("value-{}", i)),
+                Bytes::from(format!("value-{i}")),
             );
             let captured = recorder.capture(&record, "events", 0).await.unwrap();
             assert!(captured);

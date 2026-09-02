@@ -97,8 +97,8 @@ impl ChaosCluster {
 
             let config = ClusterConfig {
                 node_id,
-                advertised_addr: format!("127.0.0.1:{}", kafka_port).parse().unwrap(),
-                inter_broker_addr: format!("127.0.0.1:{}", inter_broker_port).parse().unwrap(),
+                advertised_addr: format!("127.0.0.1:{kafka_port}").parse().unwrap(),
+                inter_broker_addr: format!("127.0.0.1:{inter_broker_port}").parse().unwrap(),
                 seed_nodes,
                 default_replication_factor: 3.min(num_nodes as i16),
                 min_insync_replicas: (num_nodes as i16 / 2 + 1).min(2),
@@ -259,8 +259,7 @@ impl ChaosCluster {
             .map(|m| m.brokers.len())
             .unwrap_or(0);
         Err(format!(
-            "Timeout waiting for {} brokers (only {} registered)",
-            count, current_count
+            "Timeout waiting for {count} brokers (only {current_count} registered)"
         ))
     }
 
@@ -355,20 +354,20 @@ impl ChaosNode {
         // Create cluster manager
         let manager = ClusterManager::new(self.config.clone(), self.data_path.clone())
             .await
-            .map_err(|e| format!("Failed to create cluster manager: {}", e))?;
+            .map_err(|e| format!("Failed to create cluster manager: {e}"))?;
 
         // Start RPC listener
         manager
             .start_rpc_listener()
             .await
-            .map_err(|e| format!("Failed to start RPC listener: {}", e))?;
+            .map_err(|e| format!("Failed to start RPC listener: {e}"))?;
 
         // Create topic manager
         let topic_path = self.data_path.join("topics");
         std::fs::create_dir_all(&topic_path).map_err(|e| e.to_string())?;
         let topic_manager = Arc::new(
             TopicManager::new(&topic_path)
-                .map_err(|e| format!("Failed to create topic manager: {}", e))?,
+                .map_err(|e| format!("Failed to create topic manager: {e}"))?,
         );
 
         // Wire up topic manager to cluster
@@ -392,7 +391,7 @@ impl ChaosNode {
         manager
             .bootstrap()
             .await
-            .map_err(|e| format!("Bootstrap failed: {}", e))?;
+            .map_err(|e| format!("Bootstrap failed: {e}"))?;
 
         Ok(())
     }
@@ -413,7 +412,7 @@ impl ChaosNode {
         manager
             .join_cluster(seed_nodes)
             .await
-            .map_err(|e| format!("Join failed: {}", e))?;
+            .map_err(|e| format!("Join failed: {e}"))?;
 
         Ok(())
     }
@@ -431,7 +430,7 @@ impl ChaosNode {
             manager
                 .shutdown()
                 .await
-                .map_err(|e| format!("Shutdown failed: {}", e))?;
+                .map_err(|e| format!("Shutdown failed: {e}"))?;
         }
 
         // Clear topic manager
@@ -481,7 +480,7 @@ impl ChaosNode {
         manager
             .create_topic(name.to_string(), partitions, replication_factor)
             .await
-            .map_err(|e| format!("Failed to create topic: {}", e))?;
+            .map_err(|e| format!("Failed to create topic: {e}"))?;
 
         Ok(())
     }

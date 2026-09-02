@@ -266,7 +266,7 @@ impl PolicyValidator {
                         "DUPLICATE_TOPIC",
                         format!("Duplicate topic name: {}", topic.name),
                     )
-                    .with_path(format!("topics[{}].name", i)),
+                    .with_path(format!("topics[{i}].name")),
                 );
             }
             result.merge(self.validate_topic(topic, i));
@@ -285,9 +285,9 @@ impl PolicyValidator {
                 result.add_error(
                     PolicyValidationError::warning(
                         "DUPLICATE_QUOTA",
-                        format!("Duplicate quota entity: {}", key),
+                        format!("Duplicate quota entity: {key}"),
                     )
-                    .with_path(format!("quotas[{}]", i)),
+                    .with_path(format!("quotas[{i}]")),
                 );
             }
             result.merge(self.validate_quota(quota, i));
@@ -305,9 +305,9 @@ impl PolicyValidator {
                     result.add_error(
                         PolicyValidationError::error(
                             "INVALID_RETENTION_REF",
-                            format!("Retention policy '{}' not found", policy_ref),
+                            format!("Retention policy '{policy_ref}' not found"),
                         )
-                        .with_path(format!("topics[{}].retention_policy_ref", i)),
+                        .with_path(format!("topics[{i}].retention_policy_ref")),
                     );
                 }
             }
@@ -319,13 +319,13 @@ impl PolicyValidator {
     /// Validate a topic policy
     pub fn validate_topic(&self, topic: &TopicPolicy, index: usize) -> ValidationResult {
         let mut result = ValidationResult::success();
-        let path_prefix = format!("topics[{}]", index);
+        let path_prefix = format!("topics[{index}]");
 
         // Validate name
         if topic.name.is_empty() {
             result.add_error(
                 PolicyValidationError::error("EMPTY_TOPIC_NAME", "Topic name cannot be empty")
-                    .with_path(format!("{}.name", path_prefix)),
+                    .with_path(format!("{path_prefix}.name")),
             );
         } else {
             // Check for reserved patterns
@@ -336,7 +336,7 @@ impl PolicyValidator {
                             "RESERVED_TOPIC_NAME",
                             format!("Topic name '{}' is reserved", topic.name),
                         )
-                        .with_path(format!("{}.name", path_prefix)),
+                        .with_path(format!("{path_prefix}.name")),
                     );
                 }
             }
@@ -348,7 +348,7 @@ impl PolicyValidator {
                         "INVALID_TOPIC_NAME",
                         "Topic name cannot contain whitespace",
                     )
-                    .with_path(format!("{}.name", path_prefix)),
+                    .with_path(format!("{path_prefix}.name")),
                 );
             }
         }
@@ -360,7 +360,7 @@ impl PolicyValidator {
                     "INVALID_PARTITIONS",
                     format!("Partitions must be at least 1, got {}", topic.partitions),
                 )
-                .with_path(format!("{}.partitions", path_prefix)),
+                .with_path(format!("{path_prefix}.partitions")),
             );
         } else if topic.partitions > self.max_partitions {
             result.add_error(
@@ -371,7 +371,7 @@ impl PolicyValidator {
                         topic.partitions, self.max_partitions
                     ),
                 )
-                .with_path(format!("{}.partitions", path_prefix)),
+                .with_path(format!("{path_prefix}.partitions")),
             );
         }
 
@@ -385,7 +385,7 @@ impl PolicyValidator {
                         topic.replication_factor
                     ),
                 )
-                .with_path(format!("{}.replication_factor", path_prefix)),
+                .with_path(format!("{path_prefix}.replication_factor")),
             );
         } else if topic.replication_factor > self.max_replication_factor {
             result.add_error(
@@ -396,7 +396,7 @@ impl PolicyValidator {
                         topic.replication_factor, self.max_replication_factor
                     ),
                 )
-                .with_path(format!("{}.replication_factor", path_prefix)),
+                .with_path(format!("{path_prefix}.replication_factor")),
             );
         }
 
@@ -407,7 +407,7 @@ impl PolicyValidator {
                     "INVALID_RETENTION_MS",
                     "Retention ms must be -1 (unlimited) or positive",
                 )
-                .with_path(format!("{}.retention.ms", path_prefix)),
+                .with_path(format!("{path_prefix}.retention.ms")),
             );
         }
 
@@ -417,7 +417,7 @@ impl PolicyValidator {
                     "INVALID_RETENTION_BYTES",
                     "Retention bytes must be -1 (unlimited) or positive",
                 )
-                .with_path(format!("{}.retention.bytes", path_prefix)),
+                .with_path(format!("{path_prefix}.retention.bytes")),
             );
         }
 
@@ -429,7 +429,7 @@ impl PolicyValidator {
                     "INVALID_CLEANUP_POLICY",
                     format!("Invalid cleanup policy: {}", topic.retention.cleanup_policy),
                 )
-                .with_path(format!("{}.retention.cleanup_policy", path_prefix)),
+                .with_path(format!("{path_prefix}.retention.cleanup_policy")),
             );
         }
 
@@ -439,7 +439,7 @@ impl PolicyValidator {
     /// Validate an ACL policy
     pub fn validate_acl(&self, acl: &AclPolicy, index: usize) -> ValidationResult {
         let mut result = ValidationResult::success();
-        let path_prefix = format!("acls[{}]", index);
+        let path_prefix = format!("acls[{index}]");
 
         // Validate principal format
         if !acl.principal.contains(':') {
@@ -448,7 +448,7 @@ impl PolicyValidator {
                     "INVALID_PRINCIPAL",
                     format!("Principal '{}' must be in format Type:Name", acl.principal),
                 )
-                .with_path(format!("{}.principal", path_prefix)),
+                .with_path(format!("{path_prefix}.principal")),
             );
         }
 
@@ -462,7 +462,7 @@ impl PolicyValidator {
                     "INVALID_RESOURCE_TYPE",
                     format!("Invalid resource type: {}", acl.resource_type),
                 )
-                .with_path(format!("{}.resource_type", path_prefix)),
+                .with_path(format!("{path_prefix}.resource_type")),
             );
         }
 
@@ -472,9 +472,9 @@ impl PolicyValidator {
                 result.add_error(
                     PolicyValidationError::error(
                         "INVALID_OPERATION",
-                        format!("Invalid operation: {}", op),
+                        format!("Invalid operation: {op}"),
                     )
-                    .with_path(format!("{}.operations[{}]", path_prefix, i)),
+                    .with_path(format!("{path_prefix}.operations[{i}]")),
                 );
             }
         }
@@ -489,7 +489,7 @@ impl PolicyValidator {
                         acl.permission
                     ),
                 )
-                .with_path(format!("{}.permission", path_prefix)),
+                .with_path(format!("{path_prefix}.permission")),
             );
         }
 
@@ -503,7 +503,7 @@ impl PolicyValidator {
                         acl.pattern_type
                     ),
                 )
-                .with_path(format!("{}.pattern_type", path_prefix)),
+                .with_path(format!("{path_prefix}.pattern_type")),
             );
         }
 
@@ -513,7 +513,7 @@ impl PolicyValidator {
     /// Validate a quota policy
     pub fn validate_quota(&self, quota: &QuotaPolicy, index: usize) -> ValidationResult {
         let mut result = ValidationResult::success();
-        let path_prefix = format!("quotas[{}]", index);
+        let path_prefix = format!("quotas[{index}]");
 
         // Validate entity type
         let valid_entity_types = ["user", "client-id", "ip"];
@@ -523,7 +523,7 @@ impl PolicyValidator {
                     "INVALID_ENTITY_TYPE",
                     format!("Invalid entity type: {}", quota.entity_type),
                 )
-                .with_path(format!("{}.entity_type", path_prefix)),
+                .with_path(format!("{path_prefix}.entity_type")),
             );
         }
 
@@ -535,7 +535,7 @@ impl PolicyValidator {
                         "INVALID_RATE",
                         "Producer byte rate cannot be negative",
                     )
-                    .with_path(format!("{}.producer_byte_rate", path_prefix)),
+                    .with_path(format!("{path_prefix}.producer_byte_rate")),
                 );
             }
         }
@@ -547,7 +547,7 @@ impl PolicyValidator {
                         "INVALID_RATE",
                         "Consumer byte rate cannot be negative",
                     )
-                    .with_path(format!("{}.consumer_byte_rate", path_prefix)),
+                    .with_path(format!("{path_prefix}.consumer_byte_rate")),
                 );
             }
         }
@@ -557,9 +557,9 @@ impl PolicyValidator {
                 result.add_error(
                     PolicyValidationError::error(
                         "INVALID_PERCENTAGE",
-                        format!("Request percentage must be 0-100, got {}", pct),
+                        format!("Request percentage must be 0-100, got {pct}"),
                     )
-                    .with_path(format!("{}.request_percentage", path_prefix)),
+                    .with_path(format!("{path_prefix}.request_percentage")),
                 );
             }
         }
@@ -570,13 +570,13 @@ impl PolicyValidator {
     /// Validate a schema policy
     pub fn validate_schema(&self, schema: &SchemaPolicy, index: usize) -> ValidationResult {
         let mut result = ValidationResult::success();
-        let path_prefix = format!("schemas[{}]", index);
+        let path_prefix = format!("schemas[{index}]");
 
         // Validate subject
         if schema.subject.is_empty() {
             result.add_error(
                 PolicyValidationError::error("EMPTY_SUBJECT", "Schema subject cannot be empty")
-                    .with_path(format!("{}.subject", path_prefix)),
+                    .with_path(format!("{path_prefix}.subject")),
             );
         }
 
@@ -590,7 +590,7 @@ impl PolicyValidator {
                     "INVALID_SCHEMA_TYPE",
                     format!("Invalid schema type: {}", schema.schema_type),
                 )
-                .with_path(format!("{}.schema_type", path_prefix)),
+                .with_path(format!("{path_prefix}.schema_type")),
             );
         }
 
@@ -604,7 +604,7 @@ impl PolicyValidator {
                     "INVALID_COMPATIBILITY",
                     format!("Invalid compatibility level: {}", schema.compatibility),
                 )
-                .with_path(format!("{}.compatibility", path_prefix)),
+                .with_path(format!("{path_prefix}.compatibility")),
             );
         }
 

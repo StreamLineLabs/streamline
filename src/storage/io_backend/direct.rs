@@ -80,7 +80,7 @@ pub struct DirectIoStats {
 /// * `alignment` - Required alignment (must be power of 2)
 ///
 /// # Returns
-/// An aligned Vec<u8> with capacity rounded up to alignment
+/// An aligned `Vec<u8>` with capacity rounded up to alignment.
 #[inline]
 pub fn allocate_aligned(size: usize, alignment: usize) -> Result<Vec<u8>> {
     debug_assert!(alignment.is_power_of_two(), "alignment must be power of 2");
@@ -89,8 +89,11 @@ pub fn allocate_aligned(size: usize, alignment: usize) -> Result<Vec<u8>> {
     let aligned_size = (size + alignment - 1) & !(alignment - 1);
 
     // Use Layout for aligned allocation
-    let layout = std::alloc::Layout::from_size_align(aligned_size, alignment)
-        .map_err(|e| StreamlineError::Storage(format!("Invalid layout for aligned allocation (size={}, align={}): {}", aligned_size, alignment, e)))?;
+    let layout = std::alloc::Layout::from_size_align(aligned_size, alignment).map_err(|e| {
+        StreamlineError::Storage(format!(
+            "Invalid layout for aligned allocation (size={aligned_size}, align={alignment}): {e}"
+        ))
+    })?;
 
     // SAFETY: We're creating a properly aligned buffer and initializing it
     unsafe {
@@ -263,8 +266,7 @@ impl AsyncFile for DirectFile {
             Ok((Err(e), buf)) => (Err(StreamlineError::from(e)), buf),
             Err(e) => (
                 Err(StreamlineError::storage_msg(format!(
-                    "Task join error: {}",
-                    e
+                    "Task join error: {e}"
                 ))),
                 vec![],
             ),
@@ -330,8 +332,7 @@ impl AsyncFile for DirectFile {
             Ok((Err(e), buf)) => (Err(StreamlineError::from(e)), buf),
             Err(e) => (
                 Err(StreamlineError::storage_msg(format!(
-                    "Task join error: {}",
-                    e
+                    "Task join error: {e}"
                 ))),
                 vec![],
             ),
@@ -372,8 +373,7 @@ impl AsyncFile for DirectFile {
             Ok((Err(e), buf)) => (Err(StreamlineError::from(e)), buf),
             Err(e) => (
                 Err(StreamlineError::storage_msg(format!(
-                    "Task join error: {}",
-                    e
+                    "Task join error: {e}"
                 ))),
                 vec![],
             ),
@@ -384,7 +384,7 @@ impl AsyncFile for DirectFile {
         let file = self.file.clone();
         tokio::task::spawn_blocking(move || file.blocking_lock().sync_data())
             .await
-            .map_err(|e| StreamlineError::storage_msg(format!("Task join error: {}", e)))?
+            .map_err(|e| StreamlineError::storage_msg(format!("Task join error: {e}")))?
             .map_err(StreamlineError::from)
     }
 
@@ -392,7 +392,7 @@ impl AsyncFile for DirectFile {
         let file = self.file.clone();
         tokio::task::spawn_blocking(move || file.blocking_lock().sync_all())
             .await
-            .map_err(|e| StreamlineError::storage_msg(format!("Task join error: {}", e)))?
+            .map_err(|e| StreamlineError::storage_msg(format!("Task join error: {e}")))?
             .map_err(StreamlineError::from)
     }
 
@@ -403,7 +403,7 @@ impl AsyncFile for DirectFile {
             file.metadata().map(|m| m.len())
         })
         .await
-        .map_err(|e| StreamlineError::storage_msg(format!("Task join error: {}", e)))?
+        .map_err(|e| StreamlineError::storage_msg(format!("Task join error: {e}")))?
         .map_err(StreamlineError::from)
     }
 
@@ -439,7 +439,7 @@ impl AsyncFile for DirectFile {
                 file.set_len(len)
             })
             .await
-            .map_err(|e| StreamlineError::storage_msg(format!("Task join error: {}", e)))?
+            .map_err(|e| StreamlineError::storage_msg(format!("Task join error: {e}")))?
             .map_err(StreamlineError::from)
         }
     }
@@ -583,13 +583,12 @@ impl AsyncFileSystem for DirectFileSystem {
                     Ok((file, direct, path_buf))
                 }
                 Err(e) => Err(StreamlineError::storage_msg(format!(
-                    "Failed to open file {:?}: {}",
-                    path_buf, e
+                    "Failed to open file {path_buf:?}: {e}"
                 ))),
             }
         })
         .await
-        .map_err(|e| StreamlineError::storage_msg(format!("Task join error: {}", e)))??;
+        .map_err(|e| StreamlineError::storage_msg(format!("Task join error: {e}")))??;
 
         Ok(DirectFile::new(file, final_path, config, direct_enabled))
     }
@@ -612,13 +611,12 @@ impl AsyncFileSystem for DirectFileSystem {
                     Ok((file, direct, path_buf))
                 }
                 Err(e) => Err(StreamlineError::storage_msg(format!(
-                    "Failed to open file {:?} for read-write: {}",
-                    path_buf, e
+                    "Failed to open file {path_buf:?} for read-write: {e}"
                 ))),
             }
         })
         .await
-        .map_err(|e| StreamlineError::storage_msg(format!("Task join error: {}", e)))??;
+        .map_err(|e| StreamlineError::storage_msg(format!("Task join error: {e}")))??;
 
         Ok(DirectFile::new(file, final_path, config, direct_enabled))
     }
@@ -646,13 +644,12 @@ impl AsyncFileSystem for DirectFileSystem {
                     Ok((file, direct, path_buf))
                 }
                 Err(e) => Err(StreamlineError::storage_msg(format!(
-                    "Failed to create file {:?}: {}",
-                    path_buf, e
+                    "Failed to create file {path_buf:?}: {e}"
                 ))),
             }
         })
         .await
-        .map_err(|e| StreamlineError::storage_msg(format!("Task join error: {}", e)))??;
+        .map_err(|e| StreamlineError::storage_msg(format!("Task join error: {e}")))??;
 
         Ok(DirectFile::new(file, final_path, config, direct_enabled))
     }
@@ -679,13 +676,12 @@ impl AsyncFileSystem for DirectFileSystem {
                     Ok((file, direct, path_buf))
                 }
                 Err(e) => Err(StreamlineError::storage_msg(format!(
-                    "Failed to open file {:?} for append: {}",
-                    path_buf, e
+                    "Failed to open file {path_buf:?} for append: {e}"
                 ))),
             }
         })
         .await
-        .map_err(|e| StreamlineError::storage_msg(format!("Task join error: {}", e)))??;
+        .map_err(|e| StreamlineError::storage_msg(format!("Task join error: {e}")))??;
 
         Ok(DirectFile::new(file, final_path, config, direct_enabled))
     }

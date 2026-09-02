@@ -140,7 +140,7 @@ async fn get_plugin(
             (
                 StatusCode::NOT_FOUND,
                 Json(PluginErrorResponse {
-                    error: format!("Plugin '{}' not found", name),
+                    error: format!("Plugin '{name}' not found"),
                 }),
             )
         })

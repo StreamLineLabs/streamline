@@ -34,10 +34,7 @@ pub(crate) fn handle_topic_command(cmd: TopicCommands, ctx: &CliContext) -> Resu
                             })
                         })
                         .collect();
-                    println!(
-                        "{}",
-                        serde_json::to_string_pretty(&data)?
-                    );
+                    println!("{}", serde_json::to_string_pretty(&data)?);
                 }
                 OutputFormat::Csv | OutputFormat::Tsv => {
                     // Print header
@@ -75,7 +72,7 @@ pub(crate) fn handle_topic_command(cmd: TopicCommands, ctx: &CliContext) -> Resu
                             ]);
                         }
 
-                        println!("{}", table);
+                        println!("{table}");
                     }
                 }
             }
@@ -93,7 +90,7 @@ pub(crate) fn handle_topic_command(cmd: TopicCommands, ctx: &CliContext) -> Resu
             remote_cache_bytes,
             explain,
         } => {
-            let spinner = ctx.spinner(&format!("Creating topic '{}'...", name));
+            let spinner = ctx.spinner(&format!("Creating topic '{name}'..."));
 
             // Parse storage mode
             let mode: StorageMode = storage_mode
@@ -144,10 +141,7 @@ pub(crate) fn handle_topic_command(cmd: TopicCommands, ctx: &CliContext) -> Resu
                         "segment_bytes": segment_bytes,
                         "storage_mode": mode.to_string()
                     });
-                    println!(
-                        "{}",
-                        serde_json::to_string_pretty(&info)?
-                    );
+                    println!("{}", serde_json::to_string_pretty(&info)?);
                 }
                 _ => {
                     ctx.success(&format!(
@@ -185,12 +179,12 @@ pub(crate) fn handle_topic_command(cmd: TopicCommands, ctx: &CliContext) -> Resu
         }
 
         TopicCommands::Delete { name } => {
-            if !ctx.confirm(&format!("Delete topic '{}'?", name)) {
+            if !ctx.confirm(&format!("Delete topic '{name}'?")) {
                 ctx.info("Cancelled.");
                 return Ok(());
             }
 
-            let spinner = ctx.spinner(&format!("Deleting topic '{}'...", name));
+            let spinner = ctx.spinner(&format!("Deleting topic '{name}'..."));
             manager.delete_topic(&name)?;
             if let Some(s) = spinner {
                 s.finish_and_clear();
@@ -262,11 +256,8 @@ pub(crate) fn handle_topic_command(cmd: TopicCommands, ctx: &CliContext) -> Resu
         } => {
             use std::io::Write;
 
-            let output_path = output.unwrap_or_else(|| format!("{}.jsonl", name));
-            let spinner = ctx.spinner(&format!(
-                "Exporting topic '{}' to '{}'...",
-                name, output_path
-            ));
+            let output_path = output.unwrap_or_else(|| format!("{name}.jsonl"));
+            let spinner = ctx.spinner(&format!("Exporting topic '{name}' to '{output_path}'..."));
 
             // Get topic metadata to know partitions
             let metadata = manager.get_topic_metadata(&name)?;
@@ -371,8 +362,7 @@ pub(crate) fn handle_topic_command(cmd: TopicCommands, ctx: &CliContext) -> Resu
 
             if !std::path::Path::new(&input).exists() {
                 return Err(streamline::StreamlineError::storage_msg(format!(
-                    "Input file not found: {}",
-                    input
+                    "Input file not found: {input}"
                 )));
             }
 
@@ -385,28 +375,22 @@ pub(crate) fn handle_topic_command(cmd: TopicCommands, ctx: &CliContext) -> Resu
                     if !dry_run {
                         manager.get_or_create_topic(&name, partitions)?;
                         ctx.info(&format!(
-                            "Created topic '{}' with {} partition(s)",
-                            name, partitions
+                            "Created topic '{name}' with {partitions} partition(s)"
                         ));
                     } else {
                         ctx.info(&format!(
-                            "[DRY RUN] Would create topic '{}' with {} partition(s)",
-                            name, partitions
+                            "[DRY RUN] Would create topic '{name}' with {partitions} partition(s)"
                         ));
                     }
                 } else {
                     return Err(streamline::StreamlineError::storage_msg(format!(
-                        "Topic '{}' does not exist. Use --create to create it.",
-                        name
+                        "Topic '{name}' does not exist. Use --create to create it."
                     )));
                 }
             }
 
             let spinner = if !dry_run {
-                ctx.spinner(&format!(
-                    "Importing to topic '{}' from '{}'...",
-                    name, input
-                ))
+                ctx.spinner(&format!("Importing to topic '{name}' from '{input}'..."))
             } else {
                 None
             };
@@ -501,7 +485,7 @@ pub(crate) fn handle_topic_command(cmd: TopicCommands, ctx: &CliContext) -> Resu
                             input.cyan()
                         ));
                         if errors > 0 {
-                            ctx.warn(&format!("{} record(s) failed to parse", errors));
+                            ctx.warn(&format!("{errors} record(s) failed to parse"));
                         }
                     }
                 }
@@ -537,7 +521,7 @@ pub(crate) fn handle_topic_command(cmd: TopicCommands, ctx: &CliContext) -> Resu
 
                 if topics_to_watch.is_empty() {
                     if let Some(ref name) = topic {
-                        ctx.error(&format!("Topic '{}' not found", name));
+                        ctx.error(&format!("Topic '{name}' not found"));
                         return Ok(());
                     }
                     println!("{}", "No topics found".dimmed());
@@ -600,7 +584,7 @@ pub(crate) fn handle_topic_command(cmd: TopicCommands, ctx: &CliContext) -> Resu
                             } else if total_size > 1024 {
                                 format!("{:.1} KB", total_size as f64 / 1024.0)
                             } else {
-                                format!("{} B", total_size)
+                                format!("{total_size} B")
                             };
                             format!(" | {}", size_display.dimmed())
                         } else {
@@ -642,14 +626,14 @@ pub(crate) fn handle_topic_command(cmd: TopicCommands, ctx: &CliContext) -> Resu
             let source_meta = match manager.get_topic_metadata(&source) {
                 Ok(meta) => meta,
                 Err(_) => {
-                    ctx.error(&format!("Source topic '{}' not found", source));
+                    ctx.error(&format!("Source topic '{source}' not found"));
                     return Ok(());
                 }
             };
 
             // Check if destination topic already exists
             if manager.get_topic_metadata(&dest).is_ok() {
-                ctx.error(&format!("Destination topic '{}' already exists", dest));
+                ctx.error(&format!("Destination topic '{dest}' already exists"));
                 return Ok(());
             }
 
@@ -760,8 +744,7 @@ pub(crate) fn handle_topic_command(cmd: TopicCommands, ctx: &CliContext) -> Resu
 
             println!();
             ctx.success(&format!(
-                "Cloned {} message(s) from '{}' to '{}'",
-                total_copied, source, dest
+                "Cloned {total_copied} message(s) from '{source}' to '{dest}'"
             ));
         }
 
@@ -833,7 +816,7 @@ pub(crate) fn handle_topic_command(cmd: TopicCommands, ctx: &CliContext) -> Resu
                 } else if bytes >= 1024 {
                     format!("{:.2} KB", bytes as f64 / 1024.0)
                 } else {
-                    format!("{} B", bytes)
+                    format!("{bytes} B")
                 }
             }
 
@@ -859,14 +842,14 @@ pub(crate) fn handle_topic_command(cmd: TopicCommands, ctx: &CliContext) -> Resu
             let metadata = match manager.get_topic_metadata(&name) {
                 Ok(meta) => meta,
                 Err(_) => {
-                    ctx.error(&format!("Topic '{}' not found", name));
+                    ctx.error(&format!("Topic '{name}' not found"));
                     return Ok(());
                 }
             };
 
             println!(
                 "{}",
-                format!("Retention Calculator for '{}'", name).bold().cyan()
+                format!("Retention Calculator for '{name}'").bold().cyan()
             );
             println!("{}", "─".repeat(50).dimmed());
             println!();
@@ -961,10 +944,7 @@ pub(crate) fn handle_topic_command(cmd: TopicCommands, ctx: &CliContext) -> Resu
             if msg_rate_per_ms > 0.0 {
                 let msg_per_sec = msg_rate_per_ms * 1000.0;
                 let msg_per_day = msg_rate_per_ms * 24.0 * 60.0 * 60.0 * 1000.0;
-                println!(
-                    "  Message rate: {:.2} msg/sec ({:.0} msg/day)",
-                    msg_per_sec, msg_per_day
-                );
+                println!("  Message rate: {msg_per_sec:.2} msg/sec ({msg_per_day:.0} msg/day)");
             }
             if byte_rate_per_ms > 0.0 {
                 let bytes_per_day = byte_rate_per_ms * 24.0 * 60.0 * 60.0 * 1000.0;
@@ -977,7 +957,7 @@ pub(crate) fn handle_topic_command(cmd: TopicCommands, ctx: &CliContext) -> Resu
                 if let Some(budget_bytes) = parse_size(budget_str) {
                     println!(
                         "{}",
-                        format!("Recommendations for {} budget:", budget_str)
+                        format!("Recommendations for {budget_str} budget:")
                             .bold()
                             .green()
                     );
@@ -1014,7 +994,7 @@ pub(crate) fn handle_topic_command(cmd: TopicCommands, ctx: &CliContext) -> Resu
                 if let Some(duration_ms) = parse_duration_ms(duration_str) {
                     println!(
                         "{}",
-                        format!("Recommendations for {} retention:", duration_str)
+                        format!("Recommendations for {duration_str} retention:")
                             .bold()
                             .green()
                     );
@@ -1381,8 +1361,8 @@ fn print_topic_metadata(metadata: &TopicMetadata, ctx: &CliContext) {
 
     match ctx.format {
         OutputFormat::Json => match serde_json::to_string_pretty(&info) {
-            Ok(json_str) => println!("{}", json_str),
-            Err(e) => eprintln!("Error formatting topic metadata: {}", e),
+            Ok(json_str) => println!("{json_str}"),
+            Err(e) => eprintln!("Error formatting topic metadata: {e}"),
         },
         _ => {
             println!();

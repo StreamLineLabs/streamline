@@ -126,8 +126,7 @@ pub fn infer_schema(messages: &[&str]) -> InferredSchema {
     let mut field_types: HashMap<String, HashMap<InferredType, u64>> = HashMap::new();
 
     for msg in messages {
-        if let Ok(serde_json::Value::Object(map)) = serde_json::from_str::<serde_json::Value>(msg)
-        {
+        if let Ok(serde_json::Value::Object(map)) = serde_json::from_str::<serde_json::Value>(msg) {
             for (key, val) in &map {
                 let ty = json_value_type(val);
                 *field_types
@@ -220,7 +219,7 @@ impl HyperLogLog {
         let w = hash >> self.p;
         // Count leading zeros of the remaining bits, plus 1
         let leading_zeros = if w == 0 {
-            (64 - self.p) as u8 + 1
+            64 - self.p + 1
         } else {
             w.leading_zeros() as u8 - self.p + 1
         };
@@ -339,7 +338,9 @@ impl TopicSummarizer {
                 self.values.pop_front();
             }
             self.values.push_back(v);
-        } else if let Ok(serde_json::Value::Object(map)) = serde_json::from_str::<serde_json::Value>(message) {
+        } else if let Ok(serde_json::Value::Object(map)) =
+            serde_json::from_str::<serde_json::Value>(message)
+        {
             // Extract numeric fields from JSON
             for val in map.values() {
                 if let Some(n) = val.as_f64() {
@@ -459,26 +460,32 @@ mod tests {
 
     #[test]
     fn test_schema_inference() {
-        let messages = vec![
+        let messages = [
             r#"{"name": "Alice", "age": 30, "active": true}"#,
             r#"{"name": "Bob", "age": 25, "active": false}"#,
             r#"{"name": "Charlie", "age": 35}"#,
         ];
-        let schema = infer_schema(&messages.iter().map(|s| *s).collect::<Vec<_>>());
+        let schema = infer_schema(&messages);
         assert_eq!(schema.messages_analysed, 3);
-        assert!(schema.fields.iter().any(|f| f.name == "name" && f.field_type == InferredType::String));
-        assert!(schema.fields.iter().any(|f| f.name == "age" && f.field_type == InferredType::Number));
+        assert!(schema
+            .fields
+            .iter()
+            .any(|f| f.name == "name" && f.field_type == InferredType::String));
+        assert!(schema
+            .fields
+            .iter()
+            .any(|f| f.name == "age" && f.field_type == InferredType::Number));
     }
 
     #[test]
     fn test_hyperloglog_basic() {
         let mut hll = HyperLogLog::new(12);
         for i in 0..1000 {
-            hll.add(&format!("item-{}", i));
+            hll.add(&format!("item-{i}"));
         }
         let est = hll.estimate();
         // Should be within ~10% of 1000
-        assert!(est > 800 && est < 1200, "estimate {} not in range", est);
+        assert!(est > 800 && est < 1200, "estimate {est} not in range");
     }
 
     #[test]
@@ -486,14 +493,17 @@ mod tests {
         let mut hll1 = HyperLogLog::new(10);
         let mut hll2 = HyperLogLog::new(10);
         for i in 0..500 {
-            hll1.add(&format!("item-{}", i));
+            hll1.add(&format!("item-{i}"));
         }
         for i in 500..1000 {
-            hll2.add(&format!("item-{}", i));
+            hll2.add(&format!("item-{i}"));
         }
         hll1.merge(&hll2);
         let est = hll1.estimate();
-        assert!(est > 800 && est < 1200, "merged estimate {} not in range", est);
+        assert!(
+            est > 800 && est < 1200,
+            "merged estimate {est} not in range"
+        );
     }
 
     #[tokio::test]
@@ -501,7 +511,12 @@ mod tests {
         let summarizer = StreamSummarizer::new(SummarizationConfig::default());
 
         for i in 0..50 {
-            summarizer.add_message("test-topic", &format!(r#"{{"value": {}, "name": "sensor-{}"}}"#, i * 10, i % 5)).await;
+            summarizer
+                .add_message(
+                    "test-topic",
+                    &format!(r#"{{"value": {}, "name": "sensor-{}"}}"#, i * 10, i % 5),
+                )
+                .await;
         }
 
         let summary = summarizer.summarize("test-topic").await.unwrap();

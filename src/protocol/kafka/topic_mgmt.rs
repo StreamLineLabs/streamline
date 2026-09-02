@@ -3,19 +3,19 @@
 //! This module contains handlers for creating, deleting, and managing
 //! topics and partitions.
 
-
-use crate::error::Result;
-use crate::protocol::handlers::error_codes::*;
-use crate::storage::storage_mode::StorageMode;
-use crate::storage::topic::{TopicConfig, CleanupPolicy};
-use kafka_protocol::messages::TopicName;
-use kafka_protocol::messages::{
-    CreatePartitionsRequest, CreatePartitionsResponse, CreateTopicsRequest, CreateTopicsResponse, DeleteTopicsRequest, DeleteTopicsResponse,
-};
-use kafka_protocol::protocol::StrBytes;
 use super::KafkaHandler;
 use super::Operation;
 use super::ResourceType;
+use crate::error::Result;
+use crate::protocol::handlers::error_codes::*;
+use crate::storage::storage_mode::StorageMode;
+use crate::storage::topic::{CleanupPolicy, TopicConfig};
+use kafka_protocol::messages::TopicName;
+use kafka_protocol::messages::{
+    CreatePartitionsRequest, CreatePartitionsResponse, CreateTopicsRequest, CreateTopicsResponse,
+    DeleteTopicsRequest, DeleteTopicsResponse,
+};
+use kafka_protocol::protocol::StrBytes;
 use tracing::{info, warn};
 
 impl KafkaHandler {
@@ -184,15 +184,13 @@ impl KafkaHandler {
                 Err(crate::error::StreamlineError::TopicNotFound(_)) => (
                     UNKNOWN_TOPIC_OR_PARTITION,
                     Some(StrBytes::from_string(format!(
-                        "Topic '{}' does not exist",
-                        topic_name
+                        "Topic '{topic_name}' does not exist"
                     ))),
                 ),
                 Err(e) => (
                     UNKNOWN_SERVER_ERROR,
                     Some(StrBytes::from_string(format!(
-                        "Failed to delete topic: {}",
-                        e
+                        "Failed to delete topic: {e}"
                     ))),
                 ),
             };
@@ -275,8 +273,7 @@ impl KafkaHandler {
                         .with_name(topic.name.clone())
                         .with_error_code(INVALID_PARTITIONS)
                         .with_error_message(Some(StrBytes::from_string(format!(
-                            "Partition count must be greater than current count ({})",
-                            current_count
+                            "Partition count must be greater than current count ({current_count})"
                         )))),
                 );
                 continue;
@@ -324,8 +321,7 @@ impl KafkaHandler {
                             .with_name(topic.name.clone())
                             .with_error_code(INVALID_PARTITIONS)
                             .with_error_message(Some(StrBytes::from_string(format!(
-                                "Failed to add partitions: {}",
-                                e
+                                "Failed to add partitions: {e}"
                             )))),
                     );
                 }
@@ -336,5 +332,4 @@ impl KafkaHandler {
             .with_throttle_time_ms(0)
             .with_results(results))
     }
-
 }

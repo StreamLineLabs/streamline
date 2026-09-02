@@ -224,8 +224,8 @@ impl JoinGroupRequestBuilder {
     /// # Example
     ///
     /// With 6 partitions and 2 consumers:
-    /// - **Range**: Consumer 1 gets [0,1,2], Consumer 2 gets [3,4,5]
-    /// - **RoundRobin**: Consumer 1 gets [0,2,4], Consumer 2 gets [1,3,5]
+    /// - **Range**: Consumer 1 gets `[0,1,2]`, Consumer 2 gets `[3,4,5]`
+    /// - **RoundRobin**: Consumer 1 gets `[0,2,4]`, Consumer 2 gets `[1,3,5]`
     pub fn protocol_name(mut self, protocol_name: impl Into<String>) -> Self {
         self.protocol_name = protocol_name.into();
         self
@@ -478,7 +478,7 @@ impl GroupCoordinator {
 
     /// Handle JoinGroup request (legacy API with many parameters)
     ///
-    /// Consider using [`join_group_request`] with [`JoinGroupRequest::builder`] instead.
+    /// Consider using [`Self::join_group_request`] with [`JoinGroupRequest::builder`] instead.
     #[allow(clippy::too_many_arguments)]
     pub fn join_group(
         &self,
@@ -775,8 +775,7 @@ impl GroupCoordinator {
             member.last_heartbeat = Instant::now();
         } else {
             return Err(StreamlineError::protocol_msg(format!(
-                "Unknown member: {}",
-                member_id
+                "Unknown member: {member_id}"
             )));
         }
 
@@ -937,9 +936,10 @@ impl GroupCoordinator {
 
     /// Delete a committed offset
     pub fn delete_offset(&self, group_id: &str, topic: &str, partition: i32) -> Result<()> {
-        let group = self.groups.get(group_id).ok_or_else(|| {
-            StreamlineError::protocol_msg(format!("Group {} not found", group_id))
-        })?;
+        let group = self
+            .groups
+            .get(group_id)
+            .ok_or_else(|| StreamlineError::protocol_msg(format!("Group {group_id} not found")))?;
 
         let mut group = group.write();
         group.offsets.remove(&(topic.to_string(), partition));
@@ -992,13 +992,13 @@ impl GroupCoordinator {
             // Save group metadata
             if let Err(e) = self.offset_store.save_group(&group) {
                 warn!(group_id = %group_id, error = %e, "Failed to save group during shutdown");
-                errors.push(format!("{}: {}", group_id, e));
+                errors.push(format!("{group_id}: {e}"));
             }
 
             // Save offsets
             if let Err(e) = self.offset_store.save_offsets(group_id, &group.offsets) {
                 warn!(group_id = %group_id, error = %e, "Failed to save offsets during shutdown");
-                errors.push(format!("{} offsets: {}", group_id, e));
+                errors.push(format!("{group_id} offsets: {e}"));
             }
         }
 
@@ -1007,8 +1007,7 @@ impl GroupCoordinator {
             Ok(())
         } else {
             Err(StreamlineError::storage_msg(format!(
-                "Failed to save some groups: {:?}",
-                errors
+                "Failed to save some groups: {errors:?}"
             )))
         }
     }

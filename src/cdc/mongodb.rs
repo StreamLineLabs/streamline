@@ -847,7 +847,9 @@ mod tests {
             collection: "users".to_string(),
             document_key: Some(serde_json::json!({"_id": "u1"})),
             full_document: Some(serde_json::json!({"_id": "u1", "name": "Bob", "age": 31})),
-            full_document_before_change: Some(serde_json::json!({"_id": "u1", "name": "Bob", "age": 30})),
+            full_document_before_change: Some(
+                serde_json::json!({"_id": "u1", "name": "Bob", "age": 30}),
+            ),
             update_description: None,
             cluster_time: None,
             resume_token: "token-2".to_string(),
@@ -973,6 +975,9 @@ mod tests {
         let config = MongoDbCdcConfig::default();
         let source = MongoDbCdcSource::new(config);
         let events = source.read_next_change_events().await.unwrap();
-        assert!(events.is_empty(), "Should return empty when no driver linked");
+        assert!(
+            events.is_empty(),
+            "Should return empty when no driver linked"
+        );
     }
 }

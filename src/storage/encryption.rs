@@ -191,7 +191,7 @@ impl FileKeyProvider {
                 .map_err(|_| StreamlineError::Config("Invalid key file encoding".into()))?
                 .trim();
             let decoded = hex::decode(hex_str).map_err(|e| {
-                StreamlineError::Config(format!("Invalid hex key in key file: {}", e))
+                StreamlineError::Config(format!("Invalid hex key in key file: {e}"))
             })?;
             if decoded.len() != KEY_SIZE {
                 return Err(StreamlineError::Config(format!(
@@ -453,12 +453,12 @@ impl EncryptionManager {
         OsRng.fill_bytes(&mut nonce_bytes);
 
         let cipher = Aes256Gcm::new_from_slice(key)
-            .map_err(|e| StreamlineError::storage_msg(format!("Failed to create cipher: {}", e)))?;
+            .map_err(|e| StreamlineError::storage_msg(format!("Failed to create cipher: {e}")))?;
 
         let nonce = Nonce::from_slice(&nonce_bytes);
         let ciphertext = cipher
             .encrypt(nonce, plaintext)
-            .map_err(|e| StreamlineError::storage_msg(format!("Encryption failed: {}", e)))?;
+            .map_err(|e| StreamlineError::storage_msg(format!("Encryption failed: {e}")))?;
 
         Ok((nonce_bytes.to_vec(), ciphertext))
     }
@@ -496,12 +496,12 @@ impl EncryptionManager {
         }
 
         let cipher = Aes256Gcm::new_from_slice(key)
-            .map_err(|e| StreamlineError::storage_msg(format!("Failed to create cipher: {}", e)))?;
+            .map_err(|e| StreamlineError::storage_msg(format!("Failed to create cipher: {e}")))?;
 
         let nonce = Nonce::from_slice(nonce);
         let plaintext = cipher
             .decrypt(nonce, ciphertext)
-            .map_err(|e| StreamlineError::storage_msg(format!("Decryption failed: {}", e)))?;
+            .map_err(|e| StreamlineError::storage_msg(format!("Decryption failed: {e}")))?;
 
         Ok(plaintext)
     }

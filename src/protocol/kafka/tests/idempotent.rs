@@ -381,8 +381,7 @@ fn test_idempotent_sequence_window_size() {
             .unwrap();
         assert!(
             matches!(result, SequenceValidationResult::Duplicate(_)),
-            "Sequence {} should be duplicate within window",
-            seq
+            "Sequence {seq} should be duplicate within window"
         );
     }
 }

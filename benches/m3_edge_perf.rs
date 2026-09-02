@@ -6,16 +6,19 @@
 //!
 //! Run: `cargo bench --bench m3_edge_perf --features edge`
 
-use criterion::{black_box, criterion_group, criterion_main, Criterion, BenchmarkId};
+use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
 use streamline::EdgeRuntime;
 
 fn setup_runtime_with_data(topic: &str, record_count: usize) -> EdgeRuntime {
     let runtime = EdgeRuntime::in_memory().expect("failed to create edge runtime");
-    runtime.create_topic(topic, 1).expect("failed to create topic");
+    runtime
+        .create_topic(topic, 1)
+        .expect("failed to create topic");
     for i in 0..record_count {
-        let key = format!("key-{}", i);
+        let key = format!("key-{i}");
         let value = format!("value-{}-{}", i, "x".repeat(100));
-        runtime.produce(topic, key.as_bytes(), value.as_bytes())
+        runtime
+            .produce(topic, key.as_bytes(), value.as_bytes())
             .expect("failed to produce");
     }
     runtime
@@ -28,31 +31,23 @@ fn bench_local_read_latency(c: &mut Criterion) {
         let runtime = setup_runtime_with_data("bench-reads", *count);
         let mid_offset = (*count as i64) / 2;
 
-        group.bench_with_input(
-            BenchmarkId::new("single_read", count),
-            count,
-            |b, _| {
-                b.iter(|| {
-                    let records = runtime
-                        .consume(black_box("bench-reads"), 0, black_box(mid_offset), 1)
-                        .expect("consume failed");
-                    black_box(records);
-                });
-            },
-        );
+        group.bench_with_input(BenchmarkId::new("single_read", count), count, |b, _| {
+            b.iter(|| {
+                let records = runtime
+                    .consume(black_box("bench-reads"), 0, black_box(mid_offset), 1)
+                    .expect("consume failed");
+                black_box(records);
+            });
+        });
 
-        group.bench_with_input(
-            BenchmarkId::new("batch_read_100", count),
-            count,
-            |b, _| {
-                b.iter(|| {
-                    let records = runtime
-                        .consume(black_box("bench-reads"), 0, 0, black_box(100))
-                        .expect("consume failed");
-                    black_box(records);
-                });
-            },
-        );
+        group.bench_with_input(BenchmarkId::new("batch_read_100", count), count, |b, _| {
+            b.iter(|| {
+                let records = runtime
+                    .consume(black_box("bench-reads"), 0, 0, black_box(100))
+                    .expect("consume failed");
+                black_box(records);
+            });
+        });
     }
 
     group.finish();
@@ -60,14 +55,16 @@ fn bench_local_read_latency(c: &mut Criterion) {
 
 fn bench_local_write_latency(c: &mut Criterion) {
     let runtime = EdgeRuntime::in_memory().expect("failed to create edge runtime");
-    runtime.create_topic("bench-writes", 1).expect("failed to create topic");
+    runtime
+        .create_topic("bench-writes", 1)
+        .expect("failed to create topic");
 
     let mut counter = 0u64;
     c.bench_function("edge_local_write", |b| {
         b.iter(|| {
             counter += 1;
-            let key = format!("k-{}", counter);
-            let value = format!("v-{}", counter);
+            let key = format!("k-{counter}");
+            let value = format!("v-{counter}");
             let offset = runtime
                 .produce(black_box("bench-writes"), key.as_bytes(), value.as_bytes())
                 .expect("produce failed");
@@ -88,7 +85,7 @@ fn bench_simulated_sync_roundtrip(c: &mut Criterion) {
                 let records: Vec<(Vec<u8>, Vec<u8>)> = (0..size)
                     .map(|i| {
                         (
-                            format!("key-{}", i).into_bytes(),
+                            format!("key-{i}").into_bytes(),
                             format!("value-{}-{}", i, "x".repeat(100)).into_bytes(),
                         )
                     })

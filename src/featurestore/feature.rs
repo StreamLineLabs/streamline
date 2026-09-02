@@ -367,18 +367,18 @@ impl fmt::Display for FeatureValue {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             FeatureValue::Null => write!(f, "null"),
-            FeatureValue::Bool(b) => write!(f, "{}", b),
-            FeatureValue::Int32(i) => write!(f, "{}", i),
-            FeatureValue::Int64(i) => write!(f, "{}", i),
-            FeatureValue::Float32(v) => write!(f, "{}", v),
-            FeatureValue::Float64(v) => write!(f, "{}", v),
-            FeatureValue::String(s) => write!(f, "{}", s),
+            FeatureValue::Bool(b) => write!(f, "{b}"),
+            FeatureValue::Int32(i) => write!(f, "{i}"),
+            FeatureValue::Int64(i) => write!(f, "{i}"),
+            FeatureValue::Float32(v) => write!(f, "{v}"),
+            FeatureValue::Float64(v) => write!(f, "{v}"),
+            FeatureValue::String(s) => write!(f, "{s}"),
             FeatureValue::Bytes(b) => write!(f, "[{} bytes]", b.len()),
             FeatureValue::Int32Array(arr) => write!(f, "[{} int32s]", arr.len()),
             FeatureValue::Float32Array(arr) => write!(f, "[{} float32s]", arr.len()),
             FeatureValue::Float64Array(arr) => write!(f, "[{} float64s]", arr.len()),
             FeatureValue::Json(_) => write!(f, "[json]"),
-            FeatureValue::Timestamp(ts) => write!(f, "{}", ts),
+            FeatureValue::Timestamp(ts) => write!(f, "{ts}"),
             FeatureValue::Embedding(e) => write!(f, "[{}-dim embedding]", e.len()),
         }
     }

@@ -153,11 +153,26 @@ pub fn matrix_summary() -> MatrixSummary {
     let matrix = compatibility_matrix();
     MatrixSummary {
         total: matrix.len(),
-        verified: matrix.iter().filter(|c| c.status == CompatibilityStatus::Verified).count(),
-        compatible: matrix.iter().filter(|c| c.status == CompatibilityStatus::Compatible).count(),
-        partial: matrix.iter().filter(|c| c.status == CompatibilityStatus::Partial).count(),
-        untested: matrix.iter().filter(|c| c.status == CompatibilityStatus::Untested).count(),
-        incompatible: matrix.iter().filter(|c| c.status == CompatibilityStatus::Incompatible).count(),
+        verified: matrix
+            .iter()
+            .filter(|c| c.status == CompatibilityStatus::Verified)
+            .count(),
+        compatible: matrix
+            .iter()
+            .filter(|c| c.status == CompatibilityStatus::Compatible)
+            .count(),
+        partial: matrix
+            .iter()
+            .filter(|c| c.status == CompatibilityStatus::Partial)
+            .count(),
+        untested: matrix
+            .iter()
+            .filter(|c| c.status == CompatibilityStatus::Untested)
+            .count(),
+        incompatible: matrix
+            .iter()
+            .filter(|c| c.status == CompatibilityStatus::Incompatible)
+            .count(),
     }
 }
 
@@ -178,20 +193,39 @@ mod tests {
     #[test]
     fn test_compatibility_matrix_populated() {
         let matrix = compatibility_matrix();
-        assert!(matrix.len() >= 10, "Matrix must have at least 10 connectors");
+        assert!(
+            matrix.len() >= 10,
+            "Matrix must have at least 10 connectors"
+        );
     }
 
     #[test]
     fn test_matrix_summary() {
         let summary = matrix_summary();
-        assert!(summary.verified >= 2, "At least 2 connectors must be verified");
-        assert_eq!(summary.total, summary.verified + summary.compatible + summary.partial + summary.untested + summary.incompatible);
+        assert!(
+            summary.verified >= 2,
+            "At least 2 connectors must be verified"
+        );
+        assert_eq!(
+            summary.total,
+            summary.verified
+                + summary.compatible
+                + summary.partial
+                + summary.untested
+                + summary.incompatible
+        );
     }
 
     #[test]
     fn test_no_incompatible_connectors() {
         let matrix = compatibility_matrix();
-        let incompatible: Vec<_> = matrix.iter().filter(|c| c.status == CompatibilityStatus::Incompatible).collect();
-        assert!(incompatible.is_empty(), "No connectors should be marked incompatible: {:?}", incompatible);
+        let incompatible: Vec<_> = matrix
+            .iter()
+            .filter(|c| c.status == CompatibilityStatus::Incompatible)
+            .collect();
+        assert!(
+            incompatible.is_empty(),
+            "No connectors should be marked incompatible: {incompatible:?}"
+        );
     }
 }

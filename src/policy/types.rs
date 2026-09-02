@@ -272,7 +272,7 @@ impl TopicPolicy {
     pub fn matches(&self, topic_name: &str) -> bool {
         if self.name.contains('*') {
             let pattern = self.name.replace('*', ".*");
-            regex::Regex::new(&format!("^{}$", pattern))
+            regex::Regex::new(&format!("^{pattern}$"))
                 .map(|r| r.is_match(topic_name))
                 .unwrap_or(false)
         } else {

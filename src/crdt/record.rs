@@ -11,7 +11,7 @@ use bytes::Bytes;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-/// Convert Vec<Header> to HashMap<String, Bytes> for easier lookup
+/// Convert `Vec<Header>` to `HashMap<String, Bytes>` for easier lookup.
 pub fn headers_to_map(headers: &[Header]) -> HashMap<String, Bytes> {
     headers
         .iter()
@@ -19,7 +19,7 @@ pub fn headers_to_map(headers: &[Header]) -> HashMap<String, Bytes> {
         .collect()
 }
 
-/// Convert HashMap<String, Bytes> to Vec<Header>
+/// Convert `HashMap<String, Bytes>` to `Vec<Header>`.
 pub fn map_to_headers(map: &HashMap<String, Bytes>) -> Vec<Header> {
     map.iter()
         .map(|(k, v)| Header {
@@ -143,12 +143,12 @@ impl CrdtMetadata {
         headers
     }
 
-    /// Convert to record headers (Vec<Header> format for storage)
+    /// Convert to record headers (`Vec<Header>` format for storage).
     pub fn to_header_vec(&self) -> Vec<Header> {
         map_to_headers(&self.to_headers())
     }
 
-    /// Parse from Vec<Header>
+    /// Parse from `Vec<Header>`.
     pub fn from_header_vec(headers: &[Header]) -> Result<Option<Self>> {
         let map = headers_to_map(headers);
         Self::from_headers(&map)
@@ -160,7 +160,7 @@ impl CrdtMetadata {
         let crdt_type = match headers.get(CRDT_TYPE_HEADER) {
             Some(bytes) => {
                 let type_str = std::str::from_utf8(bytes).map_err(|e| {
-                    StreamlineError::Crdt(format!("Invalid UTF-8 in CRDT type: {}", e))
+                    StreamlineError::Crdt(format!("Invalid UTF-8 in CRDT type: {e}"))
                 })?;
                 type_str.parse::<CrdtType>()?
             }
@@ -170,7 +170,7 @@ impl CrdtMetadata {
         // Parse HLC
         let hlc = if let Some(bytes) = headers.get(CRDT_HLC_HEADER) {
             let hlc_str = std::str::from_utf8(bytes)
-                .map_err(|e| StreamlineError::Crdt(format!("Invalid UTF-8 in HLC: {}", e)))?;
+                .map_err(|e| StreamlineError::Crdt(format!("Invalid UTF-8 in HLC: {e}")))?;
             parse_hlc(hlc_str)?
         } else {
             return Err(StreamlineError::Crdt(
@@ -181,7 +181,7 @@ impl CrdtMetadata {
         // Parse vector clock
         let vector_clock = if let Some(bytes) = headers.get(CRDT_VCLOCK_HEADER) {
             let vclock_str = std::str::from_utf8(bytes).map_err(|e| {
-                StreamlineError::Crdt(format!("Invalid UTF-8 in vector clock: {}", e))
+                StreamlineError::Crdt(format!("Invalid UTF-8 in vector clock: {e}"))
             })?;
             let clocks: HashMap<String, u64> = serde_json::from_str(vclock_str)?;
             VectorClock { clocks }
@@ -192,7 +192,7 @@ impl CrdtMetadata {
         // Parse operation
         let operation = if let Some(bytes) = headers.get(CRDT_OPERATION_HEADER) {
             let op_str = std::str::from_utf8(bytes)
-                .map_err(|e| StreamlineError::Crdt(format!("Invalid UTF-8 in operation: {}", e)))?;
+                .map_err(|e| StreamlineError::Crdt(format!("Invalid UTF-8 in operation: {e}")))?;
             match op_str {
                 "state" => CrdtOperation::State,
                 "delta" => CrdtOperation::Delta,
@@ -205,7 +205,7 @@ impl CrdtMetadata {
         // Parse node ID
         let node_id = if let Some(bytes) = headers.get(CRDT_NODE_HEADER) {
             std::str::from_utf8(bytes)
-                .map_err(|e| StreamlineError::Crdt(format!("Invalid UTF-8 in node ID: {}", e)))?
+                .map_err(|e| StreamlineError::Crdt(format!("Invalid UTF-8 in node ID: {e}")))?
                 .to_string()
         } else {
             hlc.node_id.clone()
@@ -214,7 +214,7 @@ impl CrdtMetadata {
         // Parse version
         let version = if let Some(bytes) = headers.get(CRDT_VERSION_HEADER) {
             std::str::from_utf8(bytes)
-                .map_err(|e| StreamlineError::Crdt(format!("Invalid UTF-8 in version: {}", e)))?
+                .map_err(|e| StreamlineError::Crdt(format!("Invalid UTF-8 in version: {e}")))?
                 .to_string()
         } else {
             CRDT_FORMAT_VERSION.to_string()
@@ -234,15 +234,15 @@ impl CrdtMetadata {
 fn parse_hlc(s: &str) -> Result<HybridLogicalClock> {
     let parts: Vec<&str> = s.splitn(3, ':').collect();
     if parts.len() != 3 {
-        return Err(StreamlineError::Crdt(format!("Invalid HLC format: {}", s)));
+        return Err(StreamlineError::Crdt(format!("Invalid HLC format: {s}")));
     }
 
     let physical = parts[0]
         .parse()
-        .map_err(|e| StreamlineError::Crdt(format!("Invalid HLC physical: {}", e)))?;
+        .map_err(|e| StreamlineError::Crdt(format!("Invalid HLC physical: {e}")))?;
     let logical = parts[1]
         .parse()
-        .map_err(|e| StreamlineError::Crdt(format!("Invalid HLC logical: {}", e)))?;
+        .map_err(|e| StreamlineError::Crdt(format!("Invalid HLC logical: {e}")))?;
     let node_id = parts[2].to_string();
 
     Ok(HybridLogicalClock {
@@ -307,7 +307,7 @@ impl CrdtRecord {
         headers
     }
 
-    /// Get all headers as Vec<Header> for storage
+    /// Get all headers as `Vec<Header>` for storage.
     pub fn all_headers_vec(&self) -> Vec<Header> {
         map_to_headers(&self.all_headers())
     }
@@ -359,7 +359,7 @@ impl CrdtRecord {
         }))
     }
 
-    /// Deserialize a CRDT record from raw record data (Vec<Header> format)
+    /// Deserialize a CRDT record from raw record data (`Vec<Header>` format).
     pub fn from_raw_vec(
         key: Option<Bytes>,
         value: Bytes,

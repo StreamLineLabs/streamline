@@ -285,7 +285,7 @@ pub(crate) async fn dispatch_request(
         None => {
             warn!(api_key = ?api_key, "Unsupported API");
             return Err(StreamlineError::ProtocolDomain(
-                ProtocolError::unsupported_api_key(format!("{:?}", api_key)),
+                ProtocolError::unsupported_api_key(format!("{api_key:?}")),
             ));
         }
     };
@@ -410,8 +410,7 @@ mod tests {
         for api_key in supported {
             assert!(
                 registered.contains(&api_key),
-                "Missing handler registration for api key {}",
-                api_key
+                "Missing handler registration for api key {api_key}"
             );
         }
     }

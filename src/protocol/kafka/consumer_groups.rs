@@ -3,17 +3,20 @@
 //! This module contains handlers for consumer group coordination including
 //! group joining, syncing, heartbeats, offset management, and group administration.
 
-
-use bytes::Bytes;
+use super::KafkaHandler;
 use crate::error::Result;
 use crate::protocol::handlers::error_codes::*;
+use bytes::Bytes;
 use kafka_protocol::messages::GroupId;
 use kafka_protocol::messages::TopicName;
 use kafka_protocol::messages::{
-    DeleteGroupsRequest, DeleteGroupsResponse, DescribeGroupsRequest, DescribeGroupsResponse, FindCoordinatorRequest, FindCoordinatorResponse, HeartbeatRequest, HeartbeatResponse, JoinGroupRequest, JoinGroupResponse, LeaveGroupRequest, LeaveGroupResponse, ListGroupsRequest, ListGroupsResponse, OffsetCommitRequest, OffsetCommitResponse, OffsetFetchRequest, OffsetFetchResponse, SyncGroupRequest, SyncGroupResponse,
+    DeleteGroupsRequest, DeleteGroupsResponse, DescribeGroupsRequest, DescribeGroupsResponse,
+    FindCoordinatorRequest, FindCoordinatorResponse, HeartbeatRequest, HeartbeatResponse,
+    JoinGroupRequest, JoinGroupResponse, LeaveGroupRequest, LeaveGroupResponse, ListGroupsRequest,
+    ListGroupsResponse, OffsetCommitRequest, OffsetCommitResponse, OffsetFetchRequest,
+    OffsetFetchResponse, SyncGroupRequest, SyncGroupResponse,
 };
 use kafka_protocol::protocol::StrBytes;
-use super::KafkaHandler;
 use tracing::{debug, error, info, warn};
 
 impl KafkaHandler {
@@ -933,5 +936,4 @@ impl KafkaHandler {
 
         Ok(response)
     }
-
 }

@@ -36,10 +36,7 @@ pub(crate) fn handle_group_command(cmd: GroupCommands, ctx: &CliContext) -> Resu
                             json!({ "group_id": group_id, "state": state })
                         })
                         .collect();
-                    println!(
-                        "{}",
-                        serde_json::to_string_pretty(&data)?
-                    );
+                    println!("{}", serde_json::to_string_pretty(&data)?);
                 }
                 OutputFormat::Csv | OutputFormat::Tsv => {
                     // Print header
@@ -94,7 +91,7 @@ pub(crate) fn handle_group_command(cmd: GroupCommands, ctx: &CliContext) -> Resu
                             ]);
                         }
 
-                        println!("{}", table);
+                        println!("{table}");
                     }
                 }
             }
@@ -146,10 +143,7 @@ pub(crate) fn handle_group_command(cmd: GroupCommands, ctx: &CliContext) -> Resu
                             "members": members,
                             "offsets": offsets
                         });
-                        println!(
-                            "{}",
-                            serde_json::to_string_pretty(&info)?
-                        );
+                        println!("{}", serde_json::to_string_pretty(&info)?);
                     }
                     _ => {
                         println!("{}: {}", "Group".bold(), group.group_id);
@@ -206,12 +200,12 @@ pub(crate) fn handle_group_command(cmd: GroupCommands, ctx: &CliContext) -> Resu
                 }
             }
             None => {
-                ctx.warn(&format!("Group '{}' not found", group_id));
+                ctx.warn(&format!("Group '{group_id}' not found"));
             }
         },
 
         GroupCommands::Delete { group_id } => {
-            if !ctx.confirm(&format!("Delete consumer group '{}'?", group_id)) {
+            if !ctx.confirm(&format!("Delete consumer group '{group_id}'?")) {
                 ctx.info("Cancelled.");
                 return Ok(());
             }
@@ -276,9 +270,11 @@ pub(crate) fn handle_group_command(cmd: GroupCommands, ctx: &CliContext) -> Resu
                 let target_offset = match strategy {
                     "earliest" => topic_manager.earliest_offset(&topic, *p)?,
                     "latest" => topic_manager.latest_offset(&topic, *p)?,
-                    "offset" => to_offset.ok_or_else(|| streamline::StreamlineError::Config(
-                        "offset required when strategy is 'offset'".into()
-                    ))?,
+                    "offset" => to_offset.ok_or_else(|| {
+                        streamline::StreamlineError::Config(
+                            "offset required when strategy is 'offset'".into(),
+                        )
+                    })?,
                     _ => unreachable!(),
                 };
 
@@ -305,7 +301,7 @@ pub(crate) fn handle_group_command(cmd: GroupCommands, ctx: &CliContext) -> Resu
                                 &topic,
                                 *p,
                                 *target,
-                                format!("CLI reset to {}", strategy),
+                                format!("CLI reset to {strategy}"),
                             )?;
                         }
 
@@ -360,7 +356,7 @@ pub(crate) fn handle_group_command(cmd: GroupCommands, ctx: &CliContext) -> Resu
                         };
                         let change = target - current.max(&0);
                         let change_str = if change > 0 {
-                            format!("+{}", change)
+                            format!("+{change}")
                         } else if change < 0 {
                             change.to_string()
                         } else {
@@ -379,7 +375,7 @@ pub(crate) fn handle_group_command(cmd: GroupCommands, ctx: &CliContext) -> Resu
                         ]);
                     }
 
-                    println!("{}", table);
+                    println!("{table}");
                     println!();
 
                     if execute {
@@ -389,7 +385,7 @@ pub(crate) fn handle_group_command(cmd: GroupCommands, ctx: &CliContext) -> Resu
                                 &topic,
                                 *p,
                                 *target,
-                                format!("CLI reset to {}", strategy),
+                                format!("CLI reset to {strategy}"),
                             )?;
                         }
                         ctx.success(&format!(
@@ -421,7 +417,7 @@ pub(crate) fn handle_group_command(cmd: GroupCommands, ctx: &CliContext) -> Resu
             if let Some(threshold) = alert_lag {
                 println!(
                     "{}",
-                    format!("Alert threshold: {} messages", threshold).yellow()
+                    format!("Alert threshold: {threshold} messages").yellow()
                 );
             }
             println!("{}", "─".repeat(60).dimmed());
@@ -441,7 +437,7 @@ pub(crate) fn handle_group_command(cmd: GroupCommands, ctx: &CliContext) -> Resu
 
                 if groups_to_watch.is_empty() {
                     if let Some(ref id) = group {
-                        ctx.error(&format!("Consumer group '{}' not found", id));
+                        ctx.error(&format!("Consumer group '{id}' not found"));
                         return Ok(());
                     }
                     println!("{}", "No consumer groups found".dimmed());

@@ -3,16 +3,21 @@
 //! This module contains handlers for delegation token management,
 //! client quotas, SCRAM credentials, and quorum description.
 
-
-use bytes::Bytes;
+use super::KafkaHandler;
 use crate::error::Result;
 use crate::protocol::handlers::error_codes::*;
+use bytes::Bytes;
 use kafka_protocol::messages::TopicName;
 use kafka_protocol::messages::{
-    AlterClientQuotasRequest, AlterClientQuotasResponse, AlterUserScramCredentialsRequest, AlterUserScramCredentialsResponse, CreateDelegationTokenRequest, CreateDelegationTokenResponse, DescribeClientQuotasRequest, DescribeClientQuotasResponse, DescribeDelegationTokenRequest, DescribeDelegationTokenResponse, DescribeQuorumRequest, DescribeQuorumResponse, DescribeUserScramCredentialsRequest, DescribeUserScramCredentialsResponse, ExpireDelegationTokenRequest, ExpireDelegationTokenResponse, RenewDelegationTokenRequest, RenewDelegationTokenResponse,
+    AlterClientQuotasRequest, AlterClientQuotasResponse, AlterUserScramCredentialsRequest,
+    AlterUserScramCredentialsResponse, CreateDelegationTokenRequest, CreateDelegationTokenResponse,
+    DescribeClientQuotasRequest, DescribeClientQuotasResponse, DescribeDelegationTokenRequest,
+    DescribeDelegationTokenResponse, DescribeQuorumRequest, DescribeQuorumResponse,
+    DescribeUserScramCredentialsRequest, DescribeUserScramCredentialsResponse,
+    ExpireDelegationTokenRequest, ExpireDelegationTokenResponse, RenewDelegationTokenRequest,
+    RenewDelegationTokenResponse,
 };
 use kafka_protocol::protocol::StrBytes;
-use super::KafkaHandler;
 #[allow(unused_imports)]
 use tracing::{debug, info, warn};
 
@@ -746,5 +751,4 @@ impl KafkaHandler {
             .with_error_code(NONE)
             .with_topics(vec![topic_data]))
     }
-
 }

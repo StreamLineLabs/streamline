@@ -7,7 +7,7 @@
 use crate::featurestore::feature::FeatureValue;
 use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
-use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicU64, Ordering};
 
 /// DashMap-based online feature store for concurrent access with TTL support
 pub struct DashMapOnlineStore {
@@ -76,13 +76,7 @@ impl DashMapOnlineStore {
     }
 
     /// Put a feature entry with TTL
-    pub fn put(
-        &self,
-        key: String,
-        value: FeatureValue,
-        event_timestamp: i64,
-        ttl_seconds: u64,
-    ) {
+    pub fn put(&self, key: String, value: FeatureValue, event_timestamp: i64, ttl_seconds: u64) {
         self.put_count.fetch_add(1, Ordering::Relaxed);
 
         let now = chrono::Utc::now().timestamp_millis();
@@ -161,7 +155,9 @@ impl DashMapOnlineStore {
         let expired_keys: Vec<String> = self
             .data
             .iter()
-            .filter(|entry| entry.value().expiry_timestamp > 0 && now > entry.value().expiry_timestamp)
+            .filter(|entry| {
+                entry.value().expiry_timestamp > 0 && now > entry.value().expiry_timestamp
+            })
             .map(|entry| entry.key().clone())
             .collect();
 
@@ -201,7 +197,9 @@ impl DashMapOnlineStore {
         let expired_keys: Vec<String> = self
             .data
             .iter()
-            .filter(|entry| entry.value().expiry_timestamp > 0 && now > entry.value().expiry_timestamp)
+            .filter(|entry| {
+                entry.value().expiry_timestamp > 0 && now > entry.value().expiry_timestamp
+            })
             .map(|entry| entry.key().clone())
             .collect();
 
@@ -224,12 +222,7 @@ mod tests {
     fn test_basic_put_get() {
         let store = DashMapOnlineStore::new(1000, 0);
 
-        store.put(
-            "user_123:age".to_string(),
-            FeatureValue::Int64(25),
-            1000,
-            0,
-        );
+        store.put("user_123:age".to_string(), FeatureValue::Int64(25), 1000, 0);
 
         let entry = store.get("user_123:age");
         assert!(entry.is_some());
@@ -246,18 +239,8 @@ mod tests {
     fn test_overwrite() {
         let store = DashMapOnlineStore::new(1000, 0);
 
-        store.put(
-            "key".to_string(),
-            FeatureValue::Float64(1.0),
-            1000,
-            0,
-        );
-        store.put(
-            "key".to_string(),
-            FeatureValue::Float64(2.0),
-            2000,
-            0,
-        );
+        store.put("key".to_string(), FeatureValue::Float64(1.0), 1000, 0);
+        store.put("key".to_string(), FeatureValue::Float64(2.0), 2000, 0);
 
         let entry = store.get("key").unwrap();
         assert_eq!(entry.value, FeatureValue::Float64(2.0));
@@ -268,12 +251,7 @@ mod tests {
     fn test_delete() {
         let store = DashMapOnlineStore::new(1000, 0);
 
-        store.put(
-            "key".to_string(),
-            FeatureValue::Int64(1),
-            1000,
-            0,
-        );
+        store.put("key".to_string(), FeatureValue::Int64(1), 1000, 0);
         assert!(store.delete("key"));
         assert!(store.get("key").is_none());
         assert!(!store.delete("key"));
@@ -299,11 +277,7 @@ mod tests {
         store.put("k1".to_string(), FeatureValue::Int64(1), 1000, 0);
         store.put("k2".to_string(), FeatureValue::Int64(2), 1000, 0);
 
-        let results = store.multi_get(&[
-            "k1".to_string(),
-            "k2".to_string(),
-            "k3".to_string(),
-        ]);
+        let results = store.multi_get(&["k1".to_string(), "k2".to_string(), "k3".to_string()]);
 
         assert_eq!(results.len(), 3);
         assert!(results[0].is_some());
@@ -354,12 +328,7 @@ mod tests {
 
         // Insert more than max_entries
         for i in 0..10 {
-            store.put(
-                format!("key_{}", i),
-                FeatureValue::Int64(i),
-                i as i64 * 1000,
-                0,
-            );
+            store.put(format!("key_{i}"), FeatureValue::Int64(i), i * 1000, 0);
         }
 
         // Should have evicted some entries
@@ -380,17 +349,12 @@ mod tests {
                 created_timestamp: now,
                 expiry_timestamp: now - 1000,
             };
-            store.data.insert(format!("expired_{}", i), entry);
+            store.data.insert(format!("expired_{i}"), entry);
         }
 
         // Insert valid entries
         for i in 0..5 {
-            store.put(
-                format!("valid_{}", i),
-                FeatureValue::Int64(i),
-                now,
-                3600,
-            );
+            store.put(format!("valid_{i}"), FeatureValue::Int64(i), now, 3600);
         }
 
         assert_eq!(store.len(), 10);
@@ -425,12 +389,7 @@ mod tests {
             let store = store.clone();
             handles.push(thread::spawn(move || {
                 for i in 0..1000 {
-                    store.put(
-                        format!("thread_{}_key_{}", t, i),
-                        FeatureValue::Int64(i),
-                        i as i64,
-                        0,
-                    );
+                    store.put(format!("thread_{t}_key_{i}"), FeatureValue::Int64(i), i, 0);
                 }
             }));
         }
@@ -440,7 +399,7 @@ mod tests {
             let store = store.clone();
             handles.push(thread::spawn(move || {
                 for i in 0..1000 {
-                    let _ = store.get(&format!("thread_{}_key_{}", t, i));
+                    let _ = store.get(&format!("thread_{t}_key_{i}"));
                 }
             }));
         }

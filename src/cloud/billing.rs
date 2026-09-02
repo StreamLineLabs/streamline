@@ -302,8 +302,7 @@ impl BillingManager {
 
         if accounts.contains_key(tenant_id) {
             return Err(StreamlineError::Config(format!(
-                "Billing account already exists for tenant: {}",
-                tenant_id
+                "Billing account already exists for tenant: {tenant_id}"
             )));
         }
 
@@ -332,7 +331,7 @@ impl BillingManager {
         let mut accounts = self.accounts.write().await;
 
         let account = accounts.get_mut(tenant_id).ok_or_else(|| {
-            StreamlineError::Config(format!("No billing account for tenant: {}", tenant_id))
+            StreamlineError::Config(format!("No billing account for tenant: {tenant_id}"))
         })?;
 
         let session = MeteringSession {
@@ -360,7 +359,7 @@ impl BillingManager {
         let mut accounts = self.accounts.write().await;
 
         let account = accounts.get_mut(tenant_id).ok_or_else(|| {
-            StreamlineError::Config(format!("No billing account for tenant: {}", tenant_id))
+            StreamlineError::Config(format!("No billing account for tenant: {tenant_id}"))
         })?;
 
         // Roll up session usage to period usage
@@ -392,7 +391,7 @@ impl BillingManager {
         let mut accounts = self.accounts.write().await;
 
         let account = accounts.get_mut(tenant_id).ok_or_else(|| {
-            StreamlineError::Config(format!("No billing account for tenant: {}", tenant_id))
+            StreamlineError::Config(format!("No billing account for tenant: {tenant_id}"))
         })?;
 
         match event {
@@ -438,7 +437,7 @@ impl BillingManager {
         let accounts = self.accounts.read().await;
 
         let account = accounts.get(tenant_id).ok_or_else(|| {
-            StreamlineError::Config(format!("No billing account for tenant: {}", tenant_id))
+            StreamlineError::Config(format!("No billing account for tenant: {tenant_id}"))
         })?;
 
         let mut usage = account.current_usage.clone();
@@ -459,7 +458,7 @@ impl BillingManager {
         let accounts = self.accounts.read().await;
 
         let account = accounts.get(tenant_id).ok_or_else(|| {
-            StreamlineError::Config(format!("No billing account for tenant: {}", tenant_id))
+            StreamlineError::Config(format!("No billing account for tenant: {tenant_id}"))
         })?;
 
         let usage = self.get_usage(tenant_id).await?;

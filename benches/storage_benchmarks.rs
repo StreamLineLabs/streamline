@@ -146,7 +146,7 @@ fn bench_topic_create(c: &mut Criterion) {
 
         b.iter(|| {
             manager
-                .create_topic(&format!("topic-{}", i), black_box(1))
+                .create_topic(&format!("topic-{i}"), black_box(1))
                 .unwrap();
             i += 1;
         })

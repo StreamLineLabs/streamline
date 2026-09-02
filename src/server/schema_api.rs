@@ -63,42 +63,42 @@ impl SchemaApiError {
     fn subject_not_found(subject: &str) -> Self {
         Self {
             error_code: 40401,
-            message: format!("Subject '{}' not found.", subject),
+            message: format!("Subject '{subject}' not found."),
         }
     }
 
     fn version_not_found(subject: &str, version: i32) -> Self {
         Self {
             error_code: 40402,
-            message: format!("Version {} not found for subject '{}'.", version, subject),
+            message: format!("Version {version} not found for subject '{subject}'."),
         }
     }
 
     fn schema_not_found(id: i32) -> Self {
         Self {
             error_code: 40403,
-            message: format!("Schema {} not found.", id),
+            message: format!("Schema {id} not found."),
         }
     }
 
     fn invalid_schema(message: &str) -> Self {
         Self {
             error_code: 42201,
-            message: format!("Invalid schema: {}", message),
+            message: format!("Invalid schema: {message}"),
         }
     }
 
     fn incompatible_schema(message: &str) -> Self {
         Self {
             error_code: 409,
-            message: format!("Schema is incompatible: {}", message),
+            message: format!("Schema is incompatible: {message}"),
         }
     }
 
     fn internal_error(message: &str) -> Self {
         Self {
             error_code: 50001,
-            message: format!("Internal server error: {}", message),
+            message: format!("Internal server error: {message}"),
         }
     }
 }
@@ -112,7 +112,7 @@ impl From<SchemaError> for SchemaApiError {
             }
             SchemaError::SchemaNotFound(msg) => Self {
                 error_code: 40403,
-                message: format!("Schema not found: {}", msg),
+                message: format!("Schema not found: {msg}"),
             },
             SchemaError::InvalidSchema(msg) => Self::invalid_schema(&msg),
             SchemaError::IncompatibleSchema(msg) => Self::incompatible_schema(&msg),
@@ -380,7 +380,10 @@ async fn get_schema_types() -> Response {
 }
 
 /// Get raw schema string by global ID (GET /schemas/ids/{id}/schema)
-async fn get_raw_schema_by_id(State(state): State<SchemaApiState>, Path(id): Path<i32>) -> Response {
+async fn get_raw_schema_by_id(
+    State(state): State<SchemaApiState>,
+    Path(id): Path<i32>,
+) -> Response {
     match state.store.get_schema_by_id(id) {
         Ok(schema) => (StatusCode::OK, schema.schema).into_response(),
         Err(e) => {
@@ -391,10 +394,7 @@ async fn get_raw_schema_by_id(State(state): State<SchemaApiState>, Path(id): Pat
 }
 
 /// Get subjects associated with a schema ID (GET /schemas/ids/{id}/subjects)
-async fn get_schema_subjects(
-    State(state): State<SchemaApiState>,
-    Path(id): Path<i32>,
-) -> Response {
+async fn get_schema_subjects(State(state): State<SchemaApiState>, Path(id): Path<i32>) -> Response {
     // Verify the schema ID exists first
     if let Err(e) = state.store.get_schema_by_id(id) {
         let error: SchemaApiError = e.into();
@@ -405,10 +405,7 @@ async fn get_schema_subjects(
 }
 
 /// Get subject-version pairs for a schema ID (GET /schemas/ids/{id}/versions)
-async fn get_schema_versions(
-    State(state): State<SchemaApiState>,
-    Path(id): Path<i32>,
-) -> Response {
+async fn get_schema_versions(State(state): State<SchemaApiState>, Path(id): Path<i32>) -> Response {
     // Verify the schema ID exists first
     if let Err(e) = state.store.get_schema_by_id(id) {
         let error: SchemaApiError = e.into();
@@ -592,11 +589,7 @@ async fn delete_subject_config(
     State(state): State<SchemaApiState>,
     Path(subject): Path<String>,
 ) -> Response {
-    match state
-        .store
-        .delete_subject_compatibility(&subject)
-        .await
-    {
+    match state.store.delete_subject_compatibility(&subject).await {
         Ok(previous) => {
             let response = ConfigResponse {
                 compatibility_level: previous,
@@ -763,7 +756,7 @@ async fn schema_dashboard_handler(State(state): State<SchemaApiState>) -> Respon
                 let type_str = format!("{:?}", schema.schema_type);
                 *type_distribution.entry(type_str.clone()).or_insert(0) += 1;
                 let compat = state.store.get_subject_compatibility(subject).await;
-                (schema.version, type_str, format!("{:?}", compat))
+                (schema.version, type_str, format!("{compat:?}"))
             }
             Err(_) => (0, "UNKNOWN".to_string(), "BACKWARD".to_string()),
         };
@@ -784,7 +777,7 @@ async fn schema_dashboard_handler(State(state): State<SchemaApiState>) -> Respon
         total_versions,
         total_schemas: total_schemas.len(),
         type_distribution,
-        global_compatibility: format!("{:?}", global_compat),
+        global_compatibility: format!("{global_compat:?}"),
         subjects: subject_summaries,
     };
 
@@ -808,7 +801,7 @@ async fn schema_subjects_browser(State(state): State<SchemaApiState>) -> Respons
             Ok(schema) => {
                 let type_str = format!("{:?}", schema.schema_type);
                 let compat = state.store.get_subject_compatibility(subject).await;
-                (schema.version, type_str, format!("{:?}", compat))
+                (schema.version, type_str, format!("{compat:?}"))
             }
             Err(_) => (0, "UNKNOWN".to_string(), "BACKWARD".to_string()),
         };
@@ -947,9 +940,9 @@ async fn schema_search(
                             let end = (pos + search_lower.len() + 40).min(schema.schema.len());
                             let s = &schema.schema[start..end];
                             if start > 0 {
-                                format!("...{}...", s)
+                                format!("...{s}...")
                             } else {
-                                format!("{}...", s)
+                                format!("{s}...")
                             }
                         } else {
                             schema.schema.chars().take(80).collect::<String>()
@@ -1421,7 +1414,7 @@ mod tests {
         let response = app
             .oneshot(
                 Request::builder()
-                    .uri(format!("/schemas/ids/{}/schema", id))
+                    .uri(format!("/schemas/ids/{id}/schema"))
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -1469,7 +1462,7 @@ mod tests {
         let response = app
             .oneshot(
                 Request::builder()
-                    .uri(format!("/schemas/ids/{}/subjects", id))
+                    .uri(format!("/schemas/ids/{id}/subjects"))
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -1504,7 +1497,7 @@ mod tests {
         let response = app
             .oneshot(
                 Request::builder()
-                    .uri(format!("/schemas/ids/{}/versions", id))
+                    .uri(format!("/schemas/ids/{id}/versions"))
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -1709,7 +1702,7 @@ mod tests {
             .clone()
             .oneshot(
                 Request::builder()
-                    .uri(format!("/schemas/ids/{}", schema_id))
+                    .uri(format!("/schemas/ids/{schema_id}"))
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -1721,7 +1714,7 @@ mod tests {
         let resp = app
             .oneshot(
                 Request::builder()
-                    .uri(format!("/schemas/ids/{}/subjects", schema_id))
+                    .uri(format!("/schemas/ids/{schema_id}/subjects"))
                     .body(Body::empty())
                     .unwrap(),
             )

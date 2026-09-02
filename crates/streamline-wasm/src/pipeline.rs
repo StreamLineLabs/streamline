@@ -165,7 +165,7 @@ impl std::fmt::Display for PipelineStatus {
             PipelineStatus::Running => write!(f, "running"),
             PipelineStatus::Paused => write!(f, "paused"),
             PipelineStatus::Stopped => write!(f, "stopped"),
-            PipelineStatus::Failed(reason) => write!(f, "failed: {}", reason),
+            PipelineStatus::Failed(reason) => write!(f, "failed: {reason}"),
         }
     }
 }
@@ -718,10 +718,7 @@ impl PipelineManager {
 
         let mut pipelines = self.pipelines.write().await;
         if pipelines.contains_key(&name) {
-            return Err(WasmError::Wasm(format!(
-                "Pipeline '{}' already exists",
-                name
-            )));
+            return Err(WasmError::Wasm(format!("Pipeline '{name}' already exists")));
         }
         pipelines.insert(name.clone(), pipeline);
 
@@ -734,7 +731,7 @@ impl PipelineManager {
         let mut pipelines = self.pipelines.write().await;
         let pipeline = pipelines
             .get(name)
-            .ok_or_else(|| WasmError::Wasm(format!("Pipeline '{}' not found", name)))?;
+            .ok_or_else(|| WasmError::Wasm(format!("Pipeline '{name}' not found")))?;
 
         // Stop if running.
         let status = pipeline.get_status().await;
@@ -752,7 +749,7 @@ impl PipelineManager {
         let pipelines = self.pipelines.read().await;
         let pipeline = pipelines
             .get(name)
-            .ok_or_else(|| WasmError::Wasm(format!("Pipeline '{}' not found", name)))?;
+            .ok_or_else(|| WasmError::Wasm(format!("Pipeline '{name}' not found")))?;
         pipeline.start().await
     }
 
@@ -761,7 +758,7 @@ impl PipelineManager {
         let pipelines = self.pipelines.read().await;
         let pipeline = pipelines
             .get(name)
-            .ok_or_else(|| WasmError::Wasm(format!("Pipeline '{}' not found", name)))?;
+            .ok_or_else(|| WasmError::Wasm(format!("Pipeline '{name}' not found")))?;
         pipeline.stop().await
     }
 
@@ -770,7 +767,7 @@ impl PipelineManager {
         let pipelines = self.pipelines.read().await;
         let pipeline = pipelines
             .get(name)
-            .ok_or_else(|| WasmError::Wasm(format!("Pipeline '{}' not found", name)))?;
+            .ok_or_else(|| WasmError::Wasm(format!("Pipeline '{name}' not found")))?;
         pipeline.pause().await
     }
 
@@ -779,7 +776,7 @@ impl PipelineManager {
         let pipelines = self.pipelines.read().await;
         let pipeline = pipelines
             .get(name)
-            .ok_or_else(|| WasmError::Wasm(format!("Pipeline '{}' not found", name)))?;
+            .ok_or_else(|| WasmError::Wasm(format!("Pipeline '{name}' not found")))?;
         pipeline.resume().await
     }
 
@@ -839,7 +836,7 @@ impl PipelineManager {
         let pipelines = self.pipelines.read().await;
         let pipeline = pipelines
             .get(name)
-            .ok_or_else(|| WasmError::Wasm(format!("Pipeline '{}' not found", name)))?;
+            .ok_or_else(|| WasmError::Wasm(format!("Pipeline '{name}' not found")))?;
         pipeline.process_record(key, value, headers).await
     }
 
@@ -887,7 +884,7 @@ impl PipelineManager {
         let pipelines = self.pipelines.read().await;
         let pipeline = pipelines
             .get(pipeline_name)
-            .ok_or_else(|| WasmError::Wasm(format!("Pipeline '{}' not found", pipeline_name)))?;
+            .ok_or_else(|| WasmError::Wasm(format!("Pipeline '{pipeline_name}' not found")))?;
 
         let mut new_config = pipeline.config().clone();
         let stage = new_config
@@ -896,8 +893,7 @@ impl PipelineManager {
             .find(|s| s.name == stage_name)
             .ok_or_else(|| {
                 WasmError::Wasm(format!(
-                    "Stage '{}' not found in pipeline '{}'",
-                    stage_name, pipeline_name
+                    "Stage '{stage_name}' not found in pipeline '{pipeline_name}'"
                 ))
             })?;
         stage.config = stage_config;
@@ -1375,6 +1371,7 @@ mod tests {
     // -- Pipeline with WASM runtime ----------------------------------------
 
     /// Helper: create a WasmRuntime and load a stub module under the given id.
+    #[cfg(not(feature = "wasm-runtime"))]
     async fn setup_runtime_with_module(module_id: &str) -> Arc<crate::runtime::WasmRuntime> {
         let runtime = Arc::new(crate::runtime::WasmRuntime::new().unwrap());
 
@@ -1497,7 +1494,10 @@ mod tests {
         let runtime = setup_runtime_with_module("identity").await;
         let manager = PipelineManager::with_runtime(runtime);
 
-        manager.create_pipeline(test_config("mgr-rt")).await.unwrap();
+        manager
+            .create_pipeline(test_config("mgr-rt"))
+            .await
+            .unwrap();
         manager.start_pipeline("mgr-rt").await.unwrap();
 
         let outputs = manager

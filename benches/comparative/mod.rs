@@ -277,7 +277,7 @@ impl BenchmarkSuite {
         }
 
         for (benchmark_type, results) in grouped {
-            report.push_str(&format!("### {}\n\n", benchmark_type));
+            report.push_str(&format!("### {benchmark_type}\n\n"));
             report.push_str("| System | msgs/sec | MB/sec | p50 Latency | p99 Latency |\n");
             report.push_str("|--------|----------|--------|-------------|-------------|\n");
 
@@ -401,17 +401,15 @@ impl ComparativeReport {
             std::collections::HashMap::new();
 
         for (scenario_name, results) in &grouped {
-            let best = results
-                .iter()
-                .max_by(|a, b| {
-                    a.throughput_msgs_sec
-                        .partial_cmp(&b.throughput_msgs_sec)
-                        .unwrap_or(std::cmp::Ordering::Equal)
-                });
+            let best = results.iter().max_by(|a, b| {
+                a.throughput_msgs_sec
+                    .partial_cmp(&b.throughput_msgs_sec)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            });
 
             let second_best = results
                 .iter()
-                .filter(|r| best.map_or(true, |b| r.target != b.target))
+                .filter(|r| best.is_none_or(|b| r.target != b.target))
                 .max_by(|a, b| {
                     a.throughput_msgs_sec
                         .partial_cmp(&b.throughput_msgs_sec)
@@ -439,7 +437,7 @@ impl ComparativeReport {
 
             scenarios.push(ScenarioComparison {
                 scenario_name: scenario_name.clone(),
-                description: format!("{} benchmark scenario", scenario_name),
+                description: format!("{scenario_name} benchmark scenario"),
                 results: results.iter().map(|r| (*r).clone()).collect(),
                 resource_usage: Vec::new(),
                 winner,
@@ -521,11 +519,11 @@ impl ComparativeReport {
 
         md.push_str("## Summary\n\n");
         for finding in &self.summary.key_findings {
-            md.push_str(&format!("- {}\n", finding));
+            md.push_str(&format!("- {finding}\n"));
         }
         md.push_str("\n### Streamline Advantages\n\n");
         for adv in &self.summary.streamline_advantages {
-            md.push_str(&format!("- ✅ {}\n", adv));
+            md.push_str(&format!("- ✅ {adv}\n"));
         }
 
         md
@@ -555,126 +553,174 @@ impl ScenarioPresets {
     }
 
     pub fn throughput_1kb() -> (&'static str, &'static str, BenchmarkConfig) {
-        ("throughput-1kb", "Single producer, 1KB messages, measure msgs/sec", BenchmarkConfig {
-            message_size: 1024,
-            batch_size: 100,
-            num_partitions: 6,
-            duration_secs: 60,
-            warmup_secs: 10,
-            num_producers: 1,
-            num_consumers: 0,
-            target: BenchmarkTarget::Streamline,
-            broker_addr: "localhost:9092".to_string(),
-        })
+        (
+            "throughput-1kb",
+            "Single producer, 1KB messages, measure msgs/sec",
+            BenchmarkConfig {
+                message_size: 1024,
+                batch_size: 100,
+                num_partitions: 6,
+                duration_secs: 60,
+                warmup_secs: 10,
+                num_producers: 1,
+                num_consumers: 0,
+                target: BenchmarkTarget::Streamline,
+                broker_addr: "localhost:9092".to_string(),
+            },
+        )
     }
 
     pub fn throughput_100b() -> (&'static str, &'static str, BenchmarkConfig) {
-        ("throughput-100b", "High-frequency small messages (IoT pattern)", BenchmarkConfig {
-            message_size: 100,
-            batch_size: 500,
-            num_partitions: 3,
-            duration_secs: 60,
-            warmup_secs: 10,
-            num_producers: 1,
-            num_consumers: 0,
-            target: BenchmarkTarget::Streamline,
-            broker_addr: "localhost:9092".to_string(),
-        })
+        (
+            "throughput-100b",
+            "High-frequency small messages (IoT pattern)",
+            BenchmarkConfig {
+                message_size: 100,
+                batch_size: 500,
+                num_partitions: 3,
+                duration_secs: 60,
+                warmup_secs: 10,
+                num_producers: 1,
+                num_consumers: 0,
+                target: BenchmarkTarget::Streamline,
+                broker_addr: "localhost:9092".to_string(),
+            },
+        )
     }
 
     pub fn throughput_10kb() -> (&'static str, &'static str, BenchmarkConfig) {
-        ("throughput-10kb", "Large message throughput (log aggregation)", BenchmarkConfig {
-            message_size: 10240,
-            batch_size: 50,
-            num_partitions: 6,
-            duration_secs: 60,
-            warmup_secs: 10,
-            num_producers: 1,
-            num_consumers: 0,
-            target: BenchmarkTarget::Streamline,
-            broker_addr: "localhost:9092".to_string(),
-        })
+        (
+            "throughput-10kb",
+            "Large message throughput (log aggregation)",
+            BenchmarkConfig {
+                message_size: 10240,
+                batch_size: 50,
+                num_partitions: 6,
+                duration_secs: 60,
+                warmup_secs: 10,
+                num_producers: 1,
+                num_consumers: 0,
+                target: BenchmarkTarget::Streamline,
+                broker_addr: "localhost:9092".to_string(),
+            },
+        )
     }
 
     pub fn latency_p99() -> (&'static str, &'static str, BenchmarkConfig) {
-        ("latency-p99", "Tail latency under moderate load", BenchmarkConfig {
-            message_size: 256,
-            batch_size: 1,
-            num_partitions: 1,
-            duration_secs: 30,
-            warmup_secs: 5,
-            num_producers: 1,
-            num_consumers: 1,
-            target: BenchmarkTarget::Streamline,
-            broker_addr: "localhost:9092".to_string(),
-        })
+        (
+            "latency-p99",
+            "Tail latency under moderate load",
+            BenchmarkConfig {
+                message_size: 256,
+                batch_size: 1,
+                num_partitions: 1,
+                duration_secs: 30,
+                warmup_secs: 5,
+                num_producers: 1,
+                num_consumers: 1,
+                target: BenchmarkTarget::Streamline,
+                broker_addr: "localhost:9092".to_string(),
+            },
+        )
     }
 
     pub fn memory_footprint() -> (&'static str, &'static str, BenchmarkConfig) {
-        ("memory-footprint", "RSS memory after 1M messages", BenchmarkConfig {
-            message_size: 512,
-            batch_size: 1000,
-            num_partitions: 10,
-            duration_secs: 120,
-            warmup_secs: 0,
-            num_producers: 4,
-            num_consumers: 0,
-            target: BenchmarkTarget::Streamline,
-            broker_addr: "localhost:9092".to_string(),
-        })
+        (
+            "memory-footprint",
+            "RSS memory after 1M messages",
+            BenchmarkConfig {
+                message_size: 512,
+                batch_size: 1000,
+                num_partitions: 10,
+                duration_secs: 120,
+                warmup_secs: 0,
+                num_producers: 4,
+                num_consumers: 0,
+                target: BenchmarkTarget::Streamline,
+                broker_addr: "localhost:9092".to_string(),
+            },
+        )
     }
 
     pub fn startup_time() -> (&'static str, &'static str, BenchmarkConfig) {
-        ("startup-time", "Time from process start to first ready", BenchmarkConfig::default())
+        (
+            "startup-time",
+            "Time from process start to first ready",
+            BenchmarkConfig::default(),
+        )
     }
 
     pub fn partition_fanout() -> (&'static str, &'static str, BenchmarkConfig) {
-        ("partition-fanout", "Write to 100 partitions simultaneously", BenchmarkConfig {
-            message_size: 256,
-            batch_size: 10,
-            num_partitions: 100,
-            duration_secs: 30,
-            warmup_secs: 5,
-            num_producers: 10,
-            num_consumers: 0,
-            target: BenchmarkTarget::Streamline,
-            broker_addr: "localhost:9092".to_string(),
-        })
+        (
+            "partition-fanout",
+            "Write to 100 partitions simultaneously",
+            BenchmarkConfig {
+                message_size: 256,
+                batch_size: 10,
+                num_partitions: 100,
+                duration_secs: 30,
+                warmup_secs: 5,
+                num_producers: 10,
+                num_consumers: 0,
+                target: BenchmarkTarget::Streamline,
+                broker_addr: "localhost:9092".to_string(),
+            },
+        )
     }
 
     pub fn consumer_group_rebalance() -> (&'static str, &'static str, BenchmarkConfig) {
-        ("consumer-rebalance", "Time to rebalance 3-consumer group", BenchmarkConfig {
-            num_consumers: 3,
-            num_partitions: 12,
-            ..Default::default()
-        })
+        (
+            "consumer-rebalance",
+            "Time to rebalance 3-consumer group",
+            BenchmarkConfig {
+                num_consumers: 3,
+                num_partitions: 12,
+                ..Default::default()
+            },
+        )
     }
 
     pub fn batch_vs_single() -> (&'static str, &'static str, BenchmarkConfig) {
-        ("batch-vs-single", "Batched (100) vs single message throughput", BenchmarkConfig {
-            batch_size: 100,
-            ..Default::default()
-        })
+        (
+            "batch-vs-single",
+            "Batched (100) vs single message throughput",
+            BenchmarkConfig {
+                batch_size: 100,
+                ..Default::default()
+            },
+        )
     }
 
     pub fn compression_comparison() -> (&'static str, &'static str, BenchmarkConfig) {
-        ("compression", "Throughput with LZ4 compression enabled", BenchmarkConfig {
-            message_size: 4096,
-            batch_size: 100,
-            ..Default::default()
-        })
+        (
+            "compression",
+            "Throughput with LZ4 compression enabled",
+            BenchmarkConfig {
+                message_size: 4096,
+                batch_size: 100,
+                ..Default::default()
+            },
+        )
     }
 
     pub fn topic_creation_rate() -> (&'static str, &'static str, BenchmarkConfig) {
-        ("topic-creation", "Rate of creating 1000 topics", BenchmarkConfig::default())
+        (
+            "topic-creation",
+            "Rate of creating 1000 topics",
+            BenchmarkConfig::default(),
+        )
     }
 
     pub fn concurrent_producers() -> (&'static str, &'static str, BenchmarkConfig) {
-        ("concurrent-producers", "8 concurrent producers to same topic", BenchmarkConfig {
-            num_producers: 8,
-            num_partitions: 8,
-            ..Default::default()
-        })
+        (
+            "concurrent-producers",
+            "8 concurrent producers to same topic",
+            BenchmarkConfig {
+                num_producers: 8,
+                num_partitions: 8,
+                ..Default::default()
+            },
+        )
     }
 }
 
@@ -686,10 +732,10 @@ pub fn archive_results(
     std::fs::create_dir_all(output_dir)?;
     let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S");
 
-    let json_path = output_dir.join(format!("benchmark_{}.json", timestamp));
+    let json_path = output_dir.join(format!("benchmark_{timestamp}.json"));
     std::fs::write(&json_path, report.to_json().unwrap_or_default())?;
 
-    let md_path = output_dir.join(format!("benchmark_{}.md", timestamp));
+    let md_path = output_dir.join(format!("benchmark_{timestamp}.md"));
     std::fs::write(&md_path, report.to_markdown())?;
 
     // Also write a latest symlink-like file

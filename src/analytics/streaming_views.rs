@@ -238,8 +238,7 @@ impl StreamingViewEngine {
         let mut views = self.views.write().await;
         if views.contains_key(&name) {
             return Err(StreamlineError::Config(format!(
-                "View '{}' already exists",
-                name
+                "View '{name}' already exists"
             )));
         }
 
@@ -276,10 +275,7 @@ impl StreamingViewEngine {
     pub async fn drop_view(&self, name: &str) -> Result<()> {
         let mut views = self.views.write().await;
         if views.remove(name).is_none() {
-            return Err(StreamlineError::Config(format!(
-                "View '{}' not found",
-                name
-            )));
+            return Err(StreamlineError::Config(format!("View '{name}' not found")));
         }
 
         self.change_feeds.write().await.remove(name);
@@ -306,12 +302,16 @@ impl StreamingViewEngine {
 
     /// Get a specific view.
     pub async fn get_view(&self, name: &str) -> Option<StreamingViewInfo> {
-        self.views.read().await.get(name).map(|v| StreamingViewInfo {
-            config: v.config.clone(),
-            state: v.state.clone(),
-            metrics: v.metrics.clone(),
-            created_at: v.created_at,
-        })
+        self.views
+            .read()
+            .await
+            .get(name)
+            .map(|v| StreamingViewInfo {
+                config: v.config.clone(),
+                state: v.state.clone(),
+                metrics: v.metrics.clone(),
+                created_at: v.created_at,
+            })
     }
 
     /// Process new records for a source topic, triggering incremental refreshes.
@@ -335,10 +335,7 @@ impl StreamingViewEngine {
             }
 
             // Update watermark
-            let topic_watermarks = view
-                .watermarks
-                .entry(topic.to_string())
-                .or_default();
+            let topic_watermarks = view.watermarks.entry(topic.to_string()).or_default();
             let current_watermark = topic_watermarks.entry(partition).or_insert(-1);
 
             if offset <= *current_watermark {
@@ -396,10 +393,7 @@ impl StreamingViewEngine {
     pub async fn subscribe(&self, view_name: &str) -> Result<broadcast::Receiver<ViewChangeEvent>> {
         let feeds = self.change_feeds.read().await;
         let tx = feeds.get(view_name).ok_or_else(|| {
-            StreamlineError::Config(format!(
-                "No change feed for view '{}'",
-                view_name
-            ))
+            StreamlineError::Config(format!("No change feed for view '{view_name}'"))
         })?;
         Ok(tx.subscribe())
     }
@@ -407,9 +401,9 @@ impl StreamingViewEngine {
     /// Pause a view.
     pub async fn pause_view(&self, name: &str) -> Result<()> {
         let mut views = self.views.write().await;
-        let view = views.get_mut(name).ok_or_else(|| {
-            StreamlineError::Config(format!("View '{}' not found", name))
-        })?;
+        let view = views
+            .get_mut(name)
+            .ok_or_else(|| StreamlineError::Config(format!("View '{name}' not found")))?;
         view.state = ViewState::Paused;
         Ok(())
     }
@@ -417,9 +411,9 @@ impl StreamingViewEngine {
     /// Resume a paused view.
     pub async fn resume_view(&self, name: &str) -> Result<()> {
         let mut views = self.views.write().await;
-        let view = views.get_mut(name).ok_or_else(|| {
-            StreamlineError::Config(format!("View '{}' not found", name))
-        })?;
+        let view = views
+            .get_mut(name)
+            .ok_or_else(|| StreamlineError::Config(format!("View '{name}' not found")))?;
         view.state = ViewState::Active;
         Ok(())
     }
@@ -491,7 +485,7 @@ mod tests {
         for i in 0..3 {
             engine
                 .create_view(StreamingViewConfig {
-                    name: format!("view_{}", i),
+                    name: format!("view_{i}"),
                     query: "SELECT 1".to_string(),
                     ..Default::default()
                 })
@@ -537,7 +531,10 @@ mod tests {
             serde_json::json!({"id": 2, "name": "Bob"}),
         ];
 
-        let events = engine.process_records("events", 0, 0, &records).await.unwrap();
+        let events = engine
+            .process_records("events", 0, 0, &records)
+            .await
+            .unwrap();
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].rows.len(), 2);
 
@@ -563,7 +560,10 @@ mod tests {
 
         // Process records
         let records = vec![serde_json::json!({"data": "test"})];
-        engine.process_records("topic1", 0, 0, &records).await.unwrap();
+        engine
+            .process_records("topic1", 0, 0, &records)
+            .await
+            .unwrap();
 
         // Should receive the change event
         let event = rx.try_recv().unwrap();

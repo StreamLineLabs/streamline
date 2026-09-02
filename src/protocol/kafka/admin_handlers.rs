@@ -4,18 +4,26 @@
 //! including configuration management, log directories, partition reassignment,
 //! leader election, and feature updates.
 
-
+use super::KafkaHandler;
+use super::Operation;
+use super::ResourceType;
 use crate::error::{Result, StreamlineError};
 use crate::protocol::handlers::error_codes::*;
 use crate::storage::topic::CleanupPolicy;
 use kafka_protocol::messages::TopicName;
 use kafka_protocol::messages::{
-    AlterConfigsRequest, AlterConfigsResponse, AlterPartitionReassignmentsRequest, AlterPartitionReassignmentsResponse, AlterReplicaLogDirsRequest, AlterReplicaLogDirsResponse, DeleteRecordsRequest, DeleteRecordsResponse, DescribeClusterRequest, DescribeClusterResponse, DescribeConfigsRequest, DescribeConfigsResponse, DescribeLogDirsRequest, DescribeLogDirsResponse, ElectLeadersRequest, ElectLeadersResponse, IncrementalAlterConfigsRequest, IncrementalAlterConfigsResponse, ListPartitionReassignmentsRequest, ListPartitionReassignmentsResponse, OffsetDeleteRequest, OffsetDeleteResponse, OffsetForLeaderEpochRequest, OffsetForLeaderEpochResponse, UnregisterBrokerRequest, UnregisterBrokerResponse, UpdateFeaturesRequest, UpdateFeaturesResponse,
+    AlterConfigsRequest, AlterConfigsResponse, AlterPartitionReassignmentsRequest,
+    AlterPartitionReassignmentsResponse, AlterReplicaLogDirsRequest, AlterReplicaLogDirsResponse,
+    DeleteRecordsRequest, DeleteRecordsResponse, DescribeClusterRequest, DescribeClusterResponse,
+    DescribeConfigsRequest, DescribeConfigsResponse, DescribeLogDirsRequest,
+    DescribeLogDirsResponse, ElectLeadersRequest, ElectLeadersResponse,
+    IncrementalAlterConfigsRequest, IncrementalAlterConfigsResponse,
+    ListPartitionReassignmentsRequest, ListPartitionReassignmentsResponse, OffsetDeleteRequest,
+    OffsetDeleteResponse, OffsetForLeaderEpochRequest, OffsetForLeaderEpochResponse,
+    UnregisterBrokerRequest, UnregisterBrokerResponse, UpdateFeaturesRequest,
+    UpdateFeaturesResponse,
 };
 use kafka_protocol::protocol::StrBytes;
-use super::KafkaHandler;
-use super::Operation;
-use super::ResourceType;
 use tracing::{debug, info, warn};
 
 impl KafkaHandler {
@@ -968,8 +976,7 @@ impl KafkaHandler {
             .with_throttle_time_ms(0)
             .with_error_code(BROKER_NOT_AVAILABLE)
             .with_error_message(Some(StrBytes::from_string(format!(
-                "Broker {} not found",
-                broker_id
+                "Broker {broker_id} not found"
             )))))
     }
 
@@ -1129,5 +1136,4 @@ impl KafkaHandler {
             .with_error_code(NONE)
             .with_responses(results))
     }
-
 }

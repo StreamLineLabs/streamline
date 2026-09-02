@@ -145,7 +145,7 @@ impl FeatureStoreManager {
     ) -> Result<MaterializeResult> {
         let start = std::time::Instant::now();
         let view = self.registry.get_view(feature_view).await.ok_or_else(|| {
-            StreamlineError::Config(format!("Feature view not found: {}", feature_view))
+            StreamlineError::Config(format!("Feature view not found: {feature_view}"))
         })?;
 
         // Get features from offline store
@@ -182,18 +182,18 @@ impl FeatureStoreManager {
     /// Start a feature pipeline
     pub async fn start_pipeline(&self, pipeline_id: &str) -> Result<()> {
         let pipelines = self.pipelines.read().await;
-        let pipeline = pipelines.get(pipeline_id).ok_or_else(|| {
-            StreamlineError::Config(format!("Pipeline not found: {}", pipeline_id))
-        })?;
+        let pipeline = pipelines
+            .get(pipeline_id)
+            .ok_or_else(|| StreamlineError::Config(format!("Pipeline not found: {pipeline_id}")))?;
         pipeline.start().await
     }
 
     /// Stop a feature pipeline
     pub async fn stop_pipeline(&self, pipeline_id: &str) -> Result<()> {
         let pipelines = self.pipelines.read().await;
-        let pipeline = pipelines.get(pipeline_id).ok_or_else(|| {
-            StreamlineError::Config(format!("Pipeline not found: {}", pipeline_id))
-        })?;
+        let pipeline = pipelines
+            .get(pipeline_id)
+            .ok_or_else(|| StreamlineError::Config(format!("Pipeline not found: {pipeline_id}")))?;
         pipeline.stop().await
     }
 

@@ -154,10 +154,7 @@ pub fn init_tracing(config: &TracingConfig) -> Option<TracerProvider> {
     {
         Ok(exporter) => exporter,
         Err(e) => {
-            eprintln!(
-                "Failed to create OTLP exporter: {}. Falling back to logging only.",
-                e
-            );
+            eprintln!("Failed to create OTLP exporter: {e}. Falling back to logging only.");
             tracing_subscriber::registry()
                 .with(env_filter)
                 .with(tracing_subscriber::fmt::layer())
@@ -202,7 +199,7 @@ pub fn init_tracing(config: &TracingConfig) -> Option<TracerProvider> {
 pub fn shutdown_tracing(provider: Option<TracerProvider>) {
     if let Some(provider) = provider {
         if let Err(e) = provider.shutdown() {
-            eprintln!("Error shutting down tracer provider: {:?}", e);
+            eprintln!("Error shutting down tracer provider: {e:?}");
         }
     }
 }
@@ -383,7 +380,7 @@ impl TraceContext {
         let span_id = self.span_id.as_ref()?;
         let flags = self.trace_flags.unwrap_or(0);
 
-        Some(format!("00-{}-{}-{:02x}", trace_id, span_id, flags))
+        Some(format!("00-{trace_id}-{span_id}-{flags:02x}"))
     }
 
     /// Set trace state from W3C tracestate header

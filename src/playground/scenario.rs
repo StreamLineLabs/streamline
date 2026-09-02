@@ -194,8 +194,7 @@ impl PlaygroundManager {
                 0,
                 None,
                 bytes::Bytes::from(format!(
-                    r#"{{"level":"{}","message":"Sample log message {}","service":"demo"}}"#,
-                    level, i
+                    r#"{{"level":"{level}","message":"Sample log message {i}","service":"demo"}}"#
                 )),
             )?;
         }

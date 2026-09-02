@@ -4,7 +4,14 @@
 
 /// Generate JSON page/click events.
 pub fn generate_events(count: u32) -> Vec<String> {
-    let pages = ["/products", "/cart", "/checkout", "/home", "/search", "/profile"];
+    let pages = [
+        "/products",
+        "/cart",
+        "/checkout",
+        "/home",
+        "/search",
+        "/profile",
+    ];
     let event_types = ["page_view", "click", "scroll", "form_submit", "add_to_cart"];
 
     (0..count)
@@ -24,8 +31,12 @@ pub fn generate_events(count: u32) -> Vec<String> {
 
 /// Generate JSON user profiles.
 pub fn generate_users(count: u32) -> Vec<String> {
-    let first_names = ["Alice", "Bob", "Carol", "Dave", "Eve", "Frank", "Grace", "Hank"];
-    let last_names = ["Smith", "Jones", "Brown", "Wilson", "Taylor", "Clark", "Hall", "Young"];
+    let first_names = [
+        "Alice", "Bob", "Carol", "Dave", "Eve", "Frank", "Grace", "Hank",
+    ];
+    let last_names = [
+        "Smith", "Jones", "Brown", "Wilson", "Taylor", "Clark", "Hall", "Young",
+    ];
     let plans = ["free", "pro", "enterprise"];
 
     (0..count)
@@ -50,7 +61,13 @@ pub fn generate_users(count: u32) -> Vec<String> {
 
 /// Generate JSON metric data points.
 pub fn generate_metrics(count: u32) -> Vec<String> {
-    let metric_names = ["cpu_usage", "memory_usage", "disk_io", "network_rx", "request_latency"];
+    let metric_names = [
+        "cpu_usage",
+        "memory_usage",
+        "disk_io",
+        "network_rx",
+        "request_latency",
+    ];
     let hosts = ["web-01", "web-02", "api-01", "api-02", "db-01"];
 
     (0..count)
@@ -78,7 +95,13 @@ pub fn generate_metrics(count: u32) -> Vec<String> {
 
 /// Generate JSON log entries with levels.
 pub fn generate_logs(count: u32) -> Vec<String> {
-    let services = ["api-gateway", "user-service", "order-service", "auth-service", "payment-service"];
+    let services = [
+        "api-gateway",
+        "user-service",
+        "order-service",
+        "auth-service",
+        "payment-service",
+    ];
     let messages_info = [
         "Request processed successfully",
         "Cache hit for key",

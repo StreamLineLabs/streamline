@@ -576,16 +576,16 @@ fn convert_to_mbean_name(metric_name: &str, labels: &HashMap<String, String>) ->
 
         // Add standard label attributes
         if let Some(topic) = labels.get("topic") {
-            mbean.push_str(&format!(",topic={}", topic));
+            mbean.push_str(&format!(",topic={topic}"));
         }
         if let Some(partition) = labels.get("partition") {
-            mbean.push_str(&format!(",partition={}", partition));
+            mbean.push_str(&format!(",partition={partition}"));
         }
         if let Some(request) = labels.get("request") {
-            mbean.push_str(&format!(",request={}", request));
+            mbean.push_str(&format!(",request={request}"));
         }
         if let Some(group) = labels.get("group") {
-            mbean.push_str(&format!(",client-id={}", group));
+            mbean.push_str(&format!(",client-id={group}"));
         }
 
         (mbean, to_camel_case(attr_name))

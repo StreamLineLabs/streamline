@@ -33,10 +33,7 @@ pub(super) fn handle_doctor_command(
                         })
                     })
                     .collect();
-                println!(
-                    "{}",
-                    serde_json::to_string_pretty(&json_results)?
-                );
+                println!("{}", serde_json::to_string_pretty(&json_results)?);
             }
             _ => {
                 print_dev_diagnostic_summary(&results);
@@ -68,10 +65,7 @@ pub(super) fn handle_doctor_command(
                     })
                 })
                 .collect();
-            println!(
-                "{}",
-                serde_json::to_string_pretty(&json_results)?
-            );
+            println!("{}", serde_json::to_string_pretty(&json_results)?);
         }
         _ => {
             print_diagnostic_summary(&results);

@@ -30,7 +30,7 @@ impl std::fmt::Display for ContractRejection {
             self.expected,
             self.actual,
             self.schema_id
-                .map(|id| format!(" (schema_id={})", id))
+                .map(|id| format!(" (schema_id={id})"))
                 .unwrap_or_default()
         )
     }
@@ -61,7 +61,7 @@ pub fn validate_record(
         schema_id: contract.schema_id,
         field_path: "$".to_string(),
         expected: "valid JSON object".to_string(),
-        actual: format!("parse error: {}", e),
+        actual: format!("parse error: {e}"),
     })?;
 
     for assertion in &contract.assertions {
@@ -94,7 +94,10 @@ pub fn validate_record(
 }
 
 fn resolve_path<'a>(root: &'a Value, path: &str) -> Option<&'a Value> {
-    let trimmed = path.strip_prefix("$.").or_else(|| path.strip_prefix('$')).unwrap_or(path);
+    let trimmed = path
+        .strip_prefix("$.")
+        .or_else(|| path.strip_prefix('$'))
+        .unwrap_or(path);
     if trimmed.is_empty() {
         return Some(root);
     }
@@ -225,8 +228,7 @@ mod tests {
     #[test]
     fn wrong_type_is_rejected_with_actual_type() {
         let c = Contract::new("orders", 1).require("$.amount", ExpectedType::Number);
-        let err =
-            validate_record("orders", 0, br#"{"amount":"twenty"}"#, &c).unwrap_err();
+        let err = validate_record("orders", 0, br#"{"amount":"twenty"}"#, &c).unwrap_err();
         assert_eq!(err.actual, "string");
         assert_eq!(err.expected, "number");
     }
@@ -234,9 +236,7 @@ mod tests {
     #[test]
     fn nested_path_resolves() {
         let c = Contract::new("events", 1).require("$.user.id", ExpectedType::String);
-        assert!(
-            validate_record("events", 0, br#"{"user":{"id":"u1"}}"#, &c).is_ok()
-        );
+        assert!(validate_record("events", 0, br#"{"user":{"id":"u1"}}"#, &c).is_ok());
         assert!(validate_record("events", 0, br#"{"user":{}}"#, &c).is_err());
     }
 
@@ -253,13 +253,8 @@ mod tests {
         let c = Contract::new("orders", 1)
             .require("$.amount", ExpectedType::Number)
             .require("$.currency", ExpectedType::String);
-        assert!(
-            validate_record("orders", 0, br#"{"amount":10,"currency":"USD"}"#, &c)
-                .is_ok()
-        );
-        let err =
-            validate_record("orders", 0, br#"{"amount":10,"currency":42}"#, &c)
-                .unwrap_err();
+        assert!(validate_record("orders", 0, br#"{"amount":10,"currency":"USD"}"#, &c).is_ok());
+        let err = validate_record("orders", 0, br#"{"amount":10,"currency":42}"#, &c).unwrap_err();
         assert_eq!(err.field_path, "$.currency");
     }
 }

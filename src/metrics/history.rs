@@ -294,7 +294,7 @@ mod tests {
     #[test]
     fn test_metrics_history_debug() {
         let history = MetricsHistory::new(MetricsHistoryConfig::default());
-        let debug_str = format!("{:?}", history);
+        let debug_str = format!("{history:?}");
         assert!(debug_str.contains("MetricsHistory"));
     }
 

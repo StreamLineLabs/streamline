@@ -11,7 +11,7 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, warn};
 
 /// Configuration for the HTTP sync client
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -183,7 +183,7 @@ impl HttpSyncClient {
 
         // Serialize payload
         let body = serde_json::to_vec(&payload).map_err(|e| {
-            StreamlineError::storage_msg(format!("Failed to serialize sync batch: {}", e))
+            StreamlineError::storage_msg(format!("Failed to serialize sync batch: {e}"))
         })?;
         let body_len = body.len() as u64;
 
@@ -266,7 +266,12 @@ impl HttpSyncClient {
     // When reqwest is available (via auth/ai/serverless/web-ui features),
     // use real HTTP calls. Otherwise, fall back to stubs.
 
-    #[cfg(any(feature = "auth", feature = "ai", feature = "serverless", feature = "web-ui"))]
+    #[cfg(any(
+        feature = "auth",
+        feature = "ai",
+        feature = "serverless",
+        feature = "web-ui"
+    ))]
     async fn do_upload(&self, body: &[u8]) -> Result<SyncUploadResponse> {
         let url = format!("{}/api/v1/edge/upload", self.config.endpoint);
         let mut builder = reqwest::Client::new()
@@ -280,9 +285,10 @@ impl HttpSyncClient {
             builder = builder.bearer_auth(api_key);
         }
 
-        let resp = builder.send().await.map_err(|e| {
-            StreamlineError::storage_msg(format!("Upload request failed: {}", e))
-        })?;
+        let resp = builder
+            .send()
+            .await
+            .map_err(|e| StreamlineError::storage_msg(format!("Upload request failed: {e}")))?;
 
         if !resp.status().is_success() {
             return Err(StreamlineError::storage_msg(format!(
@@ -292,11 +298,16 @@ impl HttpSyncClient {
         }
 
         resp.json::<SyncUploadResponse>().await.map_err(|e| {
-            StreamlineError::storage_msg(format!("Failed to parse upload response: {}", e))
+            StreamlineError::storage_msg(format!("Failed to parse upload response: {e}"))
         })
     }
 
-    #[cfg(not(any(feature = "auth", feature = "ai", feature = "serverless", feature = "web-ui")))]
+    #[cfg(not(any(
+        feature = "auth",
+        feature = "ai",
+        feature = "serverless",
+        feature = "web-ui"
+    )))]
     async fn do_upload(&self, _body: &[u8]) -> Result<SyncUploadResponse> {
         Ok(SyncUploadResponse {
             accepted: true,
@@ -306,7 +317,12 @@ impl HttpSyncClient {
         })
     }
 
-    #[cfg(any(feature = "auth", feature = "ai", feature = "serverless", feature = "web-ui"))]
+    #[cfg(any(
+        feature = "auth",
+        feature = "ai",
+        feature = "serverless",
+        feature = "web-ui"
+    ))]
     async fn do_fetch(&self, url: &str) -> Result<SyncFetchResponse> {
         let mut builder = reqwest::Client::new()
             .get(url)
@@ -317,9 +333,10 @@ impl HttpSyncClient {
             builder = builder.bearer_auth(api_key);
         }
 
-        let resp = builder.send().await.map_err(|e| {
-            StreamlineError::storage_msg(format!("Fetch request failed: {}", e))
-        })?;
+        let resp = builder
+            .send()
+            .await
+            .map_err(|e| StreamlineError::storage_msg(format!("Fetch request failed: {e}")))?;
 
         if !resp.status().is_success() {
             return Err(StreamlineError::storage_msg(format!(
@@ -329,11 +346,16 @@ impl HttpSyncClient {
         }
 
         resp.json::<SyncFetchResponse>().await.map_err(|e| {
-            StreamlineError::storage_msg(format!("Failed to parse fetch response: {}", e))
+            StreamlineError::storage_msg(format!("Failed to parse fetch response: {e}"))
         })
     }
 
-    #[cfg(not(any(feature = "auth", feature = "ai", feature = "serverless", feature = "web-ui")))]
+    #[cfg(not(any(
+        feature = "auth",
+        feature = "ai",
+        feature = "serverless",
+        feature = "web-ui"
+    )))]
     async fn do_fetch(&self, _url: &str) -> Result<SyncFetchResponse> {
         Ok(SyncFetchResponse {
             records: vec![],
@@ -342,7 +364,12 @@ impl HttpSyncClient {
         })
     }
 
-    #[cfg(any(feature = "auth", feature = "ai", feature = "serverless", feature = "web-ui"))]
+    #[cfg(any(
+        feature = "auth",
+        feature = "ai",
+        feature = "serverless",
+        feature = "web-ui"
+    ))]
     async fn do_health_check(&self, url: &str) -> Result<bool> {
         match reqwest::Client::new()
             .get(url)
@@ -355,7 +382,12 @@ impl HttpSyncClient {
         }
     }
 
-    #[cfg(not(any(feature = "auth", feature = "ai", feature = "serverless", feature = "web-ui")))]
+    #[cfg(not(any(
+        feature = "auth",
+        feature = "ai",
+        feature = "serverless",
+        feature = "web-ui"
+    )))]
     async fn do_health_check(&self, _url: &str) -> Result<bool> {
         Ok(true)
     }
@@ -416,7 +448,7 @@ mod tests {
         });
 
         HttpSyncConfig {
-            endpoint: format!("http://{}", addr),
+            endpoint: format!("http://{addr}"),
             ..Default::default()
         }
     }

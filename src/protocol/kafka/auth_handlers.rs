@@ -4,33 +4,34 @@
 //! and ACL management handlers. Both full auth implementations and lite/stub
 //! versions for builds without the auth feature are included.
 
-
 #[cfg(feature = "auth")]
 use super::AuthSession;
+use super::KafkaHandler;
 #[cfg(feature = "auth")]
 use super::PatternType;
 #[cfg(feature = "auth")]
 use super::Permission;
+use super::SaslMechanism;
 #[cfg(feature = "auth")]
 use super::SaslPlainAuthenticator;
 #[cfg(feature = "auth")]
 use super::ScramAuthenticator;
+use super::SessionManager;
+use super::UserStore;
 #[cfg(feature = "auth")]
 use super::{Acl, AclFilter};
 #[allow(unused_imports)]
-use bytes::Bytes;
+use super::{Operation, ResourceType};
 use crate::error::Result;
 use crate::protocol::handlers::error_codes::*;
+#[allow(unused_imports)]
+use bytes::Bytes;
 use kafka_protocol::messages::{
-    CreateAclsRequest, CreateAclsResponse, DeleteAclsRequest, DeleteAclsResponse, DescribeAclsRequest, DescribeAclsResponse, SaslAuthenticateRequest, SaslAuthenticateResponse, SaslHandshakeRequest, SaslHandshakeResponse,
+    CreateAclsRequest, CreateAclsResponse, DeleteAclsRequest, DeleteAclsResponse,
+    DescribeAclsRequest, DescribeAclsResponse, SaslAuthenticateRequest, SaslAuthenticateResponse,
+    SaslHandshakeRequest, SaslHandshakeResponse,
 };
 use kafka_protocol::protocol::StrBytes;
-use super::KafkaHandler;
-#[allow(unused_imports)]
-use super::{Operation, ResourceType};
-use super::UserStore;
-use super::SaslMechanism;
-use super::SessionManager;
 #[cfg(feature = "auth")]
 use tracing::{debug, error, info, warn};
 
@@ -888,5 +889,4 @@ impl KafkaHandler {
             .with_throttle_time_ms(0)
             .with_filter_results(vec![]))
     }
-
 }

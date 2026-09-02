@@ -57,7 +57,7 @@ impl std::fmt::Display for PluginStatus {
             Self::Loaded => write!(f, "loaded"),
             Self::Running => write!(f, "running"),
             Self::Stopped => write!(f, "stopped"),
-            Self::Error(e) => write!(f, "error: {}", e),
+            Self::Error(e) => write!(f, "error: {e}"),
             Self::Unloading => write!(f, "unloading"),
         }
     }
@@ -296,8 +296,7 @@ impl SdkPluginRegistry {
         let mut plugins = self.plugins.write();
         if plugins.remove(name).is_none() {
             return Err(StreamlineError::Config(format!(
-                "Plugin '{}' not found",
-                name
+                "Plugin '{name}' not found"
             )));
         }
         self.record_event(name, PluginEventType::Unloaded, "Plugin unregistered");
@@ -328,9 +327,9 @@ impl SdkPluginRegistry {
     /// Transition a loaded/stopped plugin to [`PluginStatus::Running`].
     pub fn start(&self, name: &str) -> Result<()> {
         let mut plugins = self.plugins.write();
-        let plugin = plugins.get_mut(name).ok_or_else(|| {
-            StreamlineError::Config(format!("Plugin '{}' not found", name))
-        })?;
+        let plugin = plugins
+            .get_mut(name)
+            .ok_or_else(|| StreamlineError::Config(format!("Plugin '{name}' not found")))?;
 
         match &plugin.status {
             PluginStatus::Loaded | PluginStatus::Stopped => {
@@ -342,8 +341,7 @@ impl SdkPluginRegistry {
                 Ok(())
             }
             other => Err(StreamlineError::Config(format!(
-                "Cannot start plugin '{}' in state: {}",
-                name, other
+                "Cannot start plugin '{name}' in state: {other}"
             ))),
         }
     }
@@ -351,9 +349,9 @@ impl SdkPluginRegistry {
     /// Stop a running plugin.
     pub fn stop(&self, name: &str) -> Result<()> {
         let mut plugins = self.plugins.write();
-        let plugin = plugins.get_mut(name).ok_or_else(|| {
-            StreamlineError::Config(format!("Plugin '{}' not found", name))
-        })?;
+        let plugin = plugins
+            .get_mut(name)
+            .ok_or_else(|| StreamlineError::Config(format!("Plugin '{name}' not found")))?;
 
         match &plugin.status {
             PluginStatus::Running => {
@@ -365,8 +363,7 @@ impl SdkPluginRegistry {
                 Ok(())
             }
             other => Err(StreamlineError::Config(format!(
-                "Cannot stop plugin '{}' in state: {}",
-                name, other
+                "Cannot stop plugin '{name}' in state: {other}"
             ))),
         }
     }
@@ -380,9 +377,9 @@ impl SdkPluginRegistry {
         }
 
         let mut plugins = self.plugins.write();
-        let plugin = plugins.get_mut(name).ok_or_else(|| {
-            StreamlineError::Config(format!("Plugin '{}' not found", name))
-        })?;
+        let plugin = plugins
+            .get_mut(name)
+            .ok_or_else(|| StreamlineError::Config(format!("Plugin '{name}' not found")))?;
 
         plugin.status = PluginStatus::Unloading;
         plugin.status = PluginStatus::Running;
@@ -509,7 +506,8 @@ fn is_kebab_case(s: &str) -> bool {
     if bytes[0] == b'-' || bytes[bytes.len() - 1] == b'-' {
         return false;
     }
-    s.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+    s.chars()
+        .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
 }
 
 /// Simple semver-like check: `MAJOR.MINOR.PATCH` where each part is a non-negative integer.
@@ -520,7 +518,9 @@ fn is_semver_like(s: &str) -> bool {
     if parts.len() != 3 {
         return false;
     }
-    parts.iter().all(|p| !p.is_empty() && p.chars().all(|c| c.is_ascii_digit()))
+    parts
+        .iter()
+        .all(|p| !p.is_empty() && p.chars().all(|c| c.is_ascii_digit()))
 }
 
 /// Parse the major and minor components from a version string.
@@ -688,7 +688,7 @@ mod tests {
     #[test]
     fn test_validate_manifest_valid() {
         let errors = SdkPluginRegistry::validate_manifest(&test_manifest("good-plugin"));
-        assert!(errors.is_empty(), "Expected no errors, got: {:?}", errors);
+        assert!(errors.is_empty(), "Expected no errors, got: {errors:?}");
     }
 
     #[test]

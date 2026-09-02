@@ -174,7 +174,7 @@ mod tests {
     #[test]
     fn test_debug_format() {
         let config = TcpConfig::default();
-        let debug_str = format!("{:?}", config);
+        let debug_str = format!("{config:?}");
         assert!(debug_str.contains("TcpConfig"));
         assert!(debug_str.contains("keepalive_enabled"));
     }

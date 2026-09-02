@@ -123,8 +123,7 @@ pub fn handle_connect(svc: &SyncService, node_id: &str) -> SyncSession {
         last_sync_at: now,
         topics: Vec::new(),
     };
-    write_or_recover(&svc.sessions)
-        .insert(node_id.to_string(), session.clone());
+    write_or_recover(&svc.sessions).insert(node_id.to_string(), session.clone());
     session
 }
 
@@ -147,14 +146,13 @@ pub fn handle_sync_request(
 
     let total = pending_writes.len() as u64;
     let mut rejected = 0u64;
-    let accepted;
 
     for pw in &pending_writes {
         if pw.value.len() as u64 > svc.config.max_batch_bytes {
             rejected += 1;
         }
     }
-    accepted = total - rejected;
+    let accepted = total - rejected;
 
     SyncResponse {
         accepted,
@@ -226,8 +224,10 @@ mod tests {
 
     #[test]
     fn sync_request_rejects_oversized_writes() {
-        let mut cfg = SyncConfig::default();
-        cfg.max_batch_bytes = 2; // tiny limit
+        let cfg = SyncConfig {
+            max_batch_bytes: 2, // tiny limit
+            ..Default::default()
+        };
         let s = SyncService::new(cfg);
         handle_connect(&s, "node-1");
 

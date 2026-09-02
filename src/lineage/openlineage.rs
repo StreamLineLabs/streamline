@@ -132,17 +132,9 @@ pub fn to_openlineage(
         "streamline_latency_p99_ms".into(),
         serde_json::json!(edge.latency_p99_ms),
     );
-    run_facets.insert(
-        "streamline_errors".into(),
-        serde_json::json!(edge.errors),
-    );
+    run_facets.insert("streamline_errors".into(), serde_json::json!(edge.errors));
 
-    let run_id = format!(
-        "{}-{}-{}",
-        edge.from,
-        edge.to,
-        now / 1000
-    );
+    let run_id = format!("{}-{}-{}", edge.from, edge.to, now / 1000);
 
     OpenLineageEvent {
         event_time,
@@ -187,8 +179,7 @@ fn node_to_dataset(node: &LineageNode) -> OpenLineageDataset {
 fn format_iso8601(millis: i64) -> String {
     let secs = millis / 1000;
     let nanos = ((millis % 1000) * 1_000_000) as u32;
-    let dt = chrono::DateTime::from_timestamp(secs, nanos)
-        .unwrap_or_else(|| chrono::DateTime::UNIX_EPOCH);
+    let dt = chrono::DateTime::from_timestamp(secs, nanos).unwrap_or(chrono::DateTime::UNIX_EPOCH);
     dt.to_rfc3339_opts(chrono::SecondsFormat::Millis, true)
 }
 
@@ -277,10 +268,8 @@ impl OpenLineageExporter {
         nodes: &[&LineageNode],
         edges: &[&LineageEdge],
     ) -> Result<usize, String> {
-        let node_map: HashMap<&str, &LineageNode> = nodes
-            .iter()
-            .map(|n| (n.id.as_str(), *n))
-            .collect();
+        let node_map: HashMap<&str, &LineageNode> =
+            nodes.iter().map(|n| (n.id.as_str(), *n)).collect();
 
         let mut exported = 0;
         for edge in edges {
@@ -346,7 +335,10 @@ mod tests {
 
         let event = to_openlineage(&edge, &from, &to);
 
-        assert_eq!(event.producer, "https://github.com/streamlinelabs/streamline");
+        assert_eq!(
+            event.producer,
+            "https://github.com/streamlinelabs/streamline"
+        );
         assert_eq!(event.event_type, OpenLineageEventType::Running);
         assert_eq!(event.inputs.len(), 1);
         assert_eq!(event.outputs.len(), 1);

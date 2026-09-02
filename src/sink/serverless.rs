@@ -577,7 +577,7 @@ impl ServerlessConnector {
         if let Some(var_name) = secret_ref.strip_prefix('$') {
             // Environment variable reference
             std::env::var(var_name).map_err(|_| {
-                StreamlineError::Sink(format!("Environment variable '{}' not found", var_name))
+                StreamlineError::Sink(format!("Environment variable '{var_name}' not found"))
             })
         } else {
             // Literal value (for testing - in production, always use references)
@@ -620,7 +620,7 @@ impl ServerlessConnector {
         let client = reqwest::Client::builder()
             .timeout(std::time::Duration::from_millis(config.timeout_ms))
             .build()
-            .map_err(|e| StreamlineError::Sink(format!("Failed to create HTTP client: {}", e)))?;
+            .map_err(|e| StreamlineError::Sink(format!("Failed to create HTTP client: {e}")))?;
 
         for record in records {
             let payload = self.prepare_payload(record)?;
@@ -700,10 +700,10 @@ impl ServerlessConnector {
     fn apply_transform(&self, record: &Record, transform: &TransformConfig) -> Result<Bytes> {
         // Parse the record value as JSON
         let value_str = std::str::from_utf8(&record.value)
-            .map_err(|e| StreamlineError::Sink(format!("Invalid UTF-8 in record: {}", e)))?;
+            .map_err(|e| StreamlineError::Sink(format!("Invalid UTF-8 in record: {e}")))?;
 
         let mut json: serde_json::Value = serde_json::from_str(value_str)
-            .map_err(|e| StreamlineError::Sink(format!("Invalid JSON in record: {}", e)))?;
+            .map_err(|e| StreamlineError::Sink(format!("Invalid JSON in record: {e}")))?;
 
         if let serde_json::Value::Object(ref mut map) = json {
             // Drop fields
@@ -725,7 +725,7 @@ impl ServerlessConnector {
         }
 
         let transformed = serde_json::to_vec(&json).map_err(|e| {
-            StreamlineError::Sink(format!("Failed to serialize transformed record: {}", e))
+            StreamlineError::Sink(format!("Failed to serialize transformed record: {e}"))
         })?;
 
         Ok(Bytes::from(transformed))
@@ -764,7 +764,7 @@ impl ServerlessConnector {
             "hmac-sha256" => {
                 type HmacSha256 = Hmac<Sha256>;
                 let mut mac = HmacSha256::new_from_slice(secret.as_bytes())
-                    .map_err(|e| StreamlineError::Sink(format!("Invalid HMAC key: {}", e)))?;
+                    .map_err(|e| StreamlineError::Sink(format!("Invalid HMAC key: {e}")))?;
                 mac.update(payload);
                 let result = mac.finalize();
                 Ok(format!("sha256={}", hex::encode(result.into_bytes())))
@@ -772,14 +772,13 @@ impl ServerlessConnector {
             "hmac-sha512" => {
                 type HmacSha512 = Hmac<Sha512>;
                 let mut mac = HmacSha512::new_from_slice(secret.as_bytes())
-                    .map_err(|e| StreamlineError::Sink(format!("Invalid HMAC key: {}", e)))?;
+                    .map_err(|e| StreamlineError::Sink(format!("Invalid HMAC key: {e}")))?;
                 mac.update(payload);
                 let result = mac.finalize();
                 Ok(format!("sha512={}", hex::encode(result.into_bytes())))
             }
             _ => Err(StreamlineError::Sink(format!(
-                "Unsupported signature algorithm: {}",
-                algorithm
+                "Unsupported signature algorithm: {algorithm}"
             ))),
         }
     }
@@ -827,8 +826,7 @@ impl ServerlessConnector {
                         if attempts >= retry_config.max_retries {
                             let body = response.text().await.unwrap_or_default();
                             return Err(StreamlineError::Sink(format!(
-                                "HTTP request failed after {} retries: {} - {}",
-                                attempts, status, body
+                                "HTTP request failed after {attempts} retries: {status} - {body}"
                             )));
                         }
                         warn!(
@@ -839,8 +837,7 @@ impl ServerlessConnector {
                     } else {
                         let body = response.text().await.unwrap_or_default();
                         return Err(StreamlineError::Sink(format!(
-                            "HTTP request failed: {} - {}",
-                            status, body
+                            "HTTP request failed: {status} - {body}"
                         )));
                     }
                 }
@@ -848,8 +845,7 @@ impl ServerlessConnector {
                     attempts += 1;
                     if attempts >= retry_config.max_retries {
                         return Err(StreamlineError::Sink(format!(
-                            "HTTP request failed after {} retries: {}",
-                            attempts, e
+                            "HTTP request failed after {attempts} retries: {e}"
                         )));
                     }
                     warn!(error = %e, attempt = attempts, "Retrying request after error");
@@ -970,7 +966,7 @@ impl SinkConnector for ServerlessConnector {
                 // Update committed offset
                 let state = self.state.read().await;
                 if let Ok(mut offsets) = state.committed_offsets.write() {
-                    let key = format!("{}-{}", topic, partition);
+                    let key = format!("{topic}-{partition}");
                     offsets.insert(key, highest_offset);
                 }
 

@@ -13,8 +13,8 @@
 //!
 //! Stability tier: **Experimental** (gated behind `agent-memory`).
 
-mod types;
 mod handlers;
+mod types;
 
 pub use types::*;
 
@@ -23,28 +23,20 @@ use axum::{
     Router,
 };
 
-use handlers::{
-    remember_handler, recall_handler, stats_handler, export_handler, delete_handler,
-};
+use handlers::{delete_handler, export_handler, recall_handler, remember_handler, stats_handler};
 
 /// Build the agent-memory API router. Stateless — uses the global tier
-/// store inside [`tier_router`].
+/// store inside `tier_router`.
 pub fn create_memory_api_router() -> Router {
     Router::new()
         .route("/api/v1/memory/remember", post(remember_handler))
         .route("/api/v1/memory/recall", post(recall_handler))
-        .route(
-            "/api/v1/memory/agents/:agent_id/stats",
-            get(stats_handler),
-        )
+        .route("/api/v1/memory/agents/:agent_id/stats", get(stats_handler))
         .route(
             "/api/v1/memory/agents/:agent_id/export",
             post(export_handler),
         )
-        .route(
-            "/api/v1/memory/agents/:agent_id",
-            delete(delete_handler),
-        )
+        .route("/api/v1/memory/agents/:agent_id", delete(delete_handler))
 }
 
 #[cfg(test)]
@@ -253,7 +245,7 @@ mod tests {
         let req: RememberRequest = serde_json::from_str(json).unwrap();
         match req.kind {
             WriteKindWire::Procedure { ref skill } => assert_eq!(skill, "deploy"),
-            other => panic!("expected Procedure, got {:?}", other),
+            other => panic!("expected Procedure, got {other:?}"),
         }
     }
 
@@ -274,20 +266,14 @@ mod tests {
     fn validate_remember_rejects_empty_agent_id() {
         let json = r#"{"agent_id":"","kind":"fact","content":"c"}"#;
         let req: RememberRequest = serde_json::from_str(json).unwrap();
-        assert_eq!(
-            validate_remember(&req),
-            Err("agent_id must not be empty")
-        );
+        assert_eq!(validate_remember(&req), Err("agent_id must not be empty"));
     }
 
     #[test]
     fn validate_remember_rejects_whitespace_content() {
         let json = r#"{"agent_id":"a","kind":"fact","content":"   "}"#;
         let req: RememberRequest = serde_json::from_str(json).unwrap();
-        assert_eq!(
-            validate_remember(&req),
-            Err("content must not be empty")
-        );
+        assert_eq!(validate_remember(&req), Err("content must not be empty"));
     }
 
     #[test]
@@ -314,8 +300,7 @@ mod tests {
 
     #[test]
     fn recall_request_defaults_k_to_10() {
-        let req: RecallRequest =
-            serde_json::from_str(r#"{"agent_id":"a","query":"q"}"#).unwrap();
+        let req: RecallRequest = serde_json::from_str(r#"{"agent_id":"a","query":"q"}"#).unwrap();
         assert_eq!(req.k, 10);
         assert_eq!(req.min_hits, 0);
     }
@@ -323,8 +308,7 @@ mod tests {
     #[test]
     fn recall_request_explicit_k() {
         let req: RecallRequest =
-            serde_json::from_str(r#"{"agent_id":"a","query":"q","k":50,"min_hits":3}"#)
-                .unwrap();
+            serde_json::from_str(r#"{"agent_id":"a","query":"q","k":50,"min_hits":3}"#).unwrap();
         assert_eq!(req.k, 50);
         assert_eq!(req.min_hits, 3);
     }
@@ -395,7 +379,11 @@ mod tests {
             agent_id: "a".into(),
             recall_total: 1,
             remember_total: 2,
-            tiers: TierCounts { episodic: 3, semantic: 4, procedural: 5 },
+            tiers: TierCounts {
+                episodic: 3,
+                semantic: 4,
+                procedural: 5,
+            },
         };
         let json = serde_json::to_string(&resp).unwrap();
         let deser: StatsResponse = serde_json::from_str(&json).unwrap();
@@ -451,10 +439,22 @@ mod tests {
 
     #[test]
     fn parse_tier_valid_variants() {
-        assert!(matches!(parse_tier("episodic"), Ok(crate::memory::Tier::Episodic)));
-        assert!(matches!(parse_tier("semantic"), Ok(crate::memory::Tier::Semantic)));
-        assert!(matches!(parse_tier("procedural"), Ok(crate::memory::Tier::Procedural)));
-        assert!(matches!(parse_tier("EPISODIC"), Ok(crate::memory::Tier::Episodic)));
+        assert!(matches!(
+            parse_tier("episodic"),
+            Ok(crate::memory::Tier::Episodic)
+        ));
+        assert!(matches!(
+            parse_tier("semantic"),
+            Ok(crate::memory::Tier::Semantic)
+        ));
+        assert!(matches!(
+            parse_tier("procedural"),
+            Ok(crate::memory::Tier::Procedural)
+        ));
+        assert!(matches!(
+            parse_tier("EPISODIC"),
+            Ok(crate::memory::Tier::Episodic)
+        ));
     }
 
     #[test]
@@ -466,11 +466,19 @@ mod tests {
     #[test]
     fn write_kind_wire_converts_to_domain() {
         use crate::memory::WriteKind;
-        assert!(matches!(WriteKind::from(WriteKindWire::Observation), WriteKind::Observation));
-        assert!(matches!(WriteKind::from(WriteKindWire::Fact), WriteKind::Fact));
-        match WriteKind::from(WriteKindWire::Procedure { skill: "deploy".into() }) {
+        assert!(matches!(
+            WriteKind::from(WriteKindWire::Observation),
+            WriteKind::Observation
+        ));
+        assert!(matches!(
+            WriteKind::from(WriteKindWire::Fact),
+            WriteKind::Fact
+        ));
+        match WriteKind::from(WriteKindWire::Procedure {
+            skill: "deploy".into(),
+        }) {
             WriteKind::Procedure { skill } => assert_eq!(skill, "deploy"),
-            other => panic!("expected Procedure, got {:?}", other),
+            other => panic!("expected Procedure, got {other:?}"),
         }
     }
 }

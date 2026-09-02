@@ -2,8 +2,8 @@
 
 use super::function::{
     CircuitBreaker, CircuitBreakerConfig, FaasFunction, FunctionConfig, FunctionLogEntry,
-    FunctionMetrics, FunctionSpec, FunctionState, InvocationOutcome, InvocationResult,
-    LogLevel, VersionedFunction,
+    FunctionMetrics, FunctionSpec, FunctionState, InvocationOutcome, InvocationResult, LogLevel,
+    VersionedFunction,
 };
 use super::registry::{FunctionInfo, FunctionRegistry};
 use super::trigger::{TriggerBinding, TriggerType};
@@ -217,7 +217,8 @@ impl InstancePool {
             }
             map.retain(|_, v| !v.is_empty());
         }
-        self.total_evicted.fetch_add(evicted as u64, Ordering::Relaxed);
+        self.total_evicted
+            .fetch_add(evicted as u64, Ordering::Relaxed);
         evicted
     }
 
@@ -226,7 +227,8 @@ impl InstancePool {
         if let Ok(mut map) = self.instances.lock() {
             if let Some(instances) = map.remove(function_id) {
                 let count = instances.len();
-                self.total_evicted.fetch_add(count as u64, Ordering::Relaxed);
+                self.total_evicted
+                    .fetch_add(count as u64, Ordering::Relaxed);
                 return count;
             }
         }
@@ -353,9 +355,9 @@ impl WasmExecutionEngine {
     ) -> InvocationOutcome {
         match self.invoke(instance, input) {
             Ok(output) => InvocationOutcome::Success(output),
-            Err(e) => InvocationOutcome::Error(
-                super::function::FaasError::ExecutionFailed(e.to_string()),
-            ),
+            Err(e) => {
+                InvocationOutcome::Error(super::function::FaasError::ExecutionFailed(e.to_string()))
+            }
         }
     }
 
@@ -508,7 +510,7 @@ impl FaasEngine {
         let func = self
             .registry
             .get_function_mut(name)
-            .ok_or_else(|| StreamlineError::Config(format!("Function '{}' not found", name)))?;
+            .ok_or_else(|| StreamlineError::Config(format!("Function '{name}' not found")))?;
 
         match func.state {
             FunctionState::Inactive | FunctionState::Draining | FunctionState::Failed => {
@@ -518,8 +520,7 @@ impl FaasEngine {
             }
             FunctionState::Active => Ok(()),
             other => Err(StreamlineError::Config(format!(
-                "Cannot start function in state {:?}",
-                other
+                "Cannot start function in state {other:?}"
             ))),
         }
     }
@@ -529,7 +530,7 @@ impl FaasEngine {
         let func = self
             .registry
             .get_function_mut(name)
-            .ok_or_else(|| StreamlineError::Config(format!("Function '{}' not found", name)))?;
+            .ok_or_else(|| StreamlineError::Config(format!("Function '{name}' not found")))?;
 
         func.set_state(FunctionState::Inactive);
         info!(function = name, "Function stopped");
@@ -539,17 +540,10 @@ impl FaasEngine {
     /// Invoke a function with input data.
     ///
     /// Core execution path with circuit breaker checks.
-    pub fn invoke(
-        &self,
-        function_name: &str,
-        input: &[u8],
-    ) -> Result<InvocationResult> {
-        let func = self
-            .registry
-            .get_function(function_name)
-            .ok_or_else(|| {
-                StreamlineError::Config(format!("Function '{}' not found", function_name))
-            })?;
+    pub fn invoke(&self, function_name: &str, input: &[u8]) -> Result<InvocationResult> {
+        let func = self.registry.get_function(function_name).ok_or_else(|| {
+            StreamlineError::Config(format!("Function '{function_name}' not found"))
+        })?;
 
         if func.state != FunctionState::Active {
             return Err(StreamlineError::Config(format!(
@@ -564,8 +558,7 @@ impl FaasEngine {
                 if !cb.can_execute() {
                     warn!(function = function_name, "Circuit breaker open");
                     return Err(StreamlineError::ResourceExhausted(format!(
-                        "Circuit breaker open for function '{}'",
-                        function_name
+                        "Circuit breaker open for function '{function_name}'"
                     )));
                 }
             }
@@ -653,12 +646,9 @@ impl FaasEngine {
         function_name: &str,
         input: &[u8],
     ) -> Result<InvocationResult> {
-        let func = self
-            .registry
-            .get_function(function_name)
-            .ok_or_else(|| {
-                StreamlineError::Config(format!("Function '{}' not found", function_name))
-            })?;
+        let func = self.registry.get_function(function_name).ok_or_else(|| {
+            StreamlineError::Config(format!("Function '{function_name}' not found"))
+        })?;
 
         let max_retries = func.config.max_retries;
         let mut last_result = self.invoke(function_name, input)?;
@@ -750,7 +740,7 @@ impl FaasEngine {
                     .then(|| name.clone())
             })
             .ok_or_else(|| {
-                StreamlineError::Config(format!("Function ID '{}' not found", function_id))
+                StreamlineError::Config(format!("Function ID '{function_id}' not found"))
             })?;
 
         self.registry.undeploy(&function_name)?;
@@ -779,7 +769,7 @@ impl FaasEngine {
                     .then(|| name.clone())
             })
             .ok_or_else(|| {
-                StreamlineError::Config(format!("Function ID '{}' not found", function_id))
+                StreamlineError::Config(format!("Function ID '{function_id}' not found"))
             })?;
 
         let _module = self.execution_engine.compile_module(&new_spec.wasm_bytes)?;
@@ -872,11 +862,7 @@ impl FaasEngine {
     }
 
     /// Invoke a chain of functions in sequence.
-    pub fn invoke_chain(
-        &self,
-        chain: &FunctionChain,
-        input: &[u8],
-    ) -> Result<InvocationResult> {
+    pub fn invoke_chain(&self, chain: &FunctionChain, input: &[u8]) -> Result<InvocationResult> {
         let mut current_input = input.to_vec();
         let mut total_execution_ms: u64 = 0;
 
@@ -1060,7 +1046,11 @@ mod tests {
         // Without the wasm-runtime feature, invocation returns an error result
         let result = engine.invoke("fn-a", b"hello world").unwrap();
         assert!(!result.success);
-        assert!(result.error.as_ref().unwrap().contains("runtime not available"));
+        assert!(result
+            .error
+            .as_ref()
+            .unwrap()
+            .contains("runtime not available"));
 
         let metrics = engine.metrics();
         assert_eq!(metrics.total_invocations, 1);
@@ -1156,7 +1146,9 @@ mod tests {
     fn test_wasm_engine_invoke_passthrough() {
         let engine = WasmExecutionEngine::new(16);
         let module = engine.compile_module(&[0, 97, 115, 109]).unwrap();
-        let instance = engine.instantiate(&module, &test_config("fn-invoke")).unwrap();
+        let instance = engine
+            .instantiate(&module, &test_config("fn-invoke"))
+            .unwrap();
         let result = engine.invoke(&instance, b"hello");
         assert!(result.is_err());
     }
@@ -1263,7 +1255,7 @@ mod tests {
         let dlq = DeadLetterQueue::new(3);
         for i in 0..5 {
             dlq.push(DeadLetterEntry {
-                function_name: format!("fn-{}", i),
+                function_name: format!("fn-{i}"),
                 input: vec![],
                 error: "err".into(),
                 attempts: 1,
@@ -1289,7 +1281,7 @@ mod tests {
             trigger: TriggerType::Topic {
                 topic: "events".to_string(),
                 partitions: None,
-                group_id: format!("faas-{}", name),
+                group_id: format!("faas-{name}"),
             },
             config: test_config(name),
             resource_limits: ResourceLimits::default(),

@@ -434,18 +434,10 @@ mod tests {
     #[test]
     fn test_watermarks_with_data() {
         let (engine, _tmp) = create_test_engine();
+        engine.topic_manager.create_topic("test-topic", 1).unwrap();
         engine
             .topic_manager
-            .create_topic("test-topic", 1)
-            .unwrap();
-        engine
-            .topic_manager
-            .append(
-                "test-topic",
-                0,
-                Some(Bytes::from("k1")),
-                Bytes::from("v1"),
-            )
+            .append("test-topic", 0, Some(Bytes::from("k1")), Bytes::from("v1"))
             .unwrap();
 
         let watermarks = engine.watermarks().unwrap();
@@ -460,18 +452,15 @@ mod tests {
     #[tokio::test]
     async fn test_sync_cycle() {
         let (engine, _tmp) = create_test_engine();
-        engine
-            .topic_manager
-            .create_topic("sync-test", 1)
-            .unwrap();
+        engine.topic_manager.create_topic("sync-test", 1).unwrap();
         for i in 0..5 {
             engine
                 .topic_manager
                 .append(
                     "sync-test",
                     0,
-                    Some(Bytes::from(format!("k{}", i))),
-                    Bytes::from(format!("v{}", i)),
+                    Some(Bytes::from(format!("k{i}"))),
+                    Bytes::from(format!("v{i}")),
                 )
                 .unwrap();
         }

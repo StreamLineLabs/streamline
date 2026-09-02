@@ -65,10 +65,7 @@ pub enum MergeError {
 /// `<target_topic>:__merged_<branch_name>`. In production this would write
 /// directly to the log layer; the in-memory store is sufficient for M5 P2
 /// validation.
-pub fn merge_branch(
-    config: &MergeConfig,
-    store: &BranchStore,
-) -> Result<MergeResult, MergeError> {
+pub fn merge_branch(config: &MergeConfig, store: &BranchStore) -> Result<MergeResult, MergeError> {
     if !config.confirm {
         return Err(MergeError::NotConfirmed);
     }
@@ -193,7 +190,10 @@ mod tests {
             confirm: true,
         };
         let err = merge_branch(&cfg, &store).unwrap_err();
-        assert!(matches!(err, MergeError::Store(BranchStoreError::NotFound(_))));
+        assert!(matches!(
+            err,
+            MergeError::Store(BranchStoreError::NotFound(_))
+        ));
     }
 
     #[test]

@@ -123,8 +123,7 @@ fn test_sasl_handshake_request_version_roundtrip() {
         assert_eq!(
             decoded.mechanism.as_str(),
             "SCRAM-SHA-256",
-            "Version {} failed",
-            version
+            "Version {version} failed"
         );
     }
 }
@@ -239,8 +238,8 @@ fn test_sasl_handshake_response_version_roundtrip() {
         let mut read_buf = buf.freeze();
         let decoded = SaslHandshakeResponse::decode(&mut read_buf, version).unwrap();
 
-        assert_eq!(decoded.error_code, 0, "Version {} failed", version);
-        assert_eq!(decoded.mechanisms.len(), 1, "Version {} failed", version);
+        assert_eq!(decoded.error_code, 0, "Version {version} failed");
+        assert_eq!(decoded.mechanisms.len(), 1, "Version {version} failed");
     }
 }
 
@@ -383,8 +382,7 @@ fn test_sasl_authenticate_request_version_roundtrip() {
         assert_eq!(
             decoded.auth_bytes.as_ref(),
             auth_bytes,
-            "Version {} failed",
-            version
+            "Version {version} failed"
         );
     }
 }
@@ -534,7 +532,7 @@ fn test_sasl_authenticate_response_version_roundtrip() {
         let mut read_buf = buf.freeze();
         let decoded = SaslAuthenticateResponse::decode(&mut read_buf, version).unwrap();
 
-        assert_eq!(decoded.error_code, 0, "Version {} failed", version);
+        assert_eq!(decoded.error_code, 0, "Version {version} failed");
     }
 }
 

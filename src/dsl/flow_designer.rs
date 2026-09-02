@@ -107,7 +107,7 @@ impl FlowDesigner {
     pub async fn delete_flow(&self, id: &str) -> Result<()> {
         let mut flows = self.flows.write().await;
         if flows.remove(id).is_none() {
-            return Err(StreamlineError::Config(format!("Flow not found: {}", id)));
+            return Err(StreamlineError::Config(format!("Flow not found: {id}")));
         }
         Ok(())
     }
@@ -117,7 +117,7 @@ impl FlowDesigner {
         let mut flows = self.flows.write().await;
         let flow = flows
             .get_mut(flow_id)
-            .ok_or_else(|| StreamlineError::Config(format!("Flow not found: {}", flow_id)))?;
+            .ok_or_else(|| StreamlineError::Config(format!("Flow not found: {flow_id}")))?;
 
         // Validate node type
         if !self.node_registry.is_valid_type(&node.node_type) {
@@ -138,7 +138,7 @@ impl FlowDesigner {
         let mut flows = self.flows.write().await;
         let flow = flows
             .get_mut(flow_id)
-            .ok_or_else(|| StreamlineError::Config(format!("Flow not found: {}", flow_id)))?;
+            .ok_or_else(|| StreamlineError::Config(format!("Flow not found: {flow_id}")))?;
 
         // Remove node
         flow.nodes.retain(|n| n.id != node_id);
@@ -155,7 +155,7 @@ impl FlowDesigner {
         let mut flows = self.flows.write().await;
         let flow = flows
             .get_mut(flow_id)
-            .ok_or_else(|| StreamlineError::Config(format!("Flow not found: {}", flow_id)))?;
+            .ok_or_else(|| StreamlineError::Config(format!("Flow not found: {flow_id}")))?;
 
         // Validate nodes exist
         let source_exists = flow.nodes.iter().any(|n| n.id == edge.source);
@@ -185,7 +185,7 @@ impl FlowDesigner {
         let mut flows = self.flows.write().await;
         let flow = flows
             .get_mut(flow_id)
-            .ok_or_else(|| StreamlineError::Config(format!("Flow not found: {}", flow_id)))?;
+            .ok_or_else(|| StreamlineError::Config(format!("Flow not found: {flow_id}")))?;
 
         flow.edges.retain(|e| e.id != edge_id);
         flow.updated_at = Utc::now();
@@ -198,7 +198,7 @@ impl FlowDesigner {
         let flows = self.flows.read().await;
         let flow = flows
             .get(flow_id)
-            .ok_or_else(|| StreamlineError::Config(format!("Flow not found: {}", flow_id)))?;
+            .ok_or_else(|| StreamlineError::Config(format!("Flow not found: {flow_id}")))?;
 
         let validator = FlowValidator::new(&self.node_registry);
         validator.validate(flow)
@@ -209,7 +209,7 @@ impl FlowDesigner {
         let flows = self.flows.read().await;
         let flow = flows
             .get(flow_id)
-            .ok_or_else(|| StreamlineError::Config(format!("Flow not found: {}", flow_id)))?;
+            .ok_or_else(|| StreamlineError::Config(format!("Flow not found: {flow_id}")))?;
 
         // First validate
         let validation = {
@@ -234,7 +234,7 @@ impl FlowDesigner {
         let flows = self.flows.read().await;
         let flow = flows
             .get(flow_id)
-            .ok_or_else(|| StreamlineError::Config(format!("Flow not found: {}", flow_id)))?;
+            .ok_or_else(|| StreamlineError::Config(format!("Flow not found: {flow_id}")))?;
 
         let exporter = FlowExporter::new();
         exporter.export(flow, format)
@@ -254,9 +254,9 @@ impl FlowDesigner {
     /// Create a flow from a template
     pub async fn create_from_template(&self, template_id: &str, name: &str) -> Result<FlowGraph> {
         let templates = self.templates.read().await;
-        let template = templates.get(template_id).ok_or_else(|| {
-            StreamlineError::Config(format!("Template not found: {}", template_id))
-        })?;
+        let template = templates
+            .get(template_id)
+            .ok_or_else(|| StreamlineError::Config(format!("Template not found: {template_id}")))?;
 
         let mut flow = template.flow.clone();
         flow.id = Uuid::new_v4().to_string();
@@ -1066,7 +1066,7 @@ impl<'a> FlowValidator<'a> {
         }
 
         for node in &flow.nodes {
-            if self.has_cycle_util(flow, &node.id, &mut visited, &mut rec_stack) {
+            if Self::has_cycle_util(flow, &node.id, &mut visited, &mut rec_stack) {
                 return true;
             }
         }
@@ -1075,7 +1075,6 @@ impl<'a> FlowValidator<'a> {
     }
 
     fn has_cycle_util(
-        &self,
         flow: &FlowGraph,
         node_id: &str,
         visited: &mut HashMap<String, bool>,
@@ -1092,7 +1091,8 @@ impl<'a> FlowValidator<'a> {
         rec_stack.insert(node_id.to_string(), true);
 
         for edge in &flow.edges {
-            if edge.source == node_id && self.has_cycle_util(flow, &edge.target, visited, rec_stack)
+            if edge.source == node_id
+                && Self::has_cycle_util(flow, &edge.target, visited, rec_stack)
             {
                 return true;
             }
@@ -1291,9 +1291,9 @@ impl FlowExporter {
     fn export(&self, flow: &FlowGraph, format: ExportFormat) -> Result<String> {
         match format {
             ExportFormat::Json => serde_json::to_string_pretty(flow)
-                .map_err(|e| StreamlineError::Config(format!("JSON serialization error: {}", e))),
+                .map_err(|e| StreamlineError::Config(format!("JSON serialization error: {e}"))),
             ExportFormat::Yaml => serde_yaml::to_string(flow)
-                .map_err(|e| StreamlineError::Config(format!("YAML serialization error: {}", e))),
+                .map_err(|e| StreamlineError::Config(format!("YAML serialization error: {e}"))),
             ExportFormat::Dsl => self.export_dsl(flow),
         }
     }
@@ -1302,7 +1302,7 @@ impl FlowExporter {
         let mut dsl = String::new();
         dsl.push_str(&format!("-- Flow: {}\n", flow.name));
         if let Some(ref desc) = flow.description {
-            dsl.push_str(&format!("-- {}\n", desc));
+            dsl.push_str(&format!("-- {desc}\n"));
         }
         dsl.push('\n');
 
@@ -1310,7 +1310,7 @@ impl FlowExporter {
         for node in &flow.nodes {
             if node.node_type.starts_with("source.") {
                 if let Some(topic) = node.config.get("topic").and_then(|v| v.as_str()) {
-                    dsl.push_str(&format!("FROM STREAM '{}'\n", topic));
+                    dsl.push_str(&format!("FROM STREAM '{topic}'\n"));
                 }
             }
         }
@@ -1320,7 +1320,7 @@ impl FlowExporter {
             match node.node_type.as_str() {
                 "transform.filter" => {
                     if let Some(cond) = node.config.get("condition").and_then(|v| v.as_str()) {
-                        dsl.push_str(&format!("WHERE {}\n", cond));
+                        dsl.push_str(&format!("WHERE {cond}\n"));
                     }
                 }
                 "transform.project" => {
@@ -1349,7 +1349,7 @@ impl FlowExporter {
                 }
                 "sink.topic" => {
                     if let Some(topic) = node.config.get("topic").and_then(|v| v.as_str()) {
-                        dsl.push_str(&format!("EMIT TO '{}'\n", topic));
+                        dsl.push_str(&format!("EMIT TO '{topic}'\n"));
                     }
                 }
                 _ => {}
@@ -1371,9 +1371,9 @@ impl FlowImporter {
     fn import(&self, data: &str, format: ExportFormat) -> Result<FlowGraph> {
         match format {
             ExportFormat::Json => serde_json::from_str(data)
-                .map_err(|e| StreamlineError::Config(format!("JSON parse error: {}", e))),
+                .map_err(|e| StreamlineError::Config(format!("JSON parse error: {e}"))),
             ExportFormat::Yaml => serde_yaml::from_str(data)
-                .map_err(|e| StreamlineError::Config(format!("YAML parse error: {}", e))),
+                .map_err(|e| StreamlineError::Config(format!("YAML parse error: {e}"))),
             ExportFormat::Dsl => Err(StreamlineError::Config(
                 "DSL import not yet supported".to_string(),
             )),

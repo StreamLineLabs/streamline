@@ -156,18 +156,11 @@ impl SchemaHistoryStore {
 
     /// Get the schema that was in effect at a given position/timestamp for a table.
     /// Returns the latest version whose recorded_at <= ts.
-    pub fn get_schema_at(
-        &self,
-        table: &str,
-        ts: DateTime<Utc>,
-    ) -> Option<SchemaVersionRecord> {
+    pub fn get_schema_at(&self, table: &str, ts: DateTime<Utc>) -> Option<SchemaVersionRecord> {
         let versions = self.versions.read();
-        versions.get(table).and_then(|v| {
-            v.iter()
-                .rev()
-                .find(|sv| sv.recorded_at <= ts)
-                .cloned()
-        })
+        versions
+            .get(table)
+            .and_then(|v| v.iter().rev().find(|sv| sv.recorded_at <= ts).cloned())
     }
 
     /// Get the current (latest) schema for a table

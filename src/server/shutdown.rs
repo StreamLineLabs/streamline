@@ -416,8 +416,7 @@ impl std::fmt::Display for ShutdownError {
             } => {
                 write!(
                     f,
-                    "Shutdown timed out during {} phase ({} pending requests, {} active connections)",
-                    phase, pending_requests, active_connections
+                    "Shutdown timed out during {phase} phase ({pending_requests} pending requests, {active_connections} active connections)"
                 )
             }
         }

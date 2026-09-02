@@ -395,8 +395,7 @@ impl<F: AsyncFile + 'static> AsyncSegment<F> {
             } else {
                 serde_json::from_slice(&batch_bytes).map_err(|e| {
                     StreamlineError::CorruptedData(format!(
-                        "Failed to deserialize batch (JSON): {}",
-                        e
+                        "Failed to deserialize batch (JSON): {e}"
                     ))
                 })?
             };
@@ -605,7 +604,7 @@ mod tests {
         let segment = AsyncSegment::create(&fs, &path, 0).await.unwrap();
 
         for i in 0..10 {
-            let record = Record::new(i, 1234567890 + i, None, Bytes::from(format!("value {}", i)));
+            let record = Record::new(i, 1234567890 + i, None, Bytes::from(format!("value {i}")));
             segment.append_record(record).await.unwrap();
         }
 
@@ -649,7 +648,7 @@ mod tests {
             let segment = AsyncSegment::create(&fs, &path, 0).await.unwrap();
             for i in 0..5 {
                 let record =
-                    Record::new(i, 1234567890 + i, None, Bytes::from(format!("value {}", i)));
+                    Record::new(i, 1234567890 + i, None, Bytes::from(format!("value {i}")));
                 segment.append_record(record).await.unwrap();
             }
             segment.seal().await.unwrap();
@@ -674,7 +673,7 @@ mod tests {
             .unwrap();
 
         for i in 0..10 {
-            let record = Record::new(i, 1234567890 + i, None, Bytes::from(format!("value {}", i)));
+            let record = Record::new(i, 1234567890 + i, None, Bytes::from(format!("value {i}")));
             segment.append_record(record).await.unwrap();
         }
 
@@ -699,7 +698,7 @@ mod tests {
                 i,
                 1234567890 + i,
                 None,
-                Bytes::from(format!("value {}", i)),
+                Bytes::from(format!("value {i}")),
             ));
         }
         segment.append_batch(&batch).await.unwrap();

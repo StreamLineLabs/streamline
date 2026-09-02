@@ -550,7 +550,7 @@ impl WorkloadProfileCache {
 
     /// Add or update a profile
     pub fn add_profile(&mut self, fingerprint: WorkloadFingerprint, params: Vec<f64>, score: f64) {
-        let key = format!("{:?}", fingerprint);
+        let key = format!("{fingerprint:?}");
 
         if let Some(existing) = self.profiles.get_mut(&key) {
             // Update if better score
@@ -707,8 +707,7 @@ mod tests {
         let pattern = analyzer.pattern();
         assert!(
             pattern == WorkloadPattern::Growing || pattern != WorkloadPattern::Steady,
-            "Expected non-Steady pattern (got {:?}), indicating change detection",
-            pattern
+            "Expected non-Steady pattern (got {pattern:?}), indicating change detection"
         );
     }
 

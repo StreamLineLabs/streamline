@@ -100,15 +100,14 @@ impl MarketplaceRegistry {
         if let Some(conn) = self.installed.get(name) {
             if conn.running {
                 return Err(format!(
-                    "Cannot uninstall running connector '{}'. Stop it first.",
-                    name
+                    "Cannot uninstall running connector '{name}'. Stop it first."
                 ));
             }
         }
         self.installed
             .remove(name)
             .map(|_| ())
-            .ok_or_else(|| format!("Connector '{}' is not installed", name))
+            .ok_or_else(|| format!("Connector '{name}' is not installed"))
     }
 
     /// Configure an installed connector.
@@ -116,7 +115,7 @@ impl MarketplaceRegistry {
         let connector = self
             .installed
             .get_mut(name)
-            .ok_or_else(|| format!("Connector '{}' is not installed", name))?;
+            .ok_or_else(|| format!("Connector '{name}' is not installed"))?;
         connector.config = config;
         Ok(())
     }
@@ -126,10 +125,10 @@ impl MarketplaceRegistry {
         let connector = self
             .installed
             .get_mut(name)
-            .ok_or_else(|| format!("Connector '{}' is not installed", name))?;
+            .ok_or_else(|| format!("Connector '{name}' is not installed"))?;
 
         if connector.running {
-            return Err(format!("Connector '{}' is already running", name));
+            return Err(format!("Connector '{name}' is already running"));
         }
 
         connector.running = true;
@@ -142,7 +141,7 @@ impl MarketplaceRegistry {
         let connector = self
             .installed
             .get_mut(name)
-            .ok_or_else(|| format!("Connector '{}' is not installed", name))?;
+            .ok_or_else(|| format!("Connector '{name}' is not installed"))?;
         connector.running = false;
         Ok(())
     }

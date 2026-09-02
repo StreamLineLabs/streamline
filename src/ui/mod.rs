@@ -33,13 +33,13 @@ mod sse;
 mod templates;
 
 pub use client::{StreamlineClient, StreamlineClientConfig};
+pub use query_editor::{
+    ClusterHealthSummary, ClusterTopology, QueryEditorRequest, QueryEditorResult, QuerySuggestions,
+    TopicSchemaInfo, TopologyNode,
+};
 pub use routes::create_router;
 pub use sse::{SseEvent, SseManager};
 pub use templates::Templates;
-pub use query_editor::{
-    ClusterHealthSummary, ClusterTopology, QueryEditorRequest, QueryEditorResult,
-    QuerySuggestions, TopicSchemaInfo, TopologyNode,
-};
 
 use axum::Router;
 use std::net::SocketAddr;
@@ -259,7 +259,7 @@ mod tests {
     fn test_state_debug() {
         let config = WebUiConfig::default();
         let state = WebUiState::new(config).unwrap();
-        let debug = format!("{:?}", state);
+        let debug = format!("{state:?}");
         assert!(debug.contains("WebUiState"));
     }
 }

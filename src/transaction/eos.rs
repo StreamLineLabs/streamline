@@ -316,14 +316,13 @@ impl EosManager {
     ///
     /// Returns a map of (topic, partition) → (producer_id → state)
     /// that can be persisted to disk and restored with `restore_snapshot`.
-    pub fn create_snapshot(&self) -> HashMap<(String, i32), HashMap<ProducerId, ProducerSequenceState>> {
+    pub fn create_snapshot(
+        &self,
+    ) -> HashMap<(String, i32), HashMap<ProducerId, ProducerSequenceState>> {
         let mut snapshot = HashMap::new();
         for entry in self.sequences.iter() {
             let key = entry.key();
-            snapshot.insert(
-                (key.topic.clone(), key.partition),
-                entry.value().clone(),
-            );
+            snapshot.insert((key.topic.clone(), key.partition), entry.value().clone());
         }
         snapshot
     }
@@ -343,7 +342,10 @@ impl EosManager {
             count += producers.len();
             self.sequences.insert(key, producers);
         }
-        debug!(producers = count, "EOS: Restored sequence state from snapshot");
+        debug!(
+            producers = count,
+            "EOS: Restored sequence state from snapshot"
+        );
     }
 
     /// Save sequence state to a file for crash recovery
@@ -352,7 +354,7 @@ impl EosManager {
         let serializable: HashMap<String, HashMap<String, ProducerSequenceState>> = snapshot
             .into_iter()
             .map(|((topic, partition), producers)| {
-                let key = format!("{}:{}", topic, partition);
+                let key = format!("{topic}:{partition}");
                 let prods: HashMap<String, ProducerSequenceState> = producers
                     .into_iter()
                     .map(|(pid, state)| (pid.to_string(), state))
@@ -362,22 +364,16 @@ impl EosManager {
             .collect();
 
         let json = serde_json::to_string(&serializable).map_err(|e| {
-            crate::error::StreamlineError::Storage(format!(
-                "Failed to serialize EOS state: {}", e
-            ))
+            crate::error::StreamlineError::Storage(format!("Failed to serialize EOS state: {e}"))
         })?;
 
         let temp_path = path.with_extension("tmp");
         std::fs::write(&temp_path, &json).map_err(|e| {
-            crate::error::StreamlineError::Storage(format!(
-                "Failed to write EOS snapshot: {}", e
-            ))
+            crate::error::StreamlineError::Storage(format!("Failed to write EOS snapshot: {e}"))
         })?;
         // Atomic rename for crash safety
         std::fs::rename(&temp_path, path).map_err(|e| {
-            crate::error::StreamlineError::Storage(format!(
-                "Failed to finalize EOS snapshot: {}", e
-            ))
+            crate::error::StreamlineError::Storage(format!("Failed to finalize EOS snapshot: {e}"))
         })?;
 
         debug!(
@@ -395,16 +391,12 @@ impl EosManager {
         }
 
         let json = std::fs::read_to_string(path).map_err(|e| {
-            crate::error::StreamlineError::Storage(format!(
-                "Failed to read EOS snapshot: {}", e
-            ))
+            crate::error::StreamlineError::Storage(format!("Failed to read EOS snapshot: {e}"))
         })?;
 
         let serializable: HashMap<String, HashMap<String, ProducerSequenceState>> =
             serde_json::from_str(&json).map_err(|e| {
-                crate::error::StreamlineError::Storage(format!(
-                    "Failed to parse EOS snapshot: {}", e
-                ))
+                crate::error::StreamlineError::Storage(format!("Failed to parse EOS snapshot: {e}"))
             })?;
 
         let mut count = 0;
@@ -427,10 +419,8 @@ impl EosManager {
                 })
                 .collect();
             count += producer_map.len();
-            self.sequences.insert(
-                PartitionKey { topic, partition },
-                producer_map,
-            );
+            self.sequences
+                .insert(PartitionKey { topic, partition }, producer_map);
         }
 
         debug!(producers = count, "EOS: Loaded sequence state from file");
@@ -482,10 +472,7 @@ mod tests {
     fn test_sequence_validation_epoch_fenced() {
         let state = ProducerSequenceState::new(5);
         let result = state.validate_sequence(3, 0, 0);
-        assert_eq!(
-            result,
-            SequenceValidation::EpochFenced { current_epoch: 5 }
-        );
+        assert_eq!(result, SequenceValidation::EpochFenced { current_epoch: 5 });
     }
 
     #[test]
@@ -521,12 +508,7 @@ mod tests {
 
         // Duplicate should be detected
         let result = mgr.validate_produce("topic-1", 0, 1000, 0, 0, 4);
-        assert_eq!(
-            result,
-            SequenceValidation::Duplicate {
-                existing_offset: 0
-            }
-        );
+        assert_eq!(result, SequenceValidation::Duplicate { existing_offset: 0 });
 
         // Next sequence should be valid
         let result = mgr.validate_produce("topic-1", 0, 1000, 0, 5, 9);
@@ -551,10 +533,7 @@ mod tests {
 
         // Old epoch should be fenced
         let result = mgr.validate_produce("topic-1", 0, 1000, 0, 5, 9);
-        assert_eq!(
-            result,
-            SequenceValidation::EpochFenced { current_epoch: 1 }
-        );
+        assert_eq!(result, SequenceValidation::EpochFenced { current_epoch: 1 });
     }
 
     #[test]
@@ -728,7 +707,15 @@ mod tests {
 
         let mgr = EosManager::new(true);
         for i in 0..50 {
-            mgr.record_produce(&format!("topic-{}", i % 10), i % 3, i as i64, 0, 0, 4, i as i64 * 100);
+            mgr.record_produce(
+                &format!("topic-{}", i % 10),
+                i % 3,
+                i as i64,
+                0,
+                0,
+                4,
+                i as i64 * 100,
+            );
         }
 
         // Save multiple times (simulates periodic checkpointing)

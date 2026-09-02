@@ -441,7 +441,7 @@ impl ObsPipeline {
             ComponentHealth {
                 status: HealthStatus::Healthy,
                 message: if count > 0 {
-                    format!("{} metrics registered", count)
+                    format!("{count} metrics registered")
                 } else {
                     "Metrics enabled, awaiting data".to_string()
                 },
@@ -503,7 +503,7 @@ impl ObsPipeline {
             }
             ComponentHealth {
                 status,
-                message: format!("{} active alerts", active),
+                message: format!("{active} active alerts"),
                 last_check: chrono::Utc::now().timestamp_millis(),
             }
         } else {

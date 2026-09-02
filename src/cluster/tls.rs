@@ -103,8 +103,7 @@ impl InterBrokerTls {
             for cert in &ca_certs {
                 root_store.add(cert.clone()).map_err(|e| {
                     StreamlineError::Config(format!(
-                        "Failed to add inter-broker CA certificate: {}",
-                        e
+                        "Failed to add inter-broker CA certificate: {e}"
                     ))
                 })?;
             }
@@ -158,8 +157,7 @@ impl InterBrokerTls {
             for cert in ca_certs {
                 root_store.add(cert).map_err(|e| {
                     StreamlineError::Config(format!(
-                        "Failed to add inter-broker CA certificate: {}",
-                        e
+                        "Failed to add inter-broker CA certificate: {e}"
                     ))
                 })?;
             }
@@ -186,8 +184,7 @@ impl InterBrokerTls {
                 .with_client_auth_cert(certs, key)
                 .map_err(|e| {
                     StreamlineError::Config(format!(
-                        "Invalid inter-broker TLS client config (no verify): {}",
-                        e
+                        "Invalid inter-broker TLS client config (no verify): {e}"
                     ))
                 })?
         };
@@ -211,7 +208,7 @@ impl InterBrokerTls {
             .acceptor
             .accept(stream)
             .await
-            .map_err(|e| StreamlineError::Server(format!("TLS accept failed: {}", e)))?;
+            .map_err(|e| StreamlineError::Server(format!("TLS accept failed: {e}")))?;
 
         Ok(InterBrokerTlsStream::Server(tls_stream))
     }
@@ -224,7 +221,7 @@ impl InterBrokerTls {
         self.acceptor
             .accept(stream)
             .await
-            .map_err(|e| StreamlineError::Server(format!("TLS accept failed: {}", e)))
+            .map_err(|e| StreamlineError::Server(format!("TLS accept failed: {e}")))
     }
 
     /// Connect to a remote node with TLS
@@ -236,13 +233,13 @@ impl InterBrokerTls {
         // For inter-broker communication, we use the IP address as the server name
         // In production, this would be configured per-node or use DNS names
         let server_name = ServerName::try_from(addr.ip().to_string()).map_err(|e| {
-            StreamlineError::Server(format!("Invalid server name from address {}: {}", addr, e))
+            StreamlineError::Server(format!("Invalid server name from address {addr}: {e}"))
         })?;
 
         self.connector
             .connect(server_name, stream)
             .await
-            .map_err(|e| StreamlineError::Server(format!("TLS connect failed: {}", e)))
+            .map_err(|e| StreamlineError::Server(format!("TLS connect failed: {e}")))
     }
 
     /// Get the TLS acceptor for use with external code

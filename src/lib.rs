@@ -53,7 +53,6 @@
 //!
 //! ```no_run
 //! use streamline::{EmbeddedStreamline, Result};
-//! use bytes::Bytes;
 //!
 //! fn main() -> Result<()> {
 //!     // Create an in-memory instance
@@ -63,7 +62,7 @@
 //!     streamline.create_topic("events", 3)?;
 //!
 //!     // Produce messages
-//!     let offset = streamline.produce("events", 0, None, Bytes::from("hello world"))?;
+//!     let offset = streamline.produce("events", 0, None, "hello world".into())?;
 //!     println!("Produced at offset: {}", offset);
 //!
 //!     // Consume messages
@@ -102,12 +101,12 @@
 //! - [`server`]: TCP server and connection handling
 //! - [`protocol`]: Kafka wire protocol implementation
 //! - [`storage`]: Segment-based persistent storage
-//! - [`auth`]: Authentication (SASL) and authorization (ACL)
-//! - [`cluster`]: Raft-based clustering and node management
-//! - [`replication`]: Data replication and ISR management
+//! - `auth`: Authentication (SASL) and authorization (ACL; optional)
+//! - `cluster`: Raft-based clustering and node management (optional)
+//! - `replication`: Data replication and ISR management (optional)
 //! - [`consumer`]: Consumer groups and offset management
 //! - [`config`]: Server configuration and CLI arguments
-//! - [`metrics`]: Prometheus-compatible metrics
+//! - `metrics`: Prometheus-compatible metrics (optional)
 //! - [`error`]: Error types and Result alias
 //!
 //! ## Configuration
@@ -143,8 +142,8 @@
 //! | [`protocol`] | Stable | Kafka wire protocol |
 //! | [`embedded`] | Beta | Embedded SDK |
 //! | [`transaction`] | Beta | Transaction support |
-//! | [`cluster`], [`replication`] | Beta | Clustering features |
-//! | [`analytics`] | Stable | SQL analytics (DuckDB) |
+//! | `cluster`, `replication` | Beta | Clustering features |
+//! | `analytics` | Stable | SQL analytics (DuckDB) |
 //! | [`sink`] | Experimental | Lakehouse connectors |
 //!
 //! See the [API Stability documentation](https://github.com/josedab/streamline/blob/main/docs/API_STABILITY.md)
@@ -211,7 +210,7 @@ pub(crate) mod metrics;
 
 // Feature-gated modules
 #[cfg(feature = "auth")]
-pub(crate) mod audit;
+pub mod audit;
 #[cfg(feature = "auth")]
 pub mod auth;
 
@@ -264,7 +263,7 @@ pub(crate) mod cdc;
 pub(crate) mod transport;
 
 // Observability with eBPF support
-pub(crate) mod observability;
+pub mod observability;
 
 // Network module with XDP support (Linux only)
 #[cfg(target_os = "linux")]
@@ -496,9 +495,9 @@ pub use connect::api::{
 pub use cdc::{
     CdcColumnValue, CdcConfig, CdcEvent, CdcManager, CdcOperation, CdcSource, CdcSourceInfo,
     CdcSourceMetrics, CdcSourceStatus, ChangeEvent, ColumnSchema, CompatibilityResult,
-    Operation as CdcChangeOperation, SchemaCompatibility, SchemaEvolutionConfig, SchemaEvolutionStats, SchemaEvolutionTracker,
-    SchemaHistory, SchemaRegistry as CdcSchemaRegistry, SchemaVersion, SourceInfo, TableSchema,
-    TransactionInfo,
+    Operation as CdcChangeOperation, SchemaCompatibility, SchemaEvolutionConfig,
+    SchemaEvolutionStats, SchemaEvolutionTracker, SchemaHistory,
+    SchemaRegistry as CdcSchemaRegistry, SchemaVersion, SourceInfo, TableSchema, TransactionInfo,
 };
 // Debezium-replacement types
 #[cfg(any(
@@ -547,7 +546,7 @@ pub use wasm::function_registry::{
 
 // Re-export WASM Built-in function types
 pub use wasm::builtins::{
-    list_builtins, create_builtin, BuiltinFunction, BuiltinInfo, FieldMask,
+    create_builtin, list_builtins, BuiltinFunction, BuiltinInfo, FieldMask,
     FilterOperator as WasmFilterOperator, JsonFilter, JsonFlatten, JsonTransform, MaskStrategy,
     TimestampExtract, TimestampFormat,
 };
@@ -673,10 +672,10 @@ pub use edge::{
     EdgeSyncMode, EvictionResult, FederationCommand, FederationManager, FederationState,
     FederationStats, HeartbeatRequest, HeartbeatResponse, MemoryRecommendation, MeshTopology,
     OptimizationStats, PartitionCheckpoint, PeerConnection, PeerConnectionState, ResolutionResult,
-    ResourceAlert, ResourceMonitor, ResourceMonitorConfig, ResourceThresholds,
-    StoreForwardConfig, StoreForwardEngine, StoreForwardStatus, SyncBatch, SyncDirection,
-    SyncPhase, SyncPolicy, SyncProgress, SyncRecord, SyncResult, SyncState, SyncStats,
-    SyncStrategy, SyncWatermark, TopicCheckpoint, TopicStorageUsage,
+    ResourceAlert, ResourceMonitor, ResourceMonitorConfig, ResourceThresholds, StoreForwardConfig,
+    StoreForwardEngine, StoreForwardStatus, SyncBatch, SyncDirection, SyncPhase, SyncPolicy,
+    SyncProgress, SyncRecord, SyncResult, SyncState, SyncStats, SyncStrategy, SyncWatermark,
+    TopicCheckpoint, TopicStorageUsage,
 };
 
 // Re-export CRDT types
@@ -875,14 +874,14 @@ pub use gateway::{
 };
 
 // Re-export Smart Partition types
-pub use smart_partition::{
-    BrokerState, ClusterState, DryRunResult, PartitionAssignment, PartitionMetrics,
-    RebalanceConfig, RebalanceMode, RebalancePlan, SkewAnalysis, SkewAnalyzer, SkewAnalyzerConfig,
-    SkewReport, SkewSeverity, SmartRebalancer, ValidationError,
-};
 pub use smart_partition::analyzer::{
-    analyze_key_distribution, analyze_throughput_skew, gini_coefficient,
-    predict_rebalance_benefit,
+    analyze_key_distribution, analyze_throughput_skew, gini_coefficient, predict_rebalance_benefit,
+};
+pub use smart_partition::{
+    BrokerState, ClusterState, DryRunResult, PartitionAction, PartitionAssignment,
+    PartitionMetrics, RebalanceConfig, RebalanceMode, RebalancePlan, SkewAnalysis, SkewAnalyzer,
+    SkewAnalyzerConfig, SkewReport, SkewSeverity, SmartPartitionConfig, SmartPartitionManager,
+    SmartRebalancer, ValidationError,
 };
 
 // Re-export Playground types

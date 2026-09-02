@@ -112,7 +112,7 @@ impl TriggerBinding {
             trigger_type: TriggerType::Topic {
                 topic: topic.into(),
                 partitions: None,
-                group_id: format!("faas-{}", fn_name),
+                group_id: format!("faas-{fn_name}"),
             },
             config: TriggerConfig::default(),
             filter: None,
@@ -129,9 +129,7 @@ impl TriggerBinding {
         Self {
             name: name.into(),
             function_name: function_name.into(),
-            trigger_type: TriggerType::Schedule {
-                cron: cron.into(),
-            },
+            trigger_type: TriggerType::Schedule { cron: cron.into() },
             config: TriggerConfig::default(),
             filter: None,
             metadata: HashMap::new(),
@@ -219,6 +217,12 @@ pub struct TriggerManager {
     event_index: Vec<String>,
 }
 
+impl Default for TriggerManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TriggerManager {
     /// Create a new empty trigger manager.
     pub fn new() -> Self {
@@ -271,7 +275,7 @@ impl TriggerManager {
         let binding = self
             .bindings
             .remove(name)
-            .ok_or_else(|| StreamlineError::Config(format!("Binding '{}' not found", name)))?;
+            .ok_or_else(|| StreamlineError::Config(format!("Binding '{name}' not found")))?;
 
         match &binding.trigger_type {
             TriggerType::Topic { topic, .. } => {
@@ -387,7 +391,9 @@ mod tests {
         assert_eq!(binding.name, "my-trigger");
         assert_eq!(binding.function_name, "process-fn");
         match &binding.trigger_type {
-            TriggerType::Topic { topic, group_id, .. } => {
+            TriggerType::Topic {
+                topic, group_id, ..
+            } => {
                 assert_eq!(topic, "events");
                 assert_eq!(group_id, "faas-process-fn");
             }
@@ -456,7 +462,8 @@ mod tests {
     fn test_trigger_manager_register_unregister() {
         let mut mgr = TriggerManager::new();
         assert_eq!(mgr.binding_count(), 0);
-        mgr.register(TriggerBinding::topic("t1", "fn-a", "events")).unwrap();
+        mgr.register(TriggerBinding::topic("t1", "fn-a", "events"))
+            .unwrap();
         assert_eq!(mgr.binding_count(), 1);
         mgr.unregister("t1").unwrap();
         assert_eq!(mgr.binding_count(), 0);
@@ -465,16 +472,22 @@ mod tests {
     #[test]
     fn test_trigger_manager_duplicate_rejected() {
         let mut mgr = TriggerManager::new();
-        mgr.register(TriggerBinding::topic("t1", "fn-a", "events")).unwrap();
-        assert!(mgr.register(TriggerBinding::topic("t1", "fn-b", "other")).is_err());
+        mgr.register(TriggerBinding::topic("t1", "fn-a", "events"))
+            .unwrap();
+        assert!(mgr
+            .register(TriggerBinding::topic("t1", "fn-b", "other"))
+            .is_err());
     }
 
     #[test]
     fn test_trigger_manager_match_topic() {
         let mut mgr = TriggerManager::new();
-        mgr.register(TriggerBinding::topic("t1", "fn-a", "events")).unwrap();
-        mgr.register(TriggerBinding::topic("t2", "fn-b", "events")).unwrap();
-        mgr.register(TriggerBinding::topic("t3", "fn-c", "other")).unwrap();
+        mgr.register(TriggerBinding::topic("t1", "fn-a", "events"))
+            .unwrap();
+        mgr.register(TriggerBinding::topic("t2", "fn-b", "events"))
+            .unwrap();
+        mgr.register(TriggerBinding::topic("t3", "fn-c", "other"))
+            .unwrap();
         assert_eq!(mgr.match_topic("events").len(), 2);
         assert_eq!(mgr.match_topic("other").len(), 1);
         assert_eq!(mgr.match_topic("nonexistent").len(), 0);
@@ -484,11 +497,19 @@ mod tests {
     fn test_trigger_manager_match_http() {
         let mut mgr = TriggerManager::new();
         mgr.register(TriggerBinding::http(
-            "h1", "fn-a", "/api/data", vec![HttpMethod::Get, HttpMethod::Post],
-        )).unwrap();
+            "h1",
+            "fn-a",
+            "/api/data",
+            vec![HttpMethod::Get, HttpMethod::Post],
+        ))
+        .unwrap();
         mgr.register(TriggerBinding::http(
-            "h2", "fn-b", "/api/data", vec![HttpMethod::Delete],
-        )).unwrap();
+            "h2",
+            "fn-b",
+            "/api/data",
+            vec![HttpMethod::Delete],
+        ))
+        .unwrap();
         let matches = mgr.match_http("/api/data", &HttpMethod::Get);
         assert_eq!(matches.len(), 1);
         assert_eq!(matches[0].name, "h1");
@@ -500,8 +521,10 @@ mod tests {
     #[test]
     fn test_trigger_manager_match_event() {
         let mut mgr = TriggerManager::new();
-        mgr.register(TriggerBinding::event("e1", "fn-a", "user.*")).unwrap();
-        mgr.register(TriggerBinding::event("e2", "fn-b", "order.created")).unwrap();
+        mgr.register(TriggerBinding::event("e1", "fn-a", "user.*"))
+            .unwrap();
+        mgr.register(TriggerBinding::event("e2", "fn-b", "order.created"))
+            .unwrap();
         assert_eq!(mgr.match_event("user.created").len(), 1);
         assert_eq!(mgr.match_event("user.deleted").len(), 1);
         let matches = mgr.match_event("order.created");
@@ -513,8 +536,10 @@ mod tests {
     #[test]
     fn test_trigger_manager_scheduled_bindings() {
         let mut mgr = TriggerManager::new();
-        mgr.register(TriggerBinding::schedule("s1", "fn-a", "0 * * * *")).unwrap();
-        mgr.register(TriggerBinding::topic("t1", "fn-b", "events")).unwrap();
+        mgr.register(TriggerBinding::schedule("s1", "fn-a", "0 * * * *"))
+            .unwrap();
+        mgr.register(TriggerBinding::topic("t1", "fn-b", "events"))
+            .unwrap();
         let scheduled = mgr.scheduled_bindings();
         assert_eq!(scheduled.len(), 1);
         assert_eq!(scheduled[0].name, "s1");
@@ -523,9 +548,12 @@ mod tests {
     #[test]
     fn test_trigger_manager_all_bindings() {
         let mut mgr = TriggerManager::new();
-        mgr.register(TriggerBinding::topic("t1", "fn-a", "events")).unwrap();
-        mgr.register(TriggerBinding::schedule("s1", "fn-b", "0 * * * *")).unwrap();
-        mgr.register(TriggerBinding::event("e1", "fn-c", "user.*")).unwrap();
+        mgr.register(TriggerBinding::topic("t1", "fn-a", "events"))
+            .unwrap();
+        mgr.register(TriggerBinding::schedule("s1", "fn-b", "0 * * * *"))
+            .unwrap();
+        mgr.register(TriggerBinding::event("e1", "fn-c", "user.*"))
+            .unwrap();
         assert_eq!(mgr.all_bindings().len(), 3);
     }
 }

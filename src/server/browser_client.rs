@@ -774,7 +774,7 @@ async fn handle_browser_connection(
 
                                             message_counter += 1;
                                             let msg = BatchMessage {
-                                                id: format!("msg-{}", message_counter),
+                                                id: format!("msg-{message_counter}"),
                                                 topic: topic.clone(),
                                                 partition,
                                                 offset: record.offset,
@@ -823,7 +823,7 @@ async fn handle_browser_connection(
                                 } else {
                                     batch_counter += 1;
                                     ServerMessage::MessageBatch {
-                                        batch_id: format!("batch-{}", batch_counter),
+                                        batch_id: format!("batch-{batch_counter}"),
                                         subscription_id: sub.id.clone(),
                                         messages: batch_messages,
                                     }
@@ -867,7 +867,7 @@ async fn handle_browser_connection(
                     Err(e) => {
                         let err = ServerMessage::Error {
                             code: "INVALID_MESSAGE".to_string(),
-                            message: format!("Failed to parse message: {}", e),
+                            message: format!("Failed to parse message: {e}"),
                             subscription_id: None,
                             recoverable: true,
                         };
@@ -1017,7 +1017,7 @@ async fn handle_client_message(
                             let _ = message_tx
                                 .send(ServerMessage::Error {
                                     code: "FORBIDDEN".to_string(),
-                                    message: format!("Not authorized for topic: {}", topic),
+                                    message: format!("Not authorized for topic: {topic}"),
                                     subscription_id: Some(id.clone()),
                                     recoverable: false,
                                 })
@@ -1038,7 +1038,7 @@ async fn handle_client_message(
                     .replace('.', r"\.")
                     .replace('*', ".*")
                     .replace('?', ".");
-                regex::Regex::new(&format!("^{}$", regex_pattern)).ok()
+                regex::Regex::new(&format!("^{regex_pattern}$")).ok()
             });
 
             for topic in &topics {
@@ -1056,7 +1056,7 @@ async fn handle_client_message(
                         let _ = message_tx
                             .send(ServerMessage::Error {
                                 code: "TOPIC_NOT_FOUND".to_string(),
-                                message: format!("Topic '{}' not found: {}", topic, e),
+                                message: format!("Topic '{topic}' not found: {e}"),
                                 subscription_id: Some(id.clone()),
                                 recoverable: true,
                             })
@@ -1097,7 +1097,7 @@ async fn handle_client_message(
                 let _ = message_tx
                     .send(ServerMessage::Error {
                         code: "SUBSCRIPTION_NOT_FOUND".to_string(),
-                        message: format!("Subscription '{}' not found", id),
+                        message: format!("Subscription '{id}' not found"),
                         subscription_id: Some(id),
                         recoverable: true,
                     })
@@ -1180,7 +1180,7 @@ async fn handle_client_message(
                     let _ = message_tx
                         .send(ServerMessage::Error {
                             code: "REPLAY_FAILED".to_string(),
-                            message: format!("Failed to replay: {}", e),
+                            message: format!("Failed to replay: {e}"),
                             subscription_id: None,
                             recoverable: true,
                         })

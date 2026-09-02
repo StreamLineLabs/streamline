@@ -42,6 +42,7 @@ impl Default for WalSyncMode {
 
 /// Retention policy for completed (synced) segments.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[allow(clippy::enum_variant_names)] // `By*` mirrors the serde tag values
 pub enum WalRetention {
     /// Keep up to `max_bytes` of synced data before purging.
     BySize { max_bytes: usize },
@@ -80,8 +81,8 @@ impl Default for WalConfig {
     fn default() -> Self {
         Self {
             data_dir: PathBuf::from("/tmp/streamline-wal"),
-            max_segment_size_bytes: 4 * 1024 * 1024,  // 4 MB
-            max_total_size_bytes: 256 * 1024 * 1024,   // 256 MB
+            max_segment_size_bytes: 4 * 1024 * 1024, // 4 MB
+            max_total_size_bytes: 256 * 1024 * 1024, // 256 MB
             sync_mode: WalSyncMode::default(),
             compression: true,
             retention: WalRetention::default(),
@@ -118,7 +119,11 @@ impl WalEntry {
         self.topic.len()
             + self.key.as_ref().map_or(0, |k| k.len())
             + self.value.len()
-            + self.headers.iter().map(|(k, v)| k.len() + v.len()).sum::<usize>()
+            + self
+                .headers
+                .iter()
+                .map(|(k, v)| k.len() + v.len())
+                .sum::<usize>()
             + 64 // fixed overhead for sequence, timestamp, etc.
     }
 }
@@ -254,7 +259,9 @@ impl OfflineWal {
         headers: HashMap<String, String>,
     ) -> Result<u64> {
         if topic.is_empty() {
-            return Err(StreamlineError::Config("WAL append: topic must not be empty".into()));
+            return Err(StreamlineError::Config(
+                "WAL append: topic must not be empty".into(),
+            ));
         }
 
         let seq = self.next_sequence.fetch_add(1, Ordering::SeqCst);
@@ -275,9 +282,10 @@ impl OfflineWal {
         self.enforce_total_size_limit(entry_size)?;
 
         let needs_rotation = {
-            let active = self.active_segment.read().map_err(|e| {
-                StreamlineError::Storage(format!("WAL lock poisoned: {e}"))
-            })?;
+            let active = self
+                .active_segment
+                .read()
+                .map_err(|e| StreamlineError::Storage(format!("WAL lock poisoned: {e}")))?;
             active.size_bytes + entry_size > self.config.max_segment_size_bytes
         };
 
@@ -286,15 +294,18 @@ impl OfflineWal {
         }
 
         {
-            let mut active = self.active_segment.write().map_err(|e| {
-                StreamlineError::Storage(format!("WAL lock poisoned: {e}"))
-            })?;
+            let mut active = self
+                .active_segment
+                .write()
+                .map_err(|e| StreamlineError::Storage(format!("WAL lock poisoned: {e}")))?;
             active.size_bytes += entry_size;
             active.entries.push(entry);
         }
 
         self.stats.total_entries.fetch_add(1, Ordering::Relaxed);
-        self.stats.total_bytes.fetch_add(entry_size as u64, Ordering::Relaxed);
+        self.stats
+            .total_bytes
+            .fetch_add(entry_size as u64, Ordering::Relaxed);
         self.stats.pending_entries.fetch_add(1, Ordering::Relaxed);
 
         debug!(seq, topic, size = entry_size, "WAL entry appended");
@@ -350,7 +361,9 @@ impl OfflineWal {
                 }
             }
         } else {
-            return Err(StreamlineError::Storage("WAL segments lock poisoned".into()));
+            return Err(StreamlineError::Storage(
+                "WAL segments lock poisoned".into(),
+            ));
         }
 
         if let Ok(mut active) = self.active_segment.write() {
@@ -361,11 +374,17 @@ impl OfflineWal {
                 }
             }
         } else {
-            return Err(StreamlineError::Storage("WAL active segment lock poisoned".into()));
+            return Err(StreamlineError::Storage(
+                "WAL active segment lock poisoned".into(),
+            ));
         }
 
-        self.stats.synced_entries.fetch_add(marked as u64, Ordering::Relaxed);
-        self.stats.pending_entries.fetch_sub(marked as u64, Ordering::Relaxed);
+        self.stats
+            .synced_entries
+            .fetch_add(marked as u64, Ordering::Relaxed);
+        self.stats
+            .pending_entries
+            .fetch_sub(marked as u64, Ordering::Relaxed);
         self.refresh_oldest_unsynced();
 
         info!(up_to_sequence, marked, "WAL entries marked as synced");
@@ -374,9 +393,10 @@ impl OfflineWal {
 
     /// Remove fully-synced sealed segments.
     pub fn compact(&self) -> Result<CompactionResult> {
-        let mut segments = self.segments.write().map_err(|e| {
-            StreamlineError::Storage(format!("WAL segments lock poisoned: {e}"))
-        })?;
+        let mut segments = self
+            .segments
+            .write()
+            .map_err(|e| StreamlineError::Storage(format!("WAL segments lock poisoned: {e}")))?;
 
         let before_len = segments.len();
         let mut entries_removed = 0usize;
@@ -410,9 +430,7 @@ impl OfflineWal {
 
         info!(
             segments_removed,
-            entries_removed,
-            bytes_freed,
-            "WAL compaction complete"
+            entries_removed, bytes_freed, "WAL compaction complete"
         );
 
         Ok(CompactionResult {
@@ -458,18 +476,20 @@ impl OfflineWal {
         let new_id = self.next_segment_id.fetch_add(1, Ordering::SeqCst);
         let mut new_seg = WalSegment::new(new_id);
 
-        let mut active = self.active_segment.write().map_err(|e| {
-            StreamlineError::Storage(format!("WAL lock poisoned: {e}"))
-        })?;
+        let mut active = self
+            .active_segment
+            .write()
+            .map_err(|e| StreamlineError::Storage(format!("WAL lock poisoned: {e}")))?;
 
         // Seal and swap.
         active.sealed = true;
         std::mem::swap(&mut *active, &mut new_seg);
 
         // Move the old (now sealed) segment into the sealed list.
-        let mut segments = self.segments.write().map_err(|e| {
-            StreamlineError::Storage(format!("WAL segments lock poisoned: {e}"))
-        })?;
+        let mut segments = self
+            .segments
+            .write()
+            .map_err(|e| StreamlineError::Storage(format!("WAL segments lock poisoned: {e}")))?;
         segments.push(new_seg);
 
         self.stats.segments_count.fetch_add(1, Ordering::Relaxed);
@@ -484,12 +504,14 @@ impl OfflineWal {
             return Ok(());
         }
 
-        let mut segments = self.segments.write().map_err(|e| {
-            StreamlineError::Storage(format!("WAL segments lock poisoned: {e}"))
-        })?;
+        let mut segments = self
+            .segments
+            .write()
+            .map_err(|e| StreamlineError::Storage(format!("WAL segments lock poisoned: {e}")))?;
 
         let mut freed = 0usize;
-        let target = (current_total + incoming_bytes).saturating_sub(self.config.max_total_size_bytes);
+        let target =
+            (current_total + incoming_bytes).saturating_sub(self.config.max_total_size_bytes);
 
         let mut drop_count = 0usize;
         for seg in segments.iter() {
@@ -510,11 +532,21 @@ impl OfflineWal {
                 .count();
             let pending_dropped = entries_dropped - synced_dropped;
 
-            self.stats.total_entries.fetch_sub(entries_dropped as u64, Ordering::Relaxed);
-            self.stats.total_bytes.fetch_sub(freed as u64, Ordering::Relaxed);
-            self.stats.synced_entries.fetch_sub(synced_dropped as u64, Ordering::Relaxed);
-            self.stats.pending_entries.fetch_sub(pending_dropped as u64, Ordering::Relaxed);
-            self.stats.segments_count.fetch_sub(drop_count as u64, Ordering::Relaxed);
+            self.stats
+                .total_entries
+                .fetch_sub(entries_dropped as u64, Ordering::Relaxed);
+            self.stats
+                .total_bytes
+                .fetch_sub(freed as u64, Ordering::Relaxed);
+            self.stats
+                .synced_entries
+                .fetch_sub(synced_dropped as u64, Ordering::Relaxed);
+            self.stats
+                .pending_entries
+                .fetch_sub(pending_dropped as u64, Ordering::Relaxed);
+            self.stats
+                .segments_count
+                .fetch_sub(drop_count as u64, Ordering::Relaxed);
 
             warn!(
                 segments_dropped = drop_count,
@@ -720,7 +752,10 @@ mod tests {
         }
 
         let segments = wal.segments.read().unwrap();
-        assert!(segments.len() >= 1, "should have at least one sealed segment");
+        assert!(
+            !segments.is_empty(),
+            "should have at least one sealed segment"
+        );
         assert!(
             segments.iter().all(|s| s.sealed),
             "all non-active segments must be sealed"
@@ -736,7 +771,8 @@ mod tests {
         let wal = OfflineWal::new(cfg);
 
         for _ in 0..20 {
-            wal.append("t", None, b"payload-value", empty_headers()).unwrap();
+            wal.append("t", None, b"payload-value", empty_headers())
+                .unwrap();
         }
 
         // Mark everything synced.
@@ -761,7 +797,8 @@ mod tests {
         let wal = OfflineWal::new(cfg);
 
         for _ in 0..20 {
-            wal.append("t", None, b"payload-data", empty_headers()).unwrap();
+            wal.append("t", None, b"payload-data", empty_headers())
+                .unwrap();
         }
 
         // Mark only some as synced — sealed segments with unsynced entries must survive.
@@ -822,8 +859,13 @@ mod tests {
 
         // Append enough to exceed total size — oldest sealed segments should be evicted.
         for i in 0..50 {
-            wal.append("t", None, format!("payload-{i:04}").as_bytes(), empty_headers())
-                .unwrap();
+            wal.append(
+                "t",
+                None,
+                format!("payload-{i:04}").as_bytes(),
+                empty_headers(),
+            )
+            .unwrap();
         }
 
         let total = wal.actual_total_bytes();

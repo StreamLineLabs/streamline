@@ -2,11 +2,11 @@
 //!
 //! Manages the lifecycle of connector tasks: create, start, pause, resume, stop, delete.
 
+use chrono::{DateTime, Utc};
+use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
-use dashmap::DashMap;
-use chrono::{DateTime, Utc};
 
 /// State of a connector task.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -89,7 +89,7 @@ impl TaskManager {
             }
             Ok(())
         } else {
-            Err(format!("Connector '{}' not found", connector_name))
+            Err(format!("Connector '{connector_name}' not found"))
         }
     }
 
@@ -103,7 +103,7 @@ impl TaskManager {
             }
             Ok(())
         } else {
-            Err(format!("Connector '{}' not found", connector_name))
+            Err(format!("Connector '{connector_name}' not found"))
         }
     }
 
@@ -117,7 +117,7 @@ impl TaskManager {
             }
             Ok(())
         } else {
-            Err(format!("Connector '{}' not found", connector_name))
+            Err(format!("Connector '{connector_name}' not found"))
         }
     }
 
@@ -129,7 +129,7 @@ impl TaskManager {
             }
             Ok(())
         } else {
-            Err(format!("Connector '{}' not found", connector_name))
+            Err(format!("Connector '{connector_name}' not found"))
         }
     }
 
@@ -156,7 +156,7 @@ impl TaskManager {
 
         self.offsets
             .entry(connector_name.to_string())
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(task_offset);
     }
 }

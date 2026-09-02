@@ -245,7 +245,7 @@ async fn get_session(
             (
                 StatusCode::NOT_FOUND,
                 Json(PlaygroundError {
-                    error: format!("Session '{}' not found", id),
+                    error: format!("Session '{id}' not found"),
                 }),
             )
         })
@@ -263,7 +263,7 @@ async fn produce_message(
             return Err((
                 StatusCode::NOT_FOUND,
                 Json(PlaygroundError {
-                    error: format!("Session '{}' not found", id),
+                    error: format!("Session '{id}' not found"),
                 }),
             ));
         }
@@ -305,7 +305,7 @@ async fn consume_messages(
             return Err((
                 StatusCode::NOT_FOUND,
                 Json(PlaygroundError {
-                    error: format!("Session '{}' not found", id),
+                    error: format!("Session '{id}' not found"),
                 }),
             ));
         }
@@ -469,7 +469,7 @@ async fn get_tutorial(
             (
                 StatusCode::NOT_FOUND,
                 Json(PlaygroundError {
-                    error: format!("Tutorial '{}' not found", id),
+                    error: format!("Tutorial '{id}' not found"),
                 }),
             )
         })
@@ -494,7 +494,7 @@ async fn load_sample(
             (
                 StatusCode::NOT_FOUND,
                 Json(PlaygroundError {
-                    error: format!("Sample dataset '{}' not found", id),
+                    error: format!("Sample dataset '{id}' not found"),
                 }),
             )
         })?;

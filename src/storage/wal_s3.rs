@@ -257,11 +257,11 @@ impl S3WalWriter {
         match self.store.get(&path).await {
             Ok(result) => {
                 let data = result.bytes().await.map_err(|e| {
-                    StreamlineError::storage_msg(format!("Failed to read manifest: {}", e))
+                    StreamlineError::storage_msg(format!("Failed to read manifest: {e}"))
                 })?;
 
                 let manifest: WalManifest = serde_json::from_slice(&data).map_err(|e| {
-                    StreamlineError::storage_msg(format!("Failed to parse manifest: {}", e))
+                    StreamlineError::storage_msg(format!("Failed to parse manifest: {e}"))
                 })?;
 
                 // Update next sequence based on manifest
@@ -287,8 +287,7 @@ impl S3WalWriter {
             }
             Err(e) => {
                 return Err(StreamlineError::storage_msg(format!(
-                    "Failed to load manifest: {}",
-                    e
+                    "Failed to load manifest: {e}"
                 )));
             }
         }
@@ -305,7 +304,7 @@ impl S3WalWriter {
         self.store
             .put(&path, PutPayload::from_bytes(Bytes::from(data)))
             .await
-            .map_err(|e| StreamlineError::storage_msg(format!("Failed to save manifest: {}", e)))?;
+            .map_err(|e| StreamlineError::storage_msg(format!("Failed to save manifest: {e}")))?;
 
         debug!(
             topic = %self.topic,
@@ -443,7 +442,7 @@ impl S3WalWriter {
             .put(&path, PutPayload::from_bytes(data))
             .await
             .map_err(|e| {
-                StreamlineError::storage_msg(format!("Failed to upload WAL batch: {}", e))
+                StreamlineError::storage_msg(format!("Failed to upload WAL batch: {e}"))
             })?;
 
         // Update stats
@@ -500,12 +499,13 @@ impl S3WalWriter {
         let path = ObjectPath::from(batch.filename.clone());
 
         let result = self.store.get(&path).await.map_err(|e| {
-            StreamlineError::storage_msg(format!("Failed to download WAL batch: {}", e))
+            StreamlineError::storage_msg(format!("Failed to download WAL batch: {e}"))
         })?;
 
-        let data = result.bytes().await.map_err(|e| {
-            StreamlineError::storage_msg(format!("Failed to read WAL batch: {}", e))
-        })?;
+        let data = result
+            .bytes()
+            .await
+            .map_err(|e| StreamlineError::storage_msg(format!("Failed to read WAL batch: {e}")))?;
 
         Self::deserialize_batch(&data)
     }
@@ -616,12 +616,12 @@ fn create_object_store(backend: &TieringBackend) -> Result<Arc<dyn ObjectStore>>
     match backend {
         TieringBackend::Local { path } => {
             std::fs::create_dir_all(path).map_err(|e| {
-                StreamlineError::storage_msg(format!("Failed to create WAL directory: {}", e))
+                StreamlineError::storage_msg(format!("Failed to create WAL directory: {e}"))
             })?;
 
             let store =
                 object_store::local::LocalFileSystem::new_with_prefix(path).map_err(|e| {
-                    StreamlineError::storage_msg(format!("Failed to create local store: {}", e))
+                    StreamlineError::storage_msg(format!("Failed to create local store: {e}"))
                 })?;
 
             Ok(Arc::new(store))
@@ -651,7 +651,7 @@ fn create_object_store(backend: &TieringBackend) -> Result<Arc<dyn ObjectStore>>
             }
 
             let store = builder.build().map_err(|e| {
-                StreamlineError::storage_msg(format!("Failed to create S3 store: {}", e))
+                StreamlineError::storage_msg(format!("Failed to create S3 store: {e}"))
             })?;
 
             Ok(Arc::new(store))
@@ -671,7 +671,7 @@ fn create_object_store(backend: &TieringBackend) -> Result<Arc<dyn ObjectStore>>
             }
 
             let store = builder.build().map_err(|e| {
-                StreamlineError::storage_msg(format!("Failed to create Azure store: {}", e))
+                StreamlineError::storage_msg(format!("Failed to create Azure store: {e}"))
             })?;
 
             Ok(Arc::new(store))
@@ -689,7 +689,7 @@ fn create_object_store(backend: &TieringBackend) -> Result<Arc<dyn ObjectStore>>
             }
 
             let store = builder.build().map_err(|e| {
-                StreamlineError::storage_msg(format!("Failed to create GCS store: {}", e))
+                StreamlineError::storage_msg(format!("Failed to create GCS store: {e}"))
             })?;
 
             Ok(Arc::new(store))
@@ -868,7 +868,7 @@ mod tests {
 
         // Append entries until size threshold triggers
         for i in 0..10 {
-            let entry = create_test_entry(i, "test-topic", 0, &format!("value{}", i));
+            let entry = create_test_entry(i, "test-topic", 0, &format!("value{i}"));
             writer.append(entry).await.unwrap();
         }
 
@@ -895,7 +895,7 @@ mod tests {
 
         // Append entries
         for i in 0..5 {
-            let entry = create_test_entry(i, "test-topic", 0, &format!("value{}", i));
+            let entry = create_test_entry(i, "test-topic", 0, &format!("value{i}"));
             writer.append(entry).await.unwrap();
         }
 
@@ -927,7 +927,7 @@ mod tests {
                 .unwrap();
 
             for i in 0..3 {
-                let entry = create_test_entry(i, "test-topic", 0, &format!("value{}", i));
+                let entry = create_test_entry(i, "test-topic", 0, &format!("value{i}"));
                 writer.append(entry).await.unwrap();
             }
 

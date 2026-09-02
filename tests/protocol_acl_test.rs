@@ -815,7 +815,7 @@ fn test_delete_acls_response_multiple_matches() {
         let mut matching_acl = DeleteAclsMatchingAcl::default();
         matching_acl.error_code = 0;
         matching_acl.resource_type = RESOURCE_TYPE_TOPIC;
-        matching_acl.resource_name = StrBytes::from_string(format!("topic-{}", i));
+        matching_acl.resource_name = StrBytes::from_string(format!("topic-{i}"));
         matching_acl.pattern_type = PATTERN_TYPE_LITERAL;
         matching_acl.principal = StrBytes::from_static_str("User:bulk-delete");
         matching_acl.host = StrBytes::from_static_str("*");

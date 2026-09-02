@@ -10,9 +10,7 @@
 
 use bytes::Bytes;
 use std::sync::Arc;
-use streamline::{
-    EmbeddedConfig, EmbeddedStreamline, GroupCoordinator, TopicManager,
-};
+use streamline::{EmbeddedConfig, EmbeddedStreamline, GroupCoordinator, TopicManager};
 use tempfile::tempdir;
 
 // ============================================================================
@@ -47,7 +45,12 @@ fn test_produce_fetch_single_message() {
     embedded.create_topic("sdk-roundtrip", 1).unwrap();
 
     let offset = embedded
-        .produce("sdk-roundtrip", 0, Some(Bytes::from("key-1")), Bytes::from("value-1"))
+        .produce(
+            "sdk-roundtrip",
+            0,
+            Some(Bytes::from("key-1")),
+            Bytes::from("value-1"),
+        )
         .unwrap();
     assert_eq!(offset, 0);
 
@@ -404,8 +407,8 @@ fn test_topic_manager_metadata() {
 #[test]
 fn test_api_versions_encoding() {
     use bytes::BytesMut;
-    use kafka_protocol::messages::{ApiVersionsRequest, ApiVersionsResponse};
     use kafka_protocol::messages::api_versions_response::ApiVersion;
+    use kafka_protocol::messages::{ApiVersionsRequest, ApiVersionsResponse};
     use kafka_protocol::protocol::{Decodable, Encodable, StrBytes};
 
     // Encode a v3 request (latest)
@@ -418,12 +421,14 @@ fn test_api_versions_encoding() {
 
     let mut read_buf = buf.freeze();
     let decoded = ApiVersionsRequest::decode(&mut read_buf, 3).unwrap();
-    assert_eq!(decoded.client_software_name.as_str(), "streamline-cross-sdk-test");
+    assert_eq!(
+        decoded.client_software_name.as_str(),
+        "streamline-cross-sdk-test"
+    );
 
     // Build a response with expected API keys
-    let expected_apis: Vec<i16> = vec![
-        0, 1, 2, 3, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
-    ];
+    let expected_apis: Vec<i16> =
+        vec![0, 1, 2, 3, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20];
 
     let mut response = ApiVersionsResponse::default();
     response.error_code = 0;
@@ -557,7 +562,12 @@ fn test_batch_produce() {
     embedded.create_topic("sdk-batch", 3).unwrap();
 
     let messages: Vec<(Option<Bytes>, Bytes)> = (0..10)
-        .map(|i| (Some(Bytes::from(format!("k-{i}"))), Bytes::from(format!("v-{i}"))))
+        .map(|i| {
+            (
+                Some(Bytes::from(format!("k-{i}"))),
+                Bytes::from(format!("v-{i}")),
+            )
+        })
         .collect();
 
     let offsets = embedded.produce_batch("sdk-batch", messages).unwrap();
@@ -607,7 +617,9 @@ fn test_delete_records() {
     }
 
     // Delete records before offset 5
-    let new_low = embedded.delete_records_before("sdk-delete-rec", 0, 5).unwrap();
+    let new_low = embedded
+        .delete_records_before("sdk-delete-rec", 0, 5)
+        .unwrap();
     assert!(new_low >= 5);
 
     // Earliest offset should now be >= 5

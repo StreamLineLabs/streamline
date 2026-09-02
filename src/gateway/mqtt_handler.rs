@@ -199,10 +199,7 @@ impl MqttSessionManager {
     }
 
     /// Handle a CONNECT packet
-    pub async fn handle_connect(
-        &self,
-        connect: MqttConnectData,
-    ) -> Result<(ConnAckCode, bool)> {
+    pub async fn handle_connect(&self, connect: MqttConnectData) -> Result<(ConnAckCode, bool)> {
         // Validate client ID
         if connect.client_id.is_empty() && !connect.clean_session {
             return Ok((ConnAckCode::IdentifierRejected, false));
@@ -228,7 +225,9 @@ impl MqttSessionManager {
         sessions.insert(connect.client_id.clone(), session);
 
         self.stats.connections_total.fetch_add(1, Ordering::Relaxed);
-        self.stats.connections_active.fetch_add(1, Ordering::Relaxed);
+        self.stats
+            .connections_active
+            .fetch_add(1, Ordering::Relaxed);
 
         info!(
             client_id = connect.client_id,
@@ -291,9 +290,9 @@ impl MqttSessionManager {
         subscriptions: &[MqttSubscription],
     ) -> Result<Vec<QoSLevel>> {
         let mut sessions = self.sessions.write().await;
-        let session = sessions.get_mut(client_id).ok_or_else(|| {
-            StreamlineError::Protocol("Client not connected".to_string())
-        })?;
+        let session = sessions
+            .get_mut(client_id)
+            .ok_or_else(|| StreamlineError::Protocol("Client not connected".to_string()))?;
 
         let mut granted = Vec::with_capacity(subscriptions.len());
 
@@ -336,9 +335,9 @@ impl MqttSessionManager {
         topic_filters: &[String],
     ) -> Result<()> {
         let mut sessions = self.sessions.write().await;
-        let session = sessions.get_mut(client_id).ok_or_else(|| {
-            StreamlineError::Protocol("Client not connected".to_string())
-        })?;
+        let session = sessions
+            .get_mut(client_id)
+            .ok_or_else(|| StreamlineError::Protocol("Client not connected".to_string()))?;
 
         for filter in topic_filters {
             if session.subscriptions.remove(filter).is_some() {
@@ -363,7 +362,9 @@ impl MqttSessionManager {
                 sessions.remove(client_id);
             }
 
-            self.stats.connections_active.fetch_sub(1, Ordering::Relaxed);
+            self.stats
+                .connections_active
+                .fetch_sub(1, Ordering::Relaxed);
             self.stats
                 .subscriptions_active
                 .fetch_sub(sub_count, Ordering::Relaxed);
@@ -450,7 +451,10 @@ mod tests {
     fn test_mqtt_topic_matching_single_wildcard() {
         assert!(mqtt_topic_matches("sensors/+/temp", "sensors/room1/temp"));
         assert!(mqtt_topic_matches("sensors/+/temp", "sensors/room2/temp"));
-        assert!(!mqtt_topic_matches("sensors/+/temp", "sensors/room1/humidity"));
+        assert!(!mqtt_topic_matches(
+            "sensors/+/temp",
+            "sensors/room1/humidity"
+        ));
     }
 
     #[test]

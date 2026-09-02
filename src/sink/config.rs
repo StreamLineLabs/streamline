@@ -624,7 +624,9 @@ mod tests {
         assert_eq!(format!("{}", CatalogStatus::Supported), "supported");
         assert_eq!(format!("{}", CatalogStatus::Planned), "planned");
 
-        assert!(CatalogType::Rest.status_message().contains("Fully supported"));
+        assert!(CatalogType::Rest
+            .status_message()
+            .contains("Fully supported"));
         assert!(CatalogType::Hive.status_message().contains("Planned"));
         assert!(CatalogType::Glue.status_message().contains("Planned"));
     }

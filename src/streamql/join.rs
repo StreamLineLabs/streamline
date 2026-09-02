@@ -135,11 +135,11 @@ impl HashJoinOperator {
         right_key_col: &str,
     ) -> Result<Self> {
         let left_key = left_schema.column_index(left_key_col).ok_or_else(|| {
-            StreamlineError::Query(format!("Unknown left key column: {}", left_key_col))
+            StreamlineError::Query(format!("Unknown left key column: {left_key_col}"))
         })?;
 
         let right_key = right_schema.column_index(right_key_col).ok_or_else(|| {
-            StreamlineError::Query(format!("Unknown right key column: {}", right_key_col))
+            StreamlineError::Query(format!("Unknown right key column: {right_key_col}"))
         })?;
 
         let output_schema = Self::build_output_schema(&left_schema, &right_schema);
@@ -544,15 +544,15 @@ impl TemporalJoinOperator {
         table_time_col: &str,
     ) -> Result<Self> {
         let stream_key = stream_schema.column_index(stream_key_col).ok_or_else(|| {
-            StreamlineError::Query(format!("Unknown stream key column: {}", stream_key_col))
+            StreamlineError::Query(format!("Unknown stream key column: {stream_key_col}"))
         })?;
 
         let table_key = table_schema.column_index(table_key_col).ok_or_else(|| {
-            StreamlineError::Query(format!("Unknown table key column: {}", table_key_col))
+            StreamlineError::Query(format!("Unknown table key column: {table_key_col}"))
         })?;
 
         let table_time_key = table_schema.column_index(table_time_col).ok_or_else(|| {
-            StreamlineError::Query(format!("Unknown table time column: {}", table_time_col))
+            StreamlineError::Query(format!("Unknown table time column: {table_time_col}"))
         })?;
 
         let output_schema = Self::build_output_schema(&stream_schema, &table_schema);

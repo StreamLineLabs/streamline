@@ -323,17 +323,9 @@ fn test_request_header_versions_produce() {
     for version in 0..=9 {
         let header_version = ProduceRequest::header_version(version);
         if version < 9 {
-            assert_eq!(
-                header_version, 1,
-                "Produce v{} should use header v1",
-                version
-            );
+            assert_eq!(header_version, 1, "Produce v{version} should use header v1");
         } else {
-            assert_eq!(
-                header_version, 2,
-                "Produce v{} should use header v2",
-                version
-            );
+            assert_eq!(header_version, 2, "Produce v{version} should use header v2");
         }
     }
 }
@@ -344,9 +336,9 @@ fn test_request_header_versions_fetch() {
     for version in 0..=13 {
         let header_version = FetchRequest::header_version(version);
         if version < 12 {
-            assert_eq!(header_version, 1, "Fetch v{} should use header v1", version);
+            assert_eq!(header_version, 1, "Fetch v{version} should use header v1");
         } else {
-            assert_eq!(header_version, 2, "Fetch v{} should use header v2", version);
+            assert_eq!(header_version, 2, "Fetch v{version} should use header v2");
         }
     }
 }
@@ -359,14 +351,12 @@ fn test_request_header_versions_metadata() {
         if version < 9 {
             assert_eq!(
                 header_version, 1,
-                "Metadata v{} should use header v1",
-                version
+                "Metadata v{version} should use header v1"
             );
         } else {
             assert_eq!(
                 header_version, 2,
-                "Metadata v{} should use header v2",
-                version
+                "Metadata v{version} should use header v2"
             );
         }
     }
@@ -380,14 +370,12 @@ fn test_request_header_versions_api_versions() {
         if version < 3 {
             assert_eq!(
                 header_version, 1,
-                "ApiVersions v{} should use header v1",
-                version
+                "ApiVersions v{version} should use header v1"
             );
         } else {
             assert_eq!(
                 header_version, 2,
-                "ApiVersions v{} should use header v2",
-                version
+                "ApiVersions v{version} should use header v2"
             );
         }
     }
@@ -480,17 +468,11 @@ fn test_standard_api_version_ranges() {
     for (api_key, name, min, max) in api_versions {
         assert!(
             min <= max,
-            "API {} ({}): min version {} should be <= max version {}",
-            api_key,
-            name,
-            min,
-            max
+            "API {api_key} ({name}): min version {min} should be <= max version {max}"
         );
         assert!(
             min >= 0,
-            "API {} ({}): min version should be >= 0",
-            api_key,
-            name
+            "API {api_key} ({name}): min version should be >= 0"
         );
     }
 }
@@ -516,7 +498,7 @@ fn test_graceful_downgrade() {
 
     let mut read_buf = buf.freeze();
     let decoded = MetadataRequest::decode(&mut read_buf, used_version).unwrap();
-    assert!(decoded.topics.is_none() || decoded.topics.as_ref().map_or(true, |t| t.is_empty()));
+    assert!(decoded.topics.is_none() || decoded.topics.as_ref().is_none_or(|t| t.is_empty()));
 }
 
 /// Test downgrade from flexible to non-flexible version
@@ -708,8 +690,7 @@ fn test_multi_api_version_discovery() {
     for api_key in [0, 1, 2, 3, 8, 9, 10, 11, 18, 19] {
         assert!(
             decoded.api_keys.iter().any(|a| a.api_key == api_key),
-            "Should find API {}",
-            api_key
+            "Should find API {api_key}"
         );
     }
 }
@@ -763,7 +744,7 @@ fn test_version_zero_support() {
     ];
 
     for (name, success) in v0_requests {
-        assert!(success, "{} v0 should encode successfully", name);
+        assert!(success, "{name} v0 should encode successfully");
     }
 }
 

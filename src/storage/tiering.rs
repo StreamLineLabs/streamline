@@ -275,9 +275,7 @@ impl TieringManager {
         self.store
             .put(&path, PutPayload::from_bytes(data.clone()))
             .await
-            .map_err(|e| {
-                StreamlineError::storage_msg(format!("Failed to upload segment: {}", e))
-            })?;
+            .map_err(|e| StreamlineError::storage_msg(format!("Failed to upload segment: {e}")))?;
 
         self.segments_uploaded
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
@@ -317,11 +315,11 @@ impl TieringManager {
         );
 
         let result = self.store.get(&path).await.map_err(|e| {
-            StreamlineError::storage_msg(format!("Failed to download segment: {}", e))
+            StreamlineError::storage_msg(format!("Failed to download segment: {e}"))
         })?;
 
         let data = result.bytes().await.map_err(|e| {
-            StreamlineError::storage_msg(format!("Failed to read segment data: {}", e))
+            StreamlineError::storage_msg(format!("Failed to read segment data: {e}"))
         })?;
 
         self.segments_downloaded
@@ -357,8 +355,7 @@ impl TieringManager {
             Ok(_) => Ok(true),
             Err(object_store::Error::NotFound { .. }) => Ok(false),
             Err(e) => Err(StreamlineError::storage_msg(format!(
-                "Failed to check segment existence: {}",
-                e
+                "Failed to check segment existence: {e}"
             ))),
         }
     }
@@ -380,9 +377,10 @@ impl TieringManager {
             "Deleting segment from object storage"
         );
 
-        self.store.delete(&path).await.map_err(|e| {
-            StreamlineError::storage_msg(format!("Failed to delete segment: {}", e))
-        })?;
+        self.store
+            .delete(&path)
+            .await
+            .map_err(|e| StreamlineError::storage_msg(format!("Failed to delete segment: {e}")))?;
 
         info!(
             topic = %topic,
@@ -400,7 +398,7 @@ impl TieringManager {
             return Ok(Vec::new());
         }
 
-        let prefix = ObjectPath::from(format!("topics/{}/partition-{}/", topic, partition));
+        let prefix = ObjectPath::from(format!("topics/{topic}/partition-{partition}/"));
 
         let mut segment_ids = Vec::new();
 
@@ -458,8 +456,7 @@ pub struct TieringStats {
 /// Generate the object storage path for a segment
 fn segment_object_path(topic: &str, partition: i32, segment_id: u64) -> ObjectPath {
     ObjectPath::from(format!(
-        "topics/{}/partition-{}/{}.segment",
-        topic, partition, segment_id
+        "topics/{topic}/partition-{partition}/{segment_id}.segment"
     ))
 }
 
@@ -469,12 +466,12 @@ fn create_object_store(backend: &TieringBackend) -> Result<Arc<dyn ObjectStore>>
         TieringBackend::Local { path } => {
             // Ensure directory exists
             std::fs::create_dir_all(path).map_err(|e| {
-                StreamlineError::storage_msg(format!("Failed to create tiering directory: {}", e))
+                StreamlineError::storage_msg(format!("Failed to create tiering directory: {e}"))
             })?;
 
             let store =
                 object_store::local::LocalFileSystem::new_with_prefix(path).map_err(|e| {
-                    StreamlineError::storage_msg(format!("Failed to create local store: {}", e))
+                    StreamlineError::storage_msg(format!("Failed to create local store: {e}"))
                 })?;
 
             Ok(Arc::new(store))
@@ -504,7 +501,7 @@ fn create_object_store(backend: &TieringBackend) -> Result<Arc<dyn ObjectStore>>
             }
 
             let store = builder.build().map_err(|e| {
-                StreamlineError::storage_msg(format!("Failed to create S3 store: {}", e))
+                StreamlineError::storage_msg(format!("Failed to create S3 store: {e}"))
             })?;
 
             Ok(Arc::new(store))
@@ -524,7 +521,7 @@ fn create_object_store(backend: &TieringBackend) -> Result<Arc<dyn ObjectStore>>
             }
 
             let store = builder.build().map_err(|e| {
-                StreamlineError::storage_msg(format!("Failed to create Azure store: {}", e))
+                StreamlineError::storage_msg(format!("Failed to create Azure store: {e}"))
             })?;
 
             Ok(Arc::new(store))
@@ -542,7 +539,7 @@ fn create_object_store(backend: &TieringBackend) -> Result<Arc<dyn ObjectStore>>
             }
 
             let store = builder.build().map_err(|e| {
-                StreamlineError::storage_msg(format!("Failed to create GCS store: {}", e))
+                StreamlineError::storage_msg(format!("Failed to create GCS store: {e}"))
             })?;
 
             Ok(Arc::new(store))

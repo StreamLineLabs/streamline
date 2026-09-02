@@ -93,16 +93,16 @@ async fn main() -> Result<()> {
     ];
 
     for (id, content) in &tickets {
-        println!("\n   Processing: {}", id);
+        println!("\n   Processing: {id}");
         println!("   Content: {}...", &content[..50.min(content.len())]);
 
         // Simulate enrichment
         let enriched = simulate_enrichment(content);
-        println!("   Enriched: {}", enriched);
+        println!("   Enriched: {enriched}");
 
         // Simulate classification
         let classification = simulate_classification(content);
-        println!("   Classification: {:?}", classification);
+        println!("   Classification: {classification:?}");
 
         // Simulate anomaly check
         let is_anomaly = content.contains("URGENT") || content.contains("down");

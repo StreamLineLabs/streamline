@@ -173,9 +173,7 @@ async fn list_members_handler(State(state): State<RaftClusterApiState>) -> Respo
 
     // Get node addresses from membership config
     let nodes = membership.nodes();
-    let node_map: HashMap<u64, String> = nodes
-        .map(|(id, node)| (*id, node.addr.clone()))
-        .collect();
+    let node_map: HashMap<u64, String> = nodes.map(|(id, node)| (*id, node.addr.clone())).collect();
 
     // Get broker metadata for additional info
     let metadata = state.cluster_manager.metadata().await;
@@ -259,7 +257,7 @@ async fn add_member_handler(
         return (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ErrorResponse {
-                error: format!("Failed to add learner: {}", e),
+                error: format!("Failed to add learner: {e}"),
             }),
         )
             .into_response();
@@ -358,7 +356,7 @@ async fn remove_member_handler(
         return (
             StatusCode::NOT_FOUND,
             Json(ErrorResponse {
-                error: format!("Node {} is not a member of the cluster", node_id),
+                error: format!("Node {node_id} is not a member of the cluster"),
             }),
         )
             .into_response();
@@ -372,7 +370,7 @@ async fn remove_member_handler(
         return (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ErrorResponse {
-                error: format!("Failed to remove member: {}", e),
+                error: format!("Failed to remove member: {e}"),
             }),
         )
             .into_response();
@@ -410,8 +408,7 @@ mod tests {
     #[test]
     fn test_add_member_request_deserialization() {
         let json = r#"{"node_id": 2, "raft_addr": "192.168.1.2:9093"}"#;
-        let request: AddMemberRequest =
-            serde_json::from_str(json).expect("should deserialize");
+        let request: AddMemberRequest = serde_json::from_str(json).expect("should deserialize");
         assert_eq!(request.node_id, 2);
         assert_eq!(request.raft_addr, "192.168.1.2:9093");
         assert!(request.promote_to_voter); // default true
@@ -420,8 +417,7 @@ mod tests {
     #[test]
     fn test_add_member_request_no_promote() {
         let json = r#"{"node_id": 3, "raft_addr": "192.168.1.3:9093", "promote_to_voter": false}"#;
-        let request: AddMemberRequest =
-            serde_json::from_str(json).expect("should deserialize");
+        let request: AddMemberRequest = serde_json::from_str(json).expect("should deserialize");
         assert!(!request.promote_to_voter);
     }
 }

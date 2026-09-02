@@ -29,16 +29,13 @@ pub(super) fn show_info(ctx: &CliContext) -> Result<()> {
                     "partitions": t.num_partitions
                 })).collect::<Vec<_>>()
             });
-            println!(
-                "{}",
-                serde_json::to_string_pretty(&info)?
-            );
+            println!("{}", serde_json::to_string_pretty(&info)?);
         }
         _ => {
             println!(
                 "{} {}",
                 "Streamline".bold().cyan(),
-                format!("v{}", version).dimmed()
+                format!("v{version}").dimmed()
             );
             println!("{}", "═".repeat(40).dimmed());
             println!();
@@ -82,7 +79,7 @@ pub(super) fn show_info(ctx: &CliContext) -> Result<()> {
                 }
 
                 println!();
-                println!("{}", table);
+                println!("{table}");
             }
         }
     }
@@ -304,10 +301,7 @@ pub(super) fn handle_produce_command(options: ProduceOptions, ctx: &CliContext) 
                     }
                 })
             };
-            println!(
-                "{}",
-                serde_json::to_string_pretty(&info)?
-            );
+            println!("{}", serde_json::to_string_pretty(&info)?);
         }
         _ => {
             if produced_offsets.len() == 1 {
@@ -388,7 +382,7 @@ pub(super) fn handle_consume_command(options: ConsumeOptions, ctx: &CliContext) 
         if spec.ends_with('%') {
             let pct_str = spec.trim_end_matches('%');
             let pct: f64 = pct_str.parse().map_err(|_| {
-                StreamlineError::Config(format!("Invalid sample percentage: {}", spec))
+                StreamlineError::Config(format!("Invalid sample percentage: {spec}"))
             })?;
             if !(0.0..=100.0).contains(&pct) {
                 return Err(StreamlineError::Config(
@@ -399,7 +393,7 @@ pub(super) fn handle_consume_command(options: ConsumeOptions, ctx: &CliContext) 
         } else {
             let count: usize = spec
                 .parse()
-                .map_err(|_| StreamlineError::Config(format!("Invalid sample count: {}", spec)))?;
+                .map_err(|_| StreamlineError::Config(format!("Invalid sample count: {spec}")))?;
             SampleMode::Count(count)
         }
     } else {
@@ -420,7 +414,7 @@ pub(super) fn handle_consume_command(options: ConsumeOptions, ctx: &CliContext) 
                 .case_insensitive(ignore_case)
                 .build()
                 .map_err(|e| {
-                    StreamlineError::Config(format!("Invalid grep pattern '{}': {}", pattern, e))
+                    StreamlineError::Config(format!("Invalid grep pattern '{pattern}': {e}"))
                 })?,
         )
     } else {
@@ -428,14 +422,14 @@ pub(super) fn handle_consume_command(options: ConsumeOptions, ctx: &CliContext) 
     };
 
     // Parse JSONPath if provided
-    let json_path =
-        if let Some(ref path) = jq {
-            Some(JsonPath::try_from(path.as_str()).map_err(|e| {
-                StreamlineError::Config(format!("Invalid JSONPath '{}': {}", path, e))
-            })?)
-        } else {
-            None
-        };
+    let json_path = if let Some(ref path) = jq {
+        Some(
+            JsonPath::try_from(path.as_str())
+                .map_err(|e| StreamlineError::Config(format!("Invalid JSONPath '{path}': {e}")))?,
+        )
+    } else {
+        None
+    };
 
     let mut explain_ctx = ExplainContext::new(explain);
 
@@ -459,16 +453,16 @@ pub(super) fn handle_consume_command(options: ConsumeOptions, ctx: &CliContext) 
         // Time travel: --at flag
         explain_ctx.step_with_details(
             "Parsing time expression",
-            format!("Interpreting --at '{}'", at_expr),
+            format!("Interpreting --at '{at_expr}'"),
         );
         let time_expr = parse_time_expression(at_expr).map_err(|e| {
-            StreamlineError::Config(format!("Invalid time expression '{}': {}", at_expr, e))
+            StreamlineError::Config(format!("Invalid time expression '{at_expr}': {e}"))
         })?;
 
         let target_timestamp = time_expr.to_timestamp_ms();
         explain_ctx.step_with_details(
             "Finding offset",
-            format!("Searching for offset at timestamp {} ms", target_timestamp),
+            format!("Searching for offset at timestamp {target_timestamp} ms"),
         );
 
         // Find offset for timestamp (we'll search linearly for now)
@@ -492,21 +486,17 @@ pub(super) fn handle_consume_command(options: ConsumeOptions, ctx: &CliContext) 
         }
         explain_ctx.step_with_details(
             "Offset resolved",
-            format!(
-                "Starting from offset {} (timestamp >= {})",
-                found_offset, target_timestamp
-            ),
+            format!("Starting from offset {found_offset} (timestamp >= {target_timestamp})"),
         );
         found_offset
     } else if let Some(last_expr) = &last {
         // Time travel: --last flag (e.g., "5m", "1h")
         explain_ctx.step_with_details(
             "Parsing duration",
-            format!("Interpreting --last '{}'", last_expr),
+            format!("Interpreting --last '{last_expr}'"),
         );
-        let time_expr = parse_time_expression(last_expr).map_err(|e| {
-            StreamlineError::Config(format!("Invalid duration '{}': {}", last_expr, e))
-        })?;
+        let time_expr = parse_time_expression(last_expr)
+            .map_err(|e| StreamlineError::Config(format!("Invalid duration '{last_expr}': {e}")))?;
 
         let target_timestamp = time_expr.to_timestamp_ms();
         explain_ctx.step_with_details(
@@ -535,7 +525,7 @@ pub(super) fn handle_consume_command(options: ConsumeOptions, ctx: &CliContext) 
         }
         explain_ctx.step_with_details(
             "Offset resolved",
-            format!("Starting from offset {}", found_offset),
+            format!("Starting from offset {found_offset}"),
         );
         found_offset
     } else if from_beginning {
@@ -545,10 +535,7 @@ pub(super) fn handle_consume_command(options: ConsumeOptions, ctx: &CliContext) 
         );
         manager.earliest_offset(&topic, partition)?
     } else if let Some(off) = offset {
-        explain_ctx.step_with_details(
-            "Starting position",
-            format!("Using explicit offset: {}", off),
-        );
+        explain_ctx.step_with_details("Starting position", format!("Using explicit offset: {off}"));
         off
     } else {
         explain_ctx.step_with_details(
@@ -561,7 +548,7 @@ pub(super) fn handle_consume_command(options: ConsumeOptions, ctx: &CliContext) 
 
     explain_ctx.step_with_details(
         "Beginning consumption",
-        format!("Reading from topic '{}' partition {}", topic, partition),
+        format!("Reading from topic '{topic}' partition {partition}"),
     );
 
     // Print explanation if enabled
@@ -727,7 +714,7 @@ pub(super) fn handle_consume_command(options: ConsumeOptions, ctx: &CliContext) 
                     };
 
                     if prefix_parts.is_empty() {
-                        println!("{}", display_value);
+                        println!("{display_value}");
                     } else {
                         println!("{} {}", prefix_parts.join(" "), display_value);
                     }
@@ -760,10 +747,7 @@ pub(super) fn handle_consume_command(options: ConsumeOptions, ctx: &CliContext) 
 
     // Print JSON output at the end
     if matches!(ctx.format, OutputFormat::Json) {
-        println!(
-            "{}",
-            serde_json::to_string_pretty(&all_records_json)?
-        );
+        println!("{}", serde_json::to_string_pretty(&all_records_json)?);
     }
 
     // Print summary in text mode

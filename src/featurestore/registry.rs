@@ -135,8 +135,7 @@ impl FeatureRegistry {
         let mut views = self.views.write().await;
         if views.remove(name).is_none() {
             return Err(StreamlineError::Config(format!(
-                "Feature view not found: {}",
-                name
+                "Feature view not found: {name}"
             )));
         }
         Ok(())

@@ -77,7 +77,7 @@ impl CdcConfig {
         }
 
         // Check table filters
-        let full_name = format!("{}.{}", schema, table);
+        let full_name = format!("{schema}.{table}");
         if !self.include_tables.is_empty()
             && !self.include_tables.contains(&table.to_string())
             && !self.include_tables.contains(&full_name)

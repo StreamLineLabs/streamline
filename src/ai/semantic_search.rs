@@ -176,7 +176,7 @@ impl SemanticMessageIndex {
             .provider
             .embed(content)
             .await
-            .map_err(|e| StreamlineError::AI(format!("Embedding failed: {}", e)))?;
+            .map_err(|e| StreamlineError::AI(format!("Embedding failed: {e}")))?;
 
         let id = self.next_id.fetch_add(1, Ordering::Relaxed) as i64;
 
@@ -229,7 +229,7 @@ impl SemanticMessageIndex {
                 .provider
                 .embed(text)
                 .await
-                .map_err(|e| StreamlineError::AI(format!("Query embedding failed: {}", e)))?,
+                .map_err(|e| StreamlineError::AI(format!("Query embedding failed: {e}")))?,
             (_, Some(vec)) => vec.clone(),
             _ => {
                 return Err(StreamlineError::InvalidData(
@@ -248,7 +248,11 @@ impl SemanticMessageIndex {
         let topics_to_search: Vec<&String> = if query.topics.is_empty() {
             indexes.keys().collect()
         } else {
-            query.topics.iter().filter(|t| indexes.contains_key(*t)).collect()
+            query
+                .topics
+                .iter()
+                .filter(|t| indexes.contains_key(*t))
+                .collect()
         };
 
         for topic in topics_to_search {
@@ -406,18 +410,9 @@ mod tests {
         let provider = Arc::new(MockProvider::new(64));
         let index = SemanticMessageIndex::new(provider);
 
-        index
-            .index_message("t1", 0, 1, 1000, "msg1")
-            .await
-            .unwrap();
-        index
-            .index_message("t1", 0, 2, 2000, "msg2")
-            .await
-            .unwrap();
-        index
-            .index_message("t2", 0, 1, 1000, "msg3")
-            .await
-            .unwrap();
+        index.index_message("t1", 0, 1, 1000, "msg1").await.unwrap();
+        index.index_message("t1", 0, 2, 2000, "msg2").await.unwrap();
+        index.index_message("t2", 0, 1, 1000, "msg3").await.unwrap();
 
         let stats = index.get_stats().await;
         assert_eq!(stats.total_indexed, 3);

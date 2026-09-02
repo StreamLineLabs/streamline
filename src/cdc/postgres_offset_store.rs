@@ -63,8 +63,7 @@ impl PostgresOffsetStore {
             .await
             .map_err(|e| {
                 StreamlineError::storage_msg(format!(
-                    "Failed to connect to PostgreSQL for CDC offsets: {}",
-                    e
+                    "Failed to connect to PostgreSQL for CDC offsets: {e}"
                 ))
             })?;
 
@@ -85,10 +84,7 @@ impl PostgresOffsetStore {
             .execute(CREATE_TABLE_SQL, &[])
             .await
             .map_err(|e| {
-                StreamlineError::storage_msg(format!(
-                    "Failed to create CDC offsets table: {}",
-                    e
-                ))
+                StreamlineError::storage_msg(format!("Failed to create CDC offsets table: {e}"))
             })?;
         debug!("CDC offsets table ensured");
         Ok(())
@@ -125,8 +121,7 @@ impl PostgresOffsetStore {
             .await
             .map_err(|e| {
                 StreamlineError::storage_msg(format!(
-                    "Failed to save CDC offset for {}/{}: {}",
-                    source, table, e
+                    "Failed to save CDC offset for {source}/{table}: {e}"
                 ))
             })?;
 
@@ -135,10 +130,7 @@ impl PostgresOffsetStore {
     }
 
     /// Load all committed positions for a source
-    pub async fn load_positions(
-        &self,
-        source: &str,
-    ) -> Result<HashMap<String, CommittedPosition>> {
+    pub async fn load_positions(&self, source: &str) -> Result<HashMap<String, CommittedPosition>> {
         let rows = self
             .client
             .query(
@@ -148,8 +140,7 @@ impl PostgresOffsetStore {
             .await
             .map_err(|e| {
                 StreamlineError::storage_msg(format!(
-                    "Failed to load CDC offsets for source '{}': {}",
-                    source, e
+                    "Failed to load CDC offsets for source '{source}': {e}"
                 ))
             })?;
 
@@ -172,14 +163,16 @@ impl PostgresOffsetStore {
             );
         }
 
-        debug!(source, count = positions.len(), "CDC offsets loaded from PostgreSQL");
+        debug!(
+            source,
+            count = positions.len(),
+            "CDC offsets loaded from PostgreSQL"
+        );
         Ok(positions)
     }
 
     /// Load all positions for all sources (full checkpoint restore)
-    pub async fn load_all(
-        &self,
-    ) -> Result<HashMap<String, HashMap<String, CommittedPosition>>> {
+    pub async fn load_all(&self) -> Result<HashMap<String, HashMap<String, CommittedPosition>>> {
         let rows = self
             .client
             .query(
@@ -189,8 +182,7 @@ impl PostgresOffsetStore {
             .await
             .map_err(|e| {
                 StreamlineError::storage_msg(format!(
-                    "Failed to load all CDC offsets: {}",
-                    e
+                    "Failed to load all CDC offsets: {e}"
                 ))
             })?;
 
@@ -203,18 +195,15 @@ impl PostgresOffsetStore {
             let committed_at: chrono::DateTime<Utc> = row.get(4);
             let transaction_id: Option<String> = row.get(5);
 
-            all_positions
-                .entry(source_name)
-                .or_default()
-                .insert(
-                    table_name,
-                    CommittedPosition {
-                        position,
-                        sequence: sequence as u64,
-                        committed_at,
-                        transaction_id,
-                    },
-                );
+            all_positions.entry(source_name).or_default().insert(
+                table_name,
+                CommittedPosition {
+                    position,
+                    sequence: sequence as u64,
+                    committed_at,
+                    transaction_id,
+                },
+            );
         }
 
         info!(
@@ -229,19 +218,19 @@ impl PostgresOffsetStore {
     pub async fn delete_source(&self, source: &str) -> Result<u64> {
         let count = self
             .client
-            .execute(
-                "DELETE FROM cdc_offsets WHERE source_name = $1",
-                &[&source],
-            )
+            .execute("DELETE FROM cdc_offsets WHERE source_name = $1", &[&source])
             .await
             .map_err(|e| {
                 StreamlineError::storage_msg(format!(
-                    "Failed to delete CDC offsets for source '{}': {}",
-                    source, e
+                    "Failed to delete CDC offsets for source '{source}': {e}"
                 ))
             })?;
 
-        info!(source, deleted = count, "CDC offsets deleted from PostgreSQL");
+        info!(
+            source,
+            deleted = count,
+            "CDC offsets deleted from PostgreSQL"
+        );
         Ok(count)
     }
 
@@ -256,8 +245,7 @@ impl PostgresOffsetStore {
             .await
             .map_err(|e| {
                 StreamlineError::storage_msg(format!(
-                    "Failed to delete CDC offset for {}/{}: {}",
-                    source, table, e
+                    "Failed to delete CDC offset for {source}/{table}: {e}"
                 ))
             })?;
         Ok(count > 0)
@@ -270,10 +258,7 @@ impl PostgresOffsetStore {
             .query_one("SELECT COUNT(*) FROM cdc_offsets", &[])
             .await
             .map_err(|e| {
-                StreamlineError::storage_msg(format!(
-                    "Failed to count CDC offsets: {}",
-                    e
-                ))
+                StreamlineError::storage_msg(format!("Failed to count CDC offsets: {e}"))
             })?;
         Ok(row.get(0))
     }

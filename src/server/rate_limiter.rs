@@ -326,7 +326,10 @@ mod tests {
         let mut bucket = TokenBucket::new("t1".into(), 10, 1.0, 0);
         let result = bucket.try_consume(20, 0);
         match result {
-            RateLimitResult::Rejected { retry_after_ms, limit } => {
+            RateLimitResult::Rejected {
+                retry_after_ms,
+                limit,
+            } => {
                 assert!(retry_after_ms > 0);
                 assert_eq!(limit, 10);
             }
@@ -383,7 +386,7 @@ mod tests {
     fn test_check_rate_rejected_when_exhausted() {
         let mgr = default_manager();
         mgr.set_limit("c1", 10, 0.001); // very slow refill
-        // Drain the bucket
+                                        // Drain the bucket
         mgr.check_rate("c1", 10);
         let result = mgr.check_rate("c1", 5);
         assert!(matches!(result, RateLimitResult::Rejected { .. }));
@@ -491,7 +494,7 @@ mod tests {
     fn test_zero_cost_always_allowed() {
         let mgr = default_manager();
         mgr.set_limit("c1", 0, 0.0); // zero capacity, zero rate
-        // Even with 0 capacity, consuming 0 tokens should work
+                                     // Even with 0 capacity, consuming 0 tokens should work
         let result = mgr.check_rate("c1", 0);
         assert!(matches!(result, RateLimitResult::Allowed { .. }));
     }

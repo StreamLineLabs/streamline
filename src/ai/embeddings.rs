@@ -212,7 +212,10 @@ impl CachedProvider {
     pub fn new(inner: Arc<dyn EmbeddingProvider>, max_entries: usize) -> Self {
         Self {
             inner,
-            cache: Arc::new(RwLock::new(LruEmbeddingCache::new(max_entries, Duration::ZERO))),
+            cache: Arc::new(RwLock::new(LruEmbeddingCache::new(
+                max_entries,
+                Duration::ZERO,
+            ))),
             stats: CachedProviderStats::default(),
         }
     }
@@ -346,7 +349,8 @@ impl LruEmbeddingCache {
         // Evict expired entries first
         if !self.ttl.is_zero() {
             let ttl = self.ttl;
-            self.entries.retain(|_, (_, _, created_at)| created_at.elapsed() <= ttl);
+            self.entries
+                .retain(|_, (_, _, created_at)| created_at.elapsed() <= ttl);
         }
         if self.entries.len() >= self.max_size && !self.entries.contains_key(&key) {
             if let Some(oldest_key) = self
@@ -359,7 +363,8 @@ impl LruEmbeddingCache {
             }
         }
         self.counter += 1;
-        self.entries.insert(key, (value, self.counter, Instant::now()));
+        self.entries
+            .insert(key, (value, self.counter, Instant::now()));
     }
 }
 
@@ -393,12 +398,10 @@ pub fn create_embedding_provider(
             };
             Arc::new(super::providers::OpenAIProvider::new(provider_config)?)
         }
-        EmbeddingProviderSelection::Local => {
-            Arc::new(LocalProvider::with_model_name(
-                config.dimensions,
-                &config.model_name,
-            ))
-        }
+        EmbeddingProviderSelection::Local => Arc::new(LocalProvider::with_model_name(
+            config.dimensions,
+            &config.model_name,
+        )),
         EmbeddingProviderSelection::Mock => {
             Arc::new(super::providers::MockProvider::new(config.dimensions))
         }
@@ -410,7 +413,11 @@ pub fn create_embedding_provider(
         } else {
             Duration::ZERO
         };
-        Ok(Arc::new(CachedProvider::with_ttl(provider, config.cache_max_entries, ttl)))
+        Ok(Arc::new(CachedProvider::with_ttl(
+            provider,
+            config.cache_max_entries,
+            ttl,
+        )))
     } else {
         Ok(provider)
     }

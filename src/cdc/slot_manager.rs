@@ -3,13 +3,12 @@
 //! Manages the lifecycle of PostgreSQL logical replication slots used by CDC.
 //! Handles slot creation, deletion, monitoring, and WAL retention management.
 
-use crate::error::{Result, StreamlineError};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
-use tracing::{debug, error, info, warn};
+use tracing::info;
 
 /// Configuration for slot management
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -130,7 +129,13 @@ impl SlotManager {
     pub fn slot_name_for(&self, source_name: &str) -> String {
         let sanitized = source_name
             .chars()
-            .map(|c| if c.is_alphanumeric() || c == '_' { c } else { '_' })
+            .map(|c| {
+                if c.is_alphanumeric() || c == '_' {
+                    c
+                } else {
+                    '_'
+                }
+            })
             .collect::<String>();
         format!("{}{}", self.config.slot_name_prefix, sanitized)
     }
@@ -140,7 +145,10 @@ impl SlotManager {
         let slot_name = self.slot_name_for(source_name);
         let mut expected = self.expected_slots.write().await;
         expected.insert(slot_name.clone(), source_name.to_string());
-        info!(slot_name, source_name, "Registered expected replication slot");
+        info!(
+            slot_name,
+            source_name, "Registered expected replication slot"
+        );
         slot_name
     }
 
@@ -261,10 +269,7 @@ impl SlotManager {
 
     /// Generate SQL to drop a slot
     pub fn sql_drop_slot(&self, slot_name: &str) -> String {
-        format!(
-            "SELECT pg_drop_replication_slot('{}')",
-            slot_name
-        )
+        format!("SELECT pg_drop_replication_slot('{slot_name}')")
     }
 
     /// Generate SQL to query slot status
@@ -281,10 +286,7 @@ impl SlotManager {
 
     /// Generate SQL to advance a slot's confirmed LSN
     pub fn sql_advance_slot(&self, slot_name: &str, lsn: &str) -> String {
-        format!(
-            "SELECT pg_replication_slot_advance('{}', '{}')",
-            slot_name, lsn
-        )
+        format!("SELECT pg_replication_slot_advance('{slot_name}', '{lsn}')")
     }
 
     /// Get aggregated slot statistics
@@ -393,7 +395,10 @@ mod tests {
         .await;
 
         let health = mgr.check_slot_health(&slot_name).await;
-        assert!(matches!(health, SlotHealthStatus::WalRetentionWarning { .. }));
+        assert!(matches!(
+            health,
+            SlotHealthStatus::WalRetentionWarning { .. }
+        ));
     }
 
     #[tokio::test]

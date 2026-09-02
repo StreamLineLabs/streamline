@@ -117,7 +117,7 @@ async fn get_alert(
         (
             StatusCode::NOT_FOUND,
             Json(ErrorResponse {
-                error: format!("Alert '{}' not found", id),
+                error: format!("Alert '{id}' not found"),
             }),
         )
     })
@@ -137,7 +137,7 @@ async fn update_alert(
             (
                 StatusCode::NOT_FOUND,
                 Json(ErrorResponse {
-                    error: format!("Alert '{}' not found", id),
+                    error: format!("Alert '{id}' not found"),
                 }),
             )
         })
@@ -150,13 +150,13 @@ async fn delete_alert(
 ) -> Result<Json<DeleteResponse>, (StatusCode, Json<ErrorResponse>)> {
     if state.store.delete_alert(&id) {
         Ok(Json(DeleteResponse {
-            message: format!("Alert '{}' deleted", id),
+            message: format!("Alert '{id}' deleted"),
         }))
     } else {
         Err((
             StatusCode::NOT_FOUND,
             Json(ErrorResponse {
-                error: format!("Alert '{}' not found", id),
+                error: format!("Alert '{id}' not found"),
             }),
         ))
     }
@@ -180,7 +180,7 @@ async fn toggle_alert(
             (
                 StatusCode::NOT_FOUND,
                 Json(ErrorResponse {
-                    error: format!("Alert '{}' not found", id),
+                    error: format!("Alert '{id}' not found"),
                 }),
             )
         })

@@ -120,7 +120,7 @@ impl CliContext {
                 Ok(())
             }
             None => {
-                print!("{}", content);
+                print!("{content}");
                 Ok(())
             }
         }
@@ -215,13 +215,13 @@ impl CliContext {
 
     /// Print a message (plain output, no formatting)
     pub fn println(&self, message: &str) {
-        println!("{}", message);
+        println!("{message}");
     }
 
     /// Create a spinner that auto-finishes or returns a dummy for non-interactive mode
     pub fn spinner(&self, message: &str) -> SpinnerHandle {
         if !std::io::stdout().is_terminal() || self.output_file.is_some() {
-            println!("{}...", message);
+            println!("{message}...");
             return SpinnerHandle(None);
         }
 

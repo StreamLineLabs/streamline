@@ -13,6 +13,15 @@
     feature = "semantic-topics",
     feature = "agent-memory"
 ))]
+// This module is a shared helper for four independently gated subcommands, so
+// any single feature uses only part of it: `get_json` and `delete` are reached
+// only from `cli_branches_cmd.rs` (`branches`), while `post_json` and
+// `default_url` are also used by the attest/memory/search commands. Building
+// with, say, `--features attestation` alone therefore leaves the branch-only
+// helpers unused, which `-D warnings` would otherwise reject. Gating each
+// function on the union of its callers' features would duplicate that mapping
+// in two places and rot; the module is small and entirely CLI-facing.
+#![allow(dead_code)]
 
 use serde::de::DeserializeOwned;
 use std::time::Duration;
@@ -29,8 +38,7 @@ fn client() -> Result<reqwest::blocking::Client> {
 }
 
 pub fn default_url() -> String {
-    std::env::var("STREAMLINE_HTTP_URL")
-        .unwrap_or_else(|_| "http://localhost:9094".to_string())
+    std::env::var("STREAMLINE_HTTP_URL").unwrap_or_else(|_| "http://localhost:9094".to_string())
 }
 
 pub fn get_json<T: DeserializeOwned>(base: &str, path: &str) -> Result<T> {
@@ -77,7 +85,7 @@ pub fn post_json_with_status<B: serde::Serialize>(
     let value: serde_json::Value = if text.is_empty() {
         serde_json::Value::Null
     } else {
-        serde_json::from_str(&text).unwrap_or_else(|_| serde_json::Value::String(text))
+        serde_json::from_str(&text).unwrap_or(serde_json::Value::String(text))
     };
     Ok((status, value))
 }
@@ -110,7 +118,6 @@ fn parse<T: DeserializeOwned>(resp: reqwest::blocking::Response) -> Result<T> {
             text.chars().take(512).collect::<String>()
         )));
     }
-    serde_json::from_str(&text).map_err(|e| {
-        StreamlineError::Server(format!("decode JSON from {url}: {e}; body={text}"))
-    })
+    serde_json::from_str(&text)
+        .map_err(|e| StreamlineError::Server(format!("decode JSON from {url}: {e}; body={text}")))
 }

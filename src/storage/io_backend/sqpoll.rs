@@ -656,7 +656,7 @@ mod tests {
     #[test]
     fn test_sqpoll_availability() {
         let available = is_sqpoll_available();
-        println!("SQPOLL available: {}", available);
+        println!("SQPOLL available: {available}");
     }
 
     #[test]

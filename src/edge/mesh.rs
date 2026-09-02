@@ -600,9 +600,9 @@ impl EdgeMesh {
         // Verify peer exists
         {
             let conns = self.peer_connections.read().await;
-            let conn = conns.get(peer_id).ok_or_else(|| {
-                StreamlineError::storage_msg(format!("Unknown peer: {}", peer_id))
-            })?;
+            let conn = conns
+                .get(peer_id)
+                .ok_or_else(|| StreamlineError::storage_msg(format!("Unknown peer: {peer_id}")))?;
             if conn.state != PeerConnectionState::Connected {
                 return Err(StreamlineError::storage_msg(format!(
                     "Peer {} not connected (state: {:?})",
@@ -623,7 +623,9 @@ impl EdgeMesh {
 
         // In production: exchange records filtered by SyncPolicy.
         // Stub — just update stats.
-        self.stats.cross_region_syncs.fetch_add(1, Ordering::Relaxed);
+        self.stats
+            .cross_region_syncs
+            .fetch_add(1, Ordering::Relaxed);
 
         // Mark completed
         {
@@ -670,7 +672,12 @@ impl EdgeMesh {
 
     /// Get current peer connections
     pub async fn peer_connections(&self) -> Vec<PeerConnection> {
-        self.peer_connections.read().await.values().cloned().collect()
+        self.peer_connections
+            .read()
+            .await
+            .values()
+            .cloned()
+            .collect()
     }
 
     /// Get mesh statistics
@@ -732,21 +739,16 @@ impl std::fmt::Display for MeshTopology {
 }
 
 /// Policy controlling which data is synced between mesh peers
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum SyncPolicy {
     /// Replicate all topics to every peer
+    #[default]
     AllTopics,
     /// Replicate only the listed topics
     SelectedTopics(Vec<String>),
     /// Replicate topics matching a prefix filter
     Filtered { prefix: String },
-}
-
-impl Default for SyncPolicy {
-    fn default() -> Self {
-        SyncPolicy::AllTopics
-    }
 }
 
 /// Connection state for a single peer
@@ -838,7 +840,9 @@ impl GeoRouter {
                 let best = local_nodes
                     .iter()
                     .min_by_key(|n| n.latency_ms.unwrap_or(u32::MAX))
-                    .ok_or_else(|| StreamlineError::storage_msg("No local nodes available".into()))?;
+                    .ok_or_else(|| {
+                        StreamlineError::storage_msg("No local nodes available".into())
+                    })?;
 
                 let alternatives: Vec<String> = local_nodes
                     .iter()

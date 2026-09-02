@@ -26,9 +26,15 @@ pub struct BandwidthConfig {
     pub priority_topics: Vec<String>,
 }
 
-fn default_batch_interval_ms() -> u64 { 1_000 }
-fn default_max_batch_bytes() -> usize { 1_048_576 } // 1 MiB
-fn default_backoff_base_ms() -> u64 { 500 }
+fn default_batch_interval_ms() -> u64 {
+    1_000
+}
+fn default_max_batch_bytes() -> usize {
+    1_048_576
+} // 1 MiB
+fn default_backoff_base_ms() -> u64 {
+    500
+}
 
 impl Default for BandwidthConfig {
     fn default() -> Self {

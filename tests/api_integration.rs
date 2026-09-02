@@ -26,30 +26,24 @@ use streamline::TopicManager;
 
 /// Build a combined test router with all API modules wired to real state.
 fn create_test_app() -> Router {
-    let topic_manager = Arc::new(
-        TopicManager::in_memory().expect("failed to create in-memory TopicManager"),
-    );
+    let topic_manager =
+        Arc::new(TopicManager::in_memory().expect("failed to create in-memory TopicManager"));
 
     // StreamQL router (creates its own in-memory state)
     let streamql_router = create_streamql_router();
 
     // CDC router wired to the shared TopicManager
     let cdc_state = CdcApiState::with_topic_manager(topic_manager.clone());
-    let cdc_router =
-        streamline::server::cdc_api::create_cdc_router_with_state(cdc_state);
+    let cdc_router = streamline::server::cdc_api::create_cdc_router_with_state(cdc_state);
 
     // Observability router (self-contained default state)
-    let obs_router =
-        streamline::server::observability_api::create_observability_router();
+    let obs_router = streamline::server::observability_api::create_observability_router();
 
     // Scaling metrics router
-    let collector = Arc::new(ScalingMetricsCollector::new(
-        ScalingMetricsConfig::default(),
-    ));
-    let scaling_router =
-        streamline::server::scaling_metrics::create_scaling_metrics_router(
-            ScalingMetricsApiState { collector },
-        );
+    let collector = Arc::new(ScalingMetricsCollector::new(ScalingMetricsConfig::default()));
+    let scaling_router = streamline::server::scaling_metrics::create_scaling_metrics_router(
+        ScalingMetricsApiState { collector },
+    );
 
     Router::new()
         .merge(streamql_router)
@@ -120,12 +114,7 @@ async fn test_streamql_validate_valid_query() {
 #[tokio::test]
 async fn test_streamql_validate_empty_query() {
     let app = create_test_app();
-    let (status, _body) = post_json(
-        app,
-        "/api/v1/streamql/validate",
-        r#"{"query": ""}"#,
-    )
-    .await;
+    let (status, _body) = post_json(app, "/api/v1/streamql/validate", r#"{"query": ""}"#).await;
 
     // Empty query should still return a response (valid: false or an error)
     assert!(
@@ -199,7 +188,12 @@ async fn test_streamql_view_crud() {
     )
     .await;
 
-    assert_eq!(status, StatusCode::CREATED, "create view failed: {:?}", String::from_utf8_lossy(&body));
+    assert_eq!(
+        status,
+        StatusCode::CREATED,
+        "create view failed: {:?}",
+        String::from_utf8_lossy(&body)
+    );
 
     // Get the created view
     let app = create_test_app();
@@ -217,16 +211,14 @@ async fn test_streamql_view_crud() {
 #[tokio::test]
 async fn test_streamql_get_nonexistent_view() {
     let app = create_test_app();
-    let (status, _body) =
-        get_request(app, "/api/v1/streamql/views/no_such_view").await;
+    let (status, _body) = get_request(app, "/api/v1/streamql/views/no_such_view").await;
     assert_eq!(status, StatusCode::NOT_FOUND);
 }
 
 #[tokio::test]
 async fn test_streamql_drop_nonexistent_view() {
     let app = create_test_app();
-    let (status, _body) =
-        delete_request(app, "/api/v1/streamql/views/no_such_view").await;
+    let (status, _body) = delete_request(app, "/api/v1/streamql/views/no_such_view").await;
     assert_eq!(status, StatusCode::NOT_FOUND);
 }
 
@@ -237,8 +229,7 @@ async fn test_streamql_drop_nonexistent_view() {
 #[tokio::test]
 async fn test_cdc_list_connectors_empty() {
     let app = create_test_app();
-    let (status, body) =
-        get_request(app, "/api/v1/cdc/connectors").await;
+    let (status, body) = get_request(app, "/api/v1/cdc/connectors").await;
 
     assert_eq!(status, StatusCode::OK);
     let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
@@ -261,25 +252,22 @@ async fn test_cdc_create_connector() {
         "output_format": "debezium"
     });
 
-    let (status, body) = post_json(
-        app,
-        "/api/v1/cdc/connectors",
-        &payload.to_string(),
-    )
-    .await;
+    let (status, body) = post_json(app, "/api/v1/cdc/connectors", &payload.to_string()).await;
 
-    assert_eq!(status, StatusCode::CREATED, "body: {}", String::from_utf8_lossy(&body));
+    assert_eq!(
+        status,
+        StatusCode::CREATED,
+        "body: {}",
+        String::from_utf8_lossy(&body)
+    );
 }
 
 #[tokio::test]
 async fn test_cdc_create_and_get_connector() {
     // Use a shared state so create + get share the same store
-    let topic_manager = Arc::new(
-        TopicManager::in_memory().expect("in-memory TopicManager"),
-    );
+    let topic_manager = Arc::new(TopicManager::in_memory().expect("in-memory TopicManager"));
     let cdc_state = CdcApiState::with_topic_manager(topic_manager);
-    let router =
-        streamline::server::cdc_api::create_cdc_router_with_state(cdc_state.clone());
+    let router = streamline::server::cdc_api::create_cdc_router_with_state(cdc_state.clone());
 
     let payload = serde_json::json!({
         "name": "pg-orders",
@@ -301,10 +289,8 @@ async fn test_cdc_create_and_get_connector() {
     assert_eq!(status, StatusCode::CREATED);
 
     // Get
-    let router2 =
-        streamline::server::cdc_api::create_cdc_router_with_state(cdc_state.clone());
-    let (status, body) =
-        get_request(router2, "/api/v1/cdc/connectors/pg-orders").await;
+    let router2 = streamline::server::cdc_api::create_cdc_router_with_state(cdc_state.clone());
+    let (status, body) = get_request(router2, "/api/v1/cdc/connectors/pg-orders").await;
     assert_eq!(status, StatusCode::OK);
     let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
     assert_eq!(json["name"], "pg-orders");
@@ -313,21 +299,17 @@ async fn test_cdc_create_and_get_connector() {
 #[tokio::test]
 async fn test_cdc_get_nonexistent_connector() {
     let app = create_test_app();
-    let (status, _body) =
-        get_request(app, "/api/v1/cdc/connectors/does_not_exist").await;
+    let (status, _body) = get_request(app, "/api/v1/cdc/connectors/does_not_exist").await;
     assert_eq!(status, StatusCode::NOT_FOUND);
 }
 
 #[tokio::test]
 async fn test_cdc_delete_connector() {
-    let topic_manager = Arc::new(
-        TopicManager::in_memory().expect("in-memory TopicManager"),
-    );
+    let topic_manager = Arc::new(TopicManager::in_memory().expect("in-memory TopicManager"));
     let cdc_state = CdcApiState::with_topic_manager(topic_manager);
 
     // Create a connector
-    let router =
-        streamline::server::cdc_api::create_cdc_router_with_state(cdc_state.clone());
+    let router = streamline::server::cdc_api::create_cdc_router_with_state(cdc_state.clone());
     let payload = serde_json::json!({
         "name": "to-delete",
         "connector_type": "MySQL",
@@ -336,29 +318,20 @@ async fn test_cdc_delete_connector() {
         "database": "mydb",
         "tables": ["t1"]
     });
-    let (status, _) = post_json(
-        router,
-        "/api/v1/cdc/connectors",
-        &payload.to_string(),
-    )
-    .await;
+    let (status, _) = post_json(router, "/api/v1/cdc/connectors", &payload.to_string()).await;
     assert_eq!(status, StatusCode::CREATED);
 
     // Delete it
-    let router2 =
-        streamline::server::cdc_api::create_cdc_router_with_state(cdc_state.clone());
-    let (status, _) =
-        delete_request(router2, "/api/v1/cdc/connectors/to-delete").await;
+    let router2 = streamline::server::cdc_api::create_cdc_router_with_state(cdc_state.clone());
+    let (status, _) = delete_request(router2, "/api/v1/cdc/connectors/to-delete").await;
     assert!(
         status == StatusCode::OK || status == StatusCode::NO_CONTENT,
         "unexpected delete status: {status}"
     );
 
     // Verify it's gone
-    let router3 =
-        streamline::server::cdc_api::create_cdc_router_with_state(cdc_state);
-    let (status, _) =
-        get_request(router3, "/api/v1/cdc/connectors/to-delete").await;
+    let router3 = streamline::server::cdc_api::create_cdc_router_with_state(cdc_state);
+    let (status, _) = get_request(router3, "/api/v1/cdc/connectors/to-delete").await;
     assert_eq!(status, StatusCode::NOT_FOUND);
 }
 
@@ -378,8 +351,7 @@ async fn test_cdc_list_dlq_entries() {
 #[tokio::test]
 async fn test_observability_health() {
     let app = create_test_app();
-    let (status, body) =
-        get_request(app, "/api/v1/observability/health").await;
+    let (status, body) = get_request(app, "/api/v1/observability/health").await;
 
     assert_eq!(status, StatusCode::OK);
     let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
@@ -389,8 +361,7 @@ async fn test_observability_health() {
 #[tokio::test]
 async fn test_observability_dashboard() {
     let app = create_test_app();
-    let (status, body) =
-        get_request(app, "/api/v1/observability/dashboard").await;
+    let (status, body) = get_request(app, "/api/v1/observability/dashboard").await;
 
     assert_eq!(status, StatusCode::OK);
     let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
@@ -400,8 +371,7 @@ async fn test_observability_dashboard() {
 #[tokio::test]
 async fn test_observability_metrics() {
     let app = create_test_app();
-    let (status, body) =
-        get_request(app, "/api/v1/observability/metrics").await;
+    let (status, body) = get_request(app, "/api/v1/observability/metrics").await;
 
     assert_eq!(status, StatusCode::OK);
     let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
@@ -412,16 +382,10 @@ async fn test_observability_metrics() {
 async fn test_observability_alert_rules_crud() {
     let obs_state = ObservabilityApiState::new();
     let router =
-        streamline::server::observability_api::create_observability_api_router(
-            obs_state.clone(),
-        );
+        streamline::server::observability_api::create_observability_api_router(obs_state.clone());
 
     // List rules (may have defaults)
-    let (status, body) = get_request(
-        router.clone(),
-        "/api/v1/observability/alerts/rules",
-    )
-    .await;
+    let (status, body) = get_request(router.clone(), "/api/v1/observability/alerts/rules").await;
     assert_eq!(status, StatusCode::OK);
     let initial: serde_json::Value = serde_json::from_slice(&body).unwrap();
     assert!(initial.is_object() || initial.is_array());
@@ -439,9 +403,7 @@ async fn test_observability_alert_rules_crud() {
     });
 
     let router2 =
-        streamline::server::observability_api::create_observability_api_router(
-            obs_state.clone(),
-        );
+        streamline::server::observability_api::create_observability_api_router(obs_state.clone());
     let (status, _body) = post_json(
         router2,
         "/api/v1/observability/alerts/rules",
@@ -451,23 +413,16 @@ async fn test_observability_alert_rules_crud() {
     assert_eq!(status, StatusCode::CREATED, "create rule failed");
 
     // Delete the rule
-    let router3 =
-        streamline::server::observability_api::create_observability_api_router(
-            obs_state,
-        );
-    let (status, _) = delete_request(
-        router3,
-        "/api/v1/observability/alerts/rules/test-rule-1",
-    )
-    .await;
+    let router3 = streamline::server::observability_api::create_observability_api_router(obs_state);
+    let (status, _) =
+        delete_request(router3, "/api/v1/observability/alerts/rules/test-rule-1").await;
     assert_eq!(status, StatusCode::OK);
 }
 
 #[tokio::test]
 async fn test_observability_active_alerts() {
     let app = create_test_app();
-    let (status, body) =
-        get_request(app, "/api/v1/observability/alerts/active").await;
+    let (status, body) = get_request(app, "/api/v1/observability/alerts/active").await;
 
     assert_eq!(status, StatusCode::OK);
     let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
@@ -477,8 +432,7 @@ async fn test_observability_active_alerts() {
 #[tokio::test]
 async fn test_observability_topics_heatmap() {
     let app = create_test_app();
-    let (status, body) =
-        get_request(app, "/api/v1/observability/topics/heatmap").await;
+    let (status, body) = get_request(app, "/api/v1/observability/topics/heatmap").await;
 
     assert_eq!(status, StatusCode::OK);
     let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
@@ -488,8 +442,7 @@ async fn test_observability_topics_heatmap() {
 #[tokio::test]
 async fn test_observability_consumer_lag() {
     let app = create_test_app();
-    let (status, body) =
-        get_request(app, "/api/v1/observability/consumer-lag").await;
+    let (status, body) = get_request(app, "/api/v1/observability/consumer-lag").await;
 
     assert_eq!(status, StatusCode::OK);
     let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
@@ -515,9 +468,7 @@ async fn test_scaling_metrics_endpoint() {
 
 #[tokio::test]
 async fn test_scaling_metrics_after_recording() {
-    let collector = Arc::new(ScalingMetricsCollector::new(
-        ScalingMetricsConfig::default(),
-    ));
+    let collector = Arc::new(ScalingMetricsCollector::new(ScalingMetricsConfig::default()));
 
     // Record some activity
     collector.record_messages_per_second(1500.0);
@@ -525,12 +476,11 @@ async fn test_scaling_metrics_after_recording() {
     collector.record_active_connections(42);
     collector.record_consumer_lag(100);
 
-    let router =
-        streamline::server::scaling_metrics::create_scaling_metrics_router(
-            ScalingMetricsApiState {
-                collector: collector.clone(),
-            },
-        );
+    let router = streamline::server::scaling_metrics::create_scaling_metrics_router(
+        ScalingMetricsApiState {
+            collector: collector.clone(),
+        },
+    );
 
     let (status, body) = get_request(router, "/scaling/metrics").await;
     assert_eq!(status, StatusCode::OK);
@@ -544,17 +494,14 @@ async fn test_scaling_metrics_after_recording() {
 
 #[tokio::test]
 async fn test_scaling_metrics_idle_state() {
-    let collector = Arc::new(ScalingMetricsCollector::new(
-        ScalingMetricsConfig {
-            idle_threshold_seconds: 0, // instantly idle
-            cooldown_seconds: 0,
-        },
-    ));
+    let collector = Arc::new(ScalingMetricsCollector::new(ScalingMetricsConfig {
+        idle_threshold_seconds: 0, // instantly idle
+        cooldown_seconds: 0,
+    }));
     // No activity recorded — should be idle
-    let router =
-        streamline::server::scaling_metrics::create_scaling_metrics_router(
-            ScalingMetricsApiState { collector },
-        );
+    let router = streamline::server::scaling_metrics::create_scaling_metrics_router(
+        ScalingMetricsApiState { collector },
+    );
 
     let (status, body) = get_request(router, "/scaling/metrics").await;
     assert_eq!(status, StatusCode::OK);
@@ -569,7 +516,6 @@ async fn test_scaling_metrics_idle_state() {
 #[tokio::test]
 async fn test_unknown_route_returns_404() {
     let app = create_test_app();
-    let (status, _body) =
-        get_request(app, "/api/v1/nonexistent/endpoint").await;
+    let (status, _body) = get_request(app, "/api/v1/nonexistent/endpoint").await;
     assert_eq!(status, StatusCode::NOT_FOUND);
 }

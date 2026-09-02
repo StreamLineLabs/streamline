@@ -53,7 +53,7 @@ impl std::fmt::Display for CloudProvider {
             CloudProvider::Azure => write!(f, "azure"),
             CloudProvider::Gcp => write!(f, "gcp"),
             CloudProvider::OnPrem => write!(f, "on_prem"),
-            CloudProvider::Custom(s) => write!(f, "custom({})", s),
+            CloudProvider::Custom(s) => write!(f, "custom({s})"),
         }
     }
 }
@@ -149,6 +149,12 @@ pub struct MultiCloudStats {
     pub cross_region_bytes: AtomicU64,
 }
 
+impl Default for MultiCloudStats {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl MultiCloudStats {
     pub fn new() -> Self {
         Self {
@@ -170,6 +176,12 @@ pub struct MultiCloudApiState {
     regions: Arc<RwLock<HashMap<String, CloudRegion>>>,
     routing_rules: Arc<RwLock<Vec<RoutingRule>>>,
     stats: Arc<MultiCloudStats>,
+}
+
+impl Default for MultiCloudApiState {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl MultiCloudApiState {
@@ -282,15 +294,16 @@ async fn register_region(
     };
 
     state.regions.write().await.insert(id, region.clone());
-    state.stats.regions_registered.fetch_add(1, Ordering::Relaxed);
+    state
+        .stats
+        .regions_registered
+        .fetch_add(1, Ordering::Relaxed);
     info!(region = %req.region, "registered cloud region");
 
     Ok((StatusCode::CREATED, Json(region)))
 }
 
-async fn list_regions(
-    State(state): State<MultiCloudApiState>,
-) -> Json<Vec<CloudRegion>> {
+async fn list_regions(State(state): State<MultiCloudApiState>) -> Json<Vec<CloudRegion>> {
     let regions = state.regions.read().await;
     Json(regions.values().cloned().collect())
 }
@@ -323,9 +336,7 @@ async fn remove_region(
     }
 }
 
-async fn get_topology(
-    State(state): State<MultiCloudApiState>,
-) -> Json<CloudTopology> {
+async fn get_topology(State(state): State<MultiCloudApiState>) -> Json<CloudTopology> {
     let regions = state.regions.read().await;
     let region_list: Vec<CloudRegion> = regions.values().cloned().collect();
 
@@ -371,9 +382,7 @@ async fn create_routing_rule(
     (StatusCode::CREATED, Json(rule))
 }
 
-async fn list_routing_rules(
-    State(state): State<MultiCloudApiState>,
-) -> Json<Vec<RoutingRule>> {
+async fn list_routing_rules(State(state): State<MultiCloudApiState>) -> Json<Vec<RoutingRule>> {
     Json(state.routing_rules.read().await.clone())
 }
 
@@ -400,7 +409,10 @@ async fn trigger_failover(
 
     let previous_status = region.status.clone();
     region.status = RegionStatus::Draining;
-    state.stats.failovers_triggered.fetch_add(1, Ordering::Relaxed);
+    state
+        .stats
+        .failovers_triggered
+        .fetch_add(1, Ordering::Relaxed);
 
     warn!(region = %region.region, "failover triggered");
 
@@ -412,9 +424,7 @@ async fn trigger_failover(
     }))
 }
 
-async fn get_cost_analysis(
-    State(state): State<MultiCloudApiState>,
-) -> Json<CostAnalysis> {
+async fn get_cost_analysis(State(state): State<MultiCloudApiState>) -> Json<CostAnalysis> {
     let regions = state.regions.read().await;
     let mut total = 0.0;
     let mut by_region = Vec::new();
@@ -433,10 +443,13 @@ async fn get_cost_analysis(
 
     let mut suggestions = Vec::new();
     if regions.len() > 3 {
-        suggestions.push("Consider consolidating regions to reduce cross-region transfer costs".to_string());
+        suggestions.push(
+            "Consider consolidating regions to reduce cross-region transfer costs".to_string(),
+        );
     }
     if regions.values().any(|r| r.status == RegionStatus::Standby) {
-        suggestions.push("Standby regions incur baseline costs — review if still needed".to_string());
+        suggestions
+            .push("Standby regions incur baseline costs — review if still needed".to_string());
     }
 
     Json(CostAnalysis {
@@ -446,9 +459,7 @@ async fn get_cost_analysis(
     })
 }
 
-async fn get_stats(
-    State(state): State<MultiCloudApiState>,
-) -> Json<MultiCloudStatsResponse> {
+async fn get_stats(State(state): State<MultiCloudApiState>) -> Json<MultiCloudStatsResponse> {
     let regions = state.regions.read().await;
     let active = regions
         .values()
@@ -484,8 +495,7 @@ mod tests {
 
     fn region_json(provider: &str, region: &str) -> String {
         format!(
-            r#"{{"provider":"{}","region":"{}","endpoint":"https://{}.example.com:9092","cost_per_gb":0.12,"data_residency":["EU"]}}"#,
-            provider, region, region
+            r#"{{"provider":"{provider}","region":"{region}","endpoint":"https://{region}.example.com:9092","cost_per_gb":0.12,"data_residency":["EU"]}}"#
         )
     }
 
@@ -503,7 +513,9 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(resp.status(), StatusCode::CREATED);
-        let body = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
         serde_json::from_slice(&body).unwrap()
     }
 
@@ -530,7 +542,9 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
-        let body = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let regions: Vec<CloudRegion> = serde_json::from_slice(&body).unwrap();
         assert!(regions.is_empty());
     }
@@ -551,7 +565,9 @@ mod tests {
             )
             .await
             .unwrap();
-        let body = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let regions: Vec<CloudRegion> = serde_json::from_slice(&body).unwrap();
         assert_eq!(regions.len(), 2);
     }
@@ -572,7 +588,9 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
-        let body = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let region: CloudRegion = serde_json::from_slice(&body).unwrap();
         assert_eq!(region.id, created.id);
     }
@@ -653,7 +671,9 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
-        let body = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let topo: CloudTopology = serde_json::from_slice(&body).unwrap();
         assert!(topo.regions.is_empty());
         assert!(topo.connections.is_empty());
@@ -676,7 +696,9 @@ mod tests {
             )
             .await
             .unwrap();
-        let body = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let topo: CloudTopology = serde_json::from_slice(&body).unwrap();
         assert_eq!(topo.regions.len(), 2);
         assert_eq!(topo.connections.len(), 1);
@@ -686,7 +708,8 @@ mod tests {
     #[tokio::test]
     async fn test_create_routing_rule() {
         let app = create_test_app();
-        let body = r#"{"name":"low-latency","rule_type":{"type":"latency","max_ms":50},"priority":10}"#;
+        let body =
+            r#"{"name":"low-latency","rule_type":{"type":"latency","max_ms":50},"priority":10}"#;
         let resp = app
             .oneshot(
                 Request::builder()
@@ -699,7 +722,9 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(resp.status(), StatusCode::CREATED);
-        let body = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let rule: RoutingRule = serde_json::from_slice(&body).unwrap();
         assert_eq!(rule.name, "low-latency");
         assert_eq!(rule.priority, 10);
@@ -732,7 +757,9 @@ mod tests {
             )
             .await
             .unwrap();
-        let body = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let rules: Vec<RoutingRule> = serde_json::from_slice(&body).unwrap();
         assert_eq!(rules.len(), 1);
     }
@@ -740,7 +767,8 @@ mod tests {
     #[tokio::test]
     async fn test_remove_routing_rule() {
         let app = create_test_app();
-        let body = r#"{"name":"eu-residency","rule_type":{"type":"residency","allowed_regions":["EU"]}}"#;
+        let body =
+            r#"{"name":"eu-residency","rule_type":{"type":"residency","allowed_regions":["EU"]}}"#;
         let resp = app
             .clone()
             .oneshot(
@@ -753,7 +781,9 @@ mod tests {
             )
             .await
             .unwrap();
-        let b = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let b = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let rule: RoutingRule = serde_json::from_slice(&b).unwrap();
 
         let resp = app
@@ -803,7 +833,9 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
-        let body = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let fo: FailoverResponse = serde_json::from_slice(&body).unwrap();
         assert_eq!(fo.previous_status, RegionStatus::Active);
         assert_eq!(fo.new_status, RegionStatus::Draining);
@@ -841,7 +873,9 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
-        let body = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let costs: CostAnalysis = serde_json::from_slice(&body).unwrap();
         assert_eq!(costs.by_region.len(), 1);
         assert!(costs.total_monthly_cost > 0.0);
@@ -863,7 +897,9 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
-        let body = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let stats: MultiCloudStatsResponse = serde_json::from_slice(&body).unwrap();
         assert_eq!(stats.total_regions, 1);
         assert_eq!(stats.active_regions, 1);
@@ -885,7 +921,9 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(resp.status(), StatusCode::CREATED);
-        let b = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let b = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let rule: RoutingRule = serde_json::from_slice(&b).unwrap();
         assert_eq!(rule.priority, 5);
     }
@@ -921,7 +959,9 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
-        let body = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let costs: CostAnalysis = serde_json::from_slice(&body).unwrap();
         assert_eq!(costs.total_monthly_cost, 0.0);
         assert!(costs.by_region.is_empty());

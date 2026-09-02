@@ -334,7 +334,9 @@ impl ConnectorRuntime {
         drop(connectors);
 
         // Persist config to internal topic
-        self.persist_connector_config(&config.name, &config).await.ok();
+        self.persist_connector_config(&config.name, &config)
+            .await
+            .ok();
 
         self.stats
             .connectors_created
@@ -378,8 +380,7 @@ impl ConnectorRuntime {
         let mut connectors = self.connectors.write().await;
         if connectors.remove(name).is_none() {
             return Err(StreamlineError::Config(format!(
-                "Connector not found: {}",
-                name
+                "Connector not found: {name}"
             )));
         }
 
@@ -399,7 +400,7 @@ impl ConnectorRuntime {
         let mut connectors = self.connectors.write().await;
         let connector = connectors
             .get_mut(name)
-            .ok_or_else(|| StreamlineError::Config(format!("Connector not found: {}", name)))?;
+            .ok_or_else(|| StreamlineError::Config(format!("Connector not found: {name}")))?;
 
         connector.config.config = config;
         connector.updated_at = Utc::now();
@@ -437,7 +438,7 @@ impl ConnectorRuntime {
         let mut connectors = self.connectors.write().await;
         let connector = connectors
             .get_mut(name)
-            .ok_or_else(|| StreamlineError::Config(format!("Connector not found: {}", name)))?;
+            .ok_or_else(|| StreamlineError::Config(format!("Connector not found: {name}")))?;
 
         if connector.state == ConnectorState::Running {
             return Ok(());
@@ -466,7 +467,9 @@ impl ConnectorRuntime {
         connector.updated_at = Utc::now();
         drop(connectors);
 
-        self.persist_status(name, &ConnectorState::Running).await.ok();
+        self.persist_status(name, &ConnectorState::Running)
+            .await
+            .ok();
 
         self.stats
             .connectors_started
@@ -480,7 +483,7 @@ impl ConnectorRuntime {
         let mut connectors = self.connectors.write().await;
         let connector = connectors
             .get_mut(name)
-            .ok_or_else(|| StreamlineError::Config(format!("Connector not found: {}", name)))?;
+            .ok_or_else(|| StreamlineError::Config(format!("Connector not found: {name}")))?;
 
         connector.state = ConnectorState::Unassigned;
         for task in &mut connector.tasks {
@@ -489,7 +492,9 @@ impl ConnectorRuntime {
         connector.updated_at = Utc::now();
         drop(connectors);
 
-        self.persist_status(name, &ConnectorState::Unassigned).await.ok();
+        self.persist_status(name, &ConnectorState::Unassigned)
+            .await
+            .ok();
 
         self.stats
             .connectors_stopped
@@ -503,7 +508,7 @@ impl ConnectorRuntime {
         let mut connectors = self.connectors.write().await;
         let connector = connectors
             .get_mut(name)
-            .ok_or_else(|| StreamlineError::Config(format!("Connector not found: {}", name)))?;
+            .ok_or_else(|| StreamlineError::Config(format!("Connector not found: {name}")))?;
 
         connector.state = ConnectorState::Paused;
         for task in &mut connector.tasks {
@@ -512,7 +517,9 @@ impl ConnectorRuntime {
         connector.updated_at = Utc::now();
         drop(connectors);
 
-        self.persist_status(name, &ConnectorState::Paused).await.ok();
+        self.persist_status(name, &ConnectorState::Paused)
+            .await
+            .ok();
 
         info!("Paused connector: {}", name);
         Ok(())
@@ -523,12 +530,11 @@ impl ConnectorRuntime {
         let mut connectors = self.connectors.write().await;
         let connector = connectors
             .get_mut(name)
-            .ok_or_else(|| StreamlineError::Config(format!("Connector not found: {}", name)))?;
+            .ok_or_else(|| StreamlineError::Config(format!("Connector not found: {name}")))?;
 
         if connector.state != ConnectorState::Paused {
             return Err(StreamlineError::Config(format!(
-                "Connector {} is not paused",
-                name
+                "Connector {name} is not paused"
             )));
         }
 
@@ -539,7 +545,9 @@ impl ConnectorRuntime {
         connector.updated_at = Utc::now();
         drop(connectors);
 
-        self.persist_status(name, &ConnectorState::Running).await.ok();
+        self.persist_status(name, &ConnectorState::Running)
+            .await
+            .ok();
 
         info!("Resumed connector: {}", name);
         Ok(())
@@ -570,13 +578,12 @@ impl ConnectorRuntime {
     pub async fn start_source_execution(&self, connector_name: &str) -> Result<()> {
         let connectors = self.connectors.read().await;
         let connector = connectors.get(connector_name).ok_or_else(|| {
-            StreamlineError::Config(format!("Connector not found: {}", connector_name))
+            StreamlineError::Config(format!("Connector not found: {connector_name}"))
         })?;
 
         if connector.state != ConnectorState::Running {
             return Err(StreamlineError::Config(format!(
-                "Connector {} is not running",
-                connector_name
+                "Connector {connector_name} is not running"
             )));
         }
 
@@ -586,7 +593,7 @@ impl ConnectorRuntime {
             .get("topic")
             .or_else(|| connector.config.config.get("topics"))
             .cloned()
-            .unwrap_or_else(|| format!("{}-output", connector_name));
+            .unwrap_or_else(|| format!("{connector_name}-output"));
 
         let poll_interval_ms: u64 = connector
             .config
@@ -683,13 +690,12 @@ impl ConnectorRuntime {
     pub async fn start_sink_execution(&self, connector_name: &str) -> Result<()> {
         let connectors = self.connectors.read().await;
         let connector = connectors.get(connector_name).ok_or_else(|| {
-            StreamlineError::Config(format!("Connector not found: {}", connector_name))
+            StreamlineError::Config(format!("Connector not found: {connector_name}"))
         })?;
 
         if connector.state != ConnectorState::Running {
             return Err(StreamlineError::Config(format!(
-                "Connector {} is not running",
-                connector_name
+                "Connector {connector_name} is not running"
             )));
         }
 
@@ -912,8 +918,8 @@ impl ConnectorRuntime {
             self.topic_manager.create_topic(topic_name, 1)?;
         }
 
-        let data = serde_json::to_vec(config)
-            .map_err(|e| StreamlineError::storage_msg(e.to_string()))?;
+        let data =
+            serde_json::to_vec(config).map_err(|e| StreamlineError::storage_msg(e.to_string()))?;
         self.topic_manager.append(
             topic_name,
             0,
@@ -944,16 +950,18 @@ impl ConnectorRuntime {
                 let mut connectors = self.connectors.write().await;
                 let restored_count = latest_configs.len();
                 for (name, config) in latest_configs {
-                    connectors.entry(name.clone()).or_insert_with(|| ConnectorInstance {
-                        name,
-                        config,
-                        state: ConnectorState::Unassigned,
-                        tasks: Vec::new(),
-                        created_at: Utc::now(),
-                        updated_at: Utc::now(),
-                        worker_id: self.config.worker_id.clone(),
-                        error_message: None,
-                    });
+                    connectors
+                        .entry(name.clone())
+                        .or_insert_with(|| ConnectorInstance {
+                            name,
+                            config,
+                            state: ConnectorState::Unassigned,
+                            tasks: Vec::new(),
+                            created_at: Utc::now(),
+                            updated_at: Utc::now(),
+                            worker_id: self.config.worker_id.clone(),
+                            error_message: None,
+                        });
                 }
 
                 if restored_count > 0 {
@@ -1068,7 +1076,7 @@ impl Default for RuntimeConfig {
     fn default() -> Self {
         let hostname = std::env::var("HOSTNAME").unwrap_or_else(|_| "localhost".to_string());
         Self {
-            worker_id: format!("{}:8083", hostname),
+            worker_id: format!("{hostname}:8083"),
             plugin_path: None,
             max_tasks_per_connector: 10,
             offset_storage_topic: "connect-offsets".to_string(),
@@ -1405,8 +1413,7 @@ impl ConnectorRuntime {
 
         info!(
             workers = available_workers.len(),
-            reassigned,
-            "Task rebalance completed"
+            reassigned, "Task rebalance completed"
         );
 
         Ok(RebalanceResult {
@@ -1642,7 +1649,7 @@ mod tests {
                     "sink-input",
                     0,
                     None,
-                    bytes::Bytes::from(format!("message-{}", i)),
+                    bytes::Bytes::from(format!("message-{i}")),
                 )
                 .unwrap();
         }

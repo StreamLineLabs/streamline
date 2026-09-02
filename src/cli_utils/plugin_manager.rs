@@ -215,7 +215,7 @@ impl CliPluginManager {
             info!(name = %name, "Plugin uninstalled");
             Ok(())
         } else {
-            Err(format!("Plugin '{}' not found", name))
+            Err(format!("Plugin '{name}' not found"))
         }
     }
 
@@ -328,7 +328,9 @@ impl CliPluginManager {
             .chars()
             .all(|c| c.is_alphanumeric() || c == '-')
         {
-            errors.push("Plugin name may only contain alphanumeric characters and hyphens".to_string());
+            errors.push(
+                "Plugin name may only contain alphanumeric characters and hyphens".to_string(),
+            );
         }
 
         errors

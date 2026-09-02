@@ -391,12 +391,7 @@ impl VectorStore {
     }
 
     /// Search with minimum similarity threshold
-    pub fn search_with_threshold(
-        &self,
-        query: &[f32],
-        k: usize,
-        min_score: f32,
-    ) -> Vec<SearchHit> {
+    pub fn search_with_threshold(&self, query: &[f32], k: usize, min_score: f32) -> Vec<SearchHit> {
         self.search(query, k)
             .into_iter()
             .filter(|hit| hit.score >= min_score)

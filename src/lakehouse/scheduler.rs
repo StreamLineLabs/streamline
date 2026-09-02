@@ -86,10 +86,11 @@ impl RefreshScheduler {
 
     /// Schedule a view for refresh
     pub async fn schedule_view(&self, view_name: &str) -> Result<()> {
-        let view =
-            self.view_manager.get_view(view_name).await.ok_or_else(|| {
-                StreamlineError::Config(format!("View '{}' not found", view_name))
-            })?;
+        let view = self
+            .view_manager
+            .get_view(view_name)
+            .await
+            .ok_or_else(|| StreamlineError::Config(format!("View '{view_name}' not found")))?;
 
         let task = ScheduledTask::from_view(&view);
         let mut tasks = self.tasks.write().await;
@@ -489,8 +490,7 @@ impl DependencyTracker {
     ) -> Result<()> {
         if temp_visited.get(view).copied().unwrap_or(false) {
             return Err(StreamlineError::Config(format!(
-                "Circular dependency detected involving view '{}'",
-                view
+                "Circular dependency detected involving view '{view}'"
             )));
         }
 

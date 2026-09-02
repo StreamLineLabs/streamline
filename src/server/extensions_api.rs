@@ -199,32 +199,20 @@ pub fn create_extensions_api_router(state: ExtensionsApiState) -> Router {
             "/api/v1/extensions/webhooks",
             post(create_webhook).get(list_webhooks),
         )
-        .route(
-            "/api/v1/extensions/webhooks/:id",
-            delete(delete_webhook),
-        )
-        .route(
-            "/api/v1/extensions/webhooks/:id/test",
-            post(test_webhook),
-        )
+        .route("/api/v1/extensions/webhooks/:id", delete(delete_webhook))
+        .route("/api/v1/extensions/webhooks/:id/test", post(test_webhook))
         // widgets
         .route(
             "/api/v1/extensions/widgets",
             post(create_widget).get(list_widgets),
         )
-        .route(
-            "/api/v1/extensions/widgets/:id",
-            delete(delete_widget),
-        )
+        .route("/api/v1/extensions/widgets/:id", delete(delete_widget))
         // triggers
         .route(
             "/api/v1/extensions/triggers",
             post(create_trigger).get(list_triggers),
         )
-        .route(
-            "/api/v1/extensions/triggers/:id",
-            delete(delete_trigger),
-        )
+        .route("/api/v1/extensions/triggers/:id", delete(delete_trigger))
         // stats
         .route("/api/v1/extensions/stats", get(get_extension_stats))
         .with_state(state)
@@ -262,9 +250,7 @@ async fn create_webhook(
     Ok((StatusCode::CREATED, Json(webhook)))
 }
 
-async fn list_webhooks(
-    State(state): State<ExtensionsApiState>,
-) -> Json<Vec<Webhook>> {
+async fn list_webhooks(State(state): State<ExtensionsApiState>) -> Json<Vec<Webhook>> {
     let hooks: Vec<Webhook> = state.webhooks.read().await.values().cloned().collect();
     debug!(count = hooks.len(), "Listing webhooks");
     Json(hooks)
@@ -343,9 +329,7 @@ async fn create_widget(
     Ok((StatusCode::CREATED, Json(widget)))
 }
 
-async fn list_widgets(
-    State(state): State<ExtensionsApiState>,
-) -> Json<Vec<CustomWidget>> {
+async fn list_widgets(State(state): State<ExtensionsApiState>) -> Json<Vec<CustomWidget>> {
     let ws: Vec<CustomWidget> = state.widgets.read().await.values().cloned().collect();
     debug!(count = ws.len(), "Listing widgets");
     Json(ws)
@@ -398,9 +382,7 @@ async fn create_trigger(
     Ok((StatusCode::CREATED, Json(trigger)))
 }
 
-async fn list_triggers(
-    State(state): State<ExtensionsApiState>,
-) -> Json<Vec<WorkflowTrigger>> {
+async fn list_triggers(State(state): State<ExtensionsApiState>) -> Json<Vec<WorkflowTrigger>> {
     let ts: Vec<WorkflowTrigger> = state.triggers.read().await.values().cloned().collect();
     debug!(count = ts.len(), "Listing triggers");
     Json(ts)

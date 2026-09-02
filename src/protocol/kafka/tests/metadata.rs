@@ -117,7 +117,7 @@ async fn test_metadata_all_versions() {
         let request = MetadataRequest::default();
         let response = handler.handle_metadata(request, version).await;
 
-        assert!(response.is_ok(), "Metadata v{} should succeed", version);
+        assert!(response.is_ok(), "Metadata v{version} should succeed");
     }
 }
 

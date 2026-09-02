@@ -36,12 +36,7 @@ pub struct AuditEvent {
 }
 
 impl AuditEvent {
-    pub fn now(
-        backend: &'static str,
-        op: KmsOp,
-        key_id: impl Into<String>,
-        success: bool,
-    ) -> Self {
+    pub fn now(backend: &'static str, op: KmsOp, key_id: impl Into<String>, success: bool) -> Self {
         Self {
             ts_ms: SystemTime::now()
                 .duration_since(UNIX_EPOCH)

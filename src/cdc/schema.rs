@@ -56,8 +56,7 @@ impl SchemaEvolutionTracker {
             if !self.is_compatible(&compatibility) {
                 if self.config.break_on_incompatible {
                     return Err(StreamlineError::Config(format!(
-                        "Schema change for '{}' is not compatible: {:?}",
-                        table_key, compatibility
+                        "Schema change for '{table_key}' is not compatible: {compatibility:?}"
                     )));
                 } else {
                     warn!(
@@ -705,7 +704,7 @@ mod tests {
 
         // Register 3 versions
         for i in 1..=3 {
-            let schema = create_test_schema(vec![(&format!("col{}", i), "int", false)]);
+            let schema = create_test_schema(vec![(&format!("col{i}"), "int", false)]);
             tracker.register_schema("test.table", schema).unwrap();
         }
 

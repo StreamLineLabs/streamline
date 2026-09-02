@@ -27,7 +27,7 @@ pub struct Record {
     ///
     /// Note: We use `#[serde(default)]` for backward compatibility with JSON deserializaton,
     /// but NOT `skip_serializing_if` because bincode requires consistent struct layout.
-    /// Option<u32> serializes efficiently: 1 byte tag + optional 4 bytes.
+    /// `Option<u32>` serializes efficiently: 1 byte tag + optional 4 bytes.
     #[serde(default)]
     pub crc: Option<u32>,
 }

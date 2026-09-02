@@ -11,7 +11,7 @@
 
 **Please do NOT create public GitHub issues for security vulnerabilities.**
 
-To report a security vulnerability, please email **security@streamline.dev** with:
+To report a security vulnerability, please email **security@streamlinelabs.dev** with:
 
 - Description of the vulnerability
 - Steps to reproduce
@@ -115,8 +115,9 @@ We use automated security scanning:
 ## Secure Development
 
 - All code changes require review
-- CI pipeline includes security audit checks
-- No use of `unsafe` Rust without justification and review
+- CI pipeline includes fail-closed security audit checks (see above)
+- No use of `unsafe` Rust without a `// SAFETY:` justification and review; the
+  count of undocumented `unsafe` blocks is capped in CI
 - Input validation at protocol boundaries
 
 ## Disclosure Policy
@@ -151,7 +152,7 @@ When a security vulnerability is reported:
 - **Bug Bounty:** Not currently offered
 
 ### Process
-1. Reporter submits vulnerability to security@streamline.dev
+1. Reporter submits vulnerability to security@streamlinelabs.dev
 2. Team acknowledges within 48 hours with tracking ID
 3. Team assesses severity and impact within 5 business days
 4. Team develops and tests fix per SLA
@@ -162,7 +163,7 @@ When a security vulnerability is reported:
 
 ## Contact
 
-For security-related inquiries, please email **security@streamline.dev**.
+For security-related inquiries, please email **security@streamlinelabs.dev**.
 
 ## Security Audit
 

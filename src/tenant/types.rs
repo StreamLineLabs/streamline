@@ -62,7 +62,7 @@ impl Default for TenantConfig {
             max_partitions: 500,
             max_producer_bytes_per_sec: 50 * 1024 * 1024, // 50 MB/s
             max_consumer_bytes_per_sec: 100 * 1024 * 1024, // 100 MB/s
-            max_message_size: 1024 * 1024,                 // 1 MB
+            max_message_size: 1024 * 1024,                // 1 MB
             max_retention_ms: 7 * 24 * 60 * 60 * 1000,    // 7 days
             max_storage_bytes: 10 * 1024 * 1024 * 1024,   // 10 GB
             transactions_enabled: true,

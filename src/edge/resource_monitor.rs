@@ -68,6 +68,7 @@ impl std::fmt::Display for AlertSeverity {
 /// Kind of resource alert
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[allow(clippy::enum_variant_names)] // `High*` is the alert taxonomy, not noise
 pub enum AlertKind {
     HighCpu,
     HighMemory,

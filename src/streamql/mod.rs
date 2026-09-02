@@ -41,8 +41,6 @@
 
 pub mod ast;
 pub mod cep;
-#[cfg(feature = "ai")]
-pub mod natural_language;
 pub mod checkpoint;
 pub mod continuous;
 pub mod engine;
@@ -53,6 +51,8 @@ pub mod join;
 pub mod ksqldb;
 pub mod lexer;
 pub mod materialized;
+#[cfg(feature = "ai")]
+pub mod natural_language;
 pub mod operators;
 pub mod parser;
 pub mod planner;
@@ -76,14 +76,14 @@ pub use ksqldb::{
     ColumnSchema as KsqlColumnSchema, ColumnType as KsqlColumnType,
     ContinuousQuery as KsqlContinuousQuery, ContinuousQueryStats as KsqlContinuousQueryStats,
     ContinuousQueryStatus as KsqlContinuousQueryStatus, DataFormat as KsqlDataFormat,
-    KsqlAggregateFunction, KsqlWindowSpec, StreamDefinition, StreamqlEngine, StreamqlStatement,
-    StatementResult as KsqlStatementResult, TableDefinition,
+    KsqlAggregateFunction, KsqlWindowSpec, StatementResult as KsqlStatementResult,
+    StreamDefinition, StreamqlEngine, StreamqlStatement, TableDefinition,
 };
 pub use operators::{FilterOperator, ProjectOperator, StreamOperator};
 pub use parser::StreamQLParser;
 pub use planner::QueryPlanner;
 pub use state_store::{
-    FileStateStore, MemoryStateStore, StateStore, StateStoreConfig, open_state_store,
+    open_state_store, FileStateStore, MemoryStateStore, StateStore, StateStoreConfig,
 };
 pub use types::{DataType, Value};
 

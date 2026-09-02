@@ -63,8 +63,7 @@ impl<'a> TopicTableMapper<'a> {
         );
         conn.execute_batch(&create_sql).map_err(|e| {
             crate::error::StreamlineError::Storage(format!(
-                "Failed to create SQLite table for topic '{}': {}",
-                topic, e
+                "Failed to create SQLite table for topic '{topic}': {e}"
             ))
         })?;
 
@@ -95,9 +94,9 @@ impl<'a> TopicTableMapper<'a> {
             }
 
             // Read records from the topic.
-            let records = self
-                .topic_manager
-                .read(topic, partition, last_synced, SYNC_BATCH_SIZE)?;
+            let records =
+                self.topic_manager
+                    .read(topic, partition, last_synced, SYNC_BATCH_SIZE)?;
 
             if records.is_empty() {
                 continue;
@@ -108,8 +107,7 @@ impl<'a> TopicTableMapper<'a> {
             );
             let mut stmt = conn.prepare_cached(&insert_sql).map_err(|e| {
                 crate::error::StreamlineError::Storage(format!(
-                    "Failed to prepare INSERT for topic '{}': {}",
-                    topic, e
+                    "Failed to prepare INSERT for topic '{topic}': {e}"
                 ))
             })?;
 
@@ -130,8 +128,7 @@ impl<'a> TopicTableMapper<'a> {
                 ])
                 .map_err(|e| {
                     crate::error::StreamlineError::Storage(format!(
-                        "Failed to insert record into SQLite table '{}': {}",
-                        topic, e
+                        "Failed to insert record into SQLite table '{topic}': {e}"
                     ))
                 })?;
 
@@ -201,7 +198,7 @@ mod tests {
         let result = bytes_to_string(&b);
         // Should be Base64 encoded.
         assert!(!result.is_empty());
-        assert!(result.chars().all(|c| c.is_ascii()));
+        assert!(result.is_ascii());
     }
 
     #[test]

@@ -3,25 +3,29 @@
 //! This module contains handlers for fundamental protocol operations
 //! including API version negotiation, metadata, and response encoding utilities.
 
-
-use bytes::BytesMut;
+use super::constants::build_api_versions;
+use super::constants::HeaderVersionRule;
+use super::constants::REQUEST_HEADER_FLEXIBLE_VERSIONS;
+use super::constants::RESPONSE_HEADER_FLEXIBLE_VERSIONS;
+use super::KafkaHandler;
 use crate::error::{Result, StreamlineError};
 use crate::protocol::handlers::error_codes::*;
+use bytes::BytesMut;
 use kafka_protocol::messages::ApiKey;
 use kafka_protocol::messages::ProducerId as KafkaProducerId;
 use kafka_protocol::messages::ResponseHeader;
 use kafka_protocol::messages::TopicName;
 use kafka_protocol::messages::{
-    ApiVersionsRequest, ApiVersionsResponse,
-    AlterConfigsResponse, ControlledShutdownRequest, ControlledShutdownResponse, CreateTopicsResponse, DeleteGroupsResponse, DeleteTopicsResponse, DescribeConfigsResponse, DescribeGroupsResponse, EndTxnResponse, FetchResponse, FindCoordinatorResponse, HeartbeatResponse, InitProducerIdResponse, JoinGroupResponse, LeaveGroupResponse, ListGroupsResponse, ListOffsetsResponse, MetadataRequest, MetadataResponse, OffsetCommitResponse, OffsetFetchResponse, ProduceResponse, SaslAuthenticateResponse, SaslHandshakeResponse, SyncGroupResponse,
+    AlterConfigsResponse, ApiVersionsRequest, ApiVersionsResponse, ControlledShutdownRequest,
+    ControlledShutdownResponse, CreateTopicsResponse, DeleteGroupsResponse, DeleteTopicsResponse,
+    DescribeConfigsResponse, DescribeGroupsResponse, EndTxnResponse, FetchResponse,
+    FindCoordinatorResponse, HeartbeatResponse, InitProducerIdResponse, JoinGroupResponse,
+    LeaveGroupResponse, ListGroupsResponse, ListOffsetsResponse, MetadataRequest, MetadataResponse,
+    OffsetCommitResponse, OffsetFetchResponse, ProduceResponse, SaslAuthenticateResponse,
+    SaslHandshakeResponse, SyncGroupResponse,
 };
 use kafka_protocol::protocol::Encodable;
 use kafka_protocol::protocol::StrBytes;
-use super::KafkaHandler;
-use super::constants::HeaderVersionRule;
-use super::constants::REQUEST_HEADER_FLEXIBLE_VERSIONS;
-use super::constants::RESPONSE_HEADER_FLEXIBLE_VERSIONS;
-use super::constants::build_api_versions;
 #[allow(unused_imports)]
 use tracing::{debug, info, warn};
 use uuid::Uuid;
@@ -377,7 +381,11 @@ impl KafkaHandler {
         Ok(response)
     }
 
-    pub(super) fn is_flexible_header(api_key: ApiKey, api_version: i16, rules: &[HeaderVersionRule]) -> bool {
+    pub(super) fn is_flexible_header(
+        api_key: ApiKey,
+        api_version: i16,
+        rules: &[HeaderVersionRule],
+    ) -> bool {
         rules
             .iter()
             .any(|rule| rule.api_key == api_key && api_version >= rule.min_version)
@@ -576,8 +584,7 @@ impl KafkaHandler {
             }
             _ => {
                 return Err(StreamlineError::protocol_msg(format!(
-                    "Unknown API key: {}",
-                    api_key
+                    "Unknown API key: {api_key}"
                 )));
             }
         };
@@ -587,7 +594,7 @@ impl KafkaHandler {
         response_header
             .encode(&mut response_buf, response_header_version)
             .map_err(|e| {
-                StreamlineError::protocol_msg(format!("Failed to encode response header: {}", e))
+                StreamlineError::protocol_msg(format!("Failed to encode response header: {e}"))
             })?;
         response_buf.extend_from_slice(&response_body);
 
@@ -595,12 +602,14 @@ impl KafkaHandler {
     }
 
     /// Static version of encode_response for use in create_error_response
-    pub(super) fn encode_response_static<T: Encodable>(response: &T, version: i16) -> Result<Vec<u8>> {
+    pub(super) fn encode_response_static<T: Encodable>(
+        response: &T,
+        version: i16,
+    ) -> Result<Vec<u8>> {
         let mut buf = BytesMut::new();
         response.encode(&mut buf, version).map_err(|e| {
-            StreamlineError::protocol_msg(format!("Failed to encode response: {}", e))
+            StreamlineError::protocol_msg(format!("Failed to encode response: {e}"))
         })?;
         Ok(buf.to_vec())
     }
-
 }

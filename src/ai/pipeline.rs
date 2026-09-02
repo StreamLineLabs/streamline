@@ -260,10 +260,18 @@ pub enum FeatureAggregation {
     DistinctCount,
 }
 
-fn default_chunk_size() -> usize { 512 }
-fn default_chunk_overlap() -> usize { 64 }
-fn default_rag_model() -> String { "text-embedding-3-small".to_string() }
-fn default_feature_window() -> u64 { 300_000 } // 5 minutes
+fn default_chunk_size() -> usize {
+    512
+}
+fn default_chunk_overlap() -> usize {
+    64
+}
+fn default_rag_model() -> String {
+    "text-embedding-3-small".to_string()
+}
+fn default_feature_window() -> u64 {
+    300_000
+} // 5 minutes
 
 fn default_content_field() -> String {
     "content".to_string()
@@ -770,7 +778,7 @@ impl PipelineManager {
             if pipelines.contains_key(&name) {
                 return Err(StreamlineError::config(
                     "pipeline",
-                    format!("Pipeline '{}' already exists", name),
+                    format!("Pipeline '{name}' already exists"),
                 ));
             }
         }
@@ -807,7 +815,7 @@ impl PipelineManager {
     pub async fn start(&self, name: &str) -> Result<PipelineInfo> {
         let mut pipelines = self.pipelines.write().await;
         let pipeline = pipelines.get_mut(name).ok_or_else(|| {
-            StreamlineError::config("pipeline", format!("Pipeline '{}' not found", name))
+            StreamlineError::config("pipeline", format!("Pipeline '{name}' not found"))
         })?;
         pipeline.start();
         Ok(pipeline.info())
@@ -817,7 +825,7 @@ impl PipelineManager {
     pub async fn pause(&self, name: &str) -> Result<PipelineInfo> {
         let mut pipelines = self.pipelines.write().await;
         let pipeline = pipelines.get_mut(name).ok_or_else(|| {
-            StreamlineError::config("pipeline", format!("Pipeline '{}' not found", name))
+            StreamlineError::config("pipeline", format!("Pipeline '{name}' not found"))
         })?;
         pipeline.pause();
         Ok(pipeline.info())
@@ -827,7 +835,7 @@ impl PipelineManager {
     pub async fn stop(&self, name: &str) -> Result<PipelineInfo> {
         let mut pipelines = self.pipelines.write().await;
         let pipeline = pipelines.get_mut(name).ok_or_else(|| {
-            StreamlineError::config("pipeline", format!("Pipeline '{}' not found", name))
+            StreamlineError::config("pipeline", format!("Pipeline '{name}' not found"))
         })?;
         pipeline.stop();
         Ok(pipeline.info())
@@ -837,7 +845,7 @@ impl PipelineManager {
     pub async fn delete(&self, name: &str) -> Result<()> {
         let mut pipelines = self.pipelines.write().await;
         let mut pipeline = pipelines.remove(name).ok_or_else(|| {
-            StreamlineError::config("pipeline", format!("Pipeline '{}' not found", name))
+            StreamlineError::config("pipeline", format!("Pipeline '{name}' not found"))
         })?;
         pipeline.stop();
         info!(name = %name, "Deleted AI pipeline");

@@ -88,7 +88,7 @@ impl std::fmt::Display for FunctionStatus {
             FunctionStatus::Deploying => write!(f, "deploying"),
             FunctionStatus::Running => write!(f, "running"),
             FunctionStatus::Paused => write!(f, "paused"),
-            FunctionStatus::Failed(reason) => write!(f, "failed: {}", reason),
+            FunctionStatus::Failed(reason) => write!(f, "failed: {reason}"),
             FunctionStatus::Stopped => write!(f, "stopped"),
         }
     }
@@ -134,8 +134,7 @@ impl FunctionRegistry {
         let mut functions = self.functions.write().await;
         if functions.contains_key(&name) {
             return Err(WasmError::Validation(format!(
-                "Function '{}' already exists",
-                name
+                "Function '{name}' already exists"
             )));
         }
         functions.insert(name.clone(), function);
@@ -158,7 +157,7 @@ impl FunctionRegistry {
         let mut functions = self.functions.write().await;
         functions
             .remove(name)
-            .ok_or_else(|| WasmError::Internal(format!("Function '{}' not found", name)))?;
+            .ok_or_else(|| WasmError::Internal(format!("Function '{name}' not found")))?;
         info!(function = %name, "WASM function removed");
         Ok(())
     }
@@ -168,7 +167,7 @@ impl FunctionRegistry {
         let mut functions = self.functions.write().await;
         let function = functions
             .get_mut(name)
-            .ok_or_else(|| WasmError::Internal(format!("Function '{}' not found", name)))?;
+            .ok_or_else(|| WasmError::Internal(format!("Function '{name}' not found")))?;
 
         match &function.status {
             FunctionStatus::Running => {
@@ -178,8 +177,7 @@ impl FunctionRegistry {
                 Ok(())
             }
             other => Err(WasmError::Validation(format!(
-                "Cannot pause function in '{}' state",
-                other
+                "Cannot pause function in '{other}' state"
             ))),
         }
     }
@@ -189,7 +187,7 @@ impl FunctionRegistry {
         let mut functions = self.functions.write().await;
         let function = functions
             .get_mut(name)
-            .ok_or_else(|| WasmError::Internal(format!("Function '{}' not found", name)))?;
+            .ok_or_else(|| WasmError::Internal(format!("Function '{name}' not found")))?;
 
         match &function.status {
             FunctionStatus::Paused => {
@@ -199,8 +197,7 @@ impl FunctionRegistry {
                 Ok(())
             }
             other => Err(WasmError::Validation(format!(
-                "Cannot resume function in '{}' state",
-                other
+                "Cannot resume function in '{other}' state"
             ))),
         }
     }
@@ -331,9 +328,7 @@ mod tests {
         let registry = FunctionRegistry::new();
         registry.deploy(test_function("fn-metrics")).await.unwrap();
 
-        registry
-            .update_metrics("fn-metrics", 10, 10, 0, 50.0)
-            .await;
+        registry.update_metrics("fn-metrics", 10, 10, 0, 50.0).await;
 
         let func = registry.get("fn-metrics").await.unwrap();
         assert_eq!(func.metrics.records_processed, 10);

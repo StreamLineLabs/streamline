@@ -29,10 +29,7 @@ impl StatisticsManager {
         // Create storage directory if it doesn't exist
         if config.enabled {
             std::fs::create_dir_all(&storage_path).map_err(|e| {
-                StreamlineError::storage_msg(format!(
-                    "Failed to create statistics directory: {}",
-                    e
-                ))
+                StreamlineError::storage_msg(format!("Failed to create statistics directory: {e}"))
             })?;
         }
 
@@ -122,13 +119,13 @@ impl StatisticsManager {
         let stats = self.topic_stats.read().await;
 
         for (topic, topic_stats) in stats.iter() {
-            let path = self.storage_path.join(format!("{}.stats.json", topic));
+            let path = self.storage_path.join(format!("{topic}.stats.json"));
             let json = serde_json::to_string_pretty(topic_stats).map_err(|e| {
-                StreamlineError::storage_msg(format!("Failed to serialize statistics: {}", e))
+                StreamlineError::storage_msg(format!("Failed to serialize statistics: {e}"))
             })?;
 
             std::fs::write(&path, json).map_err(|e| {
-                StreamlineError::storage_msg(format!("Failed to write statistics: {}", e))
+                StreamlineError::storage_msg(format!("Failed to write statistics: {e}"))
             })?;
         }
 
@@ -148,7 +145,7 @@ impl StatisticsManager {
         let mut stats = self.topic_stats.write().await;
 
         let entries = std::fs::read_dir(&self.storage_path).map_err(|e| {
-            StreamlineError::storage_msg(format!("Failed to read statistics directory: {}", e))
+            StreamlineError::storage_msg(format!("Failed to read statistics directory: {e}"))
         })?;
 
         for entry in entries.flatten() {
@@ -158,17 +155,13 @@ impl StatisticsManager {
                     if let Some(topic) = name.to_str() {
                         let topic = topic.trim_end_matches(".stats");
                         let content = std::fs::read_to_string(&path).map_err(|e| {
-                            StreamlineError::storage_msg(format!(
-                                "Failed to read statistics: {}",
-                                e
-                            ))
+                            StreamlineError::storage_msg(format!("Failed to read statistics: {e}"))
                         })?;
 
                         let topic_stats: TopicStatistics =
                             serde_json::from_str(&content).map_err(|e| {
                                 StreamlineError::storage_msg(format!(
-                                    "Failed to parse statistics: {}",
-                                    e
+                                    "Failed to parse statistics: {e}"
                                 ))
                             })?;
 
@@ -236,10 +229,10 @@ impl StatisticsManager {
         stats.remove(topic);
 
         // Remove persisted file
-        let path = self.storage_path.join(format!("{}.stats.json", topic));
+        let path = self.storage_path.join(format!("{topic}.stats.json"));
         if path.exists() {
             std::fs::remove_file(&path).map_err(|e| {
-                StreamlineError::storage_msg(format!("Failed to remove statistics file: {}", e))
+                StreamlineError::storage_msg(format!("Failed to remove statistics file: {e}"))
             })?;
         }
 

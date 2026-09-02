@@ -158,9 +158,7 @@ fn test_cli_topics_create_describe() {
     // Should succeed
     assert!(
         output.status.success() || stdout.contains("Created") || stdout.contains("test-topic"),
-        "Topic create failed: stdout={}, stderr={}",
-        stdout,
-        stderr
+        "Topic create failed: stdout={stdout}, stderr={stderr}"
     );
 
     // Describe the topic
@@ -216,9 +214,7 @@ fn test_cli_topics_delete() {
         create_output.status.success()
             || create_stdout.contains("Created")
             || create_stdout.contains("to-delete"),
-        "Topic create should work: stdout={}, stderr={}",
-        create_stdout,
-        create_stderr
+        "Topic create should work: stdout={create_stdout}, stderr={create_stderr}"
     );
 
     // Small delay to ensure filesystem operations complete
@@ -256,9 +252,7 @@ fn test_cli_topics_delete() {
     // With -y flag, delete should succeed
     assert!(
         delete_output.status.success() || delete_stdout.contains("Deleted"),
-        "Topic delete should succeed with -y flag: stdout={}, stderr={}",
-        delete_stdout,
-        delete_stderr
+        "Topic delete should succeed with -y flag: stdout={delete_stdout}, stderr={delete_stderr}"
     );
 
     // Small delay to ensure filesystem operations complete
@@ -278,8 +272,7 @@ fn test_cli_topics_delete() {
 
     assert!(
         topic_deleted,
-        "Deleted topic should not appear in list. List output: {}",
-        list_stdout
+        "Deleted topic should not appear in list. List output: {list_stdout}"
     );
 }
 
@@ -316,9 +309,7 @@ fn test_cli_users_add() {
 
     assert!(
         output.status.success() || stdout.contains("Added") || stdout.contains("testuser"),
-        "User add should work: stdout={}, stderr={}",
-        stdout,
-        stderr
+        "User add should work: stdout={stdout}, stderr={stderr}"
     );
 
     // List users
@@ -433,9 +424,9 @@ impl TestServer {
             .arg("--")
             .arg("--in-memory")
             .arg("--listen-addr")
-            .arg(format!("127.0.0.1:{}", kafka_port))
+            .arg(format!("127.0.0.1:{kafka_port}"))
             .arg("--http-addr")
-            .arg(format!("127.0.0.1:{}", http_port))
+            .arg(format!("127.0.0.1:{http_port}"))
             .arg("--data-dir")
             .arg(data_dir.path().to_str().unwrap())
             .arg("--log-level")
@@ -450,7 +441,7 @@ impl TestServer {
         let timeout = Duration::from_secs(60);
 
         while start_time.elapsed() < timeout {
-            if let Ok(stream) = TcpStream::connect(format!("127.0.0.1:{}", http_port)) {
+            if let Ok(stream) = TcpStream::connect(format!("127.0.0.1:{http_port}")) {
                 drop(stream);
                 // Give a bit more time for full initialization
                 std::thread::sleep(Duration::from_millis(500));
@@ -462,13 +453,13 @@ impl TestServer {
         // Check if process is still running
         match process.try_wait() {
             Ok(Some(status)) => {
-                panic!("Server process exited early with status: {:?}", status);
+                panic!("Server process exited early with status: {status:?}");
             }
             Ok(None) => {
                 // Process is still running, good
             }
             Err(e) => {
-                panic!("Error checking server process: {}", e);
+                panic!("Error checking server process: {e}");
             }
         }
 
@@ -536,8 +527,7 @@ fn test_http_health_endpoint() {
 
     assert!(
         response.contains("200") || response.contains("OK") || response.contains("healthy"),
-        "Health endpoint should return success: {}",
-        response
+        "Health endpoint should return success: {response}"
     );
 }
 
@@ -568,8 +558,7 @@ fn test_http_metrics_endpoint() {
 
     assert!(
         response.contains("200") || response.contains("streamline_") || response.contains("# HELP"),
-        "Metrics endpoint should return Prometheus format: {}",
-        response
+        "Metrics endpoint should return Prometheus format: {response}"
     );
 }
 
@@ -588,9 +577,9 @@ fn test_playground_mode() {
         .arg("--")
         .arg("--playground")
         .arg("--listen-addr")
-        .arg(format!("127.0.0.1:{}", kafka_port))
+        .arg(format!("127.0.0.1:{kafka_port}"))
         .arg("--http-addr")
-        .arg(format!("127.0.0.1:{}", http_port))
+        .arg(format!("127.0.0.1:{http_port}"))
         .arg("--data-dir")
         .arg(data_dir.path().to_str().unwrap())
         .stdout(Stdio::piped())
@@ -603,7 +592,7 @@ fn test_playground_mode() {
     let timeout = Duration::from_secs(60);
 
     while start_time.elapsed() < timeout {
-        if TcpStream::connect(format!("127.0.0.1:{}", http_port)).is_ok() {
+        if TcpStream::connect(format!("127.0.0.1:{http_port}")).is_ok() {
             std::thread::sleep(Duration::from_millis(500));
             break;
         }
@@ -613,17 +602,17 @@ fn test_playground_mode() {
     // Check server is running
     match process.try_wait() {
         Ok(Some(status)) => {
-            panic!("Playground server exited early: {:?}", status);
+            panic!("Playground server exited early: {status:?}");
         }
         Ok(None) => {
             // Still running, good
         }
-        Err(e) => panic!("Error checking process: {}", e),
+        Err(e) => panic!("Error checking process: {e}"),
     }
 
     // Verify we can connect to Kafka port
     let result = TcpStream::connect_timeout(
-        &format!("127.0.0.1:{}", kafka_port).parse().unwrap(),
+        &format!("127.0.0.1:{kafka_port}").parse().unwrap(),
         Duration::from_secs(5),
     );
     assert!(result.is_ok(), "Playground should accept connections");

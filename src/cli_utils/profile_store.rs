@@ -40,7 +40,7 @@ pub fn load_profiles() -> Result<HashMap<String, ConnectionProfile>> {
 
     let contents = std::fs::read_to_string(&path)?;
     let profiles: HashMap<String, ConnectionProfile> = toml::from_str(&contents)
-        .map_err(|e| StreamlineError::Config(format!("Failed to parse profiles: {}", e)))?;
+        .map_err(|e| StreamlineError::Config(format!("Failed to parse profiles: {e}")))?;
     Ok(profiles)
 }
 
@@ -54,7 +54,7 @@ pub fn save_profiles(profiles: &HashMap<String, ConnectionProfile>) -> Result<()
     }
 
     let contents = toml::to_string_pretty(profiles)
-        .map_err(|e| StreamlineError::Config(format!("Failed to serialize profiles: {}", e)))?;
+        .map_err(|e| StreamlineError::Config(format!("Failed to serialize profiles: {e}")))?;
     std::fs::write(&path, contents)?;
     Ok(())
 }

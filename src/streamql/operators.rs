@@ -341,7 +341,7 @@ impl DistinctOperator {
         // Simple hash key for the row
         let mut key = Vec::new();
         for value in &row.values {
-            key.extend_from_slice(format!("{:?}", value).as_bytes());
+            key.extend_from_slice(format!("{value:?}").as_bytes());
             key.push(0);
         }
         key
@@ -388,10 +388,11 @@ pub fn evaluate_expression(
             let col_name = &col_ref.column;
             let idx = schema
                 .column_index(col_name)
-                .ok_or_else(|| StreamlineError::Query(format!("Unknown column: {}", col_name)))?;
-            row.values.get(idx).cloned().ok_or_else(|| {
-                StreamlineError::Query(format!("Column index out of range: {}", idx))
-            })
+                .ok_or_else(|| StreamlineError::Query(format!("Unknown column: {col_name}")))?;
+            row.values
+                .get(idx)
+                .cloned()
+                .ok_or_else(|| StreamlineError::Query(format!("Column index out of range: {idx}")))
         }
 
         Expression::BinaryOp { left, op, right } => {
@@ -415,10 +416,7 @@ pub fn evaluate_expression(
             if let Some(scalar_fn) = functions.get_scalar(name) {
                 (scalar_fn.func)(&arg_values)
             } else {
-                Err(StreamlineError::Query(format!(
-                    "Unknown function: {}",
-                    name
-                )))
+                Err(StreamlineError::Query(format!("Unknown function: {name}")))
             }
         }
 
@@ -465,8 +463,8 @@ pub fn evaluate_expression(
             let val = evaluate_expression(expr, row, schema, functions)?;
             if let Value::String(s) = val {
                 let regex_pattern = pattern.replace('%', ".*").replace('_', ".");
-                let regex = regex::Regex::new(&format!("^{}$", regex_pattern))
-                    .map_err(|e| StreamlineError::Query(format!("Invalid LIKE pattern: {}", e)))?;
+                let regex = regex::Regex::new(&format!("^{regex_pattern}$"))
+                    .map_err(|e| StreamlineError::Query(format!("Invalid LIKE pattern: {e}")))?;
                 let matches = regex.is_match(&s);
                 Ok(Value::Boolean(if *negated { !matches } else { matches }))
             } else {
@@ -509,14 +507,13 @@ pub fn evaluate_expression(
         Expression::Cast { expr, data_type } => {
             let val = evaluate_expression(expr, row, schema, functions)?;
             val.cast(data_type)
-                .ok_or_else(|| StreamlineError::Query(format!("Cannot cast to {}", data_type)))
+                .ok_or_else(|| StreamlineError::Query(format!("Cannot cast to {data_type}")))
         }
 
         Expression::Nested(inner) => evaluate_expression(inner, row, schema, functions),
 
         _ => Err(StreamlineError::Query(format!(
-            "Unsupported expression type: {:?}",
-            expr
+            "Unsupported expression type: {expr:?}"
         ))),
     }
 }
@@ -614,8 +611,7 @@ fn evaluate_binary_op(left: &Value, op: &BinaryOperator, right: &Value) -> Resul
         }
 
         _ => Err(StreamlineError::Query(format!(
-            "Unsupported binary operator: {:?}",
-            op
+            "Unsupported binary operator: {op:?}"
         ))),
     }
 }

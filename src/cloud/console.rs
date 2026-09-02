@@ -182,8 +182,7 @@ impl ConsoleManager {
                 Ok(())
             }
             None => Err(StreamlineError::Internal(format!(
-                "API key not found: {}",
-                key_id
+                "API key not found: {key_id}"
             ))),
         }
     }

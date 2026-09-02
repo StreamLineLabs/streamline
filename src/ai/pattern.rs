@@ -147,7 +147,11 @@ impl TopicPatternRecognizer {
 
     /// Return the top-K most frequent tokens.
     fn top_k_tokens(&self, k: usize) -> Vec<(String, u64)> {
-        let mut entries: Vec<_> = self.token_freq.iter().map(|(k, v)| (k.clone(), *v)).collect();
+        let mut entries: Vec<_> = self
+            .token_freq
+            .iter()
+            .map(|(k, v)| (k.clone(), *v))
+            .collect();
         entries.sort_by(|a, b| b.1.cmp(&a.1));
         entries.truncate(k);
         entries
@@ -201,7 +205,11 @@ impl TopicPatternRecognizer {
         }
 
         // Keep only the strongest non-harmonic patterns
-        patterns.sort_by(|a, b| b.strength.partial_cmp(&a.strength).unwrap_or(std::cmp::Ordering::Equal));
+        patterns.sort_by(|a, b| {
+            b.strength
+                .partial_cmp(&a.strength)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
         patterns.truncate(3);
         patterns
     }
@@ -362,11 +370,16 @@ mod tests {
             r.add_value(v);
         }
         let patterns = r.detect_seasonal(5, 20);
-        assert!(!patterns.is_empty(), "should detect at least one seasonal pattern");
+        assert!(
+            !patterns.is_empty(),
+            "should detect at least one seasonal pattern"
+        );
         // The strongest pattern should have period 10 (or a close harmonic)
         let best = patterns[0].period;
-        assert!(best == 10 || best == 20 || best == 5,
-            "expected period near 10, got {}", best);
+        assert!(
+            best == 10 || best == 20 || best == 5,
+            "expected period near 10, got {best}"
+        );
     }
 
     #[tokio::test]

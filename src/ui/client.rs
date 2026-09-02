@@ -90,8 +90,7 @@ impl StreamlineClient {
             .build()
             .map_err(|e| {
                 crate::error::StreamlineError::Internal(format!(
-                    "Failed to create HTTP client: {}",
-                    e
+                    "Failed to create HTTP client: {e}"
                 ))
             })?;
 
@@ -707,13 +706,13 @@ impl StreamlineClient {
         let mut url = format!("{}/api/v1/logs", self.config.base_url);
         let mut params = vec![];
         if let Some(l) = level {
-            params.push(format!("level={}", l));
+            params.push(format!("level={l}"));
         }
         if let Some(lim) = limit {
-            params.push(format!("limit={}", lim));
+            params.push(format!("limit={lim}"));
         }
         if let Some(a) = after {
-            params.push(format!("after={}", a));
+            params.push(format!("after={a}"));
         }
         if !params.is_empty() {
             url = format!("{}?{}", url, params.join("&"));
@@ -821,7 +820,7 @@ impl StreamlineClient {
     ) -> Result<AlertHistoryResponse, ClientError> {
         let mut url = format!("{}/api/v1/alerts/history", self.config.base_url);
         if let Some(lim) = limit {
-            url = format!("{}?limit={}", url, lim);
+            url = format!("{url}?limit={lim}");
         }
 
         let response = self.client.get(&url).send().await?;
@@ -934,7 +933,7 @@ impl StreamlineClient {
     ) -> Result<reqwest::Response, ClientError> {
         let mut url = format!("{}/api/v1/logs/stream", self.config.base_url);
         if let Some(level) = level {
-            url.push_str(&format!("?level={}", level));
+            url.push_str(&format!("?level={level}"));
         }
 
         let response = self.client.get(&url).send().await?;

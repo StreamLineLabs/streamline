@@ -10,7 +10,12 @@
 //!     returns 200 on success or 400 with a [`ContractRejection`] payload.
 //!   * `POST /api/v1/contracts/apply` — register a contract for a topic.
 
-use axum::{http::StatusCode, response::{IntoResponse, Response}, routing::post, Json, Router};
+use axum::{
+    http::StatusCode,
+    response::{IntoResponse, Response},
+    routing::post,
+    Json, Router,
+};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::{Mutex, OnceLock};
@@ -71,7 +76,7 @@ fn parse_expected(s: &str) -> Result<ExpectedType, String> {
         "bool" | "boolean" => Ok(ExpectedType::Bool),
         "object" => Ok(ExpectedType::Object),
         "array" => Ok(ExpectedType::Array),
-        other => Err(format!("unknown expected type: {}", other)),
+        other => Err(format!("unknown expected type: {other}")),
     }
 }
 

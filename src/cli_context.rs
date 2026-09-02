@@ -47,7 +47,7 @@ impl CliContext {
                 Ok(())
             }
             None => {
-                print!("{}", content);
+                print!("{content}");
                 Ok(())
             }
         }

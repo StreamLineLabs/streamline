@@ -63,8 +63,10 @@ pub fn run_decay(agent_id: &str, config: &DecayConfig) -> DecayResult {
     use super::tier_router;
 
     let store = tier_router::content_store_snapshot(agent_id);
-    let mut result = DecayResult::default();
-    result.memories_scanned = store.len() as u64;
+    let mut result = DecayResult {
+        memories_scanned: store.len() as u64,
+        ..Default::default()
+    };
 
     for (importance, age_days) in &store {
         if should_decay(*importance, *age_days, config) {

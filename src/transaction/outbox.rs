@@ -256,9 +256,7 @@ impl OutboxManager {
             if let Some(entry) = list.iter_mut().find(|e| e.id == id) {
                 entry.status = OutboxEntryStatus::Published;
                 entry.published_at = Some(current_epoch_ms());
-                self.stats
-                    .entries_published
-                    .fetch_add(1, Ordering::Relaxed);
+                self.stats.entries_published.fetch_add(1, Ordering::Relaxed);
                 debug!(id, "Outbox entry marked published");
                 return Ok(());
             }
@@ -282,7 +280,11 @@ impl OutboxManager {
                 if entry.retry_count >= self.config.max_retries {
                     entry.status = OutboxEntryStatus::Failed;
                     self.stats.entries_failed.fetch_add(1, Ordering::Relaxed);
-                    warn!(id, retries = entry.retry_count, "Outbox entry exceeded max retries");
+                    warn!(
+                        id,
+                        retries = entry.retry_count,
+                        "Outbox entry exceeded max retries"
+                    );
                 } else {
                     debug!(
                         id,
@@ -309,11 +311,7 @@ impl OutboxManager {
     }
 
     /// List all entries for a given aggregate type and aggregate ID.
-    pub async fn list_entries(
-        &self,
-        aggregate_type: &str,
-        aggregate_id: &str,
-    ) -> Vec<OutboxEntry> {
+    pub async fn list_entries(&self, aggregate_type: &str, aggregate_id: &str) -> Vec<OutboxEntry> {
         let map = self.entries.read().await;
         map.get(aggregate_type)
             .map(|v| {
@@ -327,8 +325,7 @@ impl OutboxManager {
 
     /// Expire entries whose `created_at` is older than `retention_hours`.
     pub async fn expire_old(&self) -> usize {
-        let cutoff =
-            current_epoch_ms().saturating_sub(self.config.retention_hours * 3_600_000);
+        let cutoff = current_epoch_ms().saturating_sub(self.config.retention_hours * 3_600_000);
         let mut expired = 0usize;
         let mut map = self.entries.write().await;
         for list in map.values_mut() {
@@ -399,9 +396,17 @@ mod tests {
     #[tokio::test]
     async fn test_get_pending_returns_enqueued() {
         let mgr = default_mgr();
-        mgr.enqueue("Order", "o1", "OrderCreated", "orders", None, serde_json::json!({}), HashMap::new())
-            .await
-            .unwrap();
+        mgr.enqueue(
+            "Order",
+            "o1",
+            "OrderCreated",
+            "orders",
+            None,
+            serde_json::json!({}),
+            HashMap::new(),
+        )
+        .await
+        .unwrap();
         let pending = mgr.get_pending(10).await;
         assert_eq!(pending.len(), 1);
         assert_eq!(pending[0].aggregate_type, "Order");
@@ -411,7 +416,15 @@ mod tests {
     async fn test_mark_published() {
         let mgr = default_mgr();
         let id = mgr
-            .enqueue("Order", "o1", "Created", "t", None, serde_json::json!({}), HashMap::new())
+            .enqueue(
+                "Order",
+                "o1",
+                "Created",
+                "t",
+                None,
+                serde_json::json!({}),
+                HashMap::new(),
+            )
             .await
             .unwrap();
         mgr.mark_published(&id).await.unwrap();
@@ -424,7 +437,15 @@ mod tests {
     async fn test_mark_published_removes_from_pending() {
         let mgr = default_mgr();
         let id = mgr
-            .enqueue("Order", "o1", "Created", "t", None, serde_json::json!({}), HashMap::new())
+            .enqueue(
+                "Order",
+                "o1",
+                "Created",
+                "t",
+                None,
+                serde_json::json!({}),
+                HashMap::new(),
+            )
             .await
             .unwrap();
         mgr.mark_published(&id).await.unwrap();
@@ -436,7 +457,15 @@ mod tests {
     async fn test_mark_failed_increments_retry() {
         let mgr = default_mgr();
         let id = mgr
-            .enqueue("Order", "o1", "Created", "t", None, serde_json::json!({}), HashMap::new())
+            .enqueue(
+                "Order",
+                "o1",
+                "Created",
+                "t",
+                None,
+                serde_json::json!({}),
+                HashMap::new(),
+            )
             .await
             .unwrap();
         mgr.mark_failed(&id, "timeout").await.unwrap();
@@ -456,7 +485,15 @@ mod tests {
         };
         let mgr = OutboxManager::new(cfg);
         let id = mgr
-            .enqueue("Order", "o1", "Created", "t", None, serde_json::json!({}), HashMap::new())
+            .enqueue(
+                "Order",
+                "o1",
+                "Created",
+                "t",
+                None,
+                serde_json::json!({}),
+                HashMap::new(),
+            )
             .await
             .unwrap();
         mgr.mark_failed(&id, "err1").await.unwrap();
@@ -483,7 +520,15 @@ mod tests {
     async fn test_get_entry_found() {
         let mgr = default_mgr();
         let id = mgr
-            .enqueue("Payment", "p1", "Charged", "payments", Some("p1".into()), serde_json::json!({"amount":42}), HashMap::new())
+            .enqueue(
+                "Payment",
+                "p1",
+                "Charged",
+                "payments",
+                Some("p1".into()),
+                serde_json::json!({"amount":42}),
+                HashMap::new(),
+            )
             .await
             .unwrap();
         let e = mgr.get_entry(&id).await.unwrap();
@@ -501,15 +546,39 @@ mod tests {
     #[tokio::test]
     async fn test_list_entries() {
         let mgr = OutboxManager::new(cfg_no_dedup());
-        mgr.enqueue("Order", "o1", "Created", "t", None, serde_json::json!({}), HashMap::new())
-            .await
-            .unwrap();
-        mgr.enqueue("Order", "o1", "Shipped", "t", None, serde_json::json!({}), HashMap::new())
-            .await
-            .unwrap();
-        mgr.enqueue("Order", "o2", "Created", "t", None, serde_json::json!({}), HashMap::new())
-            .await
-            .unwrap();
+        mgr.enqueue(
+            "Order",
+            "o1",
+            "Created",
+            "t",
+            None,
+            serde_json::json!({}),
+            HashMap::new(),
+        )
+        .await
+        .unwrap();
+        mgr.enqueue(
+            "Order",
+            "o1",
+            "Shipped",
+            "t",
+            None,
+            serde_json::json!({}),
+            HashMap::new(),
+        )
+        .await
+        .unwrap();
+        mgr.enqueue(
+            "Order",
+            "o2",
+            "Created",
+            "t",
+            None,
+            serde_json::json!({}),
+            HashMap::new(),
+        )
+        .await
+        .unwrap();
         let entries = mgr.list_entries("Order", "o1").await;
         assert_eq!(entries.len(), 2);
     }
@@ -524,11 +593,27 @@ mod tests {
     #[tokio::test]
     async fn test_dedup_rejects_duplicate() {
         let mgr = default_mgr();
-        mgr.enqueue("Order", "o1", "Created", "t", None, serde_json::json!({}), HashMap::new())
-            .await
-            .unwrap();
+        mgr.enqueue(
+            "Order",
+            "o1",
+            "Created",
+            "t",
+            None,
+            serde_json::json!({}),
+            HashMap::new(),
+        )
+        .await
+        .unwrap();
         let res = mgr
-            .enqueue("Order", "o1", "Created", "t", None, serde_json::json!({}), HashMap::new())
+            .enqueue(
+                "Order",
+                "o1",
+                "Created",
+                "t",
+                None,
+                serde_json::json!({}),
+                HashMap::new(),
+            )
             .await;
         assert!(res.is_err());
     }
@@ -536,11 +621,27 @@ mod tests {
     #[tokio::test]
     async fn test_dedup_allows_different_event_type() {
         let mgr = default_mgr();
-        mgr.enqueue("Order", "o1", "Created", "t", None, serde_json::json!({}), HashMap::new())
-            .await
-            .unwrap();
+        mgr.enqueue(
+            "Order",
+            "o1",
+            "Created",
+            "t",
+            None,
+            serde_json::json!({}),
+            HashMap::new(),
+        )
+        .await
+        .unwrap();
         let res = mgr
-            .enqueue("Order", "o1", "Shipped", "t", None, serde_json::json!({}), HashMap::new())
+            .enqueue(
+                "Order",
+                "o1",
+                "Shipped",
+                "t",
+                None,
+                serde_json::json!({}),
+                HashMap::new(),
+            )
             .await;
         assert!(res.is_ok());
     }
@@ -551,9 +652,17 @@ mod tests {
             retention_hours: 0, // expire immediately
             ..Default::default()
         });
-        mgr.enqueue("Order", "o1", "Created", "t", None, serde_json::json!({}), HashMap::new())
-            .await
-            .unwrap();
+        mgr.enqueue(
+            "Order",
+            "o1",
+            "Created",
+            "t",
+            None,
+            serde_json::json!({}),
+            HashMap::new(),
+        )
+        .await
+        .unwrap();
         // Entry was just created with created_at = now; retention = 0h means cutoff = now,
         // so created_at < cutoff may not hold if the clock hasn't advanced. Force by
         // manually setting created_at in the past.
@@ -574,12 +683,28 @@ mod tests {
     #[tokio::test]
     async fn test_stats_after_operations() {
         let mgr = OutboxManager::new(cfg_no_dedup());
-        mgr.enqueue("A", "1", "E1", "t", None, serde_json::json!({}), HashMap::new())
-            .await
-            .unwrap();
-        mgr.enqueue("A", "2", "E2", "t", None, serde_json::json!({}), HashMap::new())
-            .await
-            .unwrap();
+        mgr.enqueue(
+            "A",
+            "1",
+            "E1",
+            "t",
+            None,
+            serde_json::json!({}),
+            HashMap::new(),
+        )
+        .await
+        .unwrap();
+        mgr.enqueue(
+            "A",
+            "2",
+            "E2",
+            "t",
+            None,
+            serde_json::json!({}),
+            HashMap::new(),
+        )
+        .await
+        .unwrap();
         let s = mgr.stats();
         assert_eq!(s.entries_created, 2);
         assert_eq!(s.entries_published, 0);
@@ -588,11 +713,27 @@ mod tests {
     #[tokio::test]
     async fn test_stats_dedup_hits() {
         let mgr = default_mgr();
-        mgr.enqueue("Order", "o1", "Created", "t", None, serde_json::json!({}), HashMap::new())
-            .await
-            .unwrap();
+        mgr.enqueue(
+            "Order",
+            "o1",
+            "Created",
+            "t",
+            None,
+            serde_json::json!({}),
+            HashMap::new(),
+        )
+        .await
+        .unwrap();
         let _ = mgr
-            .enqueue("Order", "o1", "Created", "t", None, serde_json::json!({}), HashMap::new())
+            .enqueue(
+                "Order",
+                "o1",
+                "Created",
+                "t",
+                None,
+                serde_json::json!({}),
+                HashMap::new(),
+            )
             .await;
         let s = mgr.stats();
         assert_eq!(s.dedup_hits, 1);
@@ -602,9 +743,17 @@ mod tests {
     async fn test_get_pending_respects_batch_size() {
         let mgr = OutboxManager::new(cfg_no_dedup());
         for i in 0..10 {
-            mgr.enqueue("T", &format!("id{i}"), "E", "t", None, serde_json::json!({}), HashMap::new())
-                .await
-                .unwrap();
+            mgr.enqueue(
+                "T",
+                &format!("id{i}"),
+                "E",
+                "t",
+                None,
+                serde_json::json!({}),
+                HashMap::new(),
+            )
+            .await
+            .unwrap();
         }
         let pending = mgr.get_pending(3).await;
         assert_eq!(pending.len(), 3);
@@ -616,7 +765,15 @@ mod tests {
         let mut headers = HashMap::new();
         headers.insert("trace-id".to_string(), "abc-123".to_string());
         let id = mgr
-            .enqueue("Order", "o1", "Created", "t", None, serde_json::json!({}), headers)
+            .enqueue(
+                "Order",
+                "o1",
+                "Created",
+                "t",
+                None,
+                serde_json::json!({}),
+                headers,
+            )
             .await
             .unwrap();
         let e = mgr.get_entry(&id).await.unwrap();
@@ -639,9 +796,17 @@ mod tests {
         let mgr = OutboxManager::new(cfg_no_dedup());
         // Enqueue three entries and manually set different created_at values.
         for i in 0..3 {
-            mgr.enqueue("T", &format!("id{i}"), "E", "t", None, serde_json::json!({}), HashMap::new())
-                .await
-                .unwrap();
+            mgr.enqueue(
+                "T",
+                &format!("id{i}"),
+                "E",
+                "t",
+                None,
+                serde_json::json!({}),
+                HashMap::new(),
+            )
+            .await
+            .unwrap();
         }
         // Force ordering: id2=1, id0=2, id1=3
         {

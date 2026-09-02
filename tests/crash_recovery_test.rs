@@ -514,7 +514,7 @@ fn test_wal_recovery_multiple_entries_then_corruption() {
 
         // Write multiple valid entries
         for i in 0..num_valid_entries {
-            let message = format!("message {}", i);
+            let message = format!("message {i}");
             let entry = create_wal_entry(i, "test-topic", 0, message.as_bytes());
             file.write_all(&entry).unwrap();
         }

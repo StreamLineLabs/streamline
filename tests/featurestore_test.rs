@@ -56,8 +56,14 @@ mod featurestore_tests {
         let view = FeatureViewDefinition::new("user_features")
             .with_description("User behavior features")
             .with_entity(FeatureViewEntity::new("user_id").with_join_key("user_id"))
-            .with_feature(FeatureDefinitionView::new("purchase_count", FeatureDataType::Int64))
-            .with_feature(FeatureDefinitionView::new("avg_amount", FeatureDataType::Float64))
+            .with_feature(FeatureDefinitionView::new(
+                "purchase_count",
+                FeatureDataType::Int64,
+            ))
+            .with_feature(FeatureDefinitionView::new(
+                "avg_amount",
+                FeatureDataType::Float64,
+            ))
             .with_source_topic("user_events")
             .with_ttl_seconds(3600);
 
@@ -110,15 +116,18 @@ mod featurestore_tests {
     async fn test_get_feature_view() {
         let engine = FeatureStoreEngine::new(FeatureStoreConfig::default()).unwrap();
 
-        let view = FeatureViewDefinition::new("lookup_view")
-            .with_description("A view for lookup tests");
+        let view =
+            FeatureViewDefinition::new("lookup_view").with_description("A view for lookup tests");
         engine.register_feature_view(view).await.unwrap();
 
         let fetched = engine.get_feature_view("lookup_view").await;
         assert!(fetched.is_some());
         let fetched = fetched.unwrap();
         assert_eq!(fetched.name, "lookup_view");
-        assert_eq!(fetched.description, Some("A view for lookup tests".to_string()));
+        assert_eq!(
+            fetched.description,
+            Some("A view for lookup tests".to_string())
+        );
     }
 
     #[tokio::test]
@@ -183,7 +192,10 @@ mod featurestore_tests {
             .with_aggregation_window(AggregationWindow::session("30_min_session", 1800));
 
         assert_eq!(view.aggregation_windows.len(), 3);
-        assert_eq!(view.aggregation_windows[0].window_type, WindowType::Tumbling);
+        assert_eq!(
+            view.aggregation_windows[0].window_type,
+            WindowType::Tumbling
+        );
         assert_eq!(view.aggregation_windows[1].window_type, WindowType::Sliding);
         assert_eq!(view.aggregation_windows[1].slide_seconds, Some(300));
         assert_eq!(view.aggregation_windows[2].window_type, WindowType::Session);
@@ -197,7 +209,10 @@ mod featurestore_tests {
 
         let view = FeatureViewDefinition::new("user_features")
             .with_feature(FeatureDefinitionView::new("age", FeatureDataType::Int64))
-            .with_feature(FeatureDefinitionView::new("score", FeatureDataType::Float64))
+            .with_feature(FeatureDefinitionView::new(
+                "score",
+                FeatureDataType::Float64,
+            ))
             .with_ttl_seconds(3600);
         engine.register_feature_view(view).await.unwrap();
 
@@ -237,16 +252,16 @@ mod featurestore_tests {
         let engine = FeatureStoreEngine::new(FeatureStoreConfig::default()).unwrap();
 
         let result = engine
-            .get_online_features("nobody", &["feature_a".to_string(), "feature_b".to_string()])
+            .get_online_features(
+                "nobody",
+                &["feature_a".to_string(), "feature_b".to_string()],
+            )
             .await
             .unwrap();
 
         assert_eq!(result.missing_features.len(), 2);
         assert_eq!(result.found_features.len(), 0);
-        assert_eq!(
-            result.features.get("feature_a"),
-            Some(&FeatureValue::Null)
-        );
+        assert_eq!(result.features.get("feature_a"), Some(&FeatureValue::Null));
     }
 
     #[tokio::test]
@@ -296,22 +311,32 @@ mod featurestore_tests {
     async fn test_historical_features_point_in_time() {
         let engine = FeatureStoreEngine::new(FeatureStoreConfig::default()).unwrap();
 
-        let view = FeatureViewDefinition::new("price_view")
-            .with_feature(FeatureDefinitionView::new("price", FeatureDataType::Float64));
+        let view = FeatureViewDefinition::new("price_view").with_feature(
+            FeatureDefinitionView::new("price", FeatureDataType::Float64),
+        );
         engine.register_feature_view(view).await.unwrap();
 
         // Ingest at increasing timestamps
         let mut f1 = HashMap::new();
         f1.insert("price".to_string(), FeatureValue::Float64(10.0));
-        engine.ingest("price_view", "item_1", f1, 1000).await.unwrap();
+        engine
+            .ingest("price_view", "item_1", f1, 1000)
+            .await
+            .unwrap();
 
         let mut f2 = HashMap::new();
         f2.insert("price".to_string(), FeatureValue::Float64(15.0));
-        engine.ingest("price_view", "item_1", f2, 2000).await.unwrap();
+        engine
+            .ingest("price_view", "item_1", f2, 2000)
+            .await
+            .unwrap();
 
         let mut f3 = HashMap::new();
         f3.insert("price".to_string(), FeatureValue::Float64(20.0));
-        engine.ingest("price_view", "item_1", f3, 3000).await.unwrap();
+        engine
+            .ingest("price_view", "item_1", f3, 3000)
+            .await
+            .unwrap();
 
         // Query at different timestamps
         let results = engine
@@ -369,17 +394,24 @@ mod featurestore_tests {
     async fn test_historical_features_multiple_entities() {
         let engine = FeatureStoreEngine::new(FeatureStoreConfig::default()).unwrap();
 
-        let view = FeatureViewDefinition::new("multi_entity")
-            .with_feature(FeatureDefinitionView::new("value", FeatureDataType::Float64));
+        let view = FeatureViewDefinition::new("multi_entity").with_feature(
+            FeatureDefinitionView::new("value", FeatureDataType::Float64),
+        );
         engine.register_feature_view(view).await.unwrap();
 
         let mut f1 = HashMap::new();
         f1.insert("value".to_string(), FeatureValue::Float64(100.0));
-        engine.ingest("multi_entity", "entity_a", f1, 1000).await.unwrap();
+        engine
+            .ingest("multi_entity", "entity_a", f1, 1000)
+            .await
+            .unwrap();
 
         let mut f2 = HashMap::new();
         f2.insert("value".to_string(), FeatureValue::Float64(200.0));
-        engine.ingest("multi_entity", "entity_b", f2, 1500).await.unwrap();
+        engine
+            .ingest("multi_entity", "entity_b", f2, 1500)
+            .await
+            .unwrap();
 
         let results = engine
             .get_historical_features(
@@ -406,17 +438,15 @@ mod featurestore_tests {
     async fn test_online_store_ttl_expiry() {
         let store = DashMapOnlineStore::new(10_000, 0);
 
-        // Insert an entry that is already expired
         let now = chrono::Utc::now().timestamp_millis();
-        let entry = streamline::featurestore::online_store::OnlineEntry {
-            value: FeatureValue::Float64(42.0),
-            event_timestamp: now - 5000,
-            created_timestamp: now - 5000,
-            expiry_timestamp: now - 1000, // Expired 1 second ago
-        };
 
         // Access internal DashMap via put and then override - use the eviction mechanism
-        store.put("fresh_key".to_string(), FeatureValue::Float64(1.0), now, 3600);
+        store.put(
+            "fresh_key".to_string(),
+            FeatureValue::Float64(1.0),
+            now,
+            3600,
+        );
         assert!(store.get("fresh_key").is_some());
 
         // A put with very short TTL and then immediate get should still work
@@ -436,12 +466,7 @@ mod featurestore_tests {
 
         // Insert 20 entries
         for i in 0..20 {
-            store.put(
-                format!("key_{}", i),
-                FeatureValue::Int64(i),
-                i as i64 * 1000,
-                0,
-            );
+            store.put(format!("key_{i}"), FeatureValue::Int64(i), i * 1000, 0);
         }
 
         // Should have evicted some entries
@@ -457,7 +482,7 @@ mod featurestore_tests {
         // Insert valid entries
         for i in 0..5 {
             store.put(
-                format!("valid_{}", i),
+                format!("valid_{i}"),
                 FeatureValue::Int64(i),
                 now,
                 3600, // 1 hour TTL
@@ -479,7 +504,10 @@ mod featurestore_tests {
         let engine = FeatureStoreEngine::new(FeatureStoreConfig::default()).unwrap();
 
         let view = FeatureViewDefinition::new("mat_view")
-            .with_feature(FeatureDefinitionView::new("amount", FeatureDataType::Float64))
+            .with_feature(FeatureDefinitionView::new(
+                "amount",
+                FeatureDataType::Float64,
+            ))
             .with_ttl_seconds(3600);
         engine.register_feature_view(view).await.unwrap();
 
@@ -559,7 +587,10 @@ mod featurestore_tests {
         assert_eq!(online.found_features.len(), 1);
 
         // Offline store should also have it
-        let offline = engine.offline_store().point_in_time_lookup("entity_1", 6000).await;
+        let offline = engine
+            .offline_store()
+            .point_in_time_lookup("entity_1", 6000)
+            .await;
         assert_eq!(offline.get("val"), Some(&FeatureValue::Float64(42.0)));
     }
 
@@ -617,10 +648,7 @@ mod featurestore_tests {
             Some(&FeatureValue::Float64(250.0))
         );
         assert_eq!(results[2].get("amount"), Some(&FeatureValue::Null));
-        assert_eq!(
-            results[3].get("amount"),
-            Some(&FeatureValue::Float64(75.0))
-        );
+        assert_eq!(results[3].get("amount"), Some(&FeatureValue::Float64(75.0)));
     }
 
     #[tokio::test]
@@ -630,7 +658,7 @@ mod featurestore_tests {
         for i in 1..=10 {
             let mut f = HashMap::new();
             f.insert("v".to_string(), FeatureValue::Int64(i));
-            store.write("view", "entity", f, i as i64 * 1000).await;
+            store.write("view", "entity", f, i * 1000).await;
         }
 
         // Get records between t=3000 and t=7000
@@ -656,8 +684,7 @@ mod featurestore_tests {
             (2000, 50.0),
         ];
 
-        let results =
-            engine.tumbling_window_aggregate(&values, 1000, WindowedAggregation::Sum);
+        let results = engine.tumbling_window_aggregate(&values, 1000, WindowedAggregation::Sum);
 
         assert_eq!(results.len(), 3);
         assert_eq!(results[0].value, 30.0); // 10+20
@@ -672,15 +699,9 @@ mod featurestore_tests {
     fn test_tumbling_window_avg() {
         let engine = TransformationEngine::new();
 
-        let values = vec![
-            (0, 10.0),
-            (500, 20.0),
-            (1000, 30.0),
-            (1500, 40.0),
-        ];
+        let values = vec![(0, 10.0), (500, 20.0), (1000, 30.0), (1500, 40.0)];
 
-        let results =
-            engine.tumbling_window_aggregate(&values, 1000, WindowedAggregation::Avg);
+        let results = engine.tumbling_window_aggregate(&values, 1000, WindowedAggregation::Avg);
 
         assert_eq!(results.len(), 2);
         assert_eq!(results[0].value, 15.0); // avg(10, 20)
@@ -691,16 +712,9 @@ mod featurestore_tests {
     fn test_sliding_window_aggregation() {
         let engine = TransformationEngine::new();
 
-        let values = vec![
-            (0, 1.0),
-            (500, 2.0),
-            (1000, 3.0),
-            (1500, 4.0),
-            (2000, 5.0),
-        ];
+        let values = vec![(0, 1.0), (500, 2.0), (1000, 3.0), (1500, 4.0), (2000, 5.0)];
 
-        let results =
-            engine.sliding_window_aggregate(&values, 1000, 500, WindowedAggregation::Sum);
+        let results = engine.sliding_window_aggregate(&values, 1000, 500, WindowedAggregation::Sum);
 
         // Should have overlapping windows
         assert!(results.len() >= 3);
@@ -723,8 +737,7 @@ mod featurestore_tests {
             (1100, 20.0),
         ];
 
-        let results =
-            engine.session_window_aggregate(&values, 500, WindowedAggregation::Sum);
+        let results = engine.session_window_aggregate(&values, 500, WindowedAggregation::Sum);
 
         assert_eq!(results.len(), 2);
         assert_eq!(results[0].value, 6.0); // 1+2+3
@@ -768,7 +781,7 @@ mod featurestore_tests {
     fn test_math_log() {
         match TransformationEngine::log(std::f64::consts::E) {
             FeatureValue::Float64(v) => assert!((v - 1.0).abs() < 0.001),
-            other => panic!("Expected Float64, got {:?}", other),
+            other => panic!("Expected Float64, got {other:?}"),
         }
         // log of negative -> Null
         assert_eq!(TransformationEngine::log(-1.0), FeatureValue::Null);
@@ -779,7 +792,7 @@ mod featurestore_tests {
     fn test_math_log10() {
         match TransformationEngine::log10(100.0) {
             FeatureValue::Float64(v) => assert!((v - 2.0).abs() < 0.001),
-            other => panic!("Expected Float64, got {:?}", other),
+            other => panic!("Expected Float64, got {other:?}"),
         }
         assert_eq!(TransformationEngine::log10(-1.0), FeatureValue::Null);
     }
@@ -788,7 +801,7 @@ mod featurestore_tests {
     fn test_math_sqrt() {
         match TransformationEngine::sqrt(9.0) {
             FeatureValue::Float64(v) => assert!((v - 3.0).abs() < 0.001),
-            other => panic!("Expected Float64, got {:?}", other),
+            other => panic!("Expected Float64, got {other:?}"),
         }
         assert_eq!(TransformationEngine::sqrt(-1.0), FeatureValue::Null);
     }
@@ -798,7 +811,7 @@ mod featurestore_tests {
         // Z-score: (10 - 5) / 2.5 = 2.0
         match TransformationEngine::normalize(10.0, 5.0, 2.5) {
             FeatureValue::Float64(v) => assert!((v - 2.0).abs() < 0.001),
-            other => panic!("Expected Float64, got {:?}", other),
+            other => panic!("Expected Float64, got {other:?}"),
         }
         // std_dev = 0 -> returns 0
         assert_eq!(
@@ -812,7 +825,7 @@ mod featurestore_tests {
         // (5 - 0) / (10 - 0) = 0.5
         match TransformationEngine::min_max_normalize(5.0, 0.0, 10.0) {
             FeatureValue::Float64(v) => assert!((v - 0.5).abs() < 0.001),
-            other => panic!("Expected Float64, got {:?}", other),
+            other => panic!("Expected Float64, got {other:?}"),
         }
         // min == max -> returns 0
         assert_eq!(
@@ -831,7 +844,7 @@ mod featurestore_tests {
     fn test_math_pow() {
         match TransformationEngine::pow(2.0, 10.0) {
             FeatureValue::Float64(v) => assert!((v - 1024.0).abs() < 0.001),
-            other => panic!("Expected Float64, got {:?}", other),
+            other => panic!("Expected Float64, got {other:?}"),
         }
     }
 
@@ -883,7 +896,7 @@ mod featurestore_tests {
         let ts = 1_705_329_000_000i64;
         match TransformationEngine::hour_of_day(ts) {
             FeatureValue::Int64(h) => assert_eq!(h, 14),
-            other => panic!("Expected Int64, got {:?}", other),
+            other => panic!("Expected Int64, got {other:?}"),
         }
     }
 
@@ -893,7 +906,7 @@ mod featurestore_tests {
         let ts = 1705325400000i64;
         match TransformationEngine::day_of_week(ts) {
             FeatureValue::Int64(d) => assert_eq!(d, 0),
-            other => panic!("Expected Int64, got {:?}", other),
+            other => panic!("Expected Int64, got {other:?}"),
         }
     }
 
@@ -920,7 +933,7 @@ mod featurestore_tests {
         let ts = 1705325400000i64;
         match TransformationEngine::month(ts) {
             FeatureValue::Int64(m) => assert_eq!(m, 1),
-            other => panic!("Expected Int64, got {:?}", other),
+            other => panic!("Expected Int64, got {other:?}"),
         }
     }
 
@@ -949,12 +962,7 @@ mod featurestore_tests {
             let store = store.clone();
             handles.push(thread::spawn(move || {
                 for i in 0..500 {
-                    store.put(
-                        format!("t{}_k{}", t, i),
-                        FeatureValue::Int64(i),
-                        i as i64,
-                        0,
-                    );
+                    store.put(format!("t{t}_k{i}"), FeatureValue::Int64(i), i, 0);
                 }
             }));
         }
@@ -964,7 +972,7 @@ mod featurestore_tests {
             let store = store.clone();
             handles.push(thread::spawn(move || {
                 for i in 0..500 {
-                    let _ = store.get(&format!("t{}_k{}", t, i));
+                    let _ = store.get(&format!("t{t}_k{i}"));
                 }
             }));
         }
@@ -1040,15 +1048,12 @@ mod featurestore_tests {
                 "merchant_risk".to_string(),
                 FeatureValue::Float64(0.1 + i as f64 * 0.05),
             );
-            features.insert(
-                "is_weekend_tx".to_string(),
-                FeatureValue::Bool(false),
-            );
+            features.insert("is_weekend_tx".to_string(), FeatureValue::Bool(false));
 
             engine
                 .ingest(
                     "fraud_features",
-                    &format!("tx_{}", i),
+                    &format!("tx_{i}"),
                     features,
                     base_ts + i * 1000,
                 )

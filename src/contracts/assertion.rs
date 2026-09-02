@@ -242,7 +242,7 @@ impl AssertionEngine {
                     if !seen.insert(key.clone()) {
                         failure_count += 1;
                         if failures.len() < self.max_failure_details {
-                            failures.push(format!("Message {}: duplicate key '{}'", i, key));
+                            failures.push(format!("Message {i}: duplicate key '{key}'"));
                         }
                     }
                 }
@@ -253,7 +253,7 @@ impl AssertionEngine {
                     message: if failure_count == 0 {
                         "Uniqueness constraint holds".to_string()
                     } else {
-                        format!("{} uniqueness violations", failure_count)
+                        format!("{failure_count} uniqueness violations")
                     },
                     records_checked: messages.len() as u64,
                     failures: failure_count,
@@ -295,10 +295,7 @@ impl AssertionEngine {
             if size > max_size {
                 failure_count += 1;
                 if failures.len() < self.max_failure_details {
-                    failures.push(format!(
-                        "Message {}: size {} exceeds max {}",
-                        i, size, max_size
-                    ));
+                    failures.push(format!("Message {i}: size {size} exceeds max {max_size}"));
                 }
             }
         }
@@ -307,9 +304,9 @@ impl AssertionEngine {
             name: "message_size".to_string(),
             passed: failure_count == 0,
             message: if failure_count == 0 {
-                format!("All messages within {} byte limit", max_size)
+                format!("All messages within {max_size} byte limit")
             } else {
-                format!("{} messages exceed {} byte limit", failure_count, max_size)
+                format!("{failure_count} messages exceed {max_size} byte limit")
             },
             records_checked: messages.len() as u64,
             failures: failure_count,

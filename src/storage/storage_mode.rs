@@ -103,8 +103,7 @@ impl std::str::FromStr for StorageMode {
             "hybrid" => Ok(StorageMode::Hybrid),
             "diskless" => Ok(StorageMode::Diskless),
             _ => Err(format!(
-                "Invalid storage mode '{}'. Valid options: local, hybrid, diskless",
-                s
+                "Invalid storage mode '{s}'. Valid options: local, hybrid, diskless"
             )),
         }
     }

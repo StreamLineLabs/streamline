@@ -26,10 +26,7 @@ fn main() -> streamline::Result<()> {
             );
         }
         Err(_) => {
-            println!(
-                "Topic '{}' not found. Run basic_producer first!",
-                topic_name
-            );
+            println!("Topic '{topic_name}' not found. Run basic_producer first!");
             return Ok(());
         }
     }
@@ -41,10 +38,7 @@ fn main() -> streamline::Result<()> {
         let earliest = manager.earliest_offset(topic_name, partition)?;
         let latest = manager.latest_offset(topic_name, partition)?;
 
-        println!(
-            "--- Partition {} (offsets {} to {}) ---",
-            partition, earliest, latest
-        );
+        println!("--- Partition {partition} (offsets {earliest} to {latest}) ---");
 
         // Read all records from this partition
         let records = manager.read(topic_name, partition, earliest, 100)?;

@@ -227,8 +227,7 @@ impl StreamVector {
         let dimensions = values.len();
         if !(MIN_VECTOR_DIM..=MAX_VECTOR_DIM).contains(&dimensions) {
             return Err(StreamlineError::Validation(format!(
-                "Vector dimension {} out of range",
-                dimensions
+                "Vector dimension {dimensions} out of range"
             )));
         }
 

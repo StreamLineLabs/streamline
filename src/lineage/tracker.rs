@@ -108,7 +108,7 @@ impl LineageTracker {
             }
             ConnectionEventType::ProducerSend { topic, records, .. } => {
                 let producer_id = format!("producer:{}", event.client_id);
-                let topic_id = format!("topic:{}", topic);
+                let topic_id = format!("topic:{topic}");
 
                 let mut graph = self.graph.write().unwrap_or_else(|e| e.into_inner());
 
@@ -148,7 +148,7 @@ impl LineageTracker {
             ConnectionEventType::ConsumerConnect { group_id } => {
                 let mut graph = self.graph.write().unwrap_or_else(|e| e.into_inner());
                 graph.upsert_node(LineageNode {
-                    id: format!("group:{}", group_id),
+                    id: format!("group:{group_id}"),
                     node_type: LineageNodeType::ConsumerGroup,
                     name: group_id.clone(),
                     metadata: event.metadata.clone(),
@@ -163,8 +163,8 @@ impl LineageTracker {
                 records,
                 ..
             } => {
-                let topic_id = format!("topic:{}", topic);
-                let group_node_id = format!("group:{}", group_id);
+                let topic_id = format!("topic:{topic}");
+                let group_node_id = format!("group:{group_id}");
 
                 let mut graph = self.graph.write().unwrap_or_else(|e| e.into_inner());
 

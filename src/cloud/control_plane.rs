@@ -155,9 +155,9 @@ impl ControlPlane {
         update: UpdateOrganizationRequest,
     ) -> Result<Organization> {
         let mut orgs = self.organizations.write().await;
-        let org = orgs.get_mut(org_id).ok_or_else(|| {
-            StreamlineError::Config(format!("Organization not found: {}", org_id))
-        })?;
+        let org = orgs
+            .get_mut(org_id)
+            .ok_or_else(|| StreamlineError::Config(format!("Organization not found: {org_id}")))?;
 
         if let Some(name) = update.name {
             org.name = name;
@@ -190,9 +190,9 @@ impl ControlPlane {
         drop(projects);
 
         let mut orgs = self.organizations.write().await;
-        let org = orgs.remove(org_id).ok_or_else(|| {
-            StreamlineError::Config(format!("Organization not found: {}", org_id))
-        })?;
+        let org = orgs
+            .remove(org_id)
+            .ok_or_else(|| StreamlineError::Config(format!("Organization not found: {org_id}")))?;
 
         self.log_audit(AuditEvent::organization_deleted(&org)).await;
         info!("Deleted organization: {}", org_id);
@@ -286,7 +286,7 @@ impl ControlPlane {
         let mut projects = self.projects.write().await;
         let project = projects
             .remove(project_id)
-            .ok_or_else(|| StreamlineError::Config(format!("Project not found: {}", project_id)))?;
+            .ok_or_else(|| StreamlineError::Config(format!("Project not found: {project_id}")))?;
 
         // Update quota
         self.decrement_usage(&project.org_id, QuotaResource::Projects, 1)
@@ -386,7 +386,7 @@ impl ControlPlane {
         let mut clusters = self.clusters.write().await;
         let cluster = clusters
             .get_mut(cluster_id)
-            .ok_or_else(|| StreamlineError::Config(format!("Cluster not found: {}", cluster_id)))?;
+            .ok_or_else(|| StreamlineError::Config(format!("Cluster not found: {cluster_id}")))?;
 
         cluster.status = status;
         if let Some(ep) = endpoint {
@@ -406,7 +406,7 @@ impl ControlPlane {
         let mut clusters = self.clusters.write().await;
         let cluster = clusters
             .remove(cluster_id)
-            .ok_or_else(|| StreamlineError::Config(format!("Cluster not found: {}", cluster_id)))?;
+            .ok_or_else(|| StreamlineError::Config(format!("Cluster not found: {cluster_id}")))?;
 
         // Get org_id from project
         let projects = self.projects.read().await;
@@ -429,7 +429,7 @@ impl ControlPlane {
         let mut clusters = self.clusters.write().await;
         let cluster = clusters
             .get_mut(cluster_id)
-            .ok_or_else(|| StreamlineError::Config(format!("Cluster not found: {}", cluster_id)))?;
+            .ok_or_else(|| StreamlineError::Config(format!("Cluster not found: {cluster_id}")))?;
 
         cluster.tier = new_tier;
         cluster.resources = ClusterResources::for_tier(new_tier);
@@ -493,8 +493,7 @@ impl ControlPlane {
             Ok(())
         } else {
             Err(StreamlineError::Config(format!(
-                "Quota not found for: {}",
-                entity_id
+                "Quota not found for: {entity_id}"
             )))
         }
     }
@@ -576,8 +575,7 @@ impl ControlPlane {
             }
         }
         Err(StreamlineError::Config(format!(
-            "Alert not found: {}",
-            alert_id
+            "Alert not found: {alert_id}"
         )))
     }
 

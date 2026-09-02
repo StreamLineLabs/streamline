@@ -114,7 +114,7 @@ impl TimeTravelManager {
     /// Create a new time-travel manager
     pub fn new(config: TimeTravelConfig) -> Result<Self> {
         std::fs::create_dir_all(&config.snapshot_dir).map_err(|e| {
-            StreamlineError::storage_msg(format!("Failed to create snapshot directory: {}", e))
+            StreamlineError::storage_msg(format!("Failed to create snapshot directory: {e}"))
         })?;
 
         info!(
@@ -202,18 +202,16 @@ impl TimeTravelManager {
         if let Some(parent) = snapshot_path.parent() {
             std::fs::create_dir_all(parent).ok();
         }
-        std::fs::write(&snapshot_path, &final_data).map_err(|e| {
-            StreamlineError::storage_msg(format!("Failed to write snapshot: {}", e))
-        })?;
+        std::fs::write(&snapshot_path, &final_data)
+            .map_err(|e| StreamlineError::storage_msg(format!("Failed to write snapshot: {e}")))?;
 
         // Save metadata
         let meta_path = self.metadata_path(topic, partition, id);
         let meta_json = serde_json::to_string_pretty(&metadata).map_err(|e| {
-            StreamlineError::storage_msg(format!("Failed to serialize metadata: {}", e))
+            StreamlineError::storage_msg(format!("Failed to serialize metadata: {e}"))
         })?;
-        std::fs::write(&meta_path, meta_json).map_err(|e| {
-            StreamlineError::storage_msg(format!("Failed to write metadata: {}", e))
-        })?;
+        std::fs::write(&meta_path, meta_json)
+            .map_err(|e| StreamlineError::storage_msg(format!("Failed to write metadata: {e}")))?;
 
         // Register snapshot
         self.snapshots
@@ -303,11 +301,11 @@ impl TimeTravelManager {
         let snapshot_path = self.snapshot_path(&meta.topic, meta.partition, meta.id);
 
         let data = std::fs::read(&snapshot_path)
-            .map_err(|e| StreamlineError::storage_msg(format!("Failed to read snapshot: {}", e)))?;
+            .map_err(|e| StreamlineError::storage_msg(format!("Failed to read snapshot: {e}")))?;
 
         let decompressed = if self.config.compression {
             lz4_flex::decompress_size_prepended(&data).map_err(|e| {
-                StreamlineError::storage_msg(format!("Failed to decompress snapshot: {}", e))
+                StreamlineError::storage_msg(format!("Failed to decompress snapshot: {e}"))
             })?
         } else {
             data
@@ -421,8 +419,8 @@ impl TimeTravelManager {
         self.config
             .snapshot_dir
             .join(topic)
-            .join(format!("partition-{}", partition))
-            .join(format!("{}.snap", id))
+            .join(format!("partition-{partition}"))
+            .join(format!("{id}.snap"))
     }
 
     /// Get metadata file path
@@ -430,8 +428,8 @@ impl TimeTravelManager {
         self.config
             .snapshot_dir
             .join(topic)
-            .join(format!("partition-{}", partition))
-            .join(format!("{}.meta.json", id))
+            .join(format!("partition-{partition}"))
+            .join(format!("{id}.meta.json"))
     }
 
     /// Load existing snapshots from disk
@@ -443,10 +441,10 @@ impl TimeTravelManager {
         }
 
         for topic_entry in std::fs::read_dir(&self.config.snapshot_dir).map_err(|e| {
-            StreamlineError::storage_msg(format!("Failed to read snapshot dir: {}", e))
+            StreamlineError::storage_msg(format!("Failed to read snapshot dir: {e}"))
         })? {
             let topic_entry = topic_entry.map_err(|e| {
-                StreamlineError::storage_msg(format!("Failed to read topic entry: {}", e))
+                StreamlineError::storage_msg(format!("Failed to read topic entry: {e}"))
             })?;
             let topic = topic_entry.file_name().to_string_lossy().to_string();
 
@@ -455,10 +453,10 @@ impl TimeTravelManager {
             }
 
             for part_entry in std::fs::read_dir(topic_entry.path()).map_err(|e| {
-                StreamlineError::storage_msg(format!("Failed to read partition dir: {}", e))
+                StreamlineError::storage_msg(format!("Failed to read partition dir: {e}"))
             })? {
                 let part_entry = part_entry.map_err(|e| {
-                    StreamlineError::storage_msg(format!("Failed to read partition entry: {}", e))
+                    StreamlineError::storage_msg(format!("Failed to read partition entry: {e}"))
                 })?;
                 let part_name = part_entry.file_name().to_string_lossy().to_string();
 
@@ -473,10 +471,10 @@ impl TimeTravelManager {
 
                 // Load metadata files
                 for file_entry in std::fs::read_dir(part_entry.path()).map_err(|e| {
-                    StreamlineError::storage_msg(format!("Failed to read files: {}", e))
+                    StreamlineError::storage_msg(format!("Failed to read files: {e}"))
                 })? {
                     let file_entry = file_entry.map_err(|e| {
-                        StreamlineError::storage_msg(format!("Failed to read file entry: {}", e))
+                        StreamlineError::storage_msg(format!("Failed to read file entry: {e}"))
                     })?;
                     let file_name = file_entry.file_name().to_string_lossy().to_string();
 
@@ -484,15 +482,13 @@ impl TimeTravelManager {
                         let meta_content =
                             std::fs::read_to_string(file_entry.path()).map_err(|e| {
                                 StreamlineError::storage_msg(format!(
-                                    "Failed to read metadata: {}",
-                                    e
+                                    "Failed to read metadata: {e}"
                                 ))
                             })?;
                         let meta: SnapshotMetadata =
                             serde_json::from_str(&meta_content).map_err(|e| {
                                 StreamlineError::storage_msg(format!(
-                                    "Failed to parse metadata: {}",
-                                    e
+                                    "Failed to parse metadata: {e}"
                                 ))
                             })?;
 
@@ -701,8 +697,8 @@ mod tests {
                 Record::new(
                     start_offset + i as i64,
                     chrono::Utc::now().timestamp_millis() + i as i64,
-                    Some(Bytes::from(format!("key-{}", i))),
-                    Bytes::from(format!("value-{}", i)),
+                    Some(Bytes::from(format!("key-{i}"))),
+                    Bytes::from(format!("value-{i}")),
                 )
             })
             .collect()

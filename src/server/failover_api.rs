@@ -64,8 +64,14 @@ pub(crate) fn create_failover_api_router(state: FailoverApiState) -> Router {
         .route("/api/v1/failover/trigger", post(trigger_failover))
         .route("/api/v1/failover/split-brain", get(check_split_brain))
         .route("/api/v1/failover/routing", get(get_routing))
-        .route("/api/v1/failover/fencing-token", get(get_fencing_token).post(issue_fencing_token))
-        .route("/api/v1/failover/auto-check", post(run_automated_failover_check))
+        .route(
+            "/api/v1/failover/fencing-token",
+            get(get_fencing_token).post(issue_fencing_token),
+        )
+        .route(
+            "/api/v1/failover/auto-check",
+            post(run_automated_failover_check),
+        )
         .with_state(state)
 }
 

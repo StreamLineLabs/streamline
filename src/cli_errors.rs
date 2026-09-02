@@ -36,7 +36,7 @@ pub(crate) fn print_error_hint(e: &StreamlineError, data_dir: &Path) {
             }
 
             Some(ErrorInfo {
-                what: format!("Topic '{}' not found", name),
+                what: format!("Topic '{name}' not found"),
                 why: Some("The topic does not exist on this server.".into()),
                 fix,
                 docs: Some("/blob/main/docs/CLI.md#topic-management"),
@@ -44,7 +44,7 @@ pub(crate) fn print_error_hint(e: &StreamlineError, data_dir: &Path) {
         }
 
         StreamlineError::PartitionNotFound(topic, partition) => Some(ErrorInfo {
-            what: format!("Partition {} not found in topic '{}'", partition, topic),
+            what: format!("Partition {partition} not found in topic '{topic}'"),
             why: Some("The topic has fewer partitions than requested.".into()),
             fix: vec![
                 format!("Check topic partitions: streamline-cli topics describe {}", topic),
@@ -54,7 +54,7 @@ pub(crate) fn print_error_hint(e: &StreamlineError, data_dir: &Path) {
         }),
 
         StreamlineError::TopicAlreadyExists(name) => Some(ErrorInfo {
-            what: format!("Topic '{}' already exists", name),
+            what: format!("Topic '{name}' already exists"),
             why: Some("Topic names must be unique.".into()),
             fix: vec![
                 "Use a different topic name".into(),
@@ -64,7 +64,7 @@ pub(crate) fn print_error_hint(e: &StreamlineError, data_dir: &Path) {
         }),
 
         StreamlineError::InvalidTopicName(name) => Some(ErrorInfo {
-            what: format!("Invalid topic name '{}'", name),
+            what: format!("Invalid topic name '{name}'"),
             why: Some("Topic names must be 1-249 characters and contain only letters, numbers, dots, underscores, and hyphens.".into()),
             fix: vec![
                 "Use a valid topic name (e.g., 'events', 'user-events', 'orders.v1')".into(),
@@ -115,7 +115,7 @@ pub(crate) fn print_error_hint(e: &StreamlineError, data_dir: &Path) {
 
         StreamlineError::Config(ref msg) if msg.contains("Invalid") => Some(ErrorInfo {
             what: "Invalid configuration".into(),
-            why: Some(format!("Configuration error: {}", msg)),
+            why: Some(format!("Configuration error: {msg}")),
             fix: vec![
                 "streamline --help".into(),
                 "Verify configuration file syntax".into(),
@@ -157,7 +157,7 @@ pub(crate) fn print_error_hint(e: &StreamlineError, data_dir: &Path) {
 
         StreamlineError::MessageTooLarge(size, max) => Some(ErrorInfo {
             what: "Message too large".into(),
-            why: Some(format!("Message size {} exceeds maximum {}", size, max)),
+            why: Some(format!("Message size {size} exceeds maximum {max}")),
             fix: vec![
                 "Reduce message size".into(),
                 "Increase max message size in config".into(),
@@ -252,8 +252,7 @@ pub(crate) fn print_error_hint(e: &StreamlineError, data_dir: &Path) {
 
         StreamlineError::NotLeader(topic, partition) => Some(ErrorInfo {
             what: format!(
-                "Not leader for partition {} of topic '{}'",
-                partition, topic
+                "Not leader for partition {partition} of topic '{topic}'"
             ),
             why: Some("The request was sent to a follower node.".into()),
             fix: vec!["This is usually transient - retry the operation".into()],
@@ -312,7 +311,7 @@ pub(crate) fn print_error_hint(e: &StreamlineError, data_dir: &Path) {
 
         StreamlineError::Analytics(ref msg) => Some(ErrorInfo {
             what: "Analytics query error".into(),
-            why: Some(format!("Query execution failed: {}", msg)),
+            why: Some(format!("Query execution failed: {msg}")),
             fix: vec![
                 "streamline-cli query --validate '<your-sql>'".into(),
                 "Check that the target topic exists and has data".into(),
@@ -322,7 +321,7 @@ pub(crate) fn print_error_hint(e: &StreamlineError, data_dir: &Path) {
 
         StreamlineError::Query(ref msg) => Some(ErrorInfo {
             what: "Query execution error".into(),
-            why: Some(format!("Query failed: {}", msg)),
+            why: Some(format!("Query failed: {msg}")),
             fix: vec![
                 "Verify SQL syntax and column names".into(),
                 "streamline-cli query --validate '<your-sql>'".into(),

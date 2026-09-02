@@ -6,7 +6,9 @@ use async_graphql::{Context, Object, Result};
 use bytes::Bytes;
 use std::sync::Arc;
 
-use crate::graphql::types::{ProduceInput, ProduceResult, ProduceWithSchemaResult, Topic, TopicConfig};
+use crate::graphql::types::{
+    ProduceInput, ProduceResult, ProduceWithSchemaResult, Topic, TopicConfig,
+};
 use crate::storage::TopicManager;
 
 /// GraphQL Mutation root
@@ -156,22 +158,16 @@ impl MutationRoot {
 
         // If a schema is provided, validate value against it
         let schema_validated = if let Some(ref schema_str) = schema {
-            let schema_value: serde_json::Value =
-                serde_json::from_str(schema_str).map_err(|e| {
-                    async_graphql::Error::new(format!("Invalid JSON schema: {e}"))
-                })?;
+            let schema_value: serde_json::Value = serde_json::from_str(schema_str)
+                .map_err(|e| async_graphql::Error::new(format!("Invalid JSON schema: {e}")))?;
 
             // Perform basic structural validation: check required fields from schema
-            if let Some(required) = schema_value
-                .get("required")
-                .and_then(|r| r.as_array())
-            {
+            if let Some(required) = schema_value.get("required").and_then(|r| r.as_array()) {
                 for field in required {
                     if let Some(field_name) = field.as_str() {
                         if parsed_value.get(field_name).is_none() {
                             return Err(async_graphql::Error::new(format!(
-                                "Schema validation failed: missing required field '{}'",
-                                field_name
+                                "Schema validation failed: missing required field '{field_name}'"
                             )));
                         }
                     }
@@ -179,10 +175,7 @@ impl MutationRoot {
             }
 
             // Validate property types if defined
-            if let Some(properties) = schema_value
-                .get("properties")
-                .and_then(|p| p.as_object())
-            {
+            if let Some(properties) = schema_value.get("properties").and_then(|p| p.as_object()) {
                 for (prop_name, prop_schema) in properties {
                     if let Some(val) = parsed_value.get(prop_name) {
                         if let Some(expected_type) =
@@ -199,8 +192,7 @@ impl MutationRoot {
                             };
                             if !type_matches {
                                 return Err(async_graphql::Error::new(format!(
-                                    "Schema validation failed: field '{}' expected type '{}'",
-                                    prop_name, expected_type
+                                    "Schema validation failed: field '{prop_name}' expected type '{expected_type}'"
                                 )));
                             }
                         }

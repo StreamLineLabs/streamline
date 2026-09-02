@@ -97,9 +97,16 @@ pub enum ChaosTarget {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum ChaosSchedule {
     Immediate,
-    Delayed { delay_secs: u64 },
-    Recurring { interval_secs: u64, count: Option<u32> },
-    RandomWindow { window_secs: u64 },
+    Delayed {
+        delay_secs: u64,
+    },
+    Recurring {
+        interval_secs: u64,
+        count: Option<u32>,
+    },
+    RandomWindow {
+        window_secs: u64,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -219,7 +226,11 @@ pub struct ChaosEngine {
 
 impl ChaosEngine {
     pub fn new(config: ChaosConfig) -> Self {
-        info!(enabled = config.enabled, safe_mode = config.safe_mode, "chaos engine initialised");
+        info!(
+            enabled = config.enabled,
+            safe_mode = config.safe_mode,
+            "chaos engine initialised"
+        );
         Self {
             experiments: Arc::new(RwLock::new(HashMap::new())),
             config,
@@ -245,7 +256,10 @@ impl ChaosEngine {
         }
 
         if self.config.safe_mode
-            && matches!(fault.intensity, FaultIntensity::High | FaultIntensity::Extreme)
+            && matches!(
+                fault.intensity,
+                FaultIntensity::High | FaultIntensity::Extreme
+            )
         {
             return Err(ChaosError::IntensityNotAllowed(fault.intensity));
         }
@@ -341,11 +355,20 @@ impl ChaosEngine {
     }
 
     pub fn get_experiment(&self, id: &str) -> Option<ChaosExperiment> {
-        self.experiments.read().unwrap_or_else(|e| e.into_inner()).get(id).cloned()
+        self.experiments
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(id)
+            .cloned()
     }
 
     pub fn list_experiments(&self) -> Vec<ChaosExperiment> {
-        self.experiments.read().unwrap_or_else(|e| e.into_inner()).values().cloned().collect()
+        self.experiments
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .values()
+            .cloned()
+            .collect()
     }
 
     pub fn delete_experiment(&self, id: &str) -> Result<()> {
@@ -402,10 +425,7 @@ impl ChaosEngine {
             experiments_succeeded: self.stats.experiments_succeeded.load(Ordering::Relaxed),
             experiments_failed: self.stats.experiments_failed.load(Ordering::Relaxed),
             faults_injected: self.stats.faults_injected.load(Ordering::Relaxed),
-            total_fault_duration_secs: self
-                .stats
-                .total_fault_duration_secs
-                .load(Ordering::Relaxed),
+            total_fault_duration_secs: self.stats.total_fault_duration_secs.load(Ordering::Relaxed),
         }
     }
 }

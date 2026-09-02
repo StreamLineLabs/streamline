@@ -290,7 +290,7 @@ impl SimpleProtocolHandler {
                 Ok(Command::Offsets { topic, partition })
             }
 
-            _ => Err(format!("Unknown command: {}. Type HELP for commands.", cmd)),
+            _ => Err(format!("Unknown command: {cmd}. Type HELP for commands.")),
         }
     }
 
@@ -302,7 +302,7 @@ impl SimpleProtocolHandler {
             Command::Quit => Response::Close,
 
             Command::Help => {
-                let help = vec![
+                let help = [
                     "Available commands:",
                     "  PING                           - Health check",
                     "  TOPICS                         - List all topics",
@@ -342,22 +342,21 @@ impl SimpleProtocolHandler {
                         Response::Array(items)
                     }
                 }
-                Err(e) => Response::Error(format!("Failed to list topics: {}", e)),
+                Err(e) => Response::Error(format!("Failed to list topics: {e}")),
             },
 
             Command::Create { topic, partitions } => {
                 match self.state.topic_manager.create_topic(&topic, partitions) {
                     Ok(_) => Response::Ok(Some(format!(
-                        "Created topic '{}' with {} partition(s)",
-                        topic, partitions
+                        "Created topic '{topic}' with {partitions} partition(s)"
                     ))),
-                    Err(e) => Response::Error(format!("Failed to create topic: {}", e)),
+                    Err(e) => Response::Error(format!("Failed to create topic: {e}")),
                 }
             }
 
             Command::Delete { topic } => match self.state.topic_manager.delete_topic(&topic) {
-                Ok(_) => Response::Ok(Some(format!("Deleted topic '{}'", topic))),
-                Err(e) => Response::Error(format!("Failed to delete topic: {}", e)),
+                Ok(_) => Response::Ok(Some(format!("Deleted topic '{topic}'"))),
+                Err(e) => Response::Error(format!("Failed to delete topic: {e}")),
             },
 
             Command::Produce {
@@ -377,7 +376,7 @@ impl SimpleProtocolHandler {
                     .append(&topic, partition, key_bytes, value_bytes)
                 {
                     Ok(offset) => Response::Integer(offset),
-                    Err(e) => Response::Error(format!("Failed to produce: {}", e)),
+                    Err(e) => Response::Error(format!("Failed to produce: {e}")),
                 }
             }
 
@@ -427,7 +426,7 @@ impl SimpleProtocolHandler {
                         Response::Array(items)
                     }
                 }
-                Err(e) => Response::Error(format!("Failed to consume: {}", e)),
+                Err(e) => Response::Error(format!("Failed to consume: {e}")),
             },
 
             Command::Offsets { topic, partition } => {
@@ -442,7 +441,7 @@ impl SimpleProtocolHandler {
                     .latest_offset(&topic, partition)
                     .unwrap_or(0);
 
-                let info = format!("earliest:{}\nlatest:{}", earliest, latest);
+                let info = format!("earliest:{earliest}\nlatest:{latest}");
                 Response::Bulk(info)
             }
         }
@@ -456,18 +455,18 @@ impl SimpleProtocolHandler {
     ) -> std::io::Result<()> {
         match response {
             Response::Ok(Some(msg)) => {
-                writer.write_all(format!("+{}\r\n", msg).as_bytes()).await?;
+                writer.write_all(format!("+{msg}\r\n").as_bytes()).await?;
             }
             Response::Ok(None) => {
                 writer.write_all(b"+OK\r\n").await?;
             }
             Response::Error(msg) => {
                 writer
-                    .write_all(format!("-ERR {}\r\n", msg).as_bytes())
+                    .write_all(format!("-ERR {msg}\r\n").as_bytes())
                     .await?;
             }
             Response::Integer(n) => {
-                writer.write_all(format!(":{}\r\n", n).as_bytes()).await?;
+                writer.write_all(format!(":{n}\r\n").as_bytes()).await?;
             }
             Response::Bulk(data) => {
                 writer

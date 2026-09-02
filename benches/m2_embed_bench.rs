@@ -55,7 +55,12 @@ fn embed_stub(text: &str) -> Vec<f32> {
 
 fn texts(n: usize) -> Vec<String> {
     (0..n)
-        .map(|i| format!("synthetic order {i}: amount={}, currency=USD", i * 13 % 9999))
+        .map(|i| {
+            format!(
+                "synthetic order {i}: amount={}, currency=USD",
+                i * 13 % 9999
+            )
+        })
         .collect()
 }
 

@@ -275,8 +275,8 @@ mod tests {
             batch.add_record(Record::new(
                 i,
                 timestamp,
-                Some(Bytes::from(format!("key-{}", i))),
-                Bytes::from(format!("value-{}", i)),
+                Some(Bytes::from(format!("key-{i}"))),
+                Bytes::from(format!("value-{i}")),
             ));
         }
         segment.append_batch(&batch).unwrap();

@@ -4,8 +4,6 @@
 //! Stability: Experimental. Only compiled when the `branches` feature
 //! is enabled (because reqwest is gated behind it).
 
-#![cfg(feature = "branches")]
-
 use clap::Subcommand;
 use serde::{Deserialize, Serialize};
 use streamline::Result;
@@ -137,7 +135,7 @@ pub(crate) fn handle(cmd: BranchCli) -> Result<()> {
             }
         }
         BranchCli::Get { id } => {
-            let path = format!("/api/v1/branches/{}", id);
+            let path = format!("/api/v1/branches/{id}");
             let view: BranchView = cli_http::get_json(&base, &path)?;
             println!("{}", serde_json::to_string_pretty(&view)?);
         }
@@ -146,21 +144,21 @@ pub(crate) fn handle(cmd: BranchCli) -> Result<()> {
                 role: &role,
                 text: &text,
             };
-            let path = format!("/api/v1/branches/{}/messages", id);
+            let path = format!("/api/v1/branches/{id}/messages");
             let _: serde_json::Value = cli_http::post_json(&base, &path, &body)?;
             println!("ok");
         }
         BranchCli::Messages { id } => {
-            let path = format!("/api/v1/branches/{}/messages", id);
+            let path = format!("/api/v1/branches/{id}/messages");
             let resp: MessagesResponse = cli_http::get_json(&base, &path)?;
             for m in resp.messages {
                 println!("[{}] {}: {}", m.timestamp_ms, m.role, m.text);
             }
         }
         BranchCli::Rm { id } => {
-            let path = format!("/api/v1/branches/{}", id);
+            let path = format!("/api/v1/branches/{id}");
             cli_http::delete(&base, &path)?;
-            println!("deleted {}", id);
+            println!("deleted {id}");
         }
     }
     Ok(())

@@ -294,7 +294,7 @@ mod tests {
             trail.add(PolicyAuditEntry::new(
                 PolicyChangeType::Create,
                 "topic",
-                format!("topic-{}", i),
+                format!("topic-{i}"),
             ));
         }
 
@@ -313,7 +313,7 @@ mod tests {
             trail.add(PolicyAuditEntry::new(
                 PolicyChangeType::Create,
                 "topic",
-                format!("topic-{}", i),
+                format!("topic-{i}"),
             ));
         }
 

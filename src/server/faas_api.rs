@@ -57,6 +57,12 @@ struct FunctionInfoDto {
     invocation_count: u64,
 }
 
+impl Default for FaasApiState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl FaasApiState {
     pub fn new() -> Self {
         Self {
@@ -69,7 +75,10 @@ impl FaasApiState {
 
 pub fn create_faas_api_router(state: FaasApiState) -> Router {
     Router::new()
-        .route("/api/v1/functions", get(list_functions).post(deploy_function))
+        .route(
+            "/api/v1/functions",
+            get(list_functions).post(deploy_function),
+        )
         .route(
             "/api/v1/functions/:name",
             get(get_function).delete(undeploy_function),
@@ -95,9 +104,15 @@ struct DeployFunctionRequest {
     timeout_ms: u64,
 }
 
-fn default_runtime() -> String { "wasm".to_string() }
-fn default_memory() -> u32 { 128 }
-fn default_timeout() -> u64 { 30000 }
+fn default_runtime() -> String {
+    "wasm".to_string()
+}
+fn default_memory() -> u32 {
+    128
+}
+fn default_timeout() -> u64 {
+    30000
+}
 
 async fn deploy_function(
     State(state): State<FaasApiState>,
@@ -370,7 +385,9 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
-        let body = axum::body::to_bytes(resp.into_body(), 50_000).await.unwrap();
+        let body = axum::body::to_bytes(resp.into_body(), 50_000)
+            .await
+            .unwrap();
         let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(json["name"], "my-fn");
         assert_eq!(json["memory_mb"], 256);
@@ -417,7 +434,9 @@ mod tests {
             .oneshot(
                 Request::post("/api/v1/functions")
                     .header("content-type", "application/json")
-                    .body(Body::from(r#"{"name":"invoke-fn","source":"file:///f.wasm"}"#))
+                    .body(Body::from(
+                        r#"{"name":"invoke-fn","source":"file:///f.wasm"}"#,
+                    ))
                     .unwrap(),
             )
             .await
@@ -435,7 +454,9 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
-        let body = axum::body::to_bytes(resp.into_body(), 50_000).await.unwrap();
+        let body = axum::body::to_bytes(resp.into_body(), 50_000)
+            .await
+            .unwrap();
         let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(json["status"], "completed");
         assert_eq!(json["invocation_count"], 1);
@@ -532,9 +553,7 @@ mod tests {
             .oneshot(
                 Request::post("/api/v1/functions/my-fn/triggers")
                     .header("content-type", "application/json")
-                    .body(Body::from(
-                        r#"{"trigger_type":"topic","topic":"events"}"#,
-                    ))
+                    .body(Body::from(r#"{"trigger_type":"topic","topic":"events"}"#))
                     .unwrap(),
             )
             .await

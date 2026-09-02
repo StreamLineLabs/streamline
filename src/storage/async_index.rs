@@ -173,8 +173,7 @@ impl AsyncSegmentIndex {
         let version = u16::from_le_bytes([header_buf[4], header_buf[5]]);
         if version != INDEX_VERSION {
             return Err(StreamlineError::CorruptedData(format!(
-                "Unsupported index version: {}",
-                version
+                "Unsupported index version: {version}"
             )));
         }
 

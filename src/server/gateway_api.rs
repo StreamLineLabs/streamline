@@ -127,7 +127,7 @@ pub enum TopicMapping {
 }
 
 /// Per-listener traffic metrics.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ListenerMetrics {
     pub connections_total: u64,
     pub connections_active: u64,
@@ -135,19 +135,6 @@ pub struct ListenerMetrics {
     pub messages_forwarded: u64,
     pub bytes_received: u64,
     pub errors: u64,
-}
-
-impl Default for ListenerMetrics {
-    fn default() -> Self {
-        Self {
-            connections_total: 0,
-            connections_active: 0,
-            messages_received: 0,
-            messages_forwarded: 0,
-            bytes_received: 0,
-            errors: 0,
-        }
-    }
 }
 
 /// Aggregate gateway-level stats (lock-free counters).
@@ -395,10 +382,7 @@ async fn get_gateway_stats(State(state): State<GatewayApiState>) -> Json<Gateway
         active_listeners: listeners.len() as u64,
         total_listeners_created: state.stats.total_listeners_created.load(Ordering::Relaxed),
         total_messages_received: state.stats.total_messages_received.load(Ordering::Relaxed),
-        total_messages_forwarded: state
-            .stats
-            .total_messages_forwarded
-            .load(Ordering::Relaxed),
+        total_messages_forwarded: state.stats.total_messages_forwarded.load(Ordering::Relaxed),
         total_bytes_received: state.stats.total_bytes_received.load(Ordering::Relaxed),
         total_errors: state.stats.total_errors.load(Ordering::Relaxed),
         protocols_in_use: protocols,
@@ -476,7 +460,10 @@ mod tests {
             .expect("body");
         let protocols: Vec<serde_json::Value> = serde_json::from_slice(&body).expect("json");
         assert_eq!(protocols.len(), 5);
-        let names: Vec<&str> = protocols.iter().map(|p| p["name"].as_str().unwrap()).collect();
+        let names: Vec<&str> = protocols
+            .iter()
+            .map(|p| p["name"].as_str().unwrap())
+            .collect();
         assert!(names.contains(&"mqtt"));
         assert!(names.contains(&"amqp"));
         assert!(names.contains(&"websocket"));
@@ -584,7 +571,7 @@ mod tests {
         let response = app
             .oneshot(
                 Request::builder()
-                    .uri(&format!("/api/v1/gateway/listeners/{}", id))
+                    .uri(format!("/api/v1/gateway/listeners/{id}"))
                     .body(Body::empty())
                     .expect("request"),
             )
@@ -628,7 +615,7 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .method("DELETE")
-                    .uri(&format!("/api/v1/gateway/listeners/{}", id))
+                    .uri(format!("/api/v1/gateway/listeners/{id}"))
                     .body(Body::empty())
                     .expect("request"),
             )
@@ -670,7 +657,7 @@ mod tests {
         let response = app
             .oneshot(
                 Request::builder()
-                    .uri(&format!("/api/v1/gateway/listeners/{}/metrics", id))
+                    .uri(format!("/api/v1/gateway/listeners/{id}/metrics"))
                     .body(Body::empty())
                     .expect("request"),
             )
@@ -916,7 +903,7 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .method("DELETE")
-                    .uri(&format!("/api/v1/gateway/listeners/{}", id))
+                    .uri(format!("/api/v1/gateway/listeners/{id}"))
                     .body(Body::empty())
                     .expect("request"),
             )
@@ -929,7 +916,7 @@ mod tests {
         let response = app
             .oneshot(
                 Request::builder()
-                    .uri(&format!("/api/v1/gateway/listeners/{}", id))
+                    .uri(format!("/api/v1/gateway/listeners/{id}"))
                     .body(Body::empty())
                     .expect("request"),
             )
@@ -947,7 +934,7 @@ mod tests {
         let response = app
             .oneshot(
                 Request::builder()
-                    .uri(&format!("/api/v1/gateway/listeners/{}", id))
+                    .uri(format!("/api/v1/gateway/listeners/{id}"))
                     .body(Body::empty())
                     .expect("request"),
             )
@@ -975,7 +962,7 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .method("DELETE")
-                    .uri(&format!("/api/v1/gateway/listeners/{}", id))
+                    .uri(format!("/api/v1/gateway/listeners/{id}"))
                     .body(Body::empty())
                     .expect("request"),
             )

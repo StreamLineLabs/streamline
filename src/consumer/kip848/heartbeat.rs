@@ -211,7 +211,7 @@ impl HeartbeatResponse {
     }
 }
 
-/// Convert TopicPartitions to Vec<TopicAssignment>
+/// Convert `TopicPartitions` to `Vec<TopicAssignment>`.
 pub fn topic_partitions_to_assignments(tp: &TopicPartitions) -> Vec<TopicAssignment> {
     let mut result: HashMap<String, Vec<i32>> = HashMap::new();
 

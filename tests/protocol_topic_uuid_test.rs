@@ -128,7 +128,7 @@ fn test_metadata_response_multiple_topics_with_ids() {
 
     for i in 0..3 {
         let mut topic = MetadataResponseTopic::default();
-        topic.name = Some(TopicName(StrBytes::from_string(format!("topic-{}", i))));
+        topic.name = Some(TopicName(StrBytes::from_string(format!("topic-{i}"))));
         topic.topic_id = Uuid::new_v4();
         topic.error_code = 0;
         response.topics.push(topic);

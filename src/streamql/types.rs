@@ -48,8 +48,8 @@ impl fmt::Display for DataType {
             DataType::Date => write!(f, "DATE"),
             DataType::Duration => write!(f, "DURATION"),
             DataType::Json => write!(f, "JSON"),
-            DataType::Array(inner) => write!(f, "ARRAY<{}>", inner),
-            DataType::Map(inner) => write!(f, "MAP<STRING, {}>", inner),
+            DataType::Array(inner) => write!(f, "ARRAY<{inner}>"),
+            DataType::Map(inner) => write!(f, "MAP<STRING, {inner}>"),
         }
     }
 }
@@ -271,22 +271,22 @@ impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Value::Null => write!(f, "NULL"),
-            Value::Boolean(b) => write!(f, "{}", b),
-            Value::Int64(i) => write!(f, "{}", i),
-            Value::Float64(fl) => write!(f, "{}", fl),
-            Value::String(s) => write!(f, "'{}'", s),
+            Value::Boolean(b) => write!(f, "{b}"),
+            Value::Int64(i) => write!(f, "{i}"),
+            Value::Float64(fl) => write!(f, "{fl}"),
+            Value::String(s) => write!(f, "'{s}'"),
             Value::Binary(b) => write!(f, "0x{}", hex::encode(b)),
-            Value::Timestamp(t) => write!(f, "TIMESTAMP({})", t),
-            Value::Date(d) => write!(f, "DATE({})", d),
-            Value::Duration(d) => write!(f, "DURATION({}ms)", d),
-            Value::Json(j) => write!(f, "{}", j),
+            Value::Timestamp(t) => write!(f, "TIMESTAMP({t})"),
+            Value::Date(d) => write!(f, "DATE({d})"),
+            Value::Duration(d) => write!(f, "DURATION({d}ms)"),
+            Value::Json(j) => write!(f, "{j}"),
             Value::Array(arr) => {
                 write!(f, "[")?;
                 for (i, v) in arr.iter().enumerate() {
                     if i > 0 {
                         write!(f, ", ")?;
                     }
-                    write!(f, "{}", v)?;
+                    write!(f, "{v}")?;
                 }
                 write!(f, "]")
             }
@@ -296,7 +296,7 @@ impl fmt::Display for Value {
                     if i > 0 {
                         write!(f, ", ")?;
                     }
-                    write!(f, "'{}': {}", k, v)?;
+                    write!(f, "'{k}': {v}")?;
                 }
                 write!(f, "}}")
             }

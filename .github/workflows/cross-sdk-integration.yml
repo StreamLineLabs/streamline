@@ -73,7 +73,7 @@ jobs:
           chmod +x /tmp/server/streamline
           /tmp/server/streamline &
           echo "Waiting for server..."
-          for i in $(seq 1 30); do
+          for _ in $(seq 1 30); do
             curl -sf http://localhost:9094/health > /dev/null 2>&1 && break
             sleep 2
           done
@@ -116,7 +116,7 @@ jobs:
         run: |
           chmod +x /tmp/server/streamline
           /tmp/server/streamline &
-          for i in $(seq 1 30); do
+          for _ in $(seq 1 30); do
             curl -sf http://localhost:9094/health > /dev/null 2>&1 && break
             sleep 2
           done
@@ -157,7 +157,7 @@ jobs:
         run: |
           chmod +x /tmp/server/streamline
           /tmp/server/streamline &
-          for i in $(seq 1 30); do
+          for _ in $(seq 1 30); do
             curl -sf http://localhost:9094/health > /dev/null 2>&1 && break
             sleep 2
           done
@@ -195,7 +195,7 @@ jobs:
         run: |
           chmod +x /tmp/server/streamline
           /tmp/server/streamline &
-          for i in $(seq 1 30); do
+          for _ in $(seq 1 30); do
             curl -sf http://localhost:9094/health > /dev/null 2>&1 && break
             sleep 2
           done
@@ -234,7 +234,7 @@ jobs:
         run: |
           chmod +x /tmp/server/streamline
           /tmp/server/streamline &
-          for i in $(seq 1 30); do
+          for _ in $(seq 1 30); do
             curl -sf http://localhost:9094/health > /dev/null 2>&1 && break
             sleep 2
           done
@@ -272,7 +272,7 @@ jobs:
         run: |
           chmod +x /tmp/server/streamline
           /tmp/server/streamline &
-          for i in $(seq 1 30); do
+          for _ in $(seq 1 30); do
             curl -sf http://localhost:9094/health > /dev/null 2>&1 && break
             sleep 2
           done
@@ -311,7 +311,7 @@ jobs:
         run: |
           chmod +x /tmp/server/streamline
           /tmp/server/streamline &
-          for i in $(seq 1 30); do
+          for _ in $(seq 1 30); do
             curl -sf http://localhost:9094/health > /dev/null 2>&1 && break
             sleep 2
           done

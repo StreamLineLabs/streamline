@@ -136,9 +136,8 @@ impl QuicServer {
     pub fn new(config: QuicServerConfig) -> Result<Self> {
         let server_config = Self::build_server_config(&config)?;
 
-        let endpoint = Endpoint::server(server_config, config.bind_addr).map_err(|e| {
-            StreamlineError::Config(format!("Failed to create QUIC endpoint: {}", e))
-        })?;
+        let endpoint = Endpoint::server(server_config, config.bind_addr)
+            .map_err(|e| StreamlineError::Config(format!("Failed to create QUIC endpoint: {e}")))?;
 
         info!("QUIC server listening on {}", config.bind_addr);
 
@@ -197,7 +196,7 @@ impl QuicServer {
 
         let mut server_config = ServerConfig::with_crypto(Arc::new(
             quinn::crypto::rustls::QuicServerConfig::try_from(rustls_config).map_err(|e| {
-                StreamlineError::Config(format!("Failed to create QUIC crypto config: {}", e))
+                StreamlineError::Config(format!("Failed to create QUIC crypto config: {e}"))
             })?,
         ));
 
@@ -208,7 +207,7 @@ impl QuicServer {
         transport.max_idle_timeout(Some(
             Duration::from_millis(config.idle_timeout_ms)
                 .try_into()
-                .map_err(|e| StreamlineError::Config(format!("Invalid idle timeout: {}", e)))?,
+                .map_err(|e| StreamlineError::Config(format!("Invalid idle timeout: {e}")))?,
         ));
         if config.keep_alive_interval_ms > 0 {
             transport
@@ -219,15 +218,12 @@ impl QuicServer {
             config
                 .receive_window
                 .try_into()
-                .map_err(|e| StreamlineError::Config(format!("Invalid receive window: {}", e)))?,
+                .map_err(|e| StreamlineError::Config(format!("Invalid receive window: {e}")))?,
         );
         transport.stream_receive_window(
-            config
-                .stream_receive_window
-                .try_into()
-                .map_err(|e| {
-                    StreamlineError::Config(format!("Invalid stream receive window: {}", e))
-                })?,
+            config.stream_receive_window.try_into().map_err(|e| {
+                StreamlineError::Config(format!("Invalid stream receive window: {e}"))
+            })?,
         );
 
         server_config.transport_config(Arc::new(transport));
@@ -249,7 +245,7 @@ impl QuicServer {
 
         let connection = incoming.await.map_err(|e| {
             self.metrics.write().connection_errors += 1;
-            StreamlineError::protocol_msg(format!("Connection failed: {}", e))
+            StreamlineError::protocol_msg(format!("Connection failed: {e}"))
         })?;
 
         self.connection_count.fetch_add(1, Ordering::Relaxed);
@@ -311,23 +307,24 @@ impl QuicConnection {
     pub async fn open_bi(&self) -> Result<QuicBiStream> {
         let (send, recv) =
             self.connection.open_bi().await.map_err(|e| {
-                StreamlineError::protocol_msg(format!("Failed to open stream: {}", e))
+                StreamlineError::protocol_msg(format!("Failed to open stream: {e}"))
             })?;
         Ok(QuicBiStream::new(send, recv))
     }
 
     /// Accept an incoming bidirectional stream
     pub async fn accept_bi(&self) -> Result<QuicBiStream> {
-        let (send, recv) = self.connection.accept_bi().await.map_err(|e| {
-            StreamlineError::protocol_msg(format!("Failed to accept stream: {}", e))
-        })?;
+        let (send, recv) =
+            self.connection.accept_bi().await.map_err(|e| {
+                StreamlineError::protocol_msg(format!("Failed to accept stream: {e}"))
+            })?;
         Ok(QuicBiStream::new(send, recv))
     }
 
     /// Open a new unidirectional send stream
     pub async fn open_uni(&self) -> Result<QuicSendStream> {
         let send = self.connection.open_uni().await.map_err(|e| {
-            StreamlineError::protocol_msg(format!("Failed to open uni stream: {}", e))
+            StreamlineError::protocol_msg(format!("Failed to open uni stream: {e}"))
         })?;
         Ok(QuicSendStream::new(send))
     }
@@ -335,7 +332,7 @@ impl QuicConnection {
     /// Accept an incoming unidirectional receive stream
     pub async fn accept_uni(&self) -> Result<QuicRecvStream> {
         let recv = self.connection.accept_uni().await.map_err(|e| {
-            StreamlineError::protocol_msg(format!("Failed to accept uni stream: {}", e))
+            StreamlineError::protocol_msg(format!("Failed to accept uni stream: {e}"))
         })?;
         Ok(QuicRecvStream::new(recv))
     }
@@ -418,7 +415,7 @@ impl QuicBiStream {
         self.recv
             .read(buf)
             .await
-            .map_err(|e| StreamlineError::protocol_msg(format!("Read error: {}", e)))
+            .map_err(|e| StreamlineError::protocol_msg(format!("Read error: {e}")))
     }
 
     /// Read exact amount of data
@@ -426,7 +423,7 @@ impl QuicBiStream {
         self.recv
             .read_exact(buf)
             .await
-            .map_err(|e| StreamlineError::protocol_msg(format!("Read exact error: {}", e)))
+            .map_err(|e| StreamlineError::protocol_msg(format!("Read exact error: {e}")))
     }
 
     /// Write data to the stream
@@ -434,21 +431,21 @@ impl QuicBiStream {
         self.send
             .write_all(data)
             .await
-            .map_err(|e| StreamlineError::protocol_msg(format!("Write error: {}", e)))
+            .map_err(|e| StreamlineError::protocol_msg(format!("Write error: {e}")))
     }
 
     /// Finish the send side of the stream
     pub async fn finish(&mut self) -> Result<()> {
         self.send
             .finish()
-            .map_err(|e| StreamlineError::protocol_msg(format!("Finish error: {}", e)))
+            .map_err(|e| StreamlineError::protocol_msg(format!("Finish error: {e}")))
     }
 
     /// Reset the stream
     pub fn reset(&mut self, error_code: u32) -> Result<()> {
         self.send
             .reset(error_code.into())
-            .map_err(|e| StreamlineError::protocol_msg(format!("Reset error: {}", e)))
+            .map_err(|e| StreamlineError::protocol_msg(format!("Reset error: {e}")))
     }
 
     /// Split into send and receive halves
@@ -485,21 +482,21 @@ impl QuicSendStream {
         self.send
             .write_all(data)
             .await
-            .map_err(|e| StreamlineError::protocol_msg(format!("Write error: {}", e)))
+            .map_err(|e| StreamlineError::protocol_msg(format!("Write error: {e}")))
     }
 
     /// Finish the stream
     pub async fn finish(&mut self) -> Result<()> {
         self.send
             .finish()
-            .map_err(|e| StreamlineError::protocol_msg(format!("Finish error: {}", e)))
+            .map_err(|e| StreamlineError::protocol_msg(format!("Finish error: {e}")))
     }
 
     /// Reset the stream
     pub fn reset(&mut self, error_code: u32) -> Result<()> {
         self.send
             .reset(error_code.into())
-            .map_err(|e| StreamlineError::protocol_msg(format!("Reset error: {}", e)))
+            .map_err(|e| StreamlineError::protocol_msg(format!("Reset error: {e}")))
     }
 }
 
@@ -528,7 +525,7 @@ impl QuicRecvStream {
         self.recv
             .read(buf)
             .await
-            .map_err(|e| StreamlineError::protocol_msg(format!("Read error: {}", e)))
+            .map_err(|e| StreamlineError::protocol_msg(format!("Read error: {e}")))
     }
 
     /// Read exact amount of data
@@ -536,7 +533,7 @@ impl QuicRecvStream {
         self.recv
             .read_exact(buf)
             .await
-            .map_err(|e| StreamlineError::protocol_msg(format!("Read exact error: {}", e)))
+            .map_err(|e| StreamlineError::protocol_msg(format!("Read exact error: {e}")))
     }
 
     /// Read to end
@@ -544,14 +541,14 @@ impl QuicRecvStream {
         self.recv
             .read_to_end(max_size)
             .await
-            .map_err(|e| StreamlineError::protocol_msg(format!("Read to end error: {}", e)))
+            .map_err(|e| StreamlineError::protocol_msg(format!("Read to end error: {e}")))
     }
 
     /// Stop receiving (send STOP_SENDING frame)
     pub fn stop(&mut self, error_code: u32) -> Result<()> {
         self.recv
             .stop(error_code.into())
-            .map_err(|e| StreamlineError::protocol_msg(format!("Stop error: {}", e)))
+            .map_err(|e| StreamlineError::protocol_msg(format!("Stop error: {e}")))
     }
 }
 
@@ -567,7 +564,7 @@ impl QuicClient {
     /// Create a new QUIC client
     pub fn new(config: QuicClientConfig) -> Result<Self> {
         let mut endpoint = Endpoint::client(SocketAddr::from(([0, 0, 0, 0], 0))).map_err(|e| {
-            StreamlineError::Config(format!("Failed to create client endpoint: {}", e))
+            StreamlineError::Config(format!("Failed to create client endpoint: {e}"))
         })?;
 
         let client_config = Self::build_client_config(&config)?;
@@ -595,7 +592,7 @@ impl QuicClient {
 
         let mut client_config = ClientConfig::new(Arc::new(
             quinn::crypto::rustls::QuicClientConfig::try_from(crypto).map_err(|e| {
-                StreamlineError::Config(format!("Failed to create QUIC crypto config: {}", e))
+                StreamlineError::Config(format!("Failed to create QUIC crypto config: {e}"))
             })?,
         ));
 
@@ -604,7 +601,7 @@ impl QuicClient {
         transport.max_idle_timeout(Some(
             Duration::from_millis(config.idle_timeout_ms)
                 .try_into()
-                .map_err(|e| StreamlineError::Config(format!("Invalid idle timeout: {}", e)))?,
+                .map_err(|e| StreamlineError::Config(format!("Invalid idle timeout: {e}")))?,
         ));
         if config.keep_alive_interval_ms > 0 {
             transport
@@ -621,9 +618,9 @@ impl QuicClient {
         let connection = self
             .endpoint
             .connect(self.config.server_addr, &self.config.server_name)
-            .map_err(|e| StreamlineError::Config(format!("Failed to initiate connection: {}", e)))?
+            .map_err(|e| StreamlineError::Config(format!("Failed to initiate connection: {e}")))?
             .await
-            .map_err(|e| StreamlineError::protocol_msg(format!("Connection failed: {}", e)))?;
+            .map_err(|e| StreamlineError::protocol_msg(format!("Connection failed: {e}")))?;
 
         info!("Connected to QUIC server at {}", self.config.server_addr);
 

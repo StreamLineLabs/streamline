@@ -688,7 +688,7 @@ impl DashboardState {
                 )
                 .is_ok()
             {
-                return format!("Exported to {}", filename);
+                return format!("Exported to {filename}");
             }
         }
         "Export failed".to_string()
@@ -720,7 +720,7 @@ impl DashboardState {
                 )
                 .is_ok()
             {
-                return format!("Exported to {}", filename);
+                return format!("Exported to {filename}");
             }
         }
         "Export failed".to_string()
@@ -1234,7 +1234,7 @@ fn ui(f: &mut Frame, state: &DashboardState, status_message: &Option<(String, In
             } else {
                 Style::default().fg(theme.fg())
             };
-            Line::from(Span::styled(format!(" {} ", t), style))
+            Line::from(Span::styled(format!(" {t} "), style))
         })
         .collect();
 
@@ -1504,7 +1504,7 @@ fn render_stat_box(
 ) {
     let block = Block::default()
         .borders(Borders::ALL)
-        .title(format!(" {} ", title))
+        .title(format!(" {title} "))
         .border_style(Style::default().fg(theme.accent()));
 
     let inner = block.inner(area);
@@ -1866,7 +1866,7 @@ fn render_alerts(f: &mut Frame, area: Rect, state: &DashboardState, theme: Theme
 
             let age = alert.timestamp.elapsed().as_secs();
             let age_str = if age < 60 {
-                format!("{}s ago", age)
+                format!("{age}s ago")
             } else if age < 3600 {
                 format!("{}m ago", age / 60)
             } else {
@@ -1874,12 +1874,9 @@ fn render_alerts(f: &mut Frame, area: Rect, state: &DashboardState, theme: Theme
             };
 
             ListItem::new(Line::from(vec![
-                Span::styled(format!(" {} ", icon), Style::default().fg(color)),
+                Span::styled(format!(" {icon} "), Style::default().fg(color)),
                 Span::raw(&alert.message),
-                Span::styled(
-                    format!("  ({})", age_str),
-                    Style::default().fg(theme.muted()),
-                ),
+                Span::styled(format!("  ({age_str})"), Style::default().fg(theme.muted())),
             ]))
         })
         .collect();
@@ -2231,7 +2228,7 @@ fn render_live_messages(f: &mut Frame, state: &DashboardState, theme: Theme) {
                     Style::default().fg(theme.muted()),
                 ),
                 Span::raw(&msg.value_preview),
-                Span::styled(format!("  ({}s)", age), Style::default().fg(theme.muted())),
+                Span::styled(format!("  ({age}s)"), Style::default().fg(theme.muted())),
             ])
         })
         .collect();
@@ -2321,13 +2318,13 @@ fn format_bytes(bytes: u64) -> String {
     } else if bytes >= 1024 {
         format!("{:.1}KB", bytes as f64 / 1024.0)
     } else {
-        format!("{}B", bytes)
+        format!("{bytes}B")
     }
 }
 
 fn format_duration(secs: u64) -> String {
     if secs < 60 {
-        format!("{}s", secs)
+        format!("{secs}s")
     } else if secs < 3600 {
         format!("{}m {}s", secs / 60, secs % 60)
     } else if secs < 86400 {

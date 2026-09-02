@@ -36,7 +36,7 @@ pub(crate) fn save_to_history(args: &[String]) {
     // Add new command with timestamp
     let timestamp = chrono::Local::now().format("%Y-%m-%d %H:%M:%S");
     let command = args[1..].join(" "); // Skip the binary name
-    let entry = format!("[{}] {}", timestamp, command);
+    let entry = format!("[{timestamp}] {command}");
 
     history.push(entry);
 
@@ -105,10 +105,7 @@ pub(crate) fn handle_history(count: usize, clear: bool, ctx: &CliContext) -> Res
                 })
                 .collect();
 
-            println!(
-                "{}",
-                serde_json::to_string_pretty(&history)?
-            );
+            println!("{}", serde_json::to_string_pretty(&history)?);
         }
         _ => {
             println!("{}", "Recent Commands".bold().cyan());

@@ -19,8 +19,8 @@ mod kafka_connect_tests {
     use tower::ServiceExt;
 
     use streamline::{
-        create_connect_router, ConnectApiState, ConnectorManager, ConnectorState,
-        ConnectorType, CreateConnectorRequest, TaskState,
+        create_connect_router, ConnectApiState, ConnectorManager, ConnectorState, ConnectorType,
+        CreateConnectorRequest, TaskState,
     };
 
     /// Helper: build a test router with a fresh ConnectorManager
@@ -167,8 +167,7 @@ mod kafka_connect_tests {
     #[tokio::test]
     async fn test_get_connector_not_found() {
         let app = test_router();
-        let (status, _body) =
-            send_json(&app, Method::GET, "/connectors/nonexistent", None).await;
+        let (status, _body) = send_json(&app, Method::GET, "/connectors/nonexistent", None).await;
         assert_eq!(status, StatusCode::NOT_FOUND);
     }
 
@@ -251,8 +250,7 @@ mod kafka_connect_tests {
     #[tokio::test]
     async fn test_delete_connector_not_found() {
         let app = test_router();
-        let (status, _) =
-            send_json(&app, Method::DELETE, "/connectors/nonexistent", None).await;
+        let (status, _) = send_json(&app, Method::DELETE, "/connectors/nonexistent", None).await;
         assert_eq!(status, StatusCode::NOT_FOUND);
     }
 
@@ -280,8 +278,7 @@ mod kafka_connect_tests {
     #[tokio::test]
     async fn test_get_connector_status_not_found() {
         let app = test_router();
-        let (status, _) =
-            send_json(&app, Method::GET, "/connectors/missing/status", None).await;
+        let (status, _) = send_json(&app, Method::GET, "/connectors/missing/status", None).await;
         assert_eq!(status, StatusCode::NOT_FOUND);
     }
 
@@ -294,13 +291,11 @@ mod kafka_connect_tests {
         let app = test_router();
         create_test_connector(&app, "pause-test").await;
 
-        let (status, _) =
-            send_json(&app, Method::PUT, "/connectors/pause-test/pause", None).await;
+        let (status, _) = send_json(&app, Method::PUT, "/connectors/pause-test/pause", None).await;
         assert_eq!(status, StatusCode::ACCEPTED);
 
         // Verify paused state
-        let (_, body) =
-            send_json(&app, Method::GET, "/connectors/pause-test/status", None).await;
+        let (_, body) = send_json(&app, Method::GET, "/connectors/pause-test/status", None).await;
         assert_eq!(
             body.get("connector").unwrap().get("state").unwrap(),
             "PAUSED"
@@ -314,8 +309,7 @@ mod kafka_connect_tests {
     #[tokio::test]
     async fn test_pause_connector_not_found() {
         let app = test_router();
-        let (status, _) =
-            send_json(&app, Method::PUT, "/connectors/missing/pause", None).await;
+        let (status, _) = send_json(&app, Method::PUT, "/connectors/missing/pause", None).await;
         assert_eq!(status, StatusCode::NOT_FOUND);
     }
 
@@ -333,8 +327,7 @@ mod kafka_connect_tests {
         assert_eq!(status, StatusCode::ACCEPTED);
 
         // Verify running state
-        let (_, body) =
-            send_json(&app, Method::GET, "/connectors/resume-test/status", None).await;
+        let (_, body) = send_json(&app, Method::GET, "/connectors/resume-test/status", None).await;
         assert_eq!(
             body.get("connector").unwrap().get("state").unwrap(),
             "RUNNING"
@@ -344,8 +337,7 @@ mod kafka_connect_tests {
     #[tokio::test]
     async fn test_resume_connector_not_found() {
         let app = test_router();
-        let (status, _) =
-            send_json(&app, Method::PUT, "/connectors/missing/resume", None).await;
+        let (status, _) = send_json(&app, Method::PUT, "/connectors/missing/resume", None).await;
         assert_eq!(status, StatusCode::NOT_FOUND);
     }
 
@@ -359,8 +351,7 @@ mod kafka_connect_tests {
         assert_eq!(status, StatusCode::NO_CONTENT);
 
         // Verify still running after restart
-        let (_, body) =
-            send_json(&app, Method::GET, "/connectors/restart-test/status", None).await;
+        let (_, body) = send_json(&app, Method::GET, "/connectors/restart-test/status", None).await;
         assert_eq!(
             body.get("connector").unwrap().get("state").unwrap(),
             "RUNNING"
@@ -370,8 +361,7 @@ mod kafka_connect_tests {
     #[tokio::test]
     async fn test_restart_connector_not_found() {
         let app = test_router();
-        let (status, _) =
-            send_json(&app, Method::POST, "/connectors/missing/restart", None).await;
+        let (status, _) = send_json(&app, Method::POST, "/connectors/missing/restart", None).await;
         assert_eq!(status, StatusCode::NOT_FOUND);
     }
 
@@ -404,7 +394,7 @@ mod kafka_connect_tests {
         assert_eq!(status, StatusCode::OK);
         let tasks = body.as_array().unwrap();
         assert_eq!(tasks.len(), 2); // tasks.max = 2 in our test connector
-        // Each task should have an id and config
+                                    // Each task should have an id and config
         for task in tasks {
             assert!(task.get("id").is_some());
             assert!(task.get("config").is_some());
@@ -414,8 +404,7 @@ mod kafka_connect_tests {
     #[tokio::test]
     async fn test_get_connector_tasks_not_found() {
         let app = test_router();
-        let (status, _) =
-            send_json(&app, Method::GET, "/connectors/missing/tasks", None).await;
+        let (status, _) = send_json(&app, Method::GET, "/connectors/missing/tasks", None).await;
         assert_eq!(status, StatusCode::NOT_FOUND);
     }
 
@@ -591,8 +580,7 @@ mod kafka_connect_tests {
         assert_eq!(body.as_array().unwrap().len(), 1);
 
         // 4. Get connector info
-        let (status, body) =
-            send_json(&app, Method::GET, "/connectors/lifecycle-conn", None).await;
+        let (status, body) = send_json(&app, Method::GET, "/connectors/lifecycle-conn", None).await;
         assert_eq!(status, StatusCode::OK);
         assert_eq!(body.get("name").unwrap(), "lifecycle-conn");
 
@@ -693,13 +681,11 @@ mod kafka_connect_tests {
         assert_eq!(status, StatusCode::NO_CONTENT);
 
         // 16. Delete connector
-        let (status, _) =
-            send_json(&app, Method::DELETE, "/connectors/lifecycle-conn", None).await;
+        let (status, _) = send_json(&app, Method::DELETE, "/connectors/lifecycle-conn", None).await;
         assert_eq!(status, StatusCode::NO_CONTENT);
 
         // 17. Verify deleted
-        let (status, _) =
-            send_json(&app, Method::GET, "/connectors/lifecycle-conn", None).await;
+        let (status, _) = send_json(&app, Method::GET, "/connectors/lifecycle-conn", None).await;
         assert_eq!(status, StatusCode::NOT_FOUND);
 
         // 18. List connectors -- empty again
@@ -748,8 +734,7 @@ mod kafka_connect_tests {
     #[tokio::test]
     async fn test_get_dlq_not_found() {
         let app = test_router();
-        let (status, _) =
-            send_json(&app, Method::GET, "/connectors/missing/dlq", None).await;
+        let (status, _) = send_json(&app, Method::GET, "/connectors/missing/dlq", None).await;
         assert_eq!(status, StatusCode::NOT_FOUND);
     }
 
@@ -758,8 +743,7 @@ mod kafka_connect_tests {
         let app = test_router();
         create_test_connector(&app, "dlq-test").await;
 
-        let (status, body) =
-            send_json(&app, Method::GET, "/connectors/dlq-test/dlq", None).await;
+        let (status, body) = send_json(&app, Method::GET, "/connectors/dlq-test/dlq", None).await;
         assert_eq!(status, StatusCode::OK);
         assert_eq!(body.get("connector").unwrap(), "dlq-test");
         assert!(body.get("entries").unwrap().as_array().unwrap().is_empty());
@@ -841,10 +825,7 @@ mod kafka_connect_tests {
         let manager = ConnectorManager::new();
 
         let mut config = std::collections::HashMap::new();
-        config.insert(
-            "connector.class".to_string(),
-            "TestConnector".to_string(),
-        );
+        config.insert("connector.class".to_string(), "TestConnector".to_string());
         config.insert("tasks.max".to_string(), "1".to_string());
 
         let request = CreateConnectorRequest {
@@ -899,10 +880,7 @@ mod kafka_connect_tests {
         let manager = ConnectorManager::new();
 
         let mut config = std::collections::HashMap::new();
-        config.insert(
-            "connector.class".to_string(),
-            "TestConnector".to_string(),
-        );
+        config.insert("connector.class".to_string(), "TestConnector".to_string());
         config.insert("tasks.max".to_string(), "2".to_string());
 
         let request = CreateConnectorRequest {
@@ -950,10 +928,7 @@ mod kafka_connect_tests {
 
         // Add connector
         let mut config = std::collections::HashMap::new();
-        config.insert(
-            "connector.class".to_string(),
-            "TestConnector".to_string(),
-        );
+        config.insert("connector.class".to_string(), "TestConnector".to_string());
         config.insert("tasks.max".to_string(), "1".to_string());
         let request = CreateConnectorRequest {
             name: "health-conn".to_string(),
@@ -977,10 +952,7 @@ mod kafka_connect_tests {
         let manager = ConnectorManager::new();
 
         let mut config = std::collections::HashMap::new();
-        config.insert(
-            "connector.class".to_string(),
-            "TestConnector".to_string(),
-        );
+        config.insert("connector.class".to_string(), "TestConnector".to_string());
         config.insert("tasks.max".to_string(), "1".to_string());
 
         let request = CreateConnectorRequest {
@@ -991,10 +963,7 @@ mod kafka_connect_tests {
 
         // Update config
         let mut new_config = std::collections::HashMap::new();
-        new_config.insert(
-            "connector.class".to_string(),
-            "TestConnector".to_string(),
-        );
+        new_config.insert("connector.class".to_string(), "TestConnector".to_string());
         new_config.insert("tasks.max".to_string(), "5".to_string());
 
         let info = manager

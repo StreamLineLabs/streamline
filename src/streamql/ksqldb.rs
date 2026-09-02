@@ -87,8 +87,8 @@ impl std::fmt::Display for ColumnType {
             ColumnType::Date => write!(f, "DATE"),
             ColumnType::Time => write!(f, "TIME"),
             ColumnType::Bytes => write!(f, "BYTES"),
-            ColumnType::Array(inner) => write!(f, "ARRAY<{}>", inner),
-            ColumnType::Map(k, v) => write!(f, "MAP<{}, {}>", k, v),
+            ColumnType::Array(inner) => write!(f, "ARRAY<{inner}>"),
+            ColumnType::Map(k, v) => write!(f, "MAP<{k}, {v}>"),
             ColumnType::Struct(fields) => {
                 write!(f, "STRUCT<")?;
                 for (i, field) in fields.iter().enumerate() {
@@ -308,7 +308,7 @@ impl std::fmt::Display for KsqlAggregateFunction {
             KsqlAggregateFunction::Avg => write!(f, "AVG"),
             KsqlAggregateFunction::Min => write!(f, "MIN"),
             KsqlAggregateFunction::Max => write!(f, "MAX"),
-            KsqlAggregateFunction::TopK(k) => write!(f, "TOPK({})", k),
+            KsqlAggregateFunction::TopK(k) => write!(f, "TOPK({k})"),
             KsqlAggregateFunction::Earliest => write!(f, "EARLIEST"),
             KsqlAggregateFunction::Latest => write!(f, "LATEST"),
             KsqlAggregateFunction::CollectList => write!(f, "COLLECT_LIST"),
@@ -402,24 +402,13 @@ pub enum StreamqlStatement {
         properties: HashMap<String, String>,
     },
     /// SELECT ... FROM stream [WINDOW ...] [WHERE ...] [GROUP BY ...]
-    Select {
-        sql: String,
-    },
+    Select { sql: String },
     /// INSERT INTO topic SELECT ... FROM stream [WHERE ...]
-    InsertInto {
-        sink: String,
-        query_sql: String,
-    },
+    InsertInto { sink: String, query_sql: String },
     /// DROP STREAM name
-    DropStream {
-        name: String,
-        if_exists: bool,
-    },
+    DropStream { name: String, if_exists: bool },
     /// DROP TABLE name
-    DropTable {
-        name: String,
-        if_exists: bool,
-    },
+    DropTable { name: String, if_exists: bool },
     /// SHOW STREAMS
     ShowStreams,
     /// SHOW TABLES
@@ -427,14 +416,9 @@ pub enum StreamqlStatement {
     /// SHOW QUERIES
     ShowQueries,
     /// TERMINATE query_id
-    Terminate {
-        query_id: String,
-    },
+    Terminate { query_id: String },
     /// DESCRIBE stream_or_table
-    Describe {
-        name: String,
-        extended: bool,
-    },
+    Describe { name: String, extended: bool },
 }
 
 // ---------------------------------------------------------------------------
@@ -480,8 +464,7 @@ impl StreamqlEngine {
         let name = definition.name.clone();
         if streams.contains_key(&name) {
             return Err(StreamlineError::Query(format!(
-                "Stream already exists: {}",
-                name
+                "Stream already exists: {name}"
             )));
         }
         streams.insert(name, definition);
@@ -492,10 +475,7 @@ impl StreamqlEngine {
     pub async fn drop_stream(&self, name: &str, if_exists: bool) -> Result<()> {
         let mut streams = self.streams.write().await;
         if streams.remove(name).is_none() && !if_exists {
-            return Err(StreamlineError::Query(format!(
-                "Stream not found: {}",
-                name
-            )));
+            return Err(StreamlineError::Query(format!("Stream not found: {name}")));
         }
         Ok(())
     }
@@ -520,8 +500,7 @@ impl StreamqlEngine {
         let name = definition.name.clone();
         if tables.contains_key(&name) {
             return Err(StreamlineError::Query(format!(
-                "Table already exists: {}",
-                name
+                "Table already exists: {name}"
             )));
         }
         tables.insert(name, definition);
@@ -532,10 +511,7 @@ impl StreamqlEngine {
     pub async fn drop_table(&self, name: &str, if_exists: bool) -> Result<()> {
         let mut tables = self.tables.write().await;
         if tables.remove(name).is_none() && !if_exists {
-            return Err(StreamlineError::Query(format!(
-                "Table not found: {}",
-                name
-            )));
+            return Err(StreamlineError::Query(format!("Table not found: {name}")));
         }
         Ok(())
     }
@@ -600,16 +576,12 @@ impl StreamqlEngine {
 
                 if if_not_exists && self.get_stream(&name).await.is_some() {
                     return Ok(StatementResult::Success(format!(
-                        "Stream {} already exists",
-                        name
+                        "Stream {name} already exists"
                     )));
                 }
 
                 self.create_stream(def).await?;
-                Ok(StatementResult::Success(format!(
-                    "Stream {} created",
-                    name
-                )))
+                Ok(StatementResult::Success(format!("Stream {name} created")))
             }
 
             StreamqlStatement::CreateTableAs {
@@ -626,30 +598,22 @@ impl StreamqlEngine {
             }
 
             StreamqlStatement::InsertInto { sink, query_sql } => {
-                let query = self
-                    .start_continuous_query(&query_sql, Some(&sink))
-                    .await?;
+                let query = self.start_continuous_query(&query_sql, Some(&sink)).await?;
                 Ok(StatementResult::QueryStarted(query.id))
             }
 
-            StreamqlStatement::Select { sql: query_sql } => {
-                Ok(StatementResult::Success(format!(
-                    "Push query submitted: {}",
-                    query_sql
-                )))
-            }
+            StreamqlStatement::Select { sql: query_sql } => Ok(StatementResult::Success(format!(
+                "Push query submitted: {query_sql}"
+            ))),
 
             StreamqlStatement::DropStream { name, if_exists } => {
                 self.drop_stream(&name, if_exists).await?;
-                Ok(StatementResult::Success(format!(
-                    "Stream {} dropped",
-                    name
-                )))
+                Ok(StatementResult::Success(format!("Stream {name} dropped")))
             }
 
             StreamqlStatement::DropTable { name, if_exists } => {
                 self.drop_table(&name, if_exists).await?;
-                Ok(StatementResult::Success(format!("Table {} dropped", name)))
+                Ok(StatementResult::Success(format!("Table {name} dropped")))
             }
 
             StreamqlStatement::ShowStreams => {
@@ -673,8 +637,7 @@ impl StreamqlEngine {
             StreamqlStatement::Terminate { query_id } => {
                 self.terminate_query(&query_id).await?;
                 Ok(StatementResult::Success(format!(
-                    "Query {} terminated",
-                    query_id
+                    "Query {query_id} terminated"
                 )))
             }
 
@@ -699,8 +662,7 @@ impl StreamqlEngine {
                     return Ok(StatementResult::Success(desc));
                 }
                 Err(StreamlineError::Query(format!(
-                    "No stream or table found: {}",
-                    name
+                    "No stream or table found: {name}"
                 )))
             }
         }
@@ -745,7 +707,7 @@ impl StreamqlEngine {
         let mut queries = self.queries.write().await;
         let query = queries
             .get_mut(query_id)
-            .ok_or_else(|| StreamlineError::Query(format!("Query not found: {}", query_id)))?;
+            .ok_or_else(|| StreamlineError::Query(format!("Query not found: {query_id}")))?;
 
         query.status = ContinuousQueryStatus::Terminated;
         Ok(())
@@ -885,8 +847,7 @@ fn parse_column_defs(s: &str) -> Result<(Vec<ColumnSchema>, String)> {
         let tokens: Vec<&str> = part.split_whitespace().collect();
         if tokens.len() < 2 {
             return Err(StreamlineError::Parse(format!(
-                "Invalid column definition: {}",
-                part
+                "Invalid column definition: {part}"
             )));
         }
         let col_name = tokens[0].to_string();
@@ -942,9 +903,7 @@ fn parse_with_clause(s: &str) -> Result<HashMap<String, String>> {
 
     let after_with = trimmed["WITH".len()..].trim_start();
     if !after_with.starts_with('(') {
-        return Err(StreamlineError::Parse(
-            "Expected '(' after WITH".into(),
-        ));
+        return Err(StreamlineError::Parse("Expected '(' after WITH".into()));
     }
 
     let inner = after_with.trim_start_matches('(');
@@ -1218,7 +1177,8 @@ mod tests {
 
     #[test]
     fn test_parse_create_stream_if_not_exists() {
-        let sql = "CREATE STREAM IF NOT EXISTS events (id BIGINT, data VARCHAR) WITH (topic='events')";
+        let sql =
+            "CREATE STREAM IF NOT EXISTS events (id BIGINT, data VARCHAR) WITH (topic='events')";
         let stmt = parse_ksql_statement(sql).unwrap();
         match stmt {
             StreamqlStatement::CreateStream {
@@ -1357,8 +1317,7 @@ mod tests {
     async fn test_engine_create_and_list_streams() {
         let engine = StreamqlEngine::new();
 
-        let def = StreamDefinition::new("pageviews", "pv_topic")
-            .with_format(DataFormat::Json);
+        let def = StreamDefinition::new("pageviews", "pv_topic").with_format(DataFormat::Json);
         engine.create_stream(def).await.unwrap();
 
         let streams = engine.list_streams().await;

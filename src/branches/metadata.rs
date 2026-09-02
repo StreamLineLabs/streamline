@@ -9,7 +9,7 @@ pub struct BranchId(pub String);
 
 impl BranchId {
     pub fn new(base_topic: &str, name: &str) -> Self {
-        Self(format!("{}:{}", base_topic, name))
+        Self(format!("{base_topic}:{name}"))
     }
 
     pub fn parts(&self) -> Option<(&str, &str)> {
@@ -55,7 +55,11 @@ impl BranchMeta {
 
     /// Topic name where the branch's own writes live.
     pub fn write_topic(&self) -> String {
-        format!("__branch.{}.{}", self.base_topic, self.id.parts().map(|(_, n)| n).unwrap_or("anon"))
+        format!(
+            "__branch.{}.{}",
+            self.base_topic,
+            self.id.parts().map(|(_, n)| n).unwrap_or("anon")
+        )
     }
 }
 

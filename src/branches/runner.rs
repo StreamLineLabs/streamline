@@ -99,12 +99,11 @@ pub enum RunError {
 ///
 /// Currently only [`TransformKind::Identity`] is implemented end-to-end;
 /// WASM and SQL return [`RunError::TransformNotImplemented`].
-pub fn run_transform(
-    config: &RunConfig,
-    store: &BranchStore,
-) -> Result<RunProgress, RunError> {
+pub fn run_transform(config: &RunConfig, store: &BranchStore) -> Result<RunProgress, RunError> {
     let bid = BranchId(config.branch_id.clone());
-    let meta = store.get(&bid).ok_or(BranchStoreError::NotFound(bid.clone()))?;
+    let meta = store
+        .get(&bid)
+        .ok_or(BranchStoreError::NotFound(bid.clone()))?;
 
     if meta.state != BranchState::Active {
         return Err(RunError::NotActive);
@@ -136,13 +135,16 @@ pub fn run_transform(
             progress.records_read += 1;
             // Identity transform: fabricate a record whose value is
             // `base:<partition>:<offset>` so tests can verify content.
-            let value = format!("base:{}:{}", partition, offset).into_bytes();
+            let value = format!("base:{partition}:{offset}").into_bytes();
             match store.append(&bid, partition, value) {
                 Ok(_) => progress.records_written += 1,
                 Err(_) => progress.errors += 1,
             }
         }
-        if config.max_records.map_or(false, |m| progress.records_read >= m) {
+        if config
+            .max_records
+            .is_some_and(|m| progress.records_read >= m)
+        {
             break;
         }
     }
@@ -231,7 +233,10 @@ mod tests {
         let store = BranchStore::new();
         let cfg = RunConfig::new("orders:ghost", TransformKind::Identity);
         let err = run_transform(&cfg, &store).unwrap_err();
-        assert!(matches!(err, RunError::Store(BranchStoreError::NotFound(_))));
+        assert!(matches!(
+            err,
+            RunError::Store(BranchStoreError::NotFound(_))
+        ));
     }
 
     #[test]

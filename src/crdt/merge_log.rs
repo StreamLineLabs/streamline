@@ -139,7 +139,7 @@ mod tests {
     fn limit_caps_returned_events() {
         let log = MergeLog::default();
         for i in 0..10 {
-            record_merge(&log, evt("t1", &format!("k{}", i), i));
+            record_merge(&log, evt("t1", &format!("k{i}"), i));
         }
         let recent = get_recent(&log, 3);
         assert_eq!(recent.len(), 3);

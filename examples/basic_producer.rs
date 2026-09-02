@@ -18,13 +18,13 @@ fn main() -> streamline::Result<()> {
     let topic_name = "orders";
     manager.get_or_create_topic(topic_name, 3)?;
 
-    println!("Writing records to topic '{}'...", topic_name);
+    println!("Writing records to topic '{topic_name}'...");
 
     // Write records to different partitions
     for i in 0..10 {
         // Simple partition assignment based on key
         let partition = i % 3;
-        let key = format!("order-{}", i);
+        let key = format!("order-{i}");
         let value = format!(
             r#"{{"order_id": {}, "product": "Widget {}", "quantity": {}}}"#,
             i,
@@ -39,10 +39,7 @@ fn main() -> streamline::Result<()> {
             Bytes::from(value),
         )?;
 
-        println!(
-            "  Wrote record: key='{}' to partition {} at offset {}",
-            key, partition, offset
-        );
+        println!("  Wrote record: key='{key}' to partition {partition} at offset {offset}");
     }
 
     // Check the latest offsets for each partition
@@ -50,10 +47,7 @@ fn main() -> streamline::Result<()> {
     for partition in 0..3 {
         let earliest = manager.earliest_offset(topic_name, partition)?;
         let latest = manager.latest_offset(topic_name, partition)?;
-        println!(
-            "  Partition {}: earliest={}, latest={}",
-            partition, earliest, latest
-        );
+        println!("  Partition {partition}: earliest={earliest}, latest={latest}");
     }
 
     println!("\nDone! Data is persisted in '{}'", data_dir.display());

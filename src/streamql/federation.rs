@@ -327,8 +327,7 @@ impl FederationEngine {
 
         if sources.contains_key(&name) {
             return Err(StreamlineError::Query(format!(
-                "Source '{}' is already registered",
-                name
+                "Source '{name}' is already registered"
             )));
         }
 
@@ -365,17 +364,18 @@ impl FederationEngine {
     /// Remove a previously registered source.
     pub async fn remove_source(&self, name: &str) -> Result<FederatedSource> {
         let mut sources = self.sources.write().await;
-        sources.remove(name).ok_or_else(|| {
-            StreamlineError::Query(format!("Source '{}' not found", name))
-        })
+        sources
+            .remove(name)
+            .ok_or_else(|| StreamlineError::Query(format!("Source '{name}' not found")))
     }
 
     /// Get a clone of a registered source by name.
     pub async fn get_source(&self, name: &str) -> Result<FederatedSource> {
         let sources = self.sources.read().await;
-        sources.get(name).cloned().ok_or_else(|| {
-            StreamlineError::Query(format!("Source '{}' not found", name))
-        })
+        sources
+            .get(name)
+            .cloned()
+            .ok_or_else(|| StreamlineError::Query(format!("Source '{name}' not found")))
     }
 
     /// List all registered sources.
@@ -400,14 +400,14 @@ impl FederationEngine {
 
         // Identify source.table references
         for (source_name, source) in sources.iter() {
-            if sql.contains(&format!("{}.", source_name)) {
+            if sql.contains(&format!("{source_name}.")) {
                 sources_used.push(source_name.clone());
 
                 // Determine which predicates can be pushed down
                 let source_predicates: Vec<String> = if self.config.enable_pushdown {
                     predicates
                         .iter()
-                        .filter(|p| p.contains(&format!("{}.", source_name)))
+                        .filter(|p| p.contains(&format!("{source_name}.")))
                         .cloned()
                         .collect()
                 } else {
@@ -475,10 +475,7 @@ impl FederationEngine {
         explanation.push_str("=== Federated Query Plan ===\n");
         explanation.push_str(&format!("Query: {}\n", query.query));
         explanation.push_str(&format!("Sources: {}\n", query.sources_used.join(", ")));
-        explanation.push_str(&format!(
-            "Estimated rows: {}\n",
-            query.plan.estimated_rows
-        ));
+        explanation.push_str(&format!("Estimated rows: {}\n", query.plan.estimated_rows));
 
         if !query.plan.pushdown_predicates.is_empty() {
             explanation.push_str(&format!(
@@ -498,9 +495,9 @@ impl FederationEngine {
     /// Refresh the cached schema for a given source.
     pub async fn refresh_schema(&self, source_name: &str, schema: RemoteSchema) -> Result<()> {
         let mut sources = self.sources.write().await;
-        let source = sources.get_mut(source_name).ok_or_else(|| {
-            StreamlineError::Query(format!("Source '{}' not found", source_name))
-        })?;
+        let source = sources
+            .get_mut(source_name)
+            .ok_or_else(|| StreamlineError::Query(format!("Source '{source_name}' not found")))?;
 
         debug!(
             source = %source_name,
@@ -550,13 +547,17 @@ impl FederationEngine {
     /// Build a remote sub-query for a given source.
     fn build_remote_query(source_name: &str, _sql: &str, predicates: &[String]) -> String {
         if predicates.is_empty() {
-            format!("SELECT * FROM {}", source_name)
+            format!("SELECT * FROM {source_name}")
         } else {
             let cleaned: Vec<String> = predicates
                 .iter()
-                .map(|p| p.replace(&format!("{}.", source_name), ""))
+                .map(|p| p.replace(&format!("{source_name}."), ""))
                 .collect();
-            format!("SELECT * FROM {} WHERE {}", source_name, cleaned.join(" AND "))
+            format!(
+                "SELECT * FROM {} WHERE {}",
+                source_name,
+                cleaned.join(" AND ")
+            )
         }
     }
 
@@ -570,10 +571,7 @@ impl FederationEngine {
     }
 
     /// Rough row-count estimate based on plan steps and cached schemas.
-    fn estimate_rows(
-        steps: &[PlanStep],
-        sources: &HashMap<String, FederatedSource>,
-    ) -> u64 {
+    fn estimate_rows(steps: &[PlanStep], sources: &HashMap<String, FederatedSource>) -> u64 {
         let mut total: u64 = 0;
         for step in steps {
             match step {
@@ -606,7 +604,7 @@ impl FederationEngine {
         match step {
             PlanStep::LocalScan { topic, predicates } => {
                 if predicates.is_empty() {
-                    format!("LocalScan(topic={})", topic)
+                    format!("LocalScan(topic={topic})")
                 } else {
                     format!(
                         "LocalScan(topic={}, predicates=[{}])",
@@ -616,15 +614,13 @@ impl FederationEngine {
                 }
             }
             PlanStep::RemoteScan { source, query } => {
-                format!("RemoteScan(source={}, query={})", source, query)
+                format!("RemoteScan(source={source}, query={query})")
             }
-            PlanStep::Join {
-                join_type, on, ..
-            } => {
-                format!("Join(type={}, on={})", join_type, on)
+            PlanStep::Join { join_type, on, .. } => {
+                format!("Join(type={join_type}, on={on})")
             }
             PlanStep::Filter { predicate, .. } => {
-                format!("Filter({})", predicate)
+                format!("Filter({predicate})")
             }
             PlanStep::Project { columns, .. } => {
                 format!("Project(columns=[{}])", columns.join(", "))
@@ -703,7 +699,10 @@ mod tests {
 
     #[test]
     fn test_source_type_display() {
-        assert_eq!(SourceType::StreamlineCluster.to_string(), "StreamlineCluster");
+        assert_eq!(
+            SourceType::StreamlineCluster.to_string(),
+            "StreamlineCluster"
+        );
         assert_eq!(SourceType::PostgreSQL.to_string(), "PostgreSQL");
         assert_eq!(SourceType::HttpApi.to_string(), "HttpApi");
     }
@@ -775,7 +774,7 @@ mod tests {
         let engine = FederationEngine::new(test_config()); // max 5
         for i in 0..5 {
             engine
-                .register_source(format!("s{}", i), SourceType::HttpApi, test_connection())
+                .register_source(format!("s{i}"), SourceType::HttpApi, test_connection())
                 .await
                 .unwrap();
         }
@@ -847,7 +846,11 @@ mod tests {
     async fn test_plan_query_with_remote_source() {
         let engine = FederationEngine::new(test_config());
         engine
-            .register_source("warehouse".into(), SourceType::PostgreSQL, test_connection())
+            .register_source(
+                "warehouse".into(),
+                SourceType::PostgreSQL,
+                test_connection(),
+            )
             .await
             .unwrap();
 
@@ -857,7 +860,9 @@ mod tests {
             .unwrap();
 
         assert_eq!(plan.sources_used, vec!["warehouse"]);
-        assert!(matches!(&plan.plan.steps[0], PlanStep::RemoteScan { source, .. } if source == "warehouse"));
+        assert!(
+            matches!(&plan.plan.steps[0], PlanStep::RemoteScan { source, .. } if source == "warehouse")
+        );
     }
 
     #[tokio::test]
@@ -918,7 +923,11 @@ mod tests {
     async fn test_explain_federated_remote() {
         let engine = FederationEngine::new(test_config());
         engine
-            .register_source("remote".into(), SourceType::StreamlineCluster, test_connection())
+            .register_source(
+                "remote".into(),
+                SourceType::StreamlineCluster,
+                test_connection(),
+            )
             .await
             .unwrap();
 
@@ -1026,10 +1035,7 @@ mod tests {
             .await
             .unwrap();
 
-        engine
-            .plan_query("SELECT * FROM cached.t")
-            .await
-            .unwrap();
+        engine.plan_query("SELECT * FROM cached.t").await.unwrap();
         let snap = engine.stats();
         assert_eq!(snap.cache_hits, 1);
         assert_eq!(snap.cache_misses, 0);
@@ -1074,9 +1080,7 @@ mod tests {
 
     #[test]
     fn test_extract_predicates_with_group_by() {
-        let preds = FederationEngine::extract_predicates(
-            "SELECT * FROM t WHERE x = 1 GROUP BY y",
-        );
+        let preds = FederationEngine::extract_predicates("SELECT * FROM t WHERE x = 1 GROUP BY y");
         assert_eq!(preds, vec!["x = 1"]);
     }
 
@@ -1090,7 +1094,10 @@ mod tests {
 
     #[test]
     fn test_extract_table_name_none() {
-        assert_eq!(FederationEngine::extract_table_name("INSERT INTO t VALUES (1)"), None);
+        assert_eq!(
+            FederationEngine::extract_table_name("INSERT INTO t VALUES (1)"),
+            None
+        );
     }
 
     #[test]
@@ -1204,16 +1211,18 @@ mod tests {
             .await
             .unwrap();
 
-        let query = engine
-            .plan_query("SELECT * FROM est.big")
-            .await
-            .unwrap();
+        let query = engine.plan_query("SELECT * FROM est.big").await.unwrap();
         assert_eq!(query.plan.estimated_rows, 50_000);
     }
 
     #[test]
     fn test_auth_type_serde() {
-        for at in &[AuthType::Password, AuthType::Token, AuthType::Certificate, AuthType::ApiKey] {
+        for at in &[
+            AuthType::Password,
+            AuthType::Token,
+            AuthType::Certificate,
+            AuthType::ApiKey,
+        ] {
             let json = serde_json::to_string(at).unwrap();
             let de: AuthType = serde_json::from_str(&json).unwrap();
             assert_eq!(&de, at);

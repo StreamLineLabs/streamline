@@ -237,7 +237,7 @@ impl AuditLogger {
         // Write to file if configured
         if let Some(ref writer) = self.file_writer {
             let mut guard = writer.lock();
-            if let Err(e) = writeln!(guard, "{}", formatted) {
+            if let Err(e) = writeln!(guard, "{formatted}") {
                 error!(error = %e, "Failed to write audit log");
             }
             let _ = guard.flush();
@@ -245,7 +245,7 @@ impl AuditLogger {
 
         // Write to stdout if configured
         if self.config.log_to_stdout {
-            println!("{}", formatted);
+            println!("{formatted}");
         }
 
         // Also log at debug level via tracing
@@ -278,7 +278,7 @@ impl AuditLogger {
 
     /// Format entry as JSON
     fn format_json(&self, entry: &AuditLogEntry) -> String {
-        serde_json::to_string(entry).unwrap_or_else(|_| format!("{:?}", entry))
+        serde_json::to_string(entry).unwrap_or_else(|_| format!("{entry:?}"))
     }
 
     /// Format entry as text
@@ -289,10 +289,7 @@ impl AuditLogger {
                 mechanism,
                 client_ip,
             } => {
-                format!(
-                    "AUTH_SUCCESS user={} mechanism={} client_ip={}",
-                    user, mechanism, client_ip
-                )
+                format!("AUTH_SUCCESS user={user} mechanism={mechanism} client_ip={client_ip}")
             }
             AuditEvent::AuthFailure {
                 user,
@@ -301,8 +298,7 @@ impl AuditLogger {
                 reason,
             } => {
                 format!(
-                    "AUTH_FAILURE user={:?} mechanism={} client_ip={} reason={}",
-                    user, mechanism, client_ip, reason
+                    "AUTH_FAILURE user={user:?} mechanism={mechanism} client_ip={client_ip} reason={reason}"
                 )
             }
             AuditEvent::AuthLogout {
@@ -310,10 +306,7 @@ impl AuditLogger {
                 client_ip,
                 duration_secs,
             } => {
-                format!(
-                    "AUTH_LOGOUT user={} client_ip={} duration={}s",
-                    user, client_ip, duration_secs
-                )
+                format!("AUTH_LOGOUT user={user} client_ip={client_ip} duration={duration_secs}s")
             }
             AuditEvent::AclAllow {
                 user,
@@ -323,8 +316,7 @@ impl AuditLogger {
                 client_ip,
             } => {
                 format!(
-                    "ACL_ALLOW user={} resource={}:{} operation={} client_ip={}",
-                    user, resource_type, resource_name, operation, client_ip
+                    "ACL_ALLOW user={user} resource={resource_type}:{resource_name} operation={operation} client_ip={client_ip}"
                 )
             }
             AuditEvent::AclDeny {
@@ -336,8 +328,7 @@ impl AuditLogger {
                 reason,
             } => {
                 format!(
-                    "ACL_DENY user={} resource={}:{} operation={} client_ip={} reason={}",
-                    user, resource_type, resource_name, operation, client_ip, reason
+                    "ACL_DENY user={user} resource={resource_type}:{resource_name} operation={operation} client_ip={client_ip} reason={reason}"
                 )
             }
             AuditEvent::TopicCreate {
@@ -347,8 +338,7 @@ impl AuditLogger {
                 client_ip,
             } => {
                 format!(
-                    "TOPIC_CREATE user={:?} topic={} partitions={} client_ip={}",
-                    user, topic, partitions, client_ip
+                    "TOPIC_CREATE user={user:?} topic={topic} partitions={partitions} client_ip={client_ip}"
                 )
             }
             AuditEvent::TopicDelete {
@@ -356,16 +346,13 @@ impl AuditLogger {
                 topic,
                 client_ip,
             } => {
-                format!(
-                    "TOPIC_DELETE user={:?} topic={} client_ip={}",
-                    user, topic, client_ip
-                )
+                format!("TOPIC_DELETE user={user:?} topic={topic} client_ip={client_ip}")
             }
             AuditEvent::NodeJoin { node_id, address } => {
-                format!("NODE_JOIN node_id={} address={}", node_id, address)
+                format!("NODE_JOIN node_id={node_id} address={address}")
             }
             AuditEvent::NodeLeave { node_id, reason } => {
-                format!("NODE_LEAVE node_id={} reason={}", node_id, reason)
+                format!("NODE_LEAVE node_id={node_id} reason={reason}")
             }
             AuditEvent::LeaderChange {
                 topic,
@@ -374,8 +361,7 @@ impl AuditLogger {
                 new_leader,
             } => {
                 format!(
-                    "LEADER_CHANGE topic={} partition={} old_leader={:?} new_leader={}",
-                    topic, partition, old_leader, new_leader
+                    "LEADER_CHANGE topic={topic} partition={partition} old_leader={old_leader:?} new_leader={new_leader}"
                 )
             }
             AuditEvent::ConfigChange {
@@ -385,8 +371,7 @@ impl AuditLogger {
                 new_value,
             } => {
                 format!(
-                    "CONFIG_CHANGE user={:?} setting={} old={:?} new={}",
-                    user, setting, old_value, new_value
+                    "CONFIG_CHANGE user={user:?} setting={setting} old={old_value:?} new={new_value}"
                 )
             }
             AuditEvent::Connection {
@@ -394,10 +379,7 @@ impl AuditLogger {
                 action,
                 tls_enabled,
             } => {
-                format!(
-                    "CONNECTION client_ip={} action={} tls={}",
-                    client_ip, action, tls_enabled
-                )
+                format!("CONNECTION client_ip={client_ip} action={action} tls={tls_enabled}")
             }
         };
 
@@ -409,7 +391,7 @@ impl AuditLogger {
             entry
                 .correlation_id
                 .as_ref()
-                .map(|id| format!(" correlation_id={}", id))
+                .map(|id| format!(" correlation_id={id}"))
                 .unwrap_or_default()
         )
     }

@@ -325,13 +325,13 @@ impl OutboxSchema {
         );
 
         if let Some(topic_col) = &self.config.topic_column {
-            sql.push_str(&format!(",\n    {} VARCHAR(255)", topic_col));
+            sql.push_str(&format!(",\n    {topic_col} VARCHAR(255)"));
         }
         if let Some(pk_col) = &self.config.partition_key_column {
-            sql.push_str(&format!(",\n    {} VARCHAR(255)", pk_col));
+            sql.push_str(&format!(",\n    {pk_col} VARCHAR(255)"));
         }
         if let Some(headers_col) = &self.config.headers_column {
-            sql.push_str(&format!(",\n    {} JSONB", headers_col));
+            sql.push_str(&format!(",\n    {headers_col} JSONB"));
         }
 
         sql.push_str("\n);\n");
@@ -378,13 +378,13 @@ impl OutboxSchema {
         );
 
         if let Some(topic_col) = &self.config.topic_column {
-            sql.push_str(&format!(",\n    {} VARCHAR(255)", topic_col));
+            sql.push_str(&format!(",\n    {topic_col} VARCHAR(255)"));
         }
         if let Some(pk_col) = &self.config.partition_key_column {
-            sql.push_str(&format!(",\n    {} VARCHAR(255)", pk_col));
+            sql.push_str(&format!(",\n    {pk_col} VARCHAR(255)"));
         }
         if let Some(headers_col) = &self.config.headers_column {
-            sql.push_str(&format!(",\n    {} JSON", headers_col));
+            sql.push_str(&format!(",\n    {headers_col} JSON"));
         }
 
         sql.push_str(&format!(
@@ -427,13 +427,13 @@ impl OutboxSchema {
         );
 
         if let Some(topic_col) = &self.config.topic_column {
-            sql.push_str(&format!(",\n    {} TEXT", topic_col));
+            sql.push_str(&format!(",\n    {topic_col} TEXT"));
         }
         if let Some(pk_col) = &self.config.partition_key_column {
-            sql.push_str(&format!(",\n    {} TEXT", pk_col));
+            sql.push_str(&format!(",\n    {pk_col} TEXT"));
         }
         if let Some(headers_col) = &self.config.headers_column {
-            sql.push_str(&format!(",\n    {} TEXT", headers_col));
+            sql.push_str(&format!(",\n    {headers_col} TEXT"));
         }
 
         sql.push_str("\n);\n");
@@ -474,13 +474,13 @@ CREATE TABLE {} (
         );
 
         if let Some(topic_col) = &self.config.topic_column {
-            sql.push_str(&format!(",\n    {} NVARCHAR(255)", topic_col));
+            sql.push_str(&format!(",\n    {topic_col} NVARCHAR(255)"));
         }
         if let Some(pk_col) = &self.config.partition_key_column {
-            sql.push_str(&format!(",\n    {} NVARCHAR(255)", pk_col));
+            sql.push_str(&format!(",\n    {pk_col} NVARCHAR(255)"));
         }
         if let Some(headers_col) = &self.config.headers_column {
-            sql.push_str(&format!(",\n    {} NVARCHAR(MAX)", headers_col));
+            sql.push_str(&format!(",\n    {headers_col} NVARCHAR(MAX)"));
         }
 
         sql.push_str("\n);\n");

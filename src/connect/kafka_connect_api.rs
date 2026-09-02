@@ -213,7 +213,7 @@ pub struct KafkaConnectApiState {
 impl KafkaConnectApiState {
     /// Create a new API state with default built-in plugins.
     pub fn new(hostname: &str, port: u16) -> Self {
-        let worker_id = format!("streamline-worker-{}:{}", hostname, port);
+        let worker_id = format!("streamline-worker-{hostname}:{port}");
         let cluster_id = Uuid::new_v4().to_string();
 
         let plugins = vec![
@@ -403,10 +403,7 @@ async fn get_connector(
     let connectors = state.connectors.read();
     match connectors.get(&name) {
         Some(c) => (StatusCode::OK, Json(c.info.clone())).into_response(),
-        None => error_response(
-            StatusCode::NOT_FOUND,
-            format!("Connector {} not found", name),
-        ),
+        None => error_response(StatusCode::NOT_FOUND, format!("Connector {name} not found")),
     }
 }
 
@@ -418,10 +415,7 @@ async fn get_connector_config(
     let connectors = state.connectors.read();
     match connectors.get(&name) {
         Some(c) => (StatusCode::OK, Json(c.info.config.clone())).into_response(),
-        None => error_response(
-            StatusCode::NOT_FOUND,
-            format!("Connector {} not found", name),
-        ),
+        None => error_response(StatusCode::NOT_FOUND, format!("Connector {name} not found")),
     }
 }
 
@@ -454,10 +448,7 @@ async fn update_connector_config(
             info!(connector = %name, "Kafka Connect API: connector config updated");
             (StatusCode::OK, Json(c.info.clone())).into_response()
         }
-        None => error_response(
-            StatusCode::NOT_FOUND,
-            format!("Connector {} not found", name),
-        ),
+        None => error_response(StatusCode::NOT_FOUND, format!("Connector {name} not found")),
     }
 }
 
@@ -492,10 +483,7 @@ async fn get_connector_status(
             };
             (StatusCode::OK, Json(status)).into_response()
         }
-        None => error_response(
-            StatusCode::NOT_FOUND,
-            format!("Connector {} not found", name),
-        ),
+        None => error_response(StatusCode::NOT_FOUND, format!("Connector {name} not found")),
     }
 }
 
@@ -515,10 +503,7 @@ async fn pause_connector(
             info!(connector = %name, "Kafka Connect API: connector paused");
             StatusCode::ACCEPTED.into_response()
         }
-        None => error_response(
-            StatusCode::NOT_FOUND,
-            format!("Connector {} not found", name),
-        ),
+        None => error_response(StatusCode::NOT_FOUND, format!("Connector {name} not found")),
     }
 }
 
@@ -538,10 +523,7 @@ async fn resume_connector(
             info!(connector = %name, "Kafka Connect API: connector resumed");
             StatusCode::ACCEPTED.into_response()
         }
-        None => error_response(
-            StatusCode::NOT_FOUND,
-            format!("Connector {} not found", name),
-        ),
+        None => error_response(StatusCode::NOT_FOUND, format!("Connector {name} not found")),
     }
 }
 
@@ -562,10 +544,7 @@ async fn restart_connector(
             info!(connector = %name, "Kafka Connect API: connector restarted");
             StatusCode::NO_CONTENT.into_response()
         }
-        None => error_response(
-            StatusCode::NOT_FOUND,
-            format!("Connector {} not found", name),
-        ),
+        None => error_response(StatusCode::NOT_FOUND, format!("Connector {name} not found")),
     }
 }
 
@@ -579,10 +558,7 @@ async fn delete_connector(
         info!(connector = %name, "Kafka Connect API: connector deleted");
         StatusCode::NO_CONTENT.into_response()
     } else {
-        error_response(
-            StatusCode::NOT_FOUND,
-            format!("Connector {} not found", name),
-        )
+        error_response(StatusCode::NOT_FOUND, format!("Connector {name} not found"))
     }
 }
 
@@ -607,10 +583,7 @@ async fn get_connector_tasks(
                 .collect();
             (StatusCode::OK, Json(tasks)).into_response()
         }
-        None => error_response(
-            StatusCode::NOT_FOUND,
-            format!("Connector {} not found", name),
-        ),
+        None => error_response(StatusCode::NOT_FOUND, format!("Connector {name} not found")),
     }
 }
 
@@ -633,13 +606,10 @@ async fn get_task_status(
             }
             None => error_response(
                 StatusCode::NOT_FOUND,
-                format!("Task {} not found for connector {}", task_id, name),
+                format!("Task {task_id} not found for connector {name}"),
             ),
         },
-        None => error_response(
-            StatusCode::NOT_FOUND,
-            format!("Connector {} not found", name),
-        ),
+        None => error_response(StatusCode::NOT_FOUND, format!("Connector {name} not found")),
     }
 }
 
@@ -659,13 +629,10 @@ async fn restart_task(
             }
             None => error_response(
                 StatusCode::NOT_FOUND,
-                format!("Task {} not found for connector {}", task_id, name),
+                format!("Task {task_id} not found for connector {name}"),
             ),
         },
-        None => error_response(
-            StatusCode::NOT_FOUND,
-            format!("Connector {} not found", name),
-        ),
+        None => error_response(StatusCode::NOT_FOUND, format!("Connector {name} not found")),
     }
 }
 
@@ -686,10 +653,7 @@ async fn get_connector_topics(
             );
             (StatusCode::OK, Json(outer)).into_response()
         }
-        None => error_response(
-            StatusCode::NOT_FOUND,
-            format!("Connector {} not found", name),
-        ),
+        None => error_response(StatusCode::NOT_FOUND, format!("Connector {name} not found")),
     }
 }
 
@@ -706,10 +670,7 @@ async fn reset_connector_topics(
             info!(connector = %name, "Kafka Connect API: topic tracking reset");
             StatusCode::NO_CONTENT.into_response()
         }
-        None => error_response(
-            StatusCode::NOT_FOUND,
-            format!("Connector {} not found", name),
-        ),
+        None => error_response(StatusCode::NOT_FOUND, format!("Connector {name} not found")),
     }
 }
 
@@ -734,7 +695,11 @@ async fn validate_connector_config(
             "Fully qualified class name of the connector",
             true,
         ),
-        ("tasks.max", "Maximum number of tasks for this connector", true),
+        (
+            "tasks.max",
+            "Maximum number of tasks for this connector",
+            true,
+        ),
         (
             "topics",
             "Comma-separated list of topics (sink connectors)",
@@ -881,10 +846,7 @@ mod tests {
     // 1. GET / — cluster info
     #[tokio::test]
     async fn test_get_cluster_info() {
-        let resp = app()
-            .oneshot(json_request("GET", "/", None))
-            .await
-            .unwrap();
+        let resp = app().oneshot(json_request("GET", "/", None)).await.unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
         let json = body_json(resp).await;
         assert_eq!(json["kafka_cluster_id"], "test-cluster-id");
@@ -1182,20 +1144,12 @@ mod tests {
 
         router
             .clone()
-            .oneshot(json_request(
-                "POST",
-                "/connectors",
-                Some(create_req("c10")),
-            ))
+            .oneshot(json_request("POST", "/connectors", Some(create_req("c10"))))
             .await
             .unwrap();
 
         let resp = router
-            .oneshot(json_request(
-                "GET",
-                "/connectors/c10/tasks/1/status",
-                None,
-            ))
+            .oneshot(json_request("GET", "/connectors/c10/tasks/1/status", None))
             .await
             .unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
@@ -1212,11 +1166,7 @@ mod tests {
 
         router
             .clone()
-            .oneshot(json_request(
-                "POST",
-                "/connectors",
-                Some(create_req("c11")),
-            ))
+            .oneshot(json_request("POST", "/connectors", Some(create_req("c11"))))
             .await
             .unwrap();
 
@@ -1239,11 +1189,7 @@ mod tests {
 
         router
             .clone()
-            .oneshot(json_request(
-                "POST",
-                "/connectors",
-                Some(create_req("c12")),
-            ))
+            .oneshot(json_request("POST", "/connectors", Some(create_req("c12"))))
             .await
             .unwrap();
 
@@ -1265,11 +1211,7 @@ mod tests {
 
         router
             .clone()
-            .oneshot(json_request(
-                "POST",
-                "/connectors",
-                Some(create_req("c13")),
-            ))
+            .oneshot(json_request("POST", "/connectors", Some(create_req("c13"))))
             .await
             .unwrap();
 
@@ -1307,21 +1249,11 @@ mod tests {
             .iter()
             .map(|p| p["class"].as_str().unwrap())
             .collect();
-        assert!(classes
-            .iter()
-            .any(|c| c.contains("StreamlineFileSink")));
-        assert!(classes
-            .iter()
-            .any(|c| c.contains("StreamlineFileSource")));
-        assert!(classes
-            .iter()
-            .any(|c| c.contains("StreamlineConsoleSink")));
-        assert!(classes
-            .iter()
-            .any(|c| c.contains("StreamlineS3Sink")));
-        assert!(classes
-            .iter()
-            .any(|c| c.contains("StreamlineHttpSource")));
+        assert!(classes.iter().any(|c| c.contains("StreamlineFileSink")));
+        assert!(classes.iter().any(|c| c.contains("StreamlineFileSource")));
+        assert!(classes.iter().any(|c| c.contains("StreamlineConsoleSink")));
+        assert!(classes.iter().any(|c| c.contains("StreamlineS3Sink")));
+        assert!(classes.iter().any(|c| c.contains("StreamlineHttpSource")));
     }
 
     // 20. PUT /connector-plugins/:plugin/config/validate

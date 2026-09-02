@@ -73,7 +73,7 @@ pub struct EdgeConfig {
     /// Unique identifier for this edge device
     pub edge_id: String,
 
-    /// Cloud endpoint for sync (e.g., "https://cloud.streamline.io:9092")
+    /// Cloud endpoint for sync (e.g., <https://cloud.streamline.io:9092>)
     pub cloud_endpoint: Option<String>,
 
     /// Sync configuration

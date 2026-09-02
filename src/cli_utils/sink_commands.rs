@@ -70,8 +70,7 @@ pub async fn handle_sink_create(
         }
         _ => {
             return Err(StreamlineError::Config(format!(
-                "Invalid catalog type: {}. Must be one of: rest, hive, glue",
-                catalog_type
+                "Invalid catalog type: {catalog_type}. Must be one of: rest, hive, glue"
             )))
         }
     };
@@ -100,8 +99,7 @@ pub async fn handle_sink_create(
         },
         _ => {
             return Err(StreamlineError::Config(format!(
-                "Invalid partitioning strategy: {}. Must be one of: none, time_based_hour, time_based_day, time_based_month",
-                partitioning
+                "Invalid partitioning strategy: {partitioning}. Must be one of: none, time_based_hour, time_based_day, time_based_month"
             )))
         }
     };
@@ -131,7 +129,7 @@ pub async fn handle_sink_create(
         sink_type: SinkType::Iceberg,
         topics: topics.clone(),
         config: serde_json::to_value(&iceberg_config)
-            .map_err(|e| StreamlineError::Config(format!("Failed to serialize config: {}", e)))?,
+            .map_err(|e| StreamlineError::Config(format!("Failed to serialize config: {e}")))?,
     };
 
     // Create the sink
@@ -140,9 +138,9 @@ pub async fn handle_sink_create(
     // Start if requested
     if start {
         sink_manager.start_sink(&name).await?;
-        ctx.success(&format!("Created and started sink '{}'", name));
+        ctx.success(&format!("Created and started sink '{name}'"));
     } else {
-        ctx.success(&format!("Created sink '{}'", name));
+        ctx.success(&format!("Created sink '{name}'"));
     }
 
     println!();
@@ -222,7 +220,7 @@ pub async fn handle_sink_list(ctx: &CliContext) -> Result<()> {
                     ]);
                 }
 
-                println!("{}", table);
+                println!("{table}");
             }
         }
     }
@@ -254,7 +252,7 @@ pub async fn handle_sink_status(name: String, json: bool, ctx: &CliContext) -> R
             }))?
         );
     } else {
-        println!("{}", format!("Sink: {}", name).bold().cyan());
+        println!("{}", format!("Sink: {name}").bold().cyan());
         println!();
 
         let status_color = match status {
@@ -264,7 +262,7 @@ pub async fn handle_sink_status(name: String, json: bool, ctx: &CliContext) -> R
             _ => Color::DarkGrey,
         };
 
-        let status_text = format!("{}", status);
+        let status_text = format!("{status}");
         println!(
             "  Status:               {}",
             match status_color {
@@ -301,7 +299,7 @@ pub async fn handle_sink_status(name: String, json: bool, ctx: &CliContext) -> R
             println!();
             println!("  Committed Offsets:");
             for (partition, offset) in &metrics.committed_offsets {
-                println!("    {}: {}", partition, offset);
+                println!("    {partition}: {offset}");
             }
         }
 
@@ -324,7 +322,7 @@ pub async fn handle_sink_start(name: String, ctx: &CliContext) -> Result<()> {
     let sink_manager = SinkManager::new(topic_manager);
 
     sink_manager.start_sink(&name).await?;
-    ctx.success(&format!("Started sink '{}'", name));
+    ctx.success(&format!("Started sink '{name}'"));
 
     Ok(())
 }
@@ -339,7 +337,7 @@ pub async fn handle_sink_stop(name: String, ctx: &CliContext) -> Result<()> {
     let sink_manager = SinkManager::new(topic_manager);
 
     sink_manager.stop_sink(&name).await?;
-    ctx.success(&format!("Stopped sink '{}'", name));
+    ctx.success(&format!("Stopped sink '{name}'"));
 
     Ok(())
 }
@@ -354,7 +352,7 @@ pub async fn handle_sink_delete(name: String, yes: bool, ctx: &CliContext) -> Re
     let sink_manager = SinkManager::new(topic_manager);
 
     if !yes {
-        print!("Are you sure you want to delete sink '{}'? [y/N] ", name);
+        print!("Are you sure you want to delete sink '{name}'? [y/N] ");
         std::io::stdout().flush()?;
         let mut response = String::new();
         std::io::stdin().read_line(&mut response)?;
@@ -365,7 +363,7 @@ pub async fn handle_sink_delete(name: String, yes: bool, ctx: &CliContext) -> Re
     }
 
     sink_manager.delete_sink(&name).await?;
-    ctx.success(&format!("Deleted sink '{}'", name));
+    ctx.success(&format!("Deleted sink '{name}'"));
 
     Ok(())
 }

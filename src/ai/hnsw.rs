@@ -226,9 +226,8 @@ impl HnswIndex {
             return Ok(());
         }
 
-        let entry_point_id = entry_point.ok_or_else(|| {
-            StreamlineError::InvalidData("No entry point found".into())
-        })?;
+        let entry_point_id = entry_point
+            .ok_or_else(|| StreamlineError::InvalidData("No entry point found".into()))?;
 
         // Search from top level to node's level + 1
         let mut current_ep = entry_point_id;
@@ -396,7 +395,7 @@ impl HnswIndex {
         let nodes = self.nodes.read().await;
 
         let ep_node = nodes.get(&entry_point).ok_or_else(|| {
-            StreamlineError::InvalidData(format!("Entry point {} not found", entry_point))
+            StreamlineError::InvalidData(format!("Entry point {entry_point} not found"))
         })?;
 
         let ep_dist = self.distance(query, &ep_node.vector);

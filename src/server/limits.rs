@@ -37,7 +37,7 @@ impl Default for LimitsConfig {
             max_connections: 10000,            // 10k total connections
             max_connections_per_ip: 100,       // 100 connections per IP
             max_request_size: 104857600,       // 100 MB max request
-            produce_rate_limit_bytes: 0,               // unlimited (opt-in via config)
+            produce_rate_limit_bytes: 0,       // unlimited (opt-in via config)
             connection_idle_timeout_secs: 600, // 10 minute idle timeout
         }
     }
@@ -455,8 +455,7 @@ impl std::fmt::Display for LimitError {
             LimitError::RequestTooLarge { size, max } => {
                 write!(
                     f,
-                    "Request too large: {} bytes exceeds limit of {} bytes",
-                    size, max
+                    "Request too large: {size} bytes exceeds limit of {max} bytes"
                 )
             }
             LimitError::RateLimitExceeded => {

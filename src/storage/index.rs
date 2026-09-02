@@ -142,8 +142,7 @@ impl SegmentIndex {
         let version = u16::from_le_bytes([header[4], header[5]]);
         if version != INDEX_VERSION {
             return Err(StreamlineError::CorruptedData(format!(
-                "Unsupported index version: {}",
-                version
+                "Unsupported index version: {version}"
             )));
         }
 
@@ -339,7 +338,7 @@ impl SegmentIndex {
 
 /// Generate index filename from segment base offset
 pub fn index_filename(base_offset: i64) -> String {
-    format!("{:020}.index", base_offset)
+    format!("{base_offset:020}.index")
 }
 
 /// Get the index path for a segment path

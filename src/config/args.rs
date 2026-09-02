@@ -549,7 +549,7 @@ pub struct ServerArgs {
     #[arg(long, env = "STREAMLINE_TELEMETRY_ENABLED")]
     pub telemetry_enabled: bool,
 
-    /// Telemetry endpoint URL (default: https://telemetry.streamline.dev/v1/report)
+    /// Telemetry endpoint URL (default: <https://telemetry.streamline.dev/v1/report>)
     #[arg(long, env = "STREAMLINE_TELEMETRY_ENDPOINT")]
     pub telemetry_endpoint: Option<String>,
 
@@ -570,12 +570,16 @@ pub struct ServerArgs {
     #[arg(long, env = "STREAMLINE_EDGE_MODE")]
     pub edge_mode: bool,
 
-    /// Cloud endpoint URL for edge-to-cloud sync (e.g., "https://cloud.example.com:9092")
+    /// Cloud endpoint URL for edge-to-cloud sync (e.g., <https://cloud.example.com:9092>)
     #[arg(long, env = "STREAMLINE_EDGE_CLOUD_ENDPOINT")]
     pub edge_cloud_endpoint: Option<String>,
 
     /// Edge sync interval in seconds (default: 300 = every 5 minutes)
-    #[arg(long, env = "STREAMLINE_EDGE_SYNC_INTERVAL_SECS", default_value_t = 300)]
+    #[arg(
+        long,
+        env = "STREAMLINE_EDGE_SYNC_INTERVAL_SECS",
+        default_value_t = 300
+    )]
     pub edge_sync_interval_secs: u64,
 
     /// Edge sync strategy: "all" (sync everything), "latest-only" (latest per key), "sample" (sample subset)

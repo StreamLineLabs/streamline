@@ -8,7 +8,7 @@ use axum::{
 };
 
 use crate::memory::export::{ExportConfig, ExportFormat};
-use crate::memory::gdpr::{GdprDeleteRequest, GdprDeleteError};
+use crate::memory::gdpr::{GdprDeleteError, GdprDeleteRequest};
 use crate::memory::tier_router;
 use crate::memory::{MemoryWrite, Tier};
 
@@ -31,7 +31,10 @@ pub(crate) async fn remember_handler(Json(req): Json<RememberRequest>) -> Respon
     };
     match tier_router::remember(&write) {
         Ok(written) => {
-            crate::memory::telemetry::record_remember(&write.agent_id, crate::memory::Tier::Episodic);
+            crate::memory::telemetry::record_remember(
+                &write.agent_id,
+                crate::memory::Tier::Episodic,
+            );
             let entries: Vec<_> = written
                 .into_iter()
                 .map(|(topic, offset)| WrittenEntry { topic, offset })

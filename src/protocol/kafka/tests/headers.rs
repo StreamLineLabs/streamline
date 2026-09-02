@@ -185,13 +185,11 @@ fn test_sasl_handshake_never_flexible() {
 
         assert_eq!(
             req_header, 1,
-            "SaslHandshake v{} must use request header v1 (non-flexible), got {}",
-            version, req_header
+            "SaslHandshake v{version} must use request header v1 (non-flexible), got {req_header}"
         );
         assert_eq!(
             resp_header, 0,
-            "SaslHandshake v{} must use response header v0 (non-flexible), got {}",
-            version, resp_header
+            "SaslHandshake v{version} must use response header v0 (non-flexible), got {resp_header}"
         );
     }
 }
@@ -253,16 +251,12 @@ fn test_header_version_boundary_transitions() {
             assert_eq!(
                 KafkaHandler::request_header_version(api_key, before),
                 1,
-                "{} v{} (before threshold) should use request header v1",
-                name,
-                before
+                "{name} v{before} (before threshold) should use request header v1"
             );
             assert_eq!(
                 KafkaHandler::response_header_version(api_key, before),
                 0,
-                "{} v{} (before threshold) should use response header v0",
-                name,
-                before
+                "{name} v{before} (before threshold) should use response header v0"
             );
         }
 
@@ -270,9 +264,7 @@ fn test_header_version_boundary_transitions() {
         assert_eq!(
             KafkaHandler::request_header_version(api_key, threshold),
             2,
-            "{} v{} (at threshold) should use request header v2",
-            name,
-            threshold
+            "{name} v{threshold} (at threshold) should use request header v2"
         );
 
         // ApiVersions is special - response header is always v0
@@ -280,9 +272,7 @@ fn test_header_version_boundary_transitions() {
             assert_eq!(
                 KafkaHandler::response_header_version(api_key, threshold),
                 1,
-                "{} v{} (at threshold) should use response header v1",
-                name,
-                threshold
+                "{name} v{threshold} (at threshold) should use response header v1"
             );
         }
     }
@@ -309,8 +299,7 @@ fn test_header_version_semantics() {
         assert_eq!(
             KafkaHandler::request_header_version(api_key, version),
             1,
-            "{} should be non-flexible (request header v1)",
-            name
+            "{name} should be non-flexible (request header v1)"
         );
     }
 
@@ -326,8 +315,7 @@ fn test_header_version_semantics() {
         assert_eq!(
             KafkaHandler::request_header_version(api_key, version),
             2,
-            "{} should be flexible (request header v2)",
-            name
+            "{name} should be flexible (request header v2)"
         );
     }
 }

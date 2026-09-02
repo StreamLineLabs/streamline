@@ -45,8 +45,7 @@ impl FromStr for RuntimeMode {
             "tokio" => Ok(RuntimeMode::Tokio),
             "sharded" => Ok(RuntimeMode::Sharded),
             _ => Err(format!(
-                "Invalid runtime mode '{}'. Valid options: tokio, sharded",
-                s
+                "Invalid runtime mode '{s}'. Valid options: tokio, sharded"
             )),
         }
     }

@@ -770,6 +770,6 @@ fn test_all_api_keys_encodable() {
 
         let mut buf = BytesMut::new();
         let result = header.encode(&mut buf, 1);
-        assert!(result.is_ok(), "Failed to encode API key {}", key);
+        assert!(result.is_ok(), "Failed to encode API key {key}");
     }
 }

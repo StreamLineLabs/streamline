@@ -56,10 +56,6 @@ pub use streamline_analytics::duckdb::{
 };
 
 pub mod streaming_views;
-pub use streaming_views::{
-    StreamingViewConfig, StreamingViewEngine, StreamingViewInfo, ViewChangeEvent,
-    ViewChangeType, ViewMetrics, ViewState, ViewWindowConfig, ViewWindowType,
-};
 
 // Bridge: implement TopicDataSource for TopicManager so the workspace crate
 // can read topic data without depending on the main crate's types.

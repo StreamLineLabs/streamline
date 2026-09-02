@@ -277,7 +277,7 @@ impl ReplayEngine {
     pub async fn start_session(&self, session_id: &str) -> Result<()> {
         let mut sessions = self.sessions.write().await;
         let session = sessions.get_mut(session_id).ok_or_else(|| {
-            StreamlineError::Storage(format!("Replay session '{}' not found", session_id))
+            StreamlineError::Storage(format!("Replay session '{session_id}' not found"))
         })?;
 
         match &session.status {
@@ -287,8 +287,7 @@ impl ReplayEngine {
                 Ok(())
             }
             other => Err(StreamlineError::Storage(format!(
-                "Cannot start session in {:?} state",
-                other
+                "Cannot start session in {other:?} state"
             ))),
         }
     }
@@ -297,7 +296,7 @@ impl ReplayEngine {
     pub async fn pause_session(&self, session_id: &str) -> Result<()> {
         let mut sessions = self.sessions.write().await;
         let session = sessions.get_mut(session_id).ok_or_else(|| {
-            StreamlineError::Storage(format!("Replay session '{}' not found", session_id))
+            StreamlineError::Storage(format!("Replay session '{session_id}' not found"))
         })?;
 
         match &session.status {
@@ -307,8 +306,7 @@ impl ReplayEngine {
                 Ok(())
             }
             other => Err(StreamlineError::Storage(format!(
-                "Cannot pause session in {:?} state",
-                other
+                "Cannot pause session in {other:?} state"
             ))),
         }
     }
@@ -317,7 +315,7 @@ impl ReplayEngine {
     pub async fn resume_session(&self, session_id: &str) -> Result<()> {
         let mut sessions = self.sessions.write().await;
         let session = sessions.get_mut(session_id).ok_or_else(|| {
-            StreamlineError::Storage(format!("Replay session '{}' not found", session_id))
+            StreamlineError::Storage(format!("Replay session '{session_id}' not found"))
         })?;
 
         match &session.status {
@@ -327,8 +325,7 @@ impl ReplayEngine {
                 Ok(())
             }
             other => Err(StreamlineError::Storage(format!(
-                "Cannot resume session in {:?} state",
-                other
+                "Cannot resume session in {other:?} state"
             ))),
         }
     }
@@ -337,7 +334,7 @@ impl ReplayEngine {
     pub async fn cancel_session(&self, session_id: &str) -> Result<()> {
         let mut sessions = self.sessions.write().await;
         let session = sessions.get_mut(session_id).ok_or_else(|| {
-            StreamlineError::Storage(format!("Replay session '{}' not found", session_id))
+            StreamlineError::Storage(format!("Replay session '{session_id}' not found"))
         })?;
 
         match &session.status {
@@ -347,8 +344,7 @@ impl ReplayEngine {
                 Ok(())
             }
             other => Err(StreamlineError::Storage(format!(
-                "Cannot cancel session in {:?} state",
-                other
+                "Cannot cancel session in {other:?} state"
             ))),
         }
     }
@@ -361,19 +357,16 @@ impl ReplayEngine {
             .get(session_id)
             .cloned()
             .ok_or_else(|| {
-                StreamlineError::Storage(format!("Replay session '{}' not found", session_id))
+                StreamlineError::Storage(format!("Replay session '{session_id}' not found"))
             })
     }
 
     /// List all sessions, optionally filtered by status.
-    pub async fn list_sessions(
-        &self,
-        status_filter: Option<&ReplayStatus>,
-    ) -> Vec<ReplaySession> {
+    pub async fn list_sessions(&self, status_filter: Option<&ReplayStatus>) -> Vec<ReplaySession> {
         let sessions = self.sessions.read().await;
         sessions
             .values()
-            .filter(|s| status_filter.map_or(true, |f| s.status == *f))
+            .filter(|s| status_filter.is_none_or(|f| s.status == *f))
             .cloned()
             .collect()
     }
@@ -389,7 +382,7 @@ impl ReplayEngine {
 
         let mut sessions = self.sessions.write().await;
         let session = sessions.get_mut(session_id).ok_or_else(|| {
-            StreamlineError::Storage(format!("Replay session '{}' not found", session_id))
+            StreamlineError::Storage(format!("Replay session '{session_id}' not found"))
         })?;
 
         match &session.status {
@@ -399,8 +392,7 @@ impl ReplayEngine {
                 Ok(())
             }
             other => Err(StreamlineError::Storage(format!(
-                "Cannot set speed on session in {:?} state",
-                other
+                "Cannot set speed on session in {other:?} state"
             ))),
         }
     }
@@ -420,10 +412,8 @@ impl ReplayEngine {
             ));
         }
 
-        let orig_map: HashMap<i64, Option<String>> =
-            original_messages.iter().cloned().collect();
-        let replay_map: HashMap<i64, Option<String>> =
-            replayed_messages.iter().cloned().collect();
+        let orig_map: HashMap<i64, Option<String>> = original_messages.iter().cloned().collect();
+        let replay_map: HashMap<i64, Option<String>> = replayed_messages.iter().cloned().collect();
 
         let mut matched: u64 = 0;
         let mut diverged: u64 = 0;
@@ -568,16 +558,28 @@ mod tests {
             .unwrap();
 
         engine.start_session(&id).await.unwrap();
-        assert_eq!(engine.get_session(&id).await.unwrap().status, ReplayStatus::Running);
+        assert_eq!(
+            engine.get_session(&id).await.unwrap().status,
+            ReplayStatus::Running
+        );
 
         engine.pause_session(&id).await.unwrap();
-        assert_eq!(engine.get_session(&id).await.unwrap().status, ReplayStatus::Paused);
+        assert_eq!(
+            engine.get_session(&id).await.unwrap().status,
+            ReplayStatus::Paused
+        );
 
         engine.resume_session(&id).await.unwrap();
-        assert_eq!(engine.get_session(&id).await.unwrap().status, ReplayStatus::Running);
+        assert_eq!(
+            engine.get_session(&id).await.unwrap().status,
+            ReplayStatus::Running
+        );
 
         engine.cancel_session(&id).await.unwrap();
-        assert_eq!(engine.get_session(&id).await.unwrap().status, ReplayStatus::Cancelled);
+        assert_eq!(
+            engine.get_session(&id).await.unwrap().status,
+            ReplayStatus::Cancelled
+        );
     }
 
     #[tokio::test]
@@ -730,7 +732,10 @@ mod tests {
 
         let original = vec![(0, Some("a".into())), (1, Some("b".into()))];
         let replayed = vec![(0, Some("a".into())), (1, Some("b".into()))];
-        let diff = engine.compute_diff(&id, &original, &replayed).await.unwrap();
+        let diff = engine
+            .compute_diff(&id, &original, &replayed)
+            .await
+            .unwrap();
 
         assert_eq!(diff.matched, 2);
         assert_eq!(diff.diverged, 0);
@@ -760,7 +765,10 @@ mod tests {
             (1, Some("CHANGED".into())),
             (3, Some("extra".into())),
         ];
-        let diff = engine.compute_diff(&id, &original, &replayed).await.unwrap();
+        let diff = engine
+            .compute_diff(&id, &original, &replayed)
+            .await
+            .unwrap();
 
         assert_eq!(diff.matched, 1);
         assert_eq!(diff.diverged, 1);
@@ -811,7 +819,14 @@ mod tests {
             sample_rate: Some(1.5),
         };
         let err = engine
-            .create_session("t".into(), None, 0, 100, Some(filter), ReplayOutput::Discard)
+            .create_session(
+                "t".into(),
+                None,
+                0,
+                100,
+                Some(filter),
+                ReplayOutput::Discard,
+            )
             .await;
         assert!(err.is_err());
     }

@@ -176,7 +176,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:
-      pull-requests: write
+      contents: read
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0 }
@@ -192,7 +192,6 @@ jobs:
           git checkout ${{ github.base_ref }}
           cargo bench --bench storage_benchmarks --bench protocol_benchmarks -- --save-baseline main
       - name: Diff
-        id: diff
         run: |
           {
             echo '## Benchmark Comparison: PR vs `${{ github.base_ref }}`'
@@ -202,6 +201,33 @@ jobs:
             echo '```'
           } > diff.md
           cat diff.md
+
+      - name: Upload comparison
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-comparison-${{ github.sha }}
+          path: diff.md
+
+  # Commenting needs a writable pull-request token, so it is isolated from the
+  # job that compiles and executes the pull request's code.
+  comment-comparison:
+    name: Comment benchmark comparison
+    needs: [resolve, compare]
+    if: >-
+      needs.resolve.outputs.mode == 'compare' &&
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Download comparison
+        uses: actions/download-artifact@v4
+        with:
+          name: benchmark-comparison-${{ github.sha }}
+          path: comparison
+
       - uses: actions/github-script@v7
         with:
           script: |
@@ -209,7 +235,7 @@ jobs:
             await github.rest.issues.createComment({
               owner: context.repo.owner, repo: context.repo.repo,
               issue_number: context.payload.pull_request.number,
-              body: fs.readFileSync('diff.md', 'utf8'),
+              body: fs.readFileSync('comparison/diff.md', 'utf8'),
             });
 
   # ---------------------------------------------------------------------------

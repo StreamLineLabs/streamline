@@ -347,53 +347,42 @@ impl TuningExplainer {
 
         match param {
             "batch_size" => format!(
-                "{direction} batch size to better match {:?} workload throughput requirements.",
-                workload,
+                "{direction} batch size to better match {workload:?} workload throughput requirements.",
             ),
             "buffer_pool_size" => format!(
-                "{direction} buffer pool to improve write buffering for {:?} workload.",
-                workload,
+                "{direction} buffer pool to improve write buffering for {workload:?} workload.",
             ),
             "io_threads" => format!(
-                "{direction} I/O threads to match the concurrency demands of {:?} workload.",
-                workload,
+                "{direction} I/O threads to match the concurrency demands of {workload:?} workload.",
             ),
             "flush_interval_ms" => {
                 if change_percent > 0.0 {
                     format!(
-                        "Relaxing flush interval to batch more writes for {:?} workload.",
-                        workload,
+                        "Relaxing flush interval to batch more writes for {workload:?} workload.",
                     )
                 } else {
                     format!(
-                        "Tightening flush interval to reduce latency for {:?} workload.",
-                        workload,
+                        "Tightening flush interval to reduce latency for {workload:?} workload.",
                     )
                 }
             }
             "compression_level" => format!(
-                "{direction} compression level to balance CPU usage and I/O for {:?} workload.",
-                workload,
+                "{direction} compression level to balance CPU usage and I/O for {workload:?} workload.",
             ),
             "cache_size" => format!(
-                "{direction} cache size to improve hit rate for {:?} workload.",
-                workload,
+                "{direction} cache size to improve hit rate for {workload:?} workload.",
             ),
             "max_connections" => format!(
-                "{direction} connection limit to handle {:?} workload concurrency.",
-                workload,
+                "{direction} connection limit to handle {workload:?} workload concurrency.",
             ),
             "queue_depth" => format!(
-                "{direction} queue depth to manage request buffering for {:?} workload.",
-                workload,
+                "{direction} queue depth to manage request buffering for {workload:?} workload.",
             ),
             "prefetch_size" => format!(
-                "{direction} prefetch size to optimize sequential read performance for {:?} workload.",
-                workload,
+                "{direction} prefetch size to optimize sequential read performance for {workload:?} workload.",
             ),
             _ => format!(
-                "{direction} {param} for {:?} workload optimization.",
-                workload,
+                "{direction} {param} for {workload:?} workload optimization.",
             ),
         }
     }
@@ -428,24 +417,24 @@ pub fn format_bytes(bytes: usize) -> String {
         if (value - value.round()).abs() < 0.01 {
             format!("{} GB", value.round() as usize)
         } else {
-            format!("{:.1} GB", value)
+            format!("{value:.1} GB")
         }
     } else if bytes >= MB {
         let value = bytes as f64 / MB as f64;
         if (value - value.round()).abs() < 0.01 {
             format!("{} MB", value.round() as usize)
         } else {
-            format!("{:.1} MB", value)
+            format!("{value:.1} MB")
         }
     } else if bytes >= KB {
         let value = bytes as f64 / KB as f64;
         if (value - value.round()).abs() < 0.01 {
             format!("{} KB", value.round() as usize)
         } else {
-            format!("{:.1} KB", value)
+            format!("{value:.1} KB")
         }
     } else {
-        format!("{} B", bytes)
+        format!("{bytes} B")
     }
 }
 

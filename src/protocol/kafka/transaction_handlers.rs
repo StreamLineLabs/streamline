@@ -4,19 +4,23 @@
 //! producer ID initialization, partition management, offset commits,
 //! and transaction markers.
 
-
+use super::create_control_record_batch;
+use super::KafkaHandler;
+use super::{CONTROL_TYPE_ABORT, CONTROL_TYPE_COMMIT};
 use crate::error::Result;
 use crate::protocol::handlers::error_codes::*;
 use kafka_protocol::messages::ProducerId as KafkaProducerId;
 use kafka_protocol::messages::TopicName;
 use kafka_protocol::messages::TransactionalId;
 use kafka_protocol::messages::{
-    AddOffsetsToTxnRequest, AddOffsetsToTxnResponse, AddPartitionsToTxnRequest, AddPartitionsToTxnResponse, DescribeProducersRequest, DescribeProducersResponse, DescribeTransactionsRequest, DescribeTransactionsResponse, EndTxnRequest, EndTxnResponse, InitProducerIdRequest, InitProducerIdResponse, ListTransactionsRequest, ListTransactionsResponse, TxnOffsetCommitRequest, TxnOffsetCommitResponse, WriteTxnMarkersRequest, WriteTxnMarkersResponse,
+    AddOffsetsToTxnRequest, AddOffsetsToTxnResponse, AddPartitionsToTxnRequest,
+    AddPartitionsToTxnResponse, DescribeProducersRequest, DescribeProducersResponse,
+    DescribeTransactionsRequest, DescribeTransactionsResponse, EndTxnRequest, EndTxnResponse,
+    InitProducerIdRequest, InitProducerIdResponse, ListTransactionsRequest,
+    ListTransactionsResponse, TxnOffsetCommitRequest, TxnOffsetCommitResponse,
+    WriteTxnMarkersRequest, WriteTxnMarkersResponse,
 };
 use kafka_protocol::protocol::StrBytes;
-use super::KafkaHandler;
-use super::create_control_record_batch;
-use super::{CONTROL_TYPE_COMMIT, CONTROL_TYPE_ABORT};
 use tracing::{debug, info, warn};
 
 impl KafkaHandler {
@@ -225,7 +229,10 @@ impl KafkaHandler {
     }
 
     /// Handle EndTxn request
-    pub(in crate::protocol) fn handle_end_txn(&self, request: EndTxnRequest) -> Result<EndTxnResponse> {
+    pub(in crate::protocol) fn handle_end_txn(
+        &self,
+        request: EndTxnRequest,
+    ) -> Result<EndTxnResponse> {
         let transactional_id = request.transactional_id.as_str();
         let producer_id = request.producer_id.0;
         let producer_epoch = request.producer_epoch;
@@ -754,5 +761,4 @@ impl KafkaHandler {
             .with_error_code(NONE)
             .with_transaction_states(filtered))
     }
-
 }

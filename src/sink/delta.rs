@@ -463,7 +463,10 @@ impl DeltaLakeSink {
         let record_batch = Self::records_to_arrow_batch(&all_records)?;
 
         // Calculate batch bytes for metrics
-        let batch_bytes: u64 = all_records.iter().map(|(_, _, r)| r.value.len() as u64).sum();
+        let batch_bytes: u64 = all_records
+            .iter()
+            .map(|(_, _, r)| r.value.len() as u64)
+            .sum();
 
         // Get table lock
         let mut table_guard = table.write().await;
@@ -477,8 +480,11 @@ impl DeltaLakeSink {
                 .get_schema()
                 .map_err(|e| StreamlineError::Sink(format!("Failed to read table schema: {}", e)))
                 .and_then(|s| {
-                    let arrow: ArrowSchema = <ArrowSchema as TryFrom<&deltalake::kernel::StructType>>::try_from(s)
-                        .map_err(|e| StreamlineError::Sink(format!("Schema conversion failed: {}", e)))?;
+                    let arrow: ArrowSchema =
+                        <ArrowSchema as TryFrom<&deltalake::kernel::StructType>>::try_from(s)
+                            .map_err(|e| {
+                                StreamlineError::Sink(format!("Schema conversion failed: {}", e))
+                            })?;
                     Ok(arrow)
                 });
 
@@ -529,9 +535,7 @@ impl DeltaLakeSink {
                     "Retrying Delta Lake commit after failure"
                 );
                 tokio::time::sleep(delay).await;
-                delay = Duration::from_millis(
-                    (delay.as_millis() as u64 * 2).min(30_000),
-                );
+                delay = Duration::from_millis((delay.as_millis() as u64 * 2).min(30_000));
             }
 
             match Self::try_write_batch(delta_table, &record_batch).await {
@@ -766,9 +770,10 @@ impl DeltaLakeSink {
 
         let result = deltalake::operations::optimize::OptimizeBuilder::new(
             delta_table.log_store(),
-            delta_table.snapshot().map_err(|e| {
-                StreamlineError::Sink(format!("Delta table state not loaded: {}", e))
-            })?.clone(),
+            delta_table
+                .snapshot()
+                .map_err(|e| StreamlineError::Sink(format!("Delta table state not loaded: {}", e)))?
+                .clone(),
         )
         .with_target_size(target_size)
         .await
@@ -777,10 +782,9 @@ impl DeltaLakeSink {
         let (_updated_table, metrics) = result;
 
         // Refresh table state after optimize
-        delta_table
-            .update()
-            .await
-            .map_err(|e| StreamlineError::Sink(format!("Table refresh after OPTIMIZE failed: {}", e)))?;
+        delta_table.update().await.map_err(|e| {
+            StreamlineError::Sink(format!("Table refresh after OPTIMIZE failed: {}", e))
+        })?;
 
         let files_compacted = metrics.num_files_added + metrics.num_files_removed;
         info!(
@@ -840,9 +844,10 @@ impl DeltaLakeSink {
 
         let result = deltalake::operations::vacuum::VacuumBuilder::new(
             delta_table.log_store(),
-            delta_table.snapshot().map_err(|e| {
-                StreamlineError::Sink(format!("Delta table state not loaded: {}", e))
-            })?.clone(),
+            delta_table
+                .snapshot()
+                .map_err(|e| StreamlineError::Sink(format!("Delta table state not loaded: {}", e)))?
+                .clone(),
         )
         .with_retention_period(retention)
         .with_enforce_retention_duration(true)
@@ -852,10 +857,9 @@ impl DeltaLakeSink {
         let (_updated_table, vacuum_metrics) = result;
 
         // Refresh table state after vacuum
-        delta_table
-            .update()
-            .await
-            .map_err(|e| StreamlineError::Sink(format!("Table refresh after VACUUM failed: {}", e)))?;
+        delta_table.update().await.map_err(|e| {
+            StreamlineError::Sink(format!("Table refresh after VACUUM failed: {}", e))
+        })?;
 
         let files_deleted = vacuum_metrics.files_deleted.len() as u64;
         info!(
@@ -894,9 +898,16 @@ impl DeltaLakeSink {
     ) -> Result<Option<Vec<StructField>>> {
         use crate::sink::config::SchemaEvolutionPolicy;
 
-        let table_fields: HashMap<&str, &Field> =
-            table_schema.fields().iter().map(|f| (f.name().as_str(), f.as_ref())).collect();
-        let incoming_fields: Vec<&Field> = incoming_schema.fields().iter().map(|f| f.as_ref()).collect();
+        let table_fields: HashMap<&str, &Field> = table_schema
+            .fields()
+            .iter()
+            .map(|f| (f.name().as_str(), f.as_ref()))
+            .collect();
+        let incoming_fields: Vec<&Field> = incoming_schema
+            .fields()
+            .iter()
+            .map(|f| f.as_ref())
+            .collect();
 
         let mut new_struct_fields: Vec<StructField> = Vec::new();
         let mut has_changes = false;
@@ -958,11 +969,7 @@ impl DeltaLakeSink {
                         | SchemaEvolutionPolicy::AddAndWiden => {
                             let delta_dt = Self::arrow_to_delta_type(field.data_type())?;
                             // New columns are always nullable
-                            new_struct_fields.push(StructField::new(
-                                field.name(),
-                                delta_dt,
-                                true,
-                            ));
+                            new_struct_fields.push(StructField::new(field.name(), delta_dt, true));
                             has_changes = true;
                         }
                     }
@@ -1004,9 +1011,10 @@ impl DeltaLakeSink {
             (DataType::Float32, DataType::Float64) => Some(DataType::Float64),
 
             // Int → Float widening
-            (DataType::Int8 | DataType::Int16 | DataType::Int32, DataType::Float32 | DataType::Float64) => {
-                Some(incoming.clone())
-            }
+            (
+                DataType::Int8 | DataType::Int16 | DataType::Int32,
+                DataType::Float32 | DataType::Float64,
+            ) => Some(incoming.clone()),
             (DataType::Int64, DataType::Float64) => Some(DataType::Float64),
 
             // Same type (or already incoming is narrower — keep existing)
@@ -1032,18 +1040,12 @@ impl DeltaLakeSink {
             DataType::Int64 => DeltaDataType::Primitive(PrimitiveType::Long),
             DataType::Float32 => DeltaDataType::Primitive(PrimitiveType::Float),
             DataType::Float64 => DeltaDataType::Primitive(PrimitiveType::Double),
-            DataType::Utf8 | DataType::LargeUtf8 => {
-                DeltaDataType::Primitive(PrimitiveType::String)
-            }
+            DataType::Utf8 | DataType::LargeUtf8 => DeltaDataType::Primitive(PrimitiveType::String),
             DataType::Binary | DataType::LargeBinary => {
                 DeltaDataType::Primitive(PrimitiveType::Binary)
             }
-            DataType::Timestamp(_, _) => {
-                DeltaDataType::Primitive(PrimitiveType::TimestampNtz)
-            }
-            DataType::Date32 | DataType::Date64 => {
-                DeltaDataType::Primitive(PrimitiveType::Date)
-            }
+            DataType::Timestamp(_, _) => DeltaDataType::Primitive(PrimitiveType::TimestampNtz),
+            DataType::Date32 | DataType::Date64 => DeltaDataType::Primitive(PrimitiveType::Date),
             other => {
                 return Err(StreamlineError::Sink(format!(
                     "Unsupported Arrow type for Delta schema evolution: {:?}",
@@ -1068,17 +1070,14 @@ impl DeltaLakeSink {
             "Opening Delta table at version"
         );
 
-        let table = deltalake::open_table_with_version(
-            &self.config.table_uri,
-            version,
-        )
-        .await
-        .map_err(|e| {
-            StreamlineError::Sink(format!(
-                "Failed to open Delta table at version {}: {}",
-                version, e
-            ))
-        })?;
+        let table = deltalake::open_table_with_version(&self.config.table_uri, version)
+            .await
+            .map_err(|e| {
+                StreamlineError::Sink(format!(
+                    "Failed to open Delta table at version {}: {}",
+                    version, e
+                ))
+            })?;
 
         Self::read_table_batches(&table, &storage_options).await
     }
@@ -1107,17 +1106,14 @@ impl DeltaLakeSink {
             "Opening Delta table at timestamp"
         );
 
-        let table = deltalake::open_table_with_ds(
-            &self.config.table_uri,
-            &ts_str,
-        )
-        .await
-        .map_err(|e| {
-            StreamlineError::Sink(format!(
-                "Failed to open Delta table at timestamp {}: {}",
-                ts_str, e
-            ))
-        })?;
+        let table = deltalake::open_table_with_ds(&self.config.table_uri, &ts_str)
+            .await
+            .map_err(|e| {
+                StreamlineError::Sink(format!(
+                    "Failed to open Delta table at timestamp {}: {}",
+                    ts_str, e
+                ))
+            })?;
 
         Self::read_table_batches(&table, &storage_options).await
     }
@@ -1143,20 +1139,20 @@ impl DeltaLakeSink {
         table: &DeltaTable,
         _storage_options: &HashMap<String, String>,
     ) -> Result<Vec<RecordBatch>> {
-        let snapshot = table.snapshot().map_err(|e| {
-            StreamlineError::Sink(format!("Delta table state not loaded: {}", e))
-        })?;
+        let snapshot = table
+            .snapshot()
+            .map_err(|e| StreamlineError::Sink(format!("Delta table state not loaded: {}", e)))?;
 
         let struct_schema = snapshot.schema();
-        let arrow_schema = <ArrowSchema as TryFrom<&deltalake::kernel::StructType>>::try_from(struct_schema)
-            .map_err(|e| StreamlineError::Sink(format!("Schema conversion failed: {}", e)))?;
+        let arrow_schema =
+            <ArrowSchema as TryFrom<&deltalake::kernel::StructType>>::try_from(struct_schema)
+                .map_err(|e| StreamlineError::Sink(format!("Schema conversion failed: {}", e)))?;
 
-        let files = snapshot.file_actions_iter()
+        let files = snapshot
+            .file_actions_iter()
             .map_err(|e| StreamlineError::Sink(format!("Failed to list files: {}", e)))?;
 
-        let file_paths: Vec<String> = files
-            .map(|f| f.path)
-            .collect();
+        let file_paths: Vec<String> = files.map(|f| f.path).collect();
 
         if file_paths.is_empty() {
             return Ok(vec![]);
@@ -1396,8 +1392,7 @@ impl SinkConnector for DeltaLakeSink {
         #[cfg(not(feature = "delta-lake"))]
         {
             let mut offsets = HashMap::new();
-            Self::commit_buffer_stub(&self.name, &self.buffer, &self.metrics, &mut offsets)
-                .await?;
+            Self::commit_buffer_stub(&self.name, &self.buffer, &self.metrics, &mut offsets).await?;
         }
 
         Ok(())
@@ -1551,11 +1546,17 @@ mod tests {
             "strict"
         );
         assert_eq!(
-            format!("{}", crate::sink::config::SchemaEvolutionPolicy::AddNewColumns),
+            format!(
+                "{}",
+                crate::sink::config::SchemaEvolutionPolicy::AddNewColumns
+            ),
             "add_new_columns"
         );
         assert_eq!(
-            format!("{}", crate::sink::config::SchemaEvolutionPolicy::AddAndWiden),
+            format!(
+                "{}",
+                crate::sink::config::SchemaEvolutionPolicy::AddAndWiden
+            ),
             "add_and_widen"
         );
     }

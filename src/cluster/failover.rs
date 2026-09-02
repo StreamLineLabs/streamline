@@ -253,7 +253,7 @@ impl FailoverHandler {
                 leader_epoch: new_epoch,
             })
             .await
-            .map_err(|e| format!("Failed to update leader via Raft: {}", e))?;
+            .map_err(|e| format!("Failed to update leader via Raft: {e}"))?;
 
         // Update local leadership cache
         self.leadership_manager

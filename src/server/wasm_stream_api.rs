@@ -164,11 +164,6 @@ struct ListPipelinesResponse {
     total: usize,
 }
 
-#[derive(Debug, Serialize)]
-struct MessageResponse {
-    message: String,
-}
-
 // ============================================================================
 // Router
 // ============================================================================
@@ -249,9 +244,7 @@ async fn create_transform(
     Ok((StatusCode::CREATED, Json(transform)))
 }
 
-async fn list_transforms(
-    State(state): State<WasmStreamApiState>,
-) -> Json<ListTransformsResponse> {
+async fn list_transforms(State(state): State<WasmStreamApiState>) -> Json<ListTransformsResponse> {
     let transforms = state.transforms.read().await;
     let list: Vec<ActiveTransform> = transforms.values().cloned().collect();
     let total = list.len();
@@ -266,18 +259,14 @@ async fn get_transform(
     Path(id): Path<String>,
 ) -> Result<Json<ActiveTransform>, (StatusCode, Json<ErrorResponse>)> {
     let transforms = state.transforms.read().await;
-    transforms
-        .get(&id)
-        .cloned()
-        .map(Json)
-        .ok_or_else(|| {
-            (
-                StatusCode::NOT_FOUND,
-                Json(ErrorResponse {
-                    error: format!("Transform '{}' not found", id),
-                }),
-            )
-        })
+    transforms.get(&id).cloned().map(Json).ok_or_else(|| {
+        (
+            StatusCode::NOT_FOUND,
+            Json(ErrorResponse {
+                error: format!("Transform '{id}' not found"),
+            }),
+        )
+    })
 }
 
 async fn delete_transform(
@@ -292,7 +281,7 @@ async fn delete_transform(
         Err((
             StatusCode::NOT_FOUND,
             Json(ErrorResponse {
-                error: format!("Transform '{}' not found", id),
+                error: format!("Transform '{id}' not found"),
             }),
         ))
     }
@@ -307,7 +296,7 @@ async fn pause_transform(
         (
             StatusCode::NOT_FOUND,
             Json(ErrorResponse {
-                error: format!("Transform '{}' not found", id),
+                error: format!("Transform '{id}' not found"),
             }),
         )
     })?;
@@ -327,7 +316,7 @@ async fn pause_transform(
         TransformStatus::Error(e) => Err((
             StatusCode::CONFLICT,
             Json(ErrorResponse {
-                error: format!("Cannot pause transform in error state: {}", e),
+                error: format!("Cannot pause transform in error state: {e}"),
             }),
         )),
     }
@@ -342,7 +331,7 @@ async fn resume_transform(
         (
             StatusCode::NOT_FOUND,
             Json(ErrorResponse {
-                error: format!("Transform '{}' not found", id),
+                error: format!("Transform '{id}' not found"),
             }),
         )
     })?;
@@ -368,7 +357,7 @@ async fn resume_transform(
         TransformStatus::Error(e) => Err((
             StatusCode::CONFLICT,
             Json(ErrorResponse {
-                error: format!("Cannot resume transform in error state: {}", e),
+                error: format!("Cannot resume transform in error state: {e}"),
             }),
         )),
     }
@@ -386,7 +375,7 @@ async fn get_transform_metrics(
             (
                 StatusCode::NOT_FOUND,
                 Json(ErrorResponse {
-                    error: format!("Transform '{}' not found", id),
+                    error: format!("Transform '{id}' not found"),
                 }),
             )
         })
@@ -439,9 +428,7 @@ async fn create_pipeline(
     Ok((StatusCode::CREATED, Json(pipeline)))
 }
 
-async fn list_pipelines(
-    State(state): State<WasmStreamApiState>,
-) -> Json<ListPipelinesResponse> {
+async fn list_pipelines(State(state): State<WasmStreamApiState>) -> Json<ListPipelinesResponse> {
     let pipelines = state.pipelines.read().await;
     let list: Vec<StreamPipeline> = pipelines.values().cloned().collect();
     let total = list.len();
@@ -456,18 +443,14 @@ async fn get_pipeline(
     Path(id): Path<String>,
 ) -> Result<Json<StreamPipeline>, (StatusCode, Json<ErrorResponse>)> {
     let pipelines = state.pipelines.read().await;
-    pipelines
-        .get(&id)
-        .cloned()
-        .map(Json)
-        .ok_or_else(|| {
-            (
-                StatusCode::NOT_FOUND,
-                Json(ErrorResponse {
-                    error: format!("Pipeline '{}' not found", id),
-                }),
-            )
-        })
+    pipelines.get(&id).cloned().map(Json).ok_or_else(|| {
+        (
+            StatusCode::NOT_FOUND,
+            Json(ErrorResponse {
+                error: format!("Pipeline '{id}' not found"),
+            }),
+        )
+    })
 }
 
 async fn delete_pipeline(
@@ -482,7 +465,7 @@ async fn delete_pipeline(
         Err((
             StatusCode::NOT_FOUND,
             Json(ErrorResponse {
-                error: format!("Pipeline '{}' not found", id),
+                error: format!("Pipeline '{id}' not found"),
             }),
         ))
     }
@@ -638,10 +621,7 @@ mod tests {
             "config": {"key": "value"}
         }"#;
         let req: CreateTransformRequest = serde_json::from_str(json).unwrap();
-        assert_eq!(
-            req.config.as_ref().unwrap().get("key").unwrap(),
-            "value"
-        );
+        assert_eq!(req.config.as_ref().unwrap().get("key").unwrap(), "value");
     }
 
     #[test]
@@ -719,7 +699,7 @@ mod tests {
         let resp = router
             .oneshot(
                 Request::builder()
-                    .uri(format!("/api/v1/streams/transforms/{}", id))
+                    .uri(format!("/api/v1/streams/transforms/{id}"))
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -828,7 +808,7 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .method(http::Method::DELETE)
-                    .uri(format!("/api/v1/streams/transforms/{}", id))
+                    .uri(format!("/api/v1/streams/transforms/{id}"))
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -840,7 +820,7 @@ mod tests {
         let resp = router
             .oneshot(
                 Request::builder()
-                    .uri(format!("/api/v1/streams/transforms/{}", id))
+                    .uri(format!("/api/v1/streams/transforms/{id}"))
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -908,7 +888,7 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .method(http::Method::POST)
-                    .uri(format!("/api/v1/streams/transforms/{}/pause", id))
+                    .uri(format!("/api/v1/streams/transforms/{id}/pause"))
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -926,7 +906,7 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .method(http::Method::POST)
-                    .uri(format!("/api/v1/streams/transforms/{}/resume", id))
+                    .uri(format!("/api/v1/streams/transforms/{id}/resume"))
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -1171,7 +1151,7 @@ mod tests {
         let resp = router
             .oneshot(
                 Request::builder()
-                    .uri(format!("/api/v1/streams/pipelines/{}", id))
+                    .uri(format!("/api/v1/streams/pipelines/{id}"))
                     .body(Body::empty())
                     .unwrap(),
             )

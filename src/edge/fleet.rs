@@ -151,9 +151,16 @@ pub struct HeartbeatResponse {
 /// Remote commands from cloud to edge
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum FleetCommand {
-    UpdateConfig { config_yaml: String },
-    SyncTopic { topic: String, direction: SyncDirection },
-    StopSync { topic: String },
+    UpdateConfig {
+        config_yaml: String,
+    },
+    SyncTopic {
+        topic: String,
+        direction: SyncDirection,
+    },
+    StopSync {
+        topic: String,
+    },
     Restart,
     DrainAndShutdown,
     RunDiagnostics,
@@ -219,27 +226,33 @@ impl FleetManager {
 
     /// Register a new edge device
     pub async fn register(&self, reg: EdgeRegistration) -> RegistrationResponse {
-        let token = format!("edge_tok_{}", uuid::Uuid::new_v4().to_string().replace('-', "")[..16].to_string());
+        let token = format!(
+            "edge_tok_{}",
+            &uuid::Uuid::new_v4().to_string().replace('-', "")[..16]
+        );
 
-        let default_sync = vec![
-            TopicSyncConfig {
-                topic: "events".into(),
-                direction: SyncDirection::EdgeToCloud,
-                priority: SyncPriority::Normal,
-                max_bandwidth_kbps: None,
-            },
-        ];
+        let default_sync = vec![TopicSyncConfig {
+            topic: "events".into(),
+            direction: SyncDirection::EdgeToCloud,
+            priority: SyncPriority::Normal,
+            max_bandwidth_kbps: None,
+        }];
 
-        let config_version = self.config_version.load(std::sync::atomic::Ordering::Relaxed);
+        let config_version = self
+            .config_version
+            .load(std::sync::atomic::Ordering::Relaxed);
 
         let state = EdgeDeviceState {
             registration: reg.clone(),
             fleet_token: token.clone(),
             last_heartbeat: Instant::now(),
             last_metrics: EdgeMetrics {
-                cpu_usage_pct: 0.0, memory_usage_pct: 0.0,
-                storage_used_mb: 0, messages_in_buffer: 0,
-                topics_count: 0, connections_count: 0,
+                cpu_usage_pct: 0.0,
+                memory_usage_pct: 0.0,
+                storage_used_mb: 0,
+                messages_in_buffer: 0,
+                topics_count: 0,
+                connections_count: 0,
             },
             status: EdgeStatus::Online,
             sync_lag: HashMap::new(),
@@ -248,7 +261,10 @@ impl FleetManager {
             pending_commands: Vec::new(),
         };
 
-        self.devices.write().await.insert(reg.edge_id.clone(), state);
+        self.devices
+            .write()
+            .await
+            .insert(reg.edge_id.clone(), state);
         info!(edge_id = %reg.edge_id, "Edge device registered");
 
         RegistrationResponse {
@@ -274,7 +290,9 @@ impl FleetManager {
         let commands = std::mem::take(&mut device.pending_commands);
 
         Some(HeartbeatResponse {
-            config_version: self.config_version.load(std::sync::atomic::Ordering::Relaxed),
+            config_version: self
+                .config_version
+                .load(std::sync::atomic::Ordering::Relaxed),
             commands,
         })
     }
@@ -297,17 +315,22 @@ impl FleetManager {
 
         let mut summary = FleetSummary {
             total_devices: devices.len(),
-            online: 0, syncing: 0, degraded: 0, offline: 0,
-            total_sync_lag: 0, total_messages_buffered: 0,
+            online: 0,
+            syncing: 0,
+            degraded: 0,
+            offline: 0,
+            total_sync_lag: 0,
+            total_messages_buffered: 0,
             devices: Vec::new(),
         };
 
         for (_, device) in devices.iter() {
-            let actual_status = if now.duration_since(device.last_heartbeat) > self.offline_threshold {
-                EdgeStatus::Offline
-            } else {
-                device.status.clone()
-            };
+            let actual_status =
+                if now.duration_since(device.last_heartbeat) > self.offline_threshold {
+                    EdgeStatus::Offline
+                } else {
+                    device.status.clone()
+                };
 
             match actual_status {
                 EdgeStatus::Online => summary.online += 1,
@@ -326,7 +349,11 @@ impl FleetManager {
                 status: actual_status.to_string(),
                 version: device.registration.version.clone(),
                 platform: device.registration.platform.clone(),
-                region: device.registration.location.as_ref().and_then(|l| l.region.clone()),
+                region: device
+                    .registration
+                    .location
+                    .as_ref()
+                    .and_then(|l| l.region.clone()),
                 topics: device.last_metrics.topics_count,
                 sync_lag: device_lag,
                 last_seen_secs_ago: now.duration_since(device.last_heartbeat).as_secs(),
@@ -354,7 +381,11 @@ impl FleetManager {
             },
             version: device.registration.version.clone(),
             platform: device.registration.platform.clone(),
-            region: device.registration.location.as_ref().and_then(|l| l.region.clone()),
+            region: device
+                .registration
+                .location
+                .as_ref()
+                .and_then(|l| l.region.clone()),
             topics: device.last_metrics.topics_count,
             sync_lag: device.sync_lag.values().sum(),
             last_seen_secs_ago: now.duration_since(device.last_heartbeat).as_secs(),
@@ -440,16 +471,20 @@ mod tests {
         let mgr = FleetManager::new(60);
         mgr.register(test_registration()).await;
 
-        mgr.send_command("edge-001", FleetCommand::RunDiagnostics).await;
+        mgr.send_command("edge-001", FleetCommand::RunDiagnostics)
+            .await;
 
         let hb = EdgeHeartbeat {
             edge_id: "edge-001".into(),
             uptime_secs: 100,
             sync_lag: HashMap::new(),
             metrics: EdgeMetrics {
-                cpu_usage_pct: 0.0, memory_usage_pct: 0.0,
-                storage_used_mb: 0, messages_in_buffer: 0,
-                topics_count: 0, connections_count: 0,
+                cpu_usage_pct: 0.0,
+                memory_usage_pct: 0.0,
+                storage_used_mb: 0,
+                messages_in_buffer: 0,
+                topics_count: 0,
+                connections_count: 0,
             },
             status: EdgeStatus::Online,
         };

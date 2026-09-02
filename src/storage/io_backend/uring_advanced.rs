@@ -266,8 +266,7 @@ impl RegisteredBufferPool {
         // No free buffer available
         self.stats.cache_misses.fetch_add(1, Ordering::Relaxed);
         Err(StreamlineError::storage_msg(format!(
-            "No registered buffer available for size class {}",
-            size_class
+            "No registered buffer available for size class {size_class}"
         )))
     }
 

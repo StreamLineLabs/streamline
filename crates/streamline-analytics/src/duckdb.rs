@@ -282,7 +282,7 @@ impl DuckDBEngine {
     /// ```
     pub fn new(topic_manager: Arc<dyn TopicDataSource>) -> Result<Self> {
         let connection = Connection::open_in_memory().map_err(|e| {
-            AnalyticsError::DuckDb(format!("Failed to create DuckDB connection: {}", e))
+            AnalyticsError::DuckDb(format!("Failed to create DuckDB connection: {e}"))
         })?;
 
         // Disable automatic extension installation to avoid failures on
@@ -390,12 +390,8 @@ impl DuckDBEngine {
         // Apply pagination (offset + limit) on the collected rows
         let offset = options.offset;
         let limit = options.max_rows.unwrap_or(usize::MAX);
-        let paginated: Vec<QueryResultRow> = result
-            .1
-            .into_iter()
-            .skip(offset)
-            .take(limit)
-            .collect();
+        let paginated: Vec<QueryResultRow> =
+            result.1.into_iter().skip(offset).take(limit).collect();
         let has_more = total_rows > offset + paginated.len();
 
         let query_result = QueryResult {
@@ -451,13 +447,13 @@ impl DuckDBEngine {
         // Execute the query (single pass to avoid re-execution issues with
         // temporary topic tables that are only available for one query run).
         let conn = self.connection.lock();
-        let mut stmt = conn.prepare(&rewritten_sql).map_err(|e| {
-            AnalyticsError::invalid_sql(sql, e.to_string())
-        })?;
+        let mut stmt = conn
+            .prepare(&rewritten_sql)
+            .map_err(|e| AnalyticsError::invalid_sql(sql, e.to_string()))?;
 
-        let mut rows_result = stmt.query([]).map_err(|e| {
-            AnalyticsError::DuckDb(format!("Failed to execute query: {}", e))
-        })?;
+        let mut rows_result = stmt
+            .query([])
+            .map_err(|e| AnalyticsError::DuckDb(format!("Failed to execute query: {e}")))?;
 
         // Collect all rows, probing column count dynamically from each row.
         // We cannot call stmt.column_names() here because Rows holds a
@@ -469,7 +465,7 @@ impl DuckDBEngine {
 
         while let Some(row) = rows_result
             .next()
-            .map_err(|e| AnalyticsError::DuckDb(format!("Failed to fetch row: {}", e)))?
+            .map_err(|e| AnalyticsError::DuckDb(format!("Failed to fetch row: {e}")))?
         {
             let mut values = Vec::new();
             for i in 0.. {
@@ -518,8 +514,7 @@ impl DuckDBEngine {
 
         // Match direct table name syntax: streamline_topic_<name>
         // This handles queries like "FROM streamline_topic_events"
-        let table_pattern =
-            regex::Regex::new(r"\bstreamline_topic_(\w+)\b").unwrap();
+        let table_pattern = regex::Regex::new(r"\bstreamline_topic_(\w+)\b").unwrap();
         for cap in table_pattern.captures_iter(sql) {
             if let Some(topic_name) = cap.get(1) {
                 topics_set.insert(topic_name.as_str().to_string());
@@ -537,22 +532,20 @@ impl DuckDBEngine {
         let mut result = sql.to_string();
 
         // Replace streamline_topic('name') with streamline_topic_name
-        let st_pattern =
-            regex::Regex::new(r"streamline_topic\s*\(\s*'([^']+)'\s*\)").unwrap();
+        let st_pattern = regex::Regex::new(r"streamline_topic\s*\(\s*'([^']+)'\s*\)").unwrap();
         result = st_pattern
             .replace_all(&result, |caps: &regex::Captures| {
                 let name = caps[1].replace('-', "_");
-                format!("streamline_topic_{}", name)
+                format!("streamline_topic_{name}")
             })
             .to_string();
 
         // Replace topic('name') with streamline_topic_name (word boundary)
-        let t_pattern =
-            regex::Regex::new(r"\btopic\s*\(\s*'([^']+)'\s*\)").unwrap();
+        let t_pattern = regex::Regex::new(r"\btopic\s*\(\s*'([^']+)'\s*\)").unwrap();
         result = t_pattern
             .replace_all(&result, |caps: &regex::Captures| {
                 let name = caps[1].replace('-', "_");
-                format!("streamline_topic_{}", name)
+                format!("streamline_topic_{name}")
             })
             .to_string();
 
@@ -569,33 +562,33 @@ impl DuckDBEngine {
         debug!(topic = %topic_name, "Loading topic data into DuckDB table");
 
         // Get partition count to verify topic exists
-        let num_partitions = self.topic_manager.num_partitions(topic_name).map_err(|_| {
-            AnalyticsError::topic_not_found(topic_name)
-        })?;
+        let num_partitions = self
+            .topic_manager
+            .num_partitions(topic_name)
+            .map_err(|_| AnalyticsError::topic_not_found(topic_name))?;
 
         // Create table schema (flexible JSON-based approach)
         let table_name = format!("streamline_topic_{}", topic_name.replace('-', "_"));
         let conn = self.connection.lock();
 
         // Drop table if it exists
-        let _ = conn.execute(&format!("DROP TABLE IF EXISTS {}", table_name), []);
+        let _ = conn.execute(&format!("DROP TABLE IF EXISTS {table_name}"), []);
 
         // Create table with flexible schema
         conn.execute(
             &format!(
-                "CREATE TABLE {} (
+                "CREATE TABLE {table_name} (
                     \"offset\" BIGINT,
                     \"partition\" INT,
                     \"timestamp\" TIMESTAMP,
                     \"key\" VARCHAR,
                     \"value\" VARCHAR,
                     \"headers\" VARCHAR
-                )",
-                table_name
+                )"
             ),
             [],
         )
-        .map_err(|e| AnalyticsError::DuckDb(format!("Failed to create table: {}", e)))?;
+        .map_err(|e| AnalyticsError::DuckDb(format!("Failed to create table: {e}")))?;
 
         // Read data from all partitions via TopicDataSource trait
         for partition_id in 0..num_partitions {
@@ -638,8 +631,7 @@ impl DuckDBEngine {
 
                 conn.execute(
                     &format!(
-                        "INSERT INTO {} (\"offset\", \"partition\", \"timestamp\", \"key\", \"value\", \"headers\") VALUES (?, ?, ?, ?, ?, ?)",
-                        table_name
+                        "INSERT INTO {table_name} (\"offset\", \"partition\", \"timestamp\", \"key\", \"value\", \"headers\") VALUES (?, ?, ?, ?, ?, ?)"
                     ),
                     params![
                         record.offset,
@@ -653,7 +645,7 @@ impl DuckDBEngine {
                     ],
                 )
                 .map_err(|e| {
-                    AnalyticsError::DuckDb(format!("Failed to insert record: {}", e))
+                    AnalyticsError::DuckDb(format!("Failed to insert record: {e}"))
                 })?;
             }
         }
@@ -667,7 +659,7 @@ impl DuckDBEngine {
             ),
             [],
         )
-        .map_err(|e| AnalyticsError::DuckDb(format!("Failed to create view: {}", e)))?;
+        .map_err(|e| AnalyticsError::DuckDb(format!("Failed to create view: {e}")))?;
 
         info!(topic = %topic_name, table = %table_name, "Topic data loaded into DuckDB");
 
@@ -703,9 +695,12 @@ impl DuckDBEngine {
         };
 
         let conn = self.connection.lock();
-        conn.execute(&format!("CREATE OR REPLACE VIEW {} AS {}", name, query), [])
+        conn.execute(&format!("CREATE OR REPLACE VIEW {name} AS {query}"), [])
             .map_err(|e| {
-                AnalyticsError::invalid_sql(query, format!("Failed to create materialized view: {}", e))
+                AnalyticsError::invalid_sql(
+                    query,
+                    format!("Failed to create materialized view: {e}"),
+                )
             })?;
 
         self.materialized_views.insert(name.to_string(), view);
@@ -721,7 +716,7 @@ impl DuckDBEngine {
     /// Returns an error if the view does not exist or the SQL fails.
     pub async fn refresh_materialized_view(&self, name: &str) -> Result<()> {
         let mut view = self.materialized_views.get_mut(name).ok_or_else(|| {
-            AnalyticsError::Analytics(format!("Materialized view not found: {}", name))
+            AnalyticsError::Analytics(format!("Materialized view not found: {name}"))
         })?;
 
         let conn = self.connection.lock();
@@ -729,9 +724,7 @@ impl DuckDBEngine {
             &format!("CREATE OR REPLACE VIEW {} AS {}", name, view.query),
             [],
         )
-        .map_err(|e| {
-            AnalyticsError::DuckDb(format!("Failed to refresh materialized view: {}", e))
-        })?;
+        .map_err(|e| AnalyticsError::DuckDb(format!("Failed to refresh materialized view: {e}")))?;
 
         view.last_refreshed = chrono::Utc::now().timestamp();
 
@@ -754,7 +747,7 @@ impl DuckDBEngine {
     /// Returns an error if the view does not exist.
     pub async fn drop_materialized_view(&self, name: &str) -> Result<()> {
         self.materialized_views.remove(name).ok_or_else(|| {
-            AnalyticsError::Analytics(format!("Materialized view '{}' not found", name))
+            AnalyticsError::Analytics(format!("Materialized view '{name}' not found"))
         })?;
         info!(view = %name, "Materialized view dropped");
         Ok(())
@@ -780,21 +773,21 @@ impl DuckDBEngine {
         }
 
         let rewritten_sql = self.rewrite_topic_references(sql);
-        let explain_sql = format!("EXPLAIN {}", rewritten_sql);
+        let explain_sql = format!("EXPLAIN {rewritten_sql}");
 
         let conn = self.connection.lock();
-        let mut stmt = conn.prepare(&explain_sql).map_err(|e| {
-            AnalyticsError::invalid_sql(sql, e.to_string())
-        })?;
+        let mut stmt = conn
+            .prepare(&explain_sql)
+            .map_err(|e| AnalyticsError::invalid_sql(sql, e.to_string()))?;
 
-        let mut rows = stmt.query([]).map_err(|e| {
-            AnalyticsError::DuckDb(format!("Failed to run EXPLAIN: {}", e))
-        })?;
+        let mut rows = stmt
+            .query([])
+            .map_err(|e| AnalyticsError::DuckDb(format!("Failed to run EXPLAIN: {e}")))?;
 
         let mut plan_lines = Vec::new();
         while let Some(row) = rows
             .next()
-            .map_err(|e| AnalyticsError::DuckDb(format!("Failed to read EXPLAIN output: {}", e)))?
+            .map_err(|e| AnalyticsError::DuckDb(format!("Failed to read EXPLAIN output: {e}")))?
         {
             // DuckDB EXPLAIN returns rows with varying column counts;
             // concatenate all text columns on each row.
@@ -882,13 +875,11 @@ fn duckdb_value_to_json(value: ValueRef<'_>) -> JsonValue {
             // through the ->> (JSON extract string) operator.
             serde_json::from_str(&text).unwrap_or_else(|_| JsonValue::String(text.into_owned()))
         }
-        ValueRef::Blob(b) => {
-            JsonValue::String(base64::Engine::encode(
-                &base64::engine::general_purpose::STANDARD,
-                b,
-            ))
-        }
-        _ => JsonValue::String(format!("{:?}", value)),
+        ValueRef::Blob(b) => JsonValue::String(base64::Engine::encode(
+            &base64::engine::general_purpose::STANDARD,
+            b,
+        )),
+        _ => JsonValue::String(format!("{value:?}")),
     }
 }
 
@@ -1066,7 +1057,10 @@ mod tests {
         let engine = DuckDBEngine::new(src).unwrap();
 
         let result = engine
-            .execute_query("SELECT 1 AS one, 'hello' AS greeting", QueryOptions::default())
+            .execute_query(
+                "SELECT 1 AS one, 'hello' AS greeting",
+                QueryOptions::default(),
+            )
             .await
             .unwrap();
 
@@ -1103,7 +1097,10 @@ mod tests {
         let result = engine
             .execute_query(
                 "SELECT COUNT(*) AS cnt FROM streamline_topic_events",
-                QueryOptions { enable_cache: false, ..Default::default() },
+                QueryOptions {
+                    enable_cache: false,
+                    ..Default::default()
+                },
             )
             .await
             .unwrap();
@@ -1205,8 +1202,7 @@ mod tests {
         // Should be an InvalidSql variant
         assert!(
             matches!(err, AnalyticsError::InvalidSql(_)),
-            "Expected InvalidSql, got: {:?}",
-            err
+            "Expected InvalidSql, got: {err:?}"
         );
     }
 
@@ -1218,7 +1214,10 @@ mod tests {
         let result = engine
             .execute_query(
                 "SELECT * FROM streamline_topic_does_not_exist",
-                QueryOptions { enable_cache: false, ..Default::default() },
+                QueryOptions {
+                    enable_cache: false,
+                    ..Default::default()
+                },
             )
             .await;
 
@@ -1359,7 +1358,7 @@ mod tests {
             let eng = engine.clone();
             handles.push(tokio::spawn(async move {
                 eng.execute_query(
-                    &format!("SELECT {} AS val", i),
+                    &format!("SELECT {i} AS val"),
                     QueryOptions {
                         enable_cache: false,
                         ..Default::default()

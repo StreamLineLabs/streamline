@@ -192,8 +192,8 @@ fn test_replication_batch() {
 
     for i in 0i64..100 {
         batch.add_record(ReplicationRecord {
-            key: format!("key{}", i).into_bytes(),
-            value: format!("value{}", i).into_bytes(),
+            key: format!("key{i}").into_bytes(),
+            value: format!("value{i}").into_bytes(),
             timestamp_ms: 1000 + i,
             source_dc: "dc-east".to_string(),
             offset: i,

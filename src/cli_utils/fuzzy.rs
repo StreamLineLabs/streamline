@@ -142,7 +142,11 @@ pub fn find_similar(input: &str, candidates: &[String], max_results: usize) -> V
         .collect();
 
     // Sort by score descending
-    matches.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+    matches.sort_by(|a, b| {
+        b.score
+            .partial_cmp(&a.score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
 
     // Take top results
     matches.truncate(max_results);

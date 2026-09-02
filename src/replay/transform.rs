@@ -159,8 +159,7 @@ impl MutatorRule {
 
         // Simple partition matching
         if let Some(partition_str) = self.condition.strip_prefix("partition:") {
-            if let Ok(partition) = partition_str.parse::<i32>()
-            {
+            if let Ok(partition) = partition_str.parse::<i32>() {
                 return msg.partition == partition;
             }
         }
@@ -273,7 +272,7 @@ impl MessageMutator {
                 let value_bytes =
                     base64::Engine::decode(&base64::engine::general_purpose::STANDARD, &msg.value)
                         .map_err(|e| {
-                            StreamlineError::storage_msg(format!("Invalid base64: {}", e))
+                            StreamlineError::storage_msg(format!("Invalid base64: {e}"))
                         })?;
 
                 let value_str = String::from_utf8_lossy(&value_bytes);
@@ -282,7 +281,7 @@ impl MessageMutator {
                 let mut result = template.clone();
                 if let serde_json::Value::Object(map) = json {
                     for (key, val) in map {
-                        let placeholder = format!("{{{{{}}}}}", key);
+                        let placeholder = format!("{{{{{key}}}}}");
                         let replacement = match val {
                             serde_json::Value::String(s) => s,
                             _ => val.to_string(),
@@ -309,18 +308,18 @@ impl MessageMutator {
         // Decode value
         let value_bytes =
             base64::Engine::decode(&base64::engine::general_purpose::STANDARD, &msg.value)
-                .map_err(|e| StreamlineError::storage_msg(format!("Invalid base64: {}", e)))?;
+                .map_err(|e| StreamlineError::storage_msg(format!("Invalid base64: {e}")))?;
 
         let value_str = String::from_utf8_lossy(&value_bytes);
         let mut json: serde_json::Value = serde_json::from_str(&value_str)
-            .map_err(|e| StreamlineError::storage_msg(format!("Invalid JSON: {}", e)))?;
+            .map_err(|e| StreamlineError::storage_msg(format!("Invalid JSON: {e}")))?;
 
         // Apply mutation
         f(&mut json)?;
 
         // Re-encode
         let new_value = serde_json::to_string(&json)
-            .map_err(|e| StreamlineError::storage_msg(format!("Failed to serialize: {}", e)))?;
+            .map_err(|e| StreamlineError::storage_msg(format!("Failed to serialize: {e}")))?;
 
         msg.value = base64::Engine::encode(
             &base64::engine::general_purpose::STANDARD,
@@ -358,16 +357,12 @@ impl MessageMutator {
                         );
                     }
                     map.get_mut(*part).ok_or_else(|| {
-                        StreamlineError::storage_msg(format!(
-                            "Cannot navigate path: {}",
-                            path
-                        ))
+                        StreamlineError::storage_msg(format!("Cannot navigate path: {path}"))
                     })?
                 }
                 _ => {
                     return Err(StreamlineError::storage_msg(format!(
-                        "Cannot navigate path: {}",
-                        path
+                        "Cannot navigate path: {path}"
                     )))
                 }
             };
@@ -391,12 +386,11 @@ impl MessageMutator {
 
             current = match current {
                 serde_json::Value::Object(map) => map.get_mut(*part).ok_or_else(|| {
-                    StreamlineError::storage_msg(format!("Path not found: {}", path))
+                    StreamlineError::storage_msg(format!("Path not found: {path}"))
                 })?,
                 _ => {
                     return Err(StreamlineError::storage_msg(format!(
-                        "Cannot navigate path: {}",
-                        path
+                        "Cannot navigate path: {path}"
                     )))
                 }
             };
@@ -427,7 +421,7 @@ impl MessageMutator {
                             let start = &s[..show_start];
                             let end = &s[len - show_end..];
                             let middle = mask.to_string().repeat(len - show_start - show_end);
-                            format!("{}{}{}", start, middle, end)
+                            format!("{start}{middle}{end}")
                         };
                         map.insert(part.to_string(), serde_json::Value::String(masked));
                     }
@@ -437,12 +431,11 @@ impl MessageMutator {
 
             current = match current {
                 serde_json::Value::Object(map) => map.get_mut(*part).ok_or_else(|| {
-                    StreamlineError::storage_msg(format!("Path not found: {}", path))
+                    StreamlineError::storage_msg(format!("Path not found: {path}"))
                 })?,
                 _ => {
                     return Err(StreamlineError::storage_msg(format!(
-                        "Cannot navigate path: {}",
-                        path
+                        "Cannot navigate path: {path}"
                     )))
                 }
             };

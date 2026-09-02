@@ -73,8 +73,7 @@ impl SyncDirectConfig {
         }
         if self.alignment < MIN_ALIGNMENT {
             return Err(StreamlineError::Config(format!(
-                "Direct I/O alignment must be at least {} bytes",
-                MIN_ALIGNMENT
+                "Direct I/O alignment must be at least {MIN_ALIGNMENT} bytes"
             )));
         }
         if self.buffer_size % self.alignment != 0 {
@@ -293,7 +292,7 @@ impl SyncDirectFile {
 
         let file = options
             .open(path)
-            .map_err(|e| StreamlineError::storage_msg(format!("Failed to open file: {}", e)))?;
+            .map_err(|e| StreamlineError::storage_msg(format!("Failed to open file: {e}")))?;
 
         // Use F_NOCACHE to disable caching
         let fd = file.as_raw_fd();
@@ -308,8 +307,7 @@ impl SyncDirectFile {
                 Ok((file, false))
             } else {
                 Err(StreamlineError::storage_msg(format!(
-                    "F_NOCACHE not supported for {:?}",
-                    path
+                    "F_NOCACHE not supported for {path:?}"
                 )))
             }
         } else {
@@ -389,7 +387,7 @@ impl SyncDirectFile {
 
             // Create aligned buffer
             let mut aligned_buf = allocate_aligned(self.write_buffer.len(), self.config.alignment)
-                .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+                .map_err(|e| std::io::Error::other(e.to_string()))?;
             aligned_buf[..self.write_buffer.len()].copy_from_slice(&self.write_buffer);
 
             // Aligned offset
@@ -456,7 +454,7 @@ impl SyncDirectFile {
 
             // Allocate aligned buffer
             let mut aligned_buf = allocate_aligned(aligned_size, self.config.alignment)
-                .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+                .map_err(|e| std::io::Error::other(e.to_string()))?;
 
             #[cfg(unix)]
             let bytes_read = {
@@ -520,7 +518,7 @@ impl SyncDirectFile {
             // If offset is aligned and buf length is aligned, write directly
             if offset % alignment == 0 && buf.len() % self.config.alignment == 0 {
                 let mut aligned_buf = allocate_aligned(buf.len(), self.config.alignment)
-                    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+                    .map_err(|e| std::io::Error::other(e.to_string()))?;
                 aligned_buf[..buf.len()].copy_from_slice(buf);
 
                 #[cfg(unix)]

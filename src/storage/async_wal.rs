@@ -369,7 +369,7 @@ impl AsyncWalReader {
         let path = path.to_path_buf();
         tokio::task::spawn_blocking(move || WalReader::read_file(&path))
             .await
-            .map_err(|e| StreamlineError::storage_msg(format!("Failed to read WAL: {}", e)))?
+            .map_err(|e| StreamlineError::storage_msg(format!("Failed to read WAL: {e}")))?
     }
 
     /// Read all entries from a WAL file with recovery statistics
@@ -379,7 +379,7 @@ impl AsyncWalReader {
         let path = path.to_path_buf();
         tokio::task::spawn_blocking(move || WalReader::read_file_with_stats(&path))
             .await
-            .map_err(|e| StreamlineError::storage_msg(format!("Failed to read WAL: {}", e)))?
+            .map_err(|e| StreamlineError::storage_msg(format!("Failed to read WAL: {e}")))?
     }
 
     /// Read all entries from all WAL files in a directory
@@ -389,7 +389,7 @@ impl AsyncWalReader {
         let wal_dir = wal_dir.to_path_buf();
         tokio::task::spawn_blocking(move || WalReader::read_all(&wal_dir))
             .await
-            .map_err(|e| StreamlineError::storage_msg(format!("Failed to read WAL: {}", e)))?
+            .map_err(|e| StreamlineError::storage_msg(format!("Failed to read WAL: {e}")))?
     }
 
     /// Read all entries with recovery statistics
@@ -399,7 +399,7 @@ impl AsyncWalReader {
         let wal_dir = wal_dir.to_path_buf();
         tokio::task::spawn_blocking(move || WalReader::read_all_with_stats(&wal_dir))
             .await
-            .map_err(|e| StreamlineError::storage_msg(format!("Failed to read WAL: {}", e)))?
+            .map_err(|e| StreamlineError::storage_msg(format!("Failed to read WAL: {e}")))?
     }
 
     /// Read entries after a given sequence number
@@ -538,7 +538,7 @@ mod tests {
 
         // Write some entries
         for i in 0..10 {
-            wal.append_record("topic1", 0, None, &Bytes::from(format!("value-{}", i)))
+            wal.append_record("topic1", 0, None, &Bytes::from(format!("value-{i}")))
                 .await
                 .unwrap();
         }
@@ -570,7 +570,7 @@ mod tests {
 
         // Each write should be immediately synced
         for i in 0..5 {
-            wal.append_record("topic1", 0, None, &Bytes::from(format!("value-{}", i)))
+            wal.append_record("topic1", 0, None, &Bytes::from(format!("value-{i}")))
                 .await
                 .unwrap();
         }

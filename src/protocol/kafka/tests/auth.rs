@@ -65,8 +65,7 @@ fn test_sasl_handshake_request_header_v1_phase6() {
             KafkaHandler::request_header_version(ApiKey::SaslHandshake as i16, version);
         assert_eq!(
             header_version, 1,
-            "SaslHandshake v{} should use request header v1",
-            version
+            "SaslHandshake v{version} should use request header v1"
         );
     }
 }
@@ -81,8 +80,7 @@ fn test_sasl_handshake_response_header_v0_phase6() {
             KafkaHandler::response_header_version(ApiKey::SaslHandshake as i16, version);
         assert_eq!(
             header_version, 0,
-            "SaslHandshake v{} should use response header v0",
-            version
+            "SaslHandshake v{version} should use response header v0"
         );
     }
 }
@@ -113,8 +111,7 @@ fn test_sasl_authenticate_header_versions() {
             KafkaHandler::request_header_version(ApiKey::SaslAuthenticate as i16, version);
         assert_eq!(
             header_version, 1,
-            "SaslAuthenticate v{} should use request header v1",
-            version
+            "SaslAuthenticate v{version} should use request header v1"
         );
     }
 
@@ -318,7 +315,7 @@ fn test_sasl_plain_auth_bytes_format() {
     let username = "user";
     let password = "pass";
 
-    let auth_bytes = format!("{}\0{}\0{}", authzid, username, password);
+    let auth_bytes = format!("{authzid}\0{username}\0{password}");
     let parts: Vec<&str> = auth_bytes.split('\0').collect();
 
     assert_eq!(parts.len(), 3);
@@ -334,7 +331,7 @@ fn test_sasl_plain_auth_with_authzid() {
     let username = "user";
     let password = "pass";
 
-    let auth_bytes = format!("{}\0{}\0{}", authzid, username, password);
+    let auth_bytes = format!("{authzid}\0{username}\0{password}");
     let parts: Vec<&str> = auth_bytes.split('\0').collect();
 
     assert_eq!(parts.len(), 3);
@@ -358,8 +355,7 @@ fn test_scram_nonce_length() {
 
     assert!(
         nonce.len() >= min_nonce_length,
-        "Nonce should be at least {} chars",
-        min_nonce_length
+        "Nonce should be at least {min_nonce_length} chars"
     );
 }
 
@@ -371,8 +367,7 @@ fn test_scram_iteration_count() {
 
     assert!(
         default_iterations >= min_iterations,
-        "Default iterations should be at least {}",
-        min_iterations
+        "Default iterations should be at least {min_iterations}"
     );
 }
 

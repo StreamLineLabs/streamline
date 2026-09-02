@@ -46,28 +46,26 @@ pub mod search;
 pub mod semantic_partitioner;
 pub mod semantic_record;
 pub mod semantic_search;
-pub mod similarity_stream;
-pub mod summarization;
-pub mod vector_streaming;
 #[cfg(feature = "semantic-topics")]
 #[allow(dead_code)]
 pub mod semantic_topics;
+pub mod similarity_stream;
+pub mod summarization;
+pub mod vector_streaming;
 
 pub use anomaly::{AnomalyDetector, AnomalyEvent, AnomalyResult, AnomalyType, DetectorConfig};
 pub use config::{
     AIConfig, AnomalyConfig, EmbeddingConfig, LLMConfig, RoutingConfig, SearchConfig,
 };
-pub use pattern::{
-    PatternAnalysis, PatternConfig, PatternRecognizer, SeasonalPattern, Trend,
-};
-pub use summarization::{
-    AggregateStats, HyperLogLog, InferredField, InferredSchema, InferredType,
-    StreamSummarizer, SummarizationConfig, TopicSummary,
-};
 pub use embedding::{EmbeddingEngine, EmbeddingModel, EmbeddingResult, VectorStore};
 pub use embeddings::{
-    CachedProvider, EmbeddingProviderConfig as EnhancedEmbeddingProviderConfig,
-    EmbeddingProviderSelection, LocalProvider, create_embedding_provider,
+    create_embedding_provider, CachedProvider,
+    EmbeddingProviderConfig as EnhancedEmbeddingProviderConfig, EmbeddingProviderSelection,
+    LocalProvider,
+};
+pub use gateway::{
+    AIGateway, CostSnapshot, CostTracker, GatewayConfig, InferenceResult, InvocationCost,
+    ProviderCostSummary, ProviderEntry, ProviderKind,
 };
 pub use hnsw::{DistanceMetric, HnswConfig, HnswIndex, HnswStatsSnapshot};
 pub use llm::{
@@ -77,6 +75,10 @@ pub use llm_streaming::{
     ChatMessage, FinishReason, LLMStreamClient, LLMStreamConfig, LLMStreamManager,
     LLMStreamProvider, LLMStreamStats, MockStreamProvider, SemanticBoundary, StreamChunk,
     StreamingResponse,
+};
+pub use pattern::{PatternAnalysis, PatternConfig, PatternRecognizer, SeasonalPattern, Trend};
+pub use persistent_store::{
+    PersistentVectorStore, PersistentVectorStoreConfig, PersistentVectorStoreStats, StoredVector,
 };
 pub use pipeline::{
     AIPipeline, AnomalyMethod, ErrorStrategy, FilterAction, PipelineBuilder, PipelineConfig,
@@ -109,17 +111,14 @@ pub use similarity_stream::{
     NewRecordEvent, QueryType, SimilarityConfig, SimilarityResult, SimilarityStatsSnapshot,
     SimilarityStreamManager, StreamingResult, SubscriptionConfig,
 };
+pub use summarization::{
+    AggregateStats, HyperLogLog, InferredField, InferredSchema, InferredType, StreamSummarizer,
+    SummarizationConfig, TopicSummary,
+};
 pub use vector_streaming::{
     HnswParams, IvfParams, RagChunk, RagConfig, RagContext, RagPipeline, StreamVector,
     TopicVectorStore, VectorEncoding, VectorIndexConfig, VectorIndexType, VectorSearchResult,
     VectorStoreStats, DEFAULT_VECTOR_DIM, MAX_VECTOR_DIM, MIN_VECTOR_DIM,
-};
-pub use persistent_store::{
-    PersistentVectorStore, PersistentVectorStoreConfig, PersistentVectorStoreStats, StoredVector,
-};
-pub use gateway::{
-    AIGateway, CostSnapshot, CostTracker, GatewayConfig, InferenceResult, InvocationCost,
-    ProviderCostSummary, ProviderEntry, ProviderKind,
 };
 
 use crate::error::{Result, StreamlineError};
@@ -245,7 +244,7 @@ impl AIManager {
                     // Persist embedding to vector store if available
                     if let Some(store) = &self.vector_store {
                         let id = uuid::Uuid::new_v4().to_string();
-                        let vector: Vec<f32> = embedding.vector.iter().map(|&v| v as f32).collect();
+                        let vector: Vec<f32> = embedding.vector.clone();
                         let preview = if text.len() > 200 {
                             Some(text[..200].to_string())
                         } else {
@@ -342,7 +341,7 @@ impl AIManager {
 
         // Generate query embedding
         let embedding = self.embeddings.embed_text(query_text).await?;
-        let query_vec: Vec<f32> = embedding.vector.iter().map(|&v| v as f32).collect();
+        let query_vec: Vec<f32> = embedding.vector.clone();
 
         Ok(store.search_nearest(&query_vec, limit).await)
     }
@@ -359,7 +358,7 @@ impl AIManager {
         })?;
 
         let embedding = self.embeddings.embed_text(query_text).await?;
-        let query_vec: Vec<f32> = embedding.vector.iter().map(|&v| v as f32).collect();
+        let query_vec: Vec<f32> = embedding.vector.clone();
 
         Ok(store.search_in_topic(topic, &query_vec, limit).await)
     }

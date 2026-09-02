@@ -15,7 +15,7 @@ documentation = "https://docs.rs/streamline"
 readme = "README.md"
 keywords = ["streaming", "kafka", "messaging", "event-sourcing"]
 categories = ["network-programming", "asynchronous"]
-rust-version = "1.80"
+rust-version = "1.88"
 exclude = [
     ".github/",
     "example_data/",

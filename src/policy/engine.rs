@@ -389,14 +389,14 @@ impl PolicyEngine {
     pub async fn export_yaml(&self) -> Result<String> {
         let policy = self.current_policy.read().await;
         serde_yaml::to_string(&*policy)
-            .map_err(|e| StreamlineError::Config(format!("Failed to export policy: {}", e)))
+            .map_err(|e| StreamlineError::Config(format!("Failed to export policy: {e}")))
     }
 
     /// Export the current policy to JSON
     pub async fn export_json(&self) -> Result<String> {
         let policy = self.current_policy.read().await;
         serde_json::to_string_pretty(&*policy)
-            .map_err(|e| StreamlineError::Config(format!("Failed to export policy: {}", e)))
+            .map_err(|e| StreamlineError::Config(format!("Failed to export policy: {e}")))
     }
 }
 

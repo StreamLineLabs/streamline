@@ -13,7 +13,7 @@ use streamline::TopicManager;
 use tempfile::tempdir;
 
 /// Collect latency samples and report percentiles
-fn percentile(samples: &mut Vec<u64>, p: f64) -> u64 {
+fn percentile(samples: &mut [u64], p: f64) -> u64 {
     samples.sort_unstable();
     let idx = ((p / 100.0) * samples.len() as f64).ceil() as usize;
     samples[idx.min(samples.len() - 1)]
@@ -52,7 +52,7 @@ fn bench_produce_read_latency(c: &mut Criterion) {
         manager.create_topic("latency-rt", 1).unwrap();
         let payload = Bytes::from(vec![b'x'; size]);
 
-        group.bench_function(format!("round_trip_{}b", size), |b| {
+        group.bench_function(format!("round_trip_{size}b"), |b| {
             b.iter_custom(|iters| {
                 let mut total = std::time::Duration::ZERO;
                 for _ in 0..iters {
@@ -60,9 +60,7 @@ fn bench_produce_read_latency(c: &mut Criterion) {
                     let offset = manager
                         .append("latency-rt", 0, None, black_box(payload.clone()))
                         .unwrap();
-                    let _records = manager
-                        .read("latency-rt", 0, offset, 1)
-                        .unwrap();
+                    let _records = manager.read("latency-rt", 0, offset, 1).unwrap();
                     total += start.elapsed();
                 }
                 total
@@ -92,9 +90,7 @@ fn bench_latency_percentiles(c: &mut Criterion) {
                 let offset = manager
                     .append("pct-topic", 0, None, black_box(payload.clone()))
                     .unwrap();
-                let _records = manager
-                    .read("pct-topic", 0, offset, 1)
-                    .unwrap();
+                let _records = manager.read("pct-topic", 0, offset, 1).unwrap();
                 samples.push(start.elapsed().as_nanos() as u64);
             }
 
@@ -127,7 +123,7 @@ fn bench_latency_under_load(c: &mut Criterion) {
                 .unwrap();
         }
 
-        group.bench_function(format!("produce_{}p", partitions), |b| {
+        group.bench_function(format!("produce_{partitions}p"), |b| {
             b.iter_custom(|iters| {
                 let mut total = std::time::Duration::ZERO;
                 for i in 0..iters {

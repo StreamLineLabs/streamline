@@ -96,10 +96,7 @@ pub fn create_lineage_api_router(state: LineageApiState) -> Router {
     Router::new()
         .route("/api/v1/lineage/graph", get(get_full_graph))
         .route("/api/v1/lineage/edges", post(add_edge))
-        .route(
-            "/api/v1/lineage/edges/:source/:target",
-            delete(remove_edge),
-        )
+        .route("/api/v1/lineage/edges/:source/:target", delete(remove_edge))
         .route("/api/v1/lineage/search", get(search_entries))
         .route("/api/v1/lineage/stats", get(get_stats))
         .route("/api/v1/lineage/:topic/:offset", get(get_event_lineage))
@@ -228,18 +225,14 @@ async fn remove_edge(
         Ok(()) => (
             StatusCode::OK,
             Json(MessageResponse {
-                message: format!("Edge removed: {} -> {}", source, target),
+                message: format!("Edge removed: {source} -> {target}"),
             }),
         )
             .into_response(),
         Err(err) => {
             let msg = err.to_string();
             error!(error = %msg, "failed to remove lineage edge");
-            (
-                StatusCode::NOT_FOUND,
-                Json(LineageApiError { error: msg }),
-            )
-                .into_response()
+            (StatusCode::NOT_FOUND, Json(LineageApiError { error: msg })).into_response()
         }
     }
 }
@@ -272,9 +265,7 @@ mod tests {
     use axum::http::{Method, Request};
     use tower::ServiceExt;
 
-    use crate::schema::catalog::{
-        CatalogEntry, DataClassification, OwnerInfo, SchemaCatalog,
-    };
+    use crate::schema::catalog::{CatalogEntry, DataClassification, OwnerInfo, SchemaCatalog};
 
     fn test_state() -> LineageApiState {
         LineageApiState {
@@ -285,7 +276,7 @@ mod tests {
     fn make_entry(subject: &str) -> CatalogEntry {
         CatalogEntry {
             subject: subject.to_string(),
-            description: Some(format!("{} description", subject)),
+            description: Some(format!("{subject} description")),
             owner: Some(OwnerInfo {
                 team: "platform".to_string(),
                 contact: "team@example.com".to_string(),
@@ -339,11 +330,19 @@ mod tests {
         let state = test_state();
         state
             .catalog
-            .add_lineage_edge(make_edge("orders", "analytics", LineageEdgeType::ConsumesFrom))
+            .add_lineage_edge(make_edge(
+                "orders",
+                "analytics",
+                LineageEdgeType::ConsumesFrom,
+            ))
             .unwrap();
         state
             .catalog
-            .add_lineage_edge(make_edge("ingestion", "orders", LineageEdgeType::ProducesTo))
+            .add_lineage_edge(make_edge(
+                "ingestion",
+                "orders",
+                LineageEdgeType::ProducesTo,
+            ))
             .unwrap();
 
         let app = create_lineage_api_router(state);
@@ -388,11 +387,19 @@ mod tests {
         let state = test_state();
         state
             .catalog
-            .add_lineage_edge(make_edge("orders", "analytics", LineageEdgeType::ConsumesFrom))
+            .add_lineage_edge(make_edge(
+                "orders",
+                "analytics",
+                LineageEdgeType::ConsumesFrom,
+            ))
             .unwrap();
         state
             .catalog
-            .add_lineage_edge(make_edge("analytics", "dashboard", LineageEdgeType::DerivedFrom))
+            .add_lineage_edge(make_edge(
+                "analytics",
+                "dashboard",
+                LineageEdgeType::DerivedFrom,
+            ))
             .unwrap();
 
         let app = create_lineage_api_router(state);

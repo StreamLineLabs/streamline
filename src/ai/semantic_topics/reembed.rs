@@ -131,9 +131,9 @@ mod tests {
 
         // Seed the old index with some records.
         let old = registry::get_or_create(&topic);
-        old.insert(0, 1, &vec![1.0; 32]);
-        old.insert(0, 2, &vec![0.5; 32]);
-        old.insert(1, 3, &vec![0.0; 32]);
+        old.insert(0, 1, &[1.0; 32]);
+        old.insert(0, 2, &[0.5; 32]);
+        old.insert(1, 3, &[0.0; 32]);
         assert_eq!(old.len(), 3);
 
         let config = ReembedConfig::new(&topic, "hash-v2");
@@ -157,7 +157,7 @@ mod tests {
 
         let idx = registry::get_or_create("test-batch");
         for i in 0..5 {
-            idx.insert(0, i, &vec![1.0; 16]);
+            idx.insert(0, i, &[1.0; 16]);
         }
 
         let mut config = ReembedConfig::new("test-batch", "hash-v2");

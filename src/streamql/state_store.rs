@@ -14,8 +14,8 @@
 //!                     ──▶  FileStateStore    (WAL + checkpoints, durable)
 //! ```
 
-use async_trait::async_trait;
 use crate::error::{Result, StreamlineError};
+use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -141,7 +141,10 @@ impl StateStore for MemoryStateStore {
         let data = self.data.read().await;
         let owned_prefix = prefix.map(|p| p.to_string());
         let iter: Box<dyn Iterator<Item = (&String, &serde_json::Value)>> = match &owned_prefix {
-            Some(p) => Box::new(data.range(p.clone()..).take_while(|(k, _)| k.starts_with(p.as_str()))),
+            Some(p) => Box::new(
+                data.range(p.clone()..)
+                    .take_while(|(k, _)| k.starts_with(p.as_str())),
+            ),
             None => Box::new(data.iter()),
         };
         let entries: Vec<(String, serde_json::Value)> = match limit {
@@ -154,16 +157,13 @@ impl StateStore for MemoryStateStore {
     async fn checkpoint(&self) -> Result<Vec<u8>> {
         let data = self.data.read().await;
         let snapshot: BTreeMap<String, serde_json::Value> = data.clone();
-        serde_json::to_vec(&snapshot).map_err(|e| {
-            StreamlineError::Storage(format!("failed to serialize checkpoint: {e}"))
-        })
+        serde_json::to_vec(&snapshot)
+            .map_err(|e| StreamlineError::Storage(format!("failed to serialize checkpoint: {e}")))
     }
 
     async fn restore(&self, data: &[u8]) -> Result<()> {
-        let snapshot: BTreeMap<String, serde_json::Value> =
-            serde_json::from_slice(data).map_err(|e| {
-                StreamlineError::CorruptedData(format!("invalid checkpoint data: {e}"))
-            })?;
+        let snapshot: BTreeMap<String, serde_json::Value> = serde_json::from_slice(data)
+            .map_err(|e| StreamlineError::CorruptedData(format!("invalid checkpoint data: {e}")))?;
         let mut store = self.data.write().await;
         *store = snapshot;
         Ok(())
@@ -207,20 +207,20 @@ impl FileStateStore {
     ///
     /// Replays the latest checkpoint plus any WAL entries written after it.
     pub async fn open(dir: PathBuf) -> Result<Self> {
-        tokio::fs::create_dir_all(&dir).await.map_err(|e| {
-            StreamlineError::Storage(format!("cannot create state store dir: {e}"))
-        })?;
+        tokio::fs::create_dir_all(&dir)
+            .await
+            .map_err(|e| StreamlineError::Storage(format!("cannot create state store dir: {e}")))?;
 
         let mut data = BTreeMap::new();
 
         // Restore from checkpoint if available.
         let checkpoint_path = dir.join("checkpoint.json");
         if checkpoint_path.exists() {
-            let bytes = tokio::fs::read(&checkpoint_path).await.map_err(|e| {
-                StreamlineError::Storage(format!("failed to read checkpoint: {e}"))
-            })?;
-            let snapshot: BTreeMap<String, serde_json::Value> =
-                serde_json::from_slice(&bytes).map_err(|e| {
+            let bytes = tokio::fs::read(&checkpoint_path)
+                .await
+                .map_err(|e| StreamlineError::Storage(format!("failed to read checkpoint: {e}")))?;
+            let snapshot: BTreeMap<String, serde_json::Value> = serde_json::from_slice(&bytes)
+                .map_err(|e| {
                     StreamlineError::CorruptedData(format!("corrupt checkpoint file: {e}"))
                 })?;
             data = snapshot;
@@ -230,15 +230,17 @@ impl FileStateStore {
         // Replay WAL.
         let wal_path = dir.join("wal.jsonl");
         if wal_path.exists() {
-            let file = tokio::fs::File::open(&wal_path).await.map_err(|e| {
-                StreamlineError::Storage(format!("failed to open WAL: {e}"))
-            })?;
+            let file = tokio::fs::File::open(&wal_path)
+                .await
+                .map_err(|e| StreamlineError::Storage(format!("failed to open WAL: {e}")))?;
             let reader = BufReader::new(file);
             let mut lines = reader.lines();
             let mut replayed: u64 = 0;
-            while let Some(line) = lines.next_line().await.map_err(|e| {
-                StreamlineError::Storage(format!("WAL read error: {e}"))
-            })? {
+            while let Some(line) = lines
+                .next_line()
+                .await
+                .map_err(|e| StreamlineError::Storage(format!("WAL read error: {e}")))?
+            {
                 if line.trim().is_empty() {
                     continue;
                 }
@@ -280,9 +282,8 @@ impl FileStateStore {
 
     /// Append a WAL entry and flush to disk.
     async fn append_wal(&self, entry: &WalEntry) -> Result<()> {
-        let mut line = serde_json::to_string(entry).map_err(|e| {
-            StreamlineError::Storage(format!("WAL serialization error: {e}"))
-        })?;
+        let mut line = serde_json::to_string(entry)
+            .map_err(|e| StreamlineError::Storage(format!("WAL serialization error: {e}")))?;
         line.push('\n');
 
         let mut wal = self.wal.write().await;
@@ -329,7 +330,10 @@ impl StateStore for FileStateStore {
         let data = self.data.read().await;
         let owned_prefix = prefix.map(|p| p.to_string());
         let iter: Box<dyn Iterator<Item = (&String, &serde_json::Value)>> = match &owned_prefix {
-            Some(p) => Box::new(data.range(p.clone()..).take_while(|(k, _)| k.starts_with(p.as_str()))),
+            Some(p) => Box::new(
+                data.range(p.clone()..)
+                    .take_while(|(k, _)| k.starts_with(p.as_str())),
+            ),
             None => Box::new(data.iter()),
         };
         let entries: Vec<(String, serde_json::Value)> = match limit {
@@ -349,12 +353,12 @@ impl StateStore for FileStateStore {
         // Write checkpoint file atomically (write tmp, then rename).
         let tmp_path = self.dir.join("checkpoint.json.tmp");
         let final_path = self.dir.join("checkpoint.json");
-        tokio::fs::write(&tmp_path, &bytes).await.map_err(|e| {
-            StreamlineError::Storage(format!("failed to write checkpoint: {e}"))
-        })?;
-        tokio::fs::rename(&tmp_path, &final_path).await.map_err(|e| {
-            StreamlineError::Storage(format!("failed to finalize checkpoint: {e}"))
-        })?;
+        tokio::fs::write(&tmp_path, &bytes)
+            .await
+            .map_err(|e| StreamlineError::Storage(format!("failed to write checkpoint: {e}")))?;
+        tokio::fs::rename(&tmp_path, &final_path)
+            .await
+            .map_err(|e| StreamlineError::Storage(format!("failed to finalize checkpoint: {e}")))?;
 
         // Truncate the WAL since state is now fully captured in the checkpoint.
         drop(data); // release read lock before acquiring write
@@ -374,16 +378,14 @@ impl StateStore for FileStateStore {
     }
 
     async fn restore(&self, data: &[u8]) -> Result<()> {
-        let snapshot: BTreeMap<String, serde_json::Value> =
-            serde_json::from_slice(data).map_err(|e| {
-                StreamlineError::CorruptedData(format!("invalid checkpoint data: {e}"))
-            })?;
+        let snapshot: BTreeMap<String, serde_json::Value> = serde_json::from_slice(data)
+            .map_err(|e| StreamlineError::CorruptedData(format!("invalid checkpoint data: {e}")))?;
 
         // Write the checkpoint file.
         let checkpoint_path = self.dir.join("checkpoint.json");
-        tokio::fs::write(&checkpoint_path, data).await.map_err(|e| {
-            StreamlineError::Storage(format!("failed to write checkpoint: {e}"))
-        })?;
+        tokio::fs::write(&checkpoint_path, data)
+            .await
+            .map_err(|e| StreamlineError::Storage(format!("failed to write checkpoint: {e}")))?;
 
         // Truncate WAL.
         let wal_path = self.dir.join("wal.jsonl");
@@ -424,17 +426,11 @@ mod tests {
         assert!(store.get("k1").await.unwrap().is_none());
 
         // Put then get.
-        store
-            .put("k1", serde_json::json!(42))
-            .await
-            .unwrap();
+        store.put("k1", serde_json::json!(42)).await.unwrap();
         assert_eq!(store.get("k1").await.unwrap(), Some(serde_json::json!(42)));
 
         // Overwrite.
-        store
-            .put("k1", serde_json::json!("hello"))
-            .await
-            .unwrap();
+        store.put("k1", serde_json::json!("hello")).await.unwrap();
         assert_eq!(
             store.get("k1").await.unwrap(),
             Some(serde_json::json!("hello"))
@@ -457,10 +453,7 @@ mod tests {
                 .await
                 .unwrap();
         }
-        store
-            .put("order:1", serde_json::json!("a"))
-            .await
-            .unwrap();
+        store.put("order:1", serde_json::json!("a")).await.unwrap();
 
         // Full scan.
         let all = store.scan(None, None).await.unwrap();
@@ -478,23 +471,14 @@ mod tests {
     #[tokio::test]
     async fn test_memory_checkpoint_restore() {
         let store = MemoryStateStore::new();
-        store
-            .put("a", serde_json::json!(1))
-            .await
-            .unwrap();
-        store
-            .put("b", serde_json::json!(2))
-            .await
-            .unwrap();
+        store.put("a", serde_json::json!(1)).await.unwrap();
+        store.put("b", serde_json::json!(2)).await.unwrap();
 
         let snap = store.checkpoint().await.unwrap();
 
         // Mutate state after checkpoint.
         store.delete("a").await.unwrap();
-        store
-            .put("c", serde_json::json!(3))
-            .await
-            .unwrap();
+        store.put("c", serde_json::json!(3)).await.unwrap();
 
         // Restore.
         store.restore(&snap).await.unwrap();
@@ -515,14 +499,13 @@ mod tests {
     #[tokio::test]
     async fn test_file_get_put_delete() {
         let dir = tempfile::tempdir().unwrap();
-        let store = FileStateStore::open(dir.path().to_path_buf()).await.unwrap();
+        let store = FileStateStore::open(dir.path().to_path_buf())
+            .await
+            .unwrap();
 
         assert!(store.get("k1").await.unwrap().is_none());
 
-        store
-            .put("k1", serde_json::json!({"v": 1}))
-            .await
-            .unwrap();
+        store.put("k1", serde_json::json!({"v": 1})).await.unwrap();
         assert_eq!(
             store.get("k1").await.unwrap(),
             Some(serde_json::json!({"v": 1}))
@@ -536,7 +519,9 @@ mod tests {
     #[tokio::test]
     async fn test_file_scan() {
         let dir = tempfile::tempdir().unwrap();
-        let store = FileStateStore::open(dir.path().to_path_buf()).await.unwrap();
+        let store = FileStateStore::open(dir.path().to_path_buf())
+            .await
+            .unwrap();
 
         for i in 0..5 {
             store
@@ -564,10 +549,7 @@ mod tests {
                 .put("x", serde_json::json!("persisted"))
                 .await
                 .unwrap();
-            store
-                .put("y", serde_json::json!(99))
-                .await
-                .unwrap();
+            store.put("y", serde_json::json!(99)).await.unwrap();
             store.delete("y").await.unwrap();
         }
 
@@ -586,14 +568,8 @@ mod tests {
         let path = dir.path().to_path_buf();
 
         let store = FileStateStore::open(path.clone()).await.unwrap();
-        store
-            .put("a", serde_json::json!(1))
-            .await
-            .unwrap();
-        store
-            .put("b", serde_json::json!(2))
-            .await
-            .unwrap();
+        store.put("a", serde_json::json!(1)).await.unwrap();
+        store.put("b", serde_json::json!(2)).await.unwrap();
 
         // Checkpoint should persist state and truncate WAL.
         let snap = store.checkpoint().await.unwrap();
@@ -609,10 +585,7 @@ mod tests {
         assert!(path.join("checkpoint.json").exists());
 
         // Write more data after checkpoint.
-        store
-            .put("c", serde_json::json!(3))
-            .await
-            .unwrap();
+        store.put("c", serde_json::json!(3)).await.unwrap();
         drop(store);
 
         // Reopen: should recover from checkpoint + WAL.
@@ -634,25 +607,16 @@ mod tests {
 
         // Restore into a file store.
         let store2 = FileStateStore::open(path.clone()).await.unwrap();
-        store2
-            .put("old", serde_json::json!("gone"))
-            .await
-            .unwrap();
+        store2.put("old", serde_json::json!("gone")).await.unwrap();
         store2.restore(&snap).await.unwrap();
 
-        assert_eq!(
-            store2.get("k").await.unwrap(),
-            Some(serde_json::json!("v"))
-        );
+        assert_eq!(store2.get("k").await.unwrap(), Some(serde_json::json!("v")));
         assert!(store2.get("old").await.unwrap().is_none());
 
         // Reopen to confirm persistence.
         drop(store2);
         let store3 = FileStateStore::open(path).await.unwrap();
-        assert_eq!(
-            store3.get("k").await.unwrap(),
-            Some(serde_json::json!("v"))
-        );
+        assert_eq!(store3.get("k").await.unwrap(), Some(serde_json::json!("v")));
     }
 
     // -- open_state_store factory ------------------------------------------

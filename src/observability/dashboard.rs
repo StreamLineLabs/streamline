@@ -601,8 +601,7 @@ impl AlertEvaluator {
         rules.retain(|r| r.name != name);
         if rules.len() == before {
             return Err(StreamlineError::Config(format!(
-                "alert rule '{}' not found",
-                name
+                "alert rule '{name}' not found"
             )));
         }
         Ok(())

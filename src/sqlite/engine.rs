@@ -83,14 +83,10 @@ impl SQLiteQueryEngine {
     }
 
     /// Create a new SQLite query engine with a custom row limit.
-    pub fn with_max_rows(
-        topic_manager: Arc<TopicManager>,
-        max_rows: usize,
-    ) -> crate::Result<Self> {
+    pub fn with_max_rows(topic_manager: Arc<TopicManager>, max_rows: usize) -> crate::Result<Self> {
         let conn = Connection::open_in_memory().map_err(|e| {
             crate::error::StreamlineError::Storage(format!(
-                "Failed to open in-memory SQLite database: {}",
-                e
+                "Failed to open in-memory SQLite database: {e}"
             ))
         })?;
 
@@ -213,7 +209,7 @@ impl SQLiteQueryEngine {
         timeout_ms: u64,
     ) -> crate::Result<QueryResult> {
         let mut stmt = conn.prepare(sql).map_err(|e| {
-            crate::error::StreamlineError::Storage(format!("SQLite prepare error: {}", e))
+            crate::error::StreamlineError::Storage(format!("SQLite prepare error: {e}"))
         })?;
 
         let column_count = stmt.column_count();
@@ -245,7 +241,7 @@ impl SQLiteQueryEngine {
                 if e.to_string().contains("interrupted") {
                     crate::error::StreamlineError::Storage("Query timed out".to_string())
                 } else {
-                    crate::error::StreamlineError::Storage(format!("SQLite query error: {}", e))
+                    crate::error::StreamlineError::Storage(format!("SQLite query error: {e}"))
                 }
             })?;
 
@@ -324,11 +320,7 @@ mod tests {
 
         // Produce some JSON records.
         for i in 0..5 {
-            let value = format!(
-                r#"{{"id":{},"status":"ok","amount":{}}}"#,
-                i,
-                (i + 1) * 100
-            );
+            let value = format!(r#"{{"id":{},"status":"ok","amount":{}}}"#, i, (i + 1) * 100);
             tm.append("events", 0, None, Bytes::from(value)).unwrap();
         }
 
@@ -512,7 +504,9 @@ mod tests {
     #[test]
     fn test_type_mapping_columns() {
         let (engine, _tm) = setup_test_engine();
-        let result = engine.execute_query("SELECT * FROM events LIMIT 1", None).unwrap();
+        let result = engine
+            .execute_query("SELECT * FROM events LIMIT 1", None)
+            .unwrap();
         // Verify all expected columns are present.
         assert!(result.columns.contains(&"key".to_string()));
         assert!(result.columns.contains(&"value".to_string()));
@@ -567,9 +561,8 @@ mod tests {
 
         // Insert 20 records.
         for i in 0..20 {
-            let value = format!(r#"{{"idx":{}}}"#, i);
-            tm.append("big_topic", 0, None, Bytes::from(value))
-                .unwrap();
+            let value = format!(r#"{{"idx":{i}}}"#);
+            tm.append("big_topic", 0, None, Bytes::from(value)).unwrap();
         }
 
         // Engine with max_rows = 5.

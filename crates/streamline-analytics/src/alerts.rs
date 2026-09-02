@@ -76,10 +76,10 @@ impl AlertCondition {
             | AlertCondition::ThresholdBelow { metric, .. }
             | AlertCondition::RateOfChange { metric, .. } => metric.clone(),
             AlertCondition::ConsumerLagAbove { group, topic, .. } => {
-                format!("consumer_lag.{}.{}", group, topic)
+                format!("consumer_lag.{group}.{topic}")
             }
             AlertCondition::TopicSizeAbove { topic, .. } => {
-                format!("topic_size.{}", topic)
+                format!("topic_size.{topic}")
             }
             AlertCondition::ErrorRateAbove { .. } => "error_rate".to_string(),
             AlertCondition::Custom { expression } => expression.clone(),
@@ -249,8 +249,7 @@ impl AlertEngine {
         let mut rules = self.rules.write();
         if rules.remove(id).is_none() {
             return Err(AnalyticsError::Config(format!(
-                "Alert rule '{}' not found",
-                id
+                "Alert rule '{id}' not found"
             )));
         }
         self.active_alerts.write().remove(id);
@@ -263,7 +262,7 @@ impl AlertEngine {
         let mut rules = self.rules.write();
         let rule = rules
             .get_mut(id)
-            .ok_or_else(|| AnalyticsError::Config(format!("Alert rule '{}' not found", id)))?;
+            .ok_or_else(|| AnalyticsError::Config(format!("Alert rule '{id}' not found")))?;
         rule.enabled = true;
         debug!(rule_id = %id, "Enabled alert rule");
         Ok(())
@@ -274,7 +273,7 @@ impl AlertEngine {
         let mut rules = self.rules.write();
         let rule = rules
             .get_mut(id)
-            .ok_or_else(|| AnalyticsError::Config(format!("Alert rule '{}' not found", id)))?;
+            .ok_or_else(|| AnalyticsError::Config(format!("Alert rule '{id}' not found")))?;
         rule.enabled = false;
         debug!(rule_id = %id, "Disabled alert rule");
         Ok(())
@@ -368,7 +367,7 @@ impl AlertEngine {
     pub fn acknowledge(&self, rule_id: &str) -> Result<()> {
         let mut active = self.active_alerts.write();
         let mut event = active.remove(rule_id).ok_or_else(|| {
-            AnalyticsError::Config(format!("No active alert for rule '{}'", rule_id))
+            AnalyticsError::Config(format!("No active alert for rule '{rule_id}'"))
         })?;
 
         let now = std::time::SystemTime::now()
@@ -448,7 +447,7 @@ mod tests {
     fn make_rule(id: &str, condition: AlertCondition) -> AlertRule {
         AlertRule {
             id: id.to_string(),
-            name: format!("Rule {}", id),
+            name: format!("Rule {id}"),
             description: "test rule".to_string(),
             condition,
             severity: AlertSeverity::Warning,

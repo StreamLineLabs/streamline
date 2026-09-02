@@ -515,7 +515,7 @@ pub(crate) enum TopicCommands {
         /// Topic name to export
         name: String,
 
-        /// Output file path (default: <topic>.jsonl)
+        /// Output file path (default: `<topic>.jsonl`)
         #[arg(short, long)]
         output: Option<String>,
 

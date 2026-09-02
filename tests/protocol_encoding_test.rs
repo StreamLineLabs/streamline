@@ -166,8 +166,7 @@ fn test_unsigned_varint_two_byte_values() {
         let encoded = encode_unsigned_varint(value);
         assert_eq!(
             encoded, expected,
-            "Value {} should encode to {:?}, got {:?}",
-            value, expected, encoded
+            "Value {value} should encode to {expected:?}, got {encoded:?}"
         );
 
         let (decoded, bytes_read) = decode_unsigned_varint(&encoded).unwrap();
@@ -189,8 +188,7 @@ fn test_unsigned_varint_three_byte_values() {
         let encoded = encode_unsigned_varint(value);
         assert_eq!(
             encoded, expected,
-            "Value {} should encode to {:?}, got {:?}",
-            value, expected, encoded
+            "Value {value} should encode to {expected:?}, got {encoded:?}"
         );
 
         let (decoded, _) = decode_unsigned_varint(&encoded).unwrap();
@@ -217,7 +215,7 @@ fn test_unsigned_varint_max_values() {
     for value in test_cases {
         let encoded = encode_unsigned_varint(value);
         let (decoded, _) = decode_unsigned_varint(&encoded).unwrap();
-        assert_eq!(decoded, value, "Roundtrip failed for value {}", value);
+        assert_eq!(decoded, value, "Roundtrip failed for value {value}");
     }
 }
 
@@ -255,8 +253,7 @@ fn test_signed_varint_zigzag_encoding() {
         let unsigned_decoded = decode_unsigned_varint(&encoded).unwrap().0;
         assert_eq!(
             unsigned_decoded, expected_zigzag,
-            "ZigZag of {} should be {}, got {}",
-            signed, expected_zigzag, unsigned_decoded
+            "ZigZag of {signed} should be {expected_zigzag}, got {unsigned_decoded}"
         );
 
         // Verify roundtrip
@@ -288,7 +285,7 @@ fn test_signed_varint_negative_values() {
     for value in [-1, -64, -65, -8192, -8193, -1000000, i32::MIN] {
         let encoded = encode_signed_varint(value);
         let (decoded, _) = decode_signed_varint(&encoded).unwrap();
-        assert_eq!(decoded, value, "Roundtrip failed for {}", value);
+        assert_eq!(decoded, value, "Roundtrip failed for {value}");
     }
 }
 
@@ -743,13 +740,11 @@ fn test_fetch_request_roundtrip_across_versions() {
 
         assert_eq!(
             request.max_wait_ms, decoded.max_wait_ms,
-            "max_wait_ms mismatch at v{}",
-            version
+            "max_wait_ms mismatch at v{version}"
         );
         assert_eq!(
             request.min_bytes, decoded.min_bytes,
-            "min_bytes mismatch at v{}",
-            version
+            "min_bytes mismatch at v{version}"
         );
     }
 }

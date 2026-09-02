@@ -5,12 +5,10 @@
 //! while maintaining even load distribution across the cluster.
 
 use crate::cluster::node::{BrokerInfo, NodeId};
-use crate::cluster::rack::RackAwareAssigner;
 use crate::cluster::raft::state_machine::ClusterMetadata;
-use crate::cluster::raft::types::{PartitionAssignment, TopicAssignment};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use tracing::{debug, info, warn};
+use tracing::info;
 
 /// Configuration for the partition rebalancer
 #[derive(Debug, Clone)]
@@ -171,10 +169,7 @@ impl PartitionRebalancer {
 
         info!(
             movements = movements.len(),
-            under_replicated_count,
-            imbalance_before,
-            imbalance_after,
-            "Rebalance plan computed"
+            under_replicated_count, imbalance_before, imbalance_after, "Rebalance plan computed"
         );
 
         RebalancePlan {
@@ -231,9 +226,7 @@ impl PartitionRebalancer {
                 }
 
                 if new_replicas != partition.replicas && !new_replicas.is_empty() {
-                    let new_leader = if new_replicas.contains(
-                        &partition.leader.unwrap_or(0),
-                    ) {
+                    let new_leader = if new_replicas.contains(&partition.leader.unwrap_or(0)) {
                         partition.leader.unwrap_or(new_replicas[0])
                     } else {
                         new_replicas[0]
@@ -354,18 +347,12 @@ impl PartitionRebalancer {
 
         for _ in 0..max_budget {
             // Find most overloaded and underloaded brokers
-            let (overloaded, over_count) = match load_map
-                .iter()
-                .max_by_key(|(_, &load)| load)
-            {
+            let (overloaded, over_count) = match load_map.iter().max_by_key(|(_, &load)| load) {
                 Some((&id, &load)) => (id, load),
                 None => break,
             };
 
-            let (underloaded, under_count) = match load_map
-                .iter()
-                .min_by_key(|(_, &load)| load)
-            {
+            let (underloaded, under_count) = match load_map.iter().min_by_key(|(_, &load)| load) {
                 Some((&id, &load)) => (id, load),
                 None => break,
             };
@@ -436,8 +423,7 @@ impl PartitionRebalancer {
         metadata: &ClusterMetadata,
         alive_ids: &[NodeId],
     ) -> HashMap<NodeId, usize> {
-        let mut load: HashMap<NodeId, usize> =
-            alive_ids.iter().map(|&id| (id, 0)).collect();
+        let mut load: HashMap<NodeId, usize> = alive_ids.iter().map(|&id| (id, 0)).collect();
 
         for topic in metadata.topics.values() {
             for partition in topic.partitions.values() {
@@ -453,11 +439,7 @@ impl PartitionRebalancer {
     }
 
     /// Compute the imbalance score (0.0 = perfectly balanced)
-    fn compute_imbalance(
-        &self,
-        metadata: &ClusterMetadata,
-        alive_ids: &[NodeId],
-    ) -> f64 {
+    fn compute_imbalance(&self, metadata: &ClusterMetadata, alive_ids: &[NodeId]) -> f64 {
         let load_map = self.compute_load_map(metadata, alive_ids);
         if load_map.is_empty() {
             return 0.0;
@@ -521,7 +503,7 @@ impl PartitionRebalancer {
 mod tests {
     use super::*;
     use crate::cluster::node::NodeState;
-    use std::net::SocketAddr;
+    use crate::cluster::raft::types::{PartitionAssignment, TopicAssignment};
 
     fn make_broker(id: NodeId, state: NodeState) -> BrokerInfo {
         BrokerInfo {
@@ -543,11 +525,10 @@ mod tests {
             metadata.register_broker(broker);
         }
         for (name, partitions) in topics {
-            let mut assignment =
-                TopicAssignment::new(name.to_string(), partitions.len() as i32, 3);
+            let mut assignment = TopicAssignment::new(name.to_string(), partitions.len() as i32, 3);
             for (i, replicas) in partitions.iter().enumerate() {
-                let pa = PartitionAssignment::new(i as i32, replicas.clone())
-                    .with_leader(replicas[0]);
+                let pa =
+                    PartitionAssignment::new(i as i32, replicas.clone()).with_leader(replicas[0]);
                 assignment = assignment.with_partition(pa);
             }
             metadata.topics.insert(name.to_string(), assignment);

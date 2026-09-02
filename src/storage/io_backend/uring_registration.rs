@@ -200,11 +200,14 @@ impl BufferRegistration {
             .iter()
             .map(|&size| {
                 // Allocate page-aligned for DMA
-                let layout = std::alloc::Layout::from_size_align(size, 4096).or_else(|_| {
-                    std::alloc::Layout::from_size_align(size, 8)
-                }).map_err(|e| StreamlineError::storage_msg(format!(
-                    "Failed to create memory layout for size {}: {}", size, e
-                )))?;
+                let layout = std::alloc::Layout::from_size_align(size, 4096)
+                    .or_else(|_| std::alloc::Layout::from_size_align(size, 8))
+                    .map_err(|e| {
+                        StreamlineError::storage_msg(format!(
+                            "Failed to create memory layout for size {}: {}",
+                            size, e
+                        ))
+                    })?;
                 // SAFETY: alloc_zeroed is safe because the layout was successfully
                 // created above with valid size and alignment. The returned pointer
                 // is checked for null before use.

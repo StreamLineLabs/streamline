@@ -522,7 +522,9 @@ impl MultiAggregation {
                         }
                         if let Some(ref mut values) = state.sorted_values {
                             values.push(value);
-                            values.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+                            values.sort_by(|a, b| {
+                                a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
+                            });
                         }
                         state.count += 1;
                     }

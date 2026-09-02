@@ -74,13 +74,31 @@ pub enum Severity {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum RecommendedAction {
-    AddPartitions { topic: String, count: u32 },
-    RebalanceConsumers { group: String },
-    IncreaseRetention { topic: String, hours: u64 },
-    ScaleUp { replicas: i32 },
-    TuneConfig { key: String, value: String, reason: String },
-    CompactTopics { topics: Vec<String> },
-    NoAction { reason: String },
+    AddPartitions {
+        topic: String,
+        count: u32,
+    },
+    RebalanceConsumers {
+        group: String,
+    },
+    IncreaseRetention {
+        topic: String,
+        hours: u64,
+    },
+    ScaleUp {
+        replicas: i32,
+    },
+    TuneConfig {
+        key: String,
+        value: String,
+        reason: String,
+    },
+    CompactTopics {
+        topics: Vec<String>,
+    },
+    NoAction {
+        reason: String,
+    },
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -157,7 +175,6 @@ pub struct AdvisorStats {
 // ---------------------------------------------------------------------------
 
 pub struct PerformanceAdvisor {
-    config: AdvisorConfig,
     recommendations: Arc<RwLock<Vec<Recommendation>>>,
     stats: Arc<AdvisorStats>,
 }
@@ -170,7 +187,6 @@ impl PerformanceAdvisor {
             "performance advisor initialized"
         );
         Self {
-            config,
             recommendations: Arc::new(RwLock::new(Vec::new())),
             stats: Arc::new(AdvisorStats::default()),
         }
@@ -222,7 +238,7 @@ impl PerformanceAdvisor {
                 } else {
                     Severity::Warning
                 };
-                let confidence = (consumer.lag as f64 / 1_000_000.0).min(1.0).max(0.5);
+                let confidence = (consumer.lag as f64 / 1_000_000.0).clamp(0.5, 1.0);
                 recs.push(Recommendation {
                     id: Uuid::new_v4().to_string(),
                     category: RecommendationCategory::ConsumerLag,
@@ -263,7 +279,9 @@ impl PerformanceAdvisor {
                     "Memory usage is at {:.1}%. Consider compacting topics to free memory.",
                     snapshot.system.memory_pct
                 ),
-                action: RecommendedAction::CompactTopics { topics: topic_names },
+                action: RecommendedAction::CompactTopics {
+                    topics: topic_names,
+                },
                 impact: "Reduced memory footprint through log compaction".into(),
                 confidence: (snapshot.system.memory_pct / 100.0).min(1.0),
                 created_at: chrono::Utc::now().to_rfc3339(),
@@ -347,29 +365,35 @@ impl PerformanceAdvisor {
 
     /// Return all current recommendations.
     pub fn get_recommendations(&self) -> Vec<Recommendation> {
-        self.recommendations.read().map_or_else(|_| Vec::new(), |r| r.clone())
+        self.recommendations
+            .read()
+            .map_or_else(|_| Vec::new(), |r| r.clone())
     }
 
     /// Dismiss a recommendation by id.
     pub fn dismiss(&self, id: &str) -> Result<()> {
-        let mut recs = self.recommendations.write().map_err(|_| {
-            AdvisorError::NotFound(id.to_string())
-        })?;
+        let mut recs = self
+            .recommendations
+            .write()
+            .map_err(|_| AdvisorError::NotFound(id.to_string()))?;
         let rec = recs
             .iter_mut()
             .find(|r| r.id == id)
             .ok_or_else(|| AdvisorError::NotFound(id.to_string()))?;
         rec.status = RecommendationStatus::Dismissed;
-        self.stats.recommendations_dismissed.fetch_add(1, Ordering::Relaxed);
+        self.stats
+            .recommendations_dismissed
+            .fetch_add(1, Ordering::Relaxed);
         info!(id = %id, "recommendation dismissed");
         Ok(())
     }
 
     /// Apply a recommendation by id.
     pub fn apply(&self, id: &str) -> Result<()> {
-        let mut recs = self.recommendations.write().map_err(|_| {
-            AdvisorError::NotFound(id.to_string())
-        })?;
+        let mut recs = self
+            .recommendations
+            .write()
+            .map_err(|_| AdvisorError::NotFound(id.to_string()))?;
         let rec = recs
             .iter_mut()
             .find(|r| r.id == id)
@@ -379,7 +403,9 @@ impl PerformanceAdvisor {
         }
         rec.status = RecommendationStatus::Applied;
         rec.applied_at = Some(chrono::Utc::now().to_rfc3339());
-        self.stats.recommendations_applied.fetch_add(1, Ordering::Relaxed);
+        self.stats
+            .recommendations_applied
+            .fetch_add(1, Ordering::Relaxed);
         info!(id = %id, "recommendation applied");
         Ok(())
     }
@@ -411,7 +437,11 @@ mod tests {
         consumers: Vec<ConsumerPerf>,
         system: SystemPerf,
     ) -> PerformanceSnapshot {
-        PerformanceSnapshot { topics, consumers, system }
+        PerformanceSnapshot {
+            topics,
+            consumers,
+            system,
+        }
     }
 
     fn make_topic(name: &str, hottest: f64, partitions: u32) -> TopicPerf {
@@ -532,7 +562,11 @@ mod tests {
         let snapshot = make_snapshot(
             vec![make_topic("logs", 30.0, 2)],
             vec![],
-            SystemPerf { cpu_pct: 20.0, memory_pct: 85.0, disk_pct: 40.0 },
+            SystemPerf {
+                cpu_pct: 20.0,
+                memory_pct: 85.0,
+                disk_pct: 40.0,
+            },
         );
         let recs = advisor.analyze(&snapshot);
         assert_eq!(recs.len(), 1);
@@ -545,7 +579,11 @@ mod tests {
         let snapshot = make_snapshot(
             vec![make_topic("big-topic", 30.0, 2)],
             vec![],
-            SystemPerf { cpu_pct: 20.0, memory_pct: 50.0, disk_pct: 90.0 },
+            SystemPerf {
+                cpu_pct: 20.0,
+                memory_pct: 50.0,
+                disk_pct: 90.0,
+            },
         );
         let recs = advisor.analyze(&snapshot);
         assert_eq!(recs.len(), 1);
@@ -559,7 +597,11 @@ mod tests {
         let snapshot = make_snapshot(
             vec![],
             vec![],
-            SystemPerf { cpu_pct: 88.0, memory_pct: 50.0, disk_pct: 40.0 },
+            SystemPerf {
+                cpu_pct: 88.0,
+                memory_pct: 50.0,
+                disk_pct: 40.0,
+            },
         );
         let recs = advisor.analyze(&snapshot);
         assert_eq!(recs.len(), 1);
@@ -572,7 +614,11 @@ mod tests {
         let snapshot = make_snapshot(
             vec![make_topic("hot-topic", 75.0, 4)],
             vec![make_consumer("slow-group", 500_000)],
-            SystemPerf { cpu_pct: 20.0, memory_pct: 85.0, disk_pct: 90.0 },
+            SystemPerf {
+                cpu_pct: 20.0,
+                memory_pct: 85.0,
+                disk_pct: 90.0,
+            },
         );
         let recs = advisor.analyze(&snapshot);
         assert_eq!(recs.len(), 4); // partition + consumer + memory + disk
@@ -581,11 +627,7 @@ mod tests {
     #[test]
     fn test_dismiss_recommendation() {
         let advisor = PerformanceAdvisor::new(AdvisorConfig::default());
-        let snapshot = make_snapshot(
-            vec![make_topic("t", 70.0, 2)],
-            vec![],
-            default_system(),
-        );
+        let snapshot = make_snapshot(vec![make_topic("t", 70.0, 2)], vec![], default_system());
         let recs = advisor.analyze(&snapshot);
         let id = recs[0].id.clone();
         advisor.dismiss(&id).unwrap();
@@ -597,11 +639,7 @@ mod tests {
     #[test]
     fn test_apply_recommendation() {
         let advisor = PerformanceAdvisor::new(AdvisorConfig::default());
-        let snapshot = make_snapshot(
-            vec![make_topic("t", 70.0, 2)],
-            vec![],
-            default_system(),
-        );
+        let snapshot = make_snapshot(vec![make_topic("t", 70.0, 2)], vec![], default_system());
         let recs = advisor.analyze(&snapshot);
         let id = recs[0].id.clone();
         advisor.apply(&id).unwrap();
@@ -614,11 +652,7 @@ mod tests {
     #[test]
     fn test_apply_already_applied() {
         let advisor = PerformanceAdvisor::new(AdvisorConfig::default());
-        let snapshot = make_snapshot(
-            vec![make_topic("t", 70.0, 2)],
-            vec![],
-            default_system(),
-        );
+        let snapshot = make_snapshot(vec![make_topic("t", 70.0, 2)], vec![], default_system());
         let recs = advisor.analyze(&snapshot);
         let id = recs[0].id.clone();
         advisor.apply(&id).unwrap();
@@ -644,12 +678,21 @@ mod tests {
         let recs = advisor.analyze(&snapshot);
         assert_eq!(advisor.stats().analyses_run.load(Ordering::Relaxed), 1);
         assert_eq!(
-            advisor.stats().recommendations_generated.load(Ordering::Relaxed),
+            advisor
+                .stats()
+                .recommendations_generated
+                .load(Ordering::Relaxed),
             recs.len() as u64
         );
         let id = recs[0].id.clone();
         advisor.apply(&id).unwrap();
-        assert_eq!(advisor.stats().recommendations_applied.load(Ordering::Relaxed), 1);
+        assert_eq!(
+            advisor
+                .stats()
+                .recommendations_applied
+                .load(Ordering::Relaxed),
+            1
+        );
     }
 
     #[test]
@@ -672,7 +715,11 @@ mod tests {
         let snapshot = make_snapshot(
             vec![make_topic("t", 25.0, 4)],
             vec![make_consumer("g", 100)],
-            SystemPerf { cpu_pct: 30.0, memory_pct: 40.0, disk_pct: 50.0 },
+            SystemPerf {
+                cpu_pct: 30.0,
+                memory_pct: 40.0,
+                disk_pct: 50.0,
+            },
         );
         let recs = advisor.analyze(&snapshot);
         assert!(recs.is_empty());
@@ -681,16 +728,8 @@ mod tests {
     #[test]
     fn test_accumulates_across_analyses() {
         let advisor = PerformanceAdvisor::new(AdvisorConfig::default());
-        let snap1 = make_snapshot(
-            vec![make_topic("t1", 70.0, 2)],
-            vec![],
-            default_system(),
-        );
-        let snap2 = make_snapshot(
-            vec![make_topic("t2", 75.0, 4)],
-            vec![],
-            default_system(),
-        );
+        let snap1 = make_snapshot(vec![make_topic("t1", 70.0, 2)], vec![], default_system());
+        let snap2 = make_snapshot(vec![make_topic("t2", 75.0, 4)], vec![], default_system());
         advisor.analyze(&snap1);
         advisor.analyze(&snap2);
         assert_eq!(advisor.get_recommendations().len(), 2);

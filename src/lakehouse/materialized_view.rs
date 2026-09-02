@@ -33,8 +33,7 @@ impl MaterializedViewManager {
         if config.enabled {
             std::fs::create_dir_all(&storage_path).map_err(|e| {
                 StreamlineError::storage_msg(format!(
-                    "Failed to create materialized view directory: {}",
-                    e
+                    "Failed to create materialized view directory: {e}"
                 ))
             })?;
         }
@@ -84,24 +83,21 @@ impl MaterializedViewManager {
             // Remove storage
             if view.storage_path.exists() {
                 std::fs::remove_dir_all(&view.storage_path).map_err(|e| {
-                    StreamlineError::storage_msg(format!("Failed to remove view storage: {}", e))
+                    StreamlineError::storage_msg(format!("Failed to remove view storage: {e}"))
                 })?;
             }
 
             // Remove metadata
-            let metadata_path = self.storage_path.join(format!("{}.view.json", name));
+            let metadata_path = self.storage_path.join(format!("{name}.view.json"));
             if metadata_path.exists() {
                 std::fs::remove_file(&metadata_path).map_err(|e| {
-                    StreamlineError::storage_msg(format!("Failed to remove view metadata: {}", e))
+                    StreamlineError::storage_msg(format!("Failed to remove view metadata: {e}"))
                 })?;
             }
 
             Ok(())
         } else {
-            Err(StreamlineError::Config(format!(
-                "View '{}' not found",
-                name
-            )))
+            Err(StreamlineError::Config(format!("View '{name}' not found")))
         }
     }
 
@@ -123,7 +119,7 @@ impl MaterializedViewManager {
 
         let view = views
             .get(name)
-            .ok_or_else(|| StreamlineError::Config(format!("View '{}' not found", name)))?;
+            .ok_or_else(|| StreamlineError::Config(format!("View '{name}' not found")))?;
 
         let start_time = std::time::Instant::now();
 
@@ -173,11 +169,11 @@ impl MaterializedViewManager {
     fn persist_view_metadata(&self, view: &MaterializedView) -> Result<()> {
         let path = self.storage_path.join(format!("{}.view.json", view.name));
         let json = serde_json::to_string_pretty(view).map_err(|e| {
-            StreamlineError::storage_msg(format!("Failed to serialize view metadata: {}", e))
+            StreamlineError::storage_msg(format!("Failed to serialize view metadata: {e}"))
         })?;
 
         std::fs::write(&path, json).map_err(|e| {
-            StreamlineError::storage_msg(format!("Failed to write view metadata: {}", e))
+            StreamlineError::storage_msg(format!("Failed to write view metadata: {e}"))
         })?;
 
         Ok(())
@@ -211,7 +207,7 @@ impl MaterializedViewManager {
         let mut views = self.views.write().await;
 
         let entries = std::fs::read_dir(&self.storage_path).map_err(|e| {
-            StreamlineError::storage_msg(format!("Failed to read views directory: {}", e))
+            StreamlineError::storage_msg(format!("Failed to read views directory: {e}"))
         })?;
 
         for entry in entries.flatten() {
@@ -222,11 +218,11 @@ impl MaterializedViewManager {
                     .is_some_and(|n| n.to_string_lossy().ends_with(".view.json"))
             {
                 let content = std::fs::read_to_string(&path).map_err(|e| {
-                    StreamlineError::storage_msg(format!("Failed to read view metadata: {}", e))
+                    StreamlineError::storage_msg(format!("Failed to read view metadata: {e}"))
                 })?;
 
                 let view: MaterializedView = serde_json::from_str(&content).map_err(|e| {
-                    StreamlineError::storage_msg(format!("Failed to parse view metadata: {}", e))
+                    StreamlineError::storage_msg(format!("Failed to parse view metadata: {e}"))
                 })?;
 
                 views.insert(view.name.clone(), view);
@@ -281,7 +277,7 @@ impl MaterializedView {
         let storage_path = base_path.join(&definition.name);
 
         std::fs::create_dir_all(&storage_path).map_err(|e| {
-            StreamlineError::storage_msg(format!("Failed to create view storage: {}", e))
+            StreamlineError::storage_msg(format!("Failed to create view storage: {e}"))
         })?;
 
         Ok(Self {

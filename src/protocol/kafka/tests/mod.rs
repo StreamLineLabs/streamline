@@ -96,7 +96,7 @@ pub(super) fn create_test_record_batch(
 
     // Add minimal records (varint encoded)
     for i in 0..record_count {
-        let value = format!("test-{}", i);
+        let value = format!("test-{i}");
         let value_bytes = value.as_bytes();
 
         let record_len = 1 + 1 + 1 + 1 + 1 + value_bytes.len() + 1;

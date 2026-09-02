@@ -48,7 +48,7 @@ impl FeatureServer {
 
         // Get the feature view definition
         let view = self.registry.get_view(feature_view).await.ok_or_else(|| {
-            StreamlineError::Config(format!("Feature view not found: {}", feature_view))
+            StreamlineError::Config(format!("Feature view not found: {feature_view}"))
         })?;
 
         // Determine which features to retrieve

@@ -826,7 +826,7 @@ impl GeoReplicator {
         let statuses = self.region_statuses.read().await;
         let status = statuses
             .get(region)
-            .ok_or_else(|| StreamlineError::Replication(format!("unknown region: {}", region)))?;
+            .ok_or_else(|| StreamlineError::Replication(format!("unknown region: {region}")))?;
 
         let log = self.replication_log.read().await;
         let current_offset = log.next_sequence();
@@ -862,7 +862,7 @@ impl GeoReplicator {
         let mut statuses = self.region_statuses.write().await;
         let status = statuses
             .get_mut(region)
-            .ok_or_else(|| StreamlineError::Replication(format!("unknown region: {}", region)))?;
+            .ok_or_else(|| StreamlineError::Replication(format!("unknown region: {region}")))?;
 
         let log = self.replication_log.read().await;
         let records_to_sync = log.len() as u64;
@@ -892,16 +892,14 @@ impl GeoReplicator {
         let statuses = self.region_statuses.read().await;
         if !statuses.contains_key(region) {
             return Err(StreamlineError::Replication(format!(
-                "unknown region: {}",
-                region
+                "unknown region: {region}"
             )));
         }
 
         let status = &statuses[region];
         if status.state == RegionState::Unreachable {
             return Err(StreamlineError::Replication(format!(
-                "cannot promote unreachable region: {}",
-                region
+                "cannot promote unreachable region: {region}"
             )));
         }
         drop(statuses);
@@ -916,7 +914,7 @@ impl GeoReplicator {
         let mut statuses = self.region_statuses.write().await;
         let status = statuses
             .get_mut(region)
-            .ok_or_else(|| StreamlineError::Replication(format!("unknown region: {}", region)))?;
+            .ok_or_else(|| StreamlineError::Replication(format!("unknown region: {region}")))?;
 
         status.last_heartbeat = Utc::now();
         status.replication_lag_ms = lag_ms;

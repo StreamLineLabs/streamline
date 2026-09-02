@@ -181,8 +181,16 @@ impl ContractValidator {
 
     /// Generate a CI report from a validation result.
     pub fn generate_ci_report(&self, result: &ValidationResult) -> CiReport {
-        let checks_passed = result.checks.iter().filter(|c| c.status == CheckStatus::Passed).count();
-        let checks_failed = result.checks.iter().filter(|c| c.status == CheckStatus::Failed).count();
+        let checks_passed = result
+            .checks
+            .iter()
+            .filter(|c| c.status == CheckStatus::Passed)
+            .count();
+        let checks_failed = result
+            .checks
+            .iter()
+            .filter(|c| c.status == CheckStatus::Failed)
+            .count();
         let checks_warned = result
             .checks
             .iter()
@@ -228,7 +236,9 @@ impl ContractValidator {
 
     /// Return all stored validation results.
     pub fn get_results(&self) -> Vec<ValidationResult> {
-        self.results.read().map_or_else(|_| Vec::new(), |r| r.clone())
+        self.results
+            .read()
+            .map_or_else(|_| Vec::new(), |r| r.clone())
     }
 
     /// Return results filtered by subject.
@@ -285,7 +295,9 @@ impl ContractValidator {
             Check {
                 name: "naming_convention".into(),
                 status,
-                message: "Subject name contains invalid characters; use alphanumeric, '-', '_', '.'".into(),
+                message:
+                    "Subject name contains invalid characters; use alphanumeric, '-', '_', '.'"
+                        .into(),
                 severity: "warning".into(),
             }
         }
@@ -363,9 +375,7 @@ impl ContractValidator {
         }
 
         // Without the previous schema we can only flag removals heuristically.
-        if request.current_version.is_some()
-            && request.proposed_schema.contains("REMOVED")
-        {
+        if request.current_version.is_some() && request.proposed_schema.contains("REMOVED") {
             return Check {
                 name: "no_breaking_changes".into(),
                 status: CheckStatus::Failed,
@@ -437,13 +447,24 @@ impl ContractValidator {
     }
 
     fn build_summary(checks: &[Check], verdict: Verdict) -> String {
-        let passed = checks.iter().filter(|c| c.status == CheckStatus::Passed).count();
-        let failed = checks.iter().filter(|c| c.status == CheckStatus::Failed).count();
-        let warned = checks.iter().filter(|c| c.status == CheckStatus::Warning).count();
-        let skipped = checks.iter().filter(|c| c.status == CheckStatus::Skipped).count();
+        let passed = checks
+            .iter()
+            .filter(|c| c.status == CheckStatus::Passed)
+            .count();
+        let failed = checks
+            .iter()
+            .filter(|c| c.status == CheckStatus::Failed)
+            .count();
+        let warned = checks
+            .iter()
+            .filter(|c| c.status == CheckStatus::Warning)
+            .count();
+        let skipped = checks
+            .iter()
+            .filter(|c| c.status == CheckStatus::Skipped)
+            .count();
         format!(
-            "Verdict: {:?} — {} passed, {} failed, {} warnings, {} skipped",
-            verdict, passed, failed, warned, skipped
+            "Verdict: {verdict:?} — {passed} passed, {failed} failed, {warned} warnings, {skipped} skipped"
         )
     }
 }
@@ -520,7 +541,11 @@ mod tests {
         let v = ContractValidator::new(ValidatorConfig::default());
         let req = minimal_request("valid-name_v1.0", r#"{"type":"string"}"#, "json");
         let result = v.validate(&req).unwrap();
-        let check = result.checks.iter().find(|c| c.name == "naming_convention").unwrap();
+        let check = result
+            .checks
+            .iter()
+            .find(|c| c.name == "naming_convention")
+            .unwrap();
         assert_eq!(check.status, CheckStatus::Passed);
     }
 
@@ -529,17 +554,28 @@ mod tests {
         let v = ContractValidator::new(ValidatorConfig::default());
         let req = minimal_request("invalid name!", r#"{"type":"string"}"#, "json");
         let result = v.validate(&req).unwrap();
-        let check = result.checks.iter().find(|c| c.name == "naming_convention").unwrap();
+        let check = result
+            .checks
+            .iter()
+            .find(|c| c.name == "naming_convention")
+            .unwrap();
         assert_eq!(check.status, CheckStatus::Warning);
     }
 
     #[test]
     fn test_naming_convention_strict() {
-        let cfg = ValidatorConfig { strict_mode: true, ..Default::default() };
+        let cfg = ValidatorConfig {
+            strict_mode: true,
+            ..Default::default()
+        };
         let v = ContractValidator::new(cfg);
         let req = minimal_request("invalid name!", r#"{"type":"string"}"#, "json");
         let result = v.validate(&req).unwrap();
-        let check = result.checks.iter().find(|c| c.name == "naming_convention").unwrap();
+        let check = result
+            .checks
+            .iter()
+            .find(|c| c.name == "naming_convention")
+            .unwrap();
         assert_eq!(check.status, CheckStatus::Failed);
     }
 
@@ -547,7 +583,11 @@ mod tests {
     fn test_documentation_present() {
         let v = ContractValidator::new(ValidatorConfig::default());
         let result = v.validate(&default_request()).unwrap();
-        let check = result.checks.iter().find(|c| c.name == "documentation_present").unwrap();
+        let check = result
+            .checks
+            .iter()
+            .find(|c| c.name == "documentation_present")
+            .unwrap();
         assert_eq!(check.status, CheckStatus::Passed);
     }
 
@@ -556,13 +596,20 @@ mod tests {
         let v = ContractValidator::new(ValidatorConfig::default());
         let req = minimal_request("test", r#"{"type":"string"}"#, "json");
         let result = v.validate(&req).unwrap();
-        let check = result.checks.iter().find(|c| c.name == "documentation_present").unwrap();
+        let check = result
+            .checks
+            .iter()
+            .find(|c| c.name == "documentation_present")
+            .unwrap();
         assert_eq!(check.status, CheckStatus::Warning);
     }
 
     #[test]
     fn test_documentation_required_fail() {
-        let cfg = ValidatorConfig { require_description: true, ..Default::default() };
+        let cfg = ValidatorConfig {
+            require_description: true,
+            ..Default::default()
+        };
         let v = ContractValidator::new(cfg);
         let req = minimal_request("test", r#"{"type":"string"}"#, "json");
         let result = v.validate(&req).unwrap();
@@ -573,7 +620,11 @@ mod tests {
     fn test_field_count_within_limit() {
         let v = ContractValidator::new(ValidatorConfig::default());
         let result = v.validate(&default_request()).unwrap();
-        let check = result.checks.iter().find(|c| c.name == "field_count_limit").unwrap();
+        let check = result
+            .checks
+            .iter()
+            .find(|c| c.name == "field_count_limit")
+            .unwrap();
         assert_eq!(check.status, CheckStatus::Passed);
     }
 
@@ -588,7 +639,11 @@ mod tests {
         let schema = r#"{"name":"a","type":"record","fields":[{"name":"f1","type":"string"},{"name":"f2","type":"string"},{"name":"f3","type":"string"}]}"#;
         let req = minimal_request("test", schema, "avro");
         let result = v.validate(&req).unwrap();
-        let check = result.checks.iter().find(|c| c.name == "field_count_limit").unwrap();
+        let check = result
+            .checks
+            .iter()
+            .find(|c| c.name == "field_count_limit")
+            .unwrap();
         assert_eq!(check.status, CheckStatus::Failed);
     }
 
@@ -596,7 +651,11 @@ mod tests {
     fn test_no_breaking_changes_pass() {
         let v = ContractValidator::new(ValidatorConfig::default());
         let result = v.validate(&default_request()).unwrap();
-        let check = result.checks.iter().find(|c| c.name == "no_breaking_changes").unwrap();
+        let check = result
+            .checks
+            .iter()
+            .find(|c| c.name == "no_breaking_changes")
+            .unwrap();
         assert_eq!(check.status, CheckStatus::Passed);
     }
 
@@ -605,18 +664,30 @@ mod tests {
         let v = ContractValidator::new(ValidatorConfig::default());
         let mut req = default_request();
         req.current_version = Some(1);
-        req.proposed_schema = r#"{"type":"record","doc":"d","REMOVED":"field_x","name":"User","fields":[]}"#.into();
+        req.proposed_schema =
+            r#"{"type":"record","doc":"d","REMOVED":"field_x","name":"User","fields":[]}"#.into();
         let result = v.validate(&req).unwrap();
-        let check = result.checks.iter().find(|c| c.name == "no_breaking_changes").unwrap();
+        let check = result
+            .checks
+            .iter()
+            .find(|c| c.name == "no_breaking_changes")
+            .unwrap();
         assert_eq!(check.status, CheckStatus::Failed);
     }
 
     #[test]
     fn test_breaking_changes_disabled() {
-        let cfg = ValidatorConfig { block_breaking_changes: false, ..Default::default() };
+        let cfg = ValidatorConfig {
+            block_breaking_changes: false,
+            ..Default::default()
+        };
         let v = ContractValidator::new(cfg);
         let result = v.validate(&default_request()).unwrap();
-        let check = result.checks.iter().find(|c| c.name == "no_breaking_changes").unwrap();
+        let check = result
+            .checks
+            .iter()
+            .find(|c| c.name == "no_breaking_changes")
+            .unwrap();
         assert_eq!(check.status, CheckStatus::Skipped);
     }
 
@@ -624,7 +695,11 @@ mod tests {
     fn test_required_fields_defaults() {
         let v = ContractValidator::new(ValidatorConfig::default());
         let result = v.validate(&default_request()).unwrap();
-        let check = result.checks.iter().find(|c| c.name == "required_fields_have_defaults").unwrap();
+        let check = result
+            .checks
+            .iter()
+            .find(|c| c.name == "required_fields_have_defaults")
+            .unwrap();
         // default_request has no "required" key, so check is N/A → Passed
         assert_eq!(check.status, CheckStatus::Passed);
     }
@@ -642,7 +717,10 @@ mod tests {
 
     #[test]
     fn test_ci_report_failing() {
-        let cfg = ValidatorConfig { require_description: true, ..Default::default() };
+        let cfg = ValidatorConfig {
+            require_description: true,
+            ..Default::default()
+        };
         let v = ContractValidator::new(cfg);
         let req = minimal_request("test", r#"{"type":"string"}"#, "json");
         let result = v.validate(&req).unwrap();
@@ -662,14 +740,18 @@ mod tests {
     fn test_list_results_filter() {
         let v = ContractValidator::new(ValidatorConfig::default());
         v.validate(&default_request()).unwrap();
-        v.validate(&minimal_request("other", r#"{"type":"int"}"#, "json")).unwrap();
+        v.validate(&minimal_request("other", r#"{"type":"int"}"#, "json"))
+            .unwrap();
         assert_eq!(v.list_results(Some("user-events")).len(), 1);
         assert_eq!(v.list_results(None).len(), 2);
     }
 
     #[test]
     fn test_strict_mode_warnings_become_fail() {
-        let cfg = ValidatorConfig { strict_mode: true, ..Default::default() };
+        let cfg = ValidatorConfig {
+            strict_mode: true,
+            ..Default::default()
+        };
         let v = ContractValidator::new(cfg);
         // No doc → Warning in normal mode, but strict mode escalates to Fail
         let req = minimal_request("valid-name", r#"{"type":"string"}"#, "json");

@@ -45,7 +45,7 @@ pub mod postgres_offset_store;
 pub mod sqlserver;
 
 // Re-exports
-pub use config::{CdcConfig, OutputFormat, SchemaCompatibility, SchemaEvolutionConfig};
+pub use config::{CdcConfig, SchemaCompatibility, SchemaEvolutionConfig};
 pub use schema::{
     ColumnSchema, CompatibilityResult, SchemaEvolutionStats, SchemaEvolutionTracker, SchemaHistory,
     SchemaRegistry, SchemaVersion, TableSchema,
@@ -53,20 +53,9 @@ pub use schema::{
 
 // New Debezium-replacement re-exports
 pub use change_event::{ChangeEvent, Operation, SourceInfo, TransactionInfo};
-pub use debezium::{
-    columns_to_debezium_fields, map_db_type_to_debezium, DebeziumEnvelope, DebeziumField,
-    DebeziumSchema,
-};
 pub use heartbeat::{CdcHeartbeat, HeartbeatConfig, HeartbeatMessage};
 pub use schema_history::{DdlType, SchemaChange, SchemaHistoryStore};
 pub use snapshot::{SnapshotManager, SnapshotProgress, SnapshotState, SnapshotStrategy};
-pub use delivery::{
-    CdcDlq, CdcDlqConfig, CdcDlqEntry, CommittedPosition, DeliveryStats, DeliveryStatus,
-    DeliveryTracker, DlqErrorClass, DlqStats,
-};
-pub use slot_manager::{
-    SlotHealthStatus, SlotInfo, SlotManager, SlotManagerConfig, SlotManagerStats,
-};
 
 #[cfg(feature = "postgres-cdc")]
 pub use config::{PostgresCdcConfig, PostgresOutputPlugin, PostgresSslMode};
@@ -79,6 +68,8 @@ pub use postgres_offset_store::PostgresOffsetStore;
 pub use config::MySqlCdcConfig;
 #[cfg(feature = "mysql-cdc")]
 pub use mysql::{BinlogPosition, MySqlCdcSource};
+#[cfg(feature = "postgres-cdc")]
+pub use postgres::PostgresCdcSource;
 
 #[cfg(feature = "mongodb-cdc")]
 pub use config::{MongoDbCdcConfig, MongoFullDocumentMode};
@@ -390,8 +381,7 @@ impl CdcManager {
         let name = source.name().to_string();
         if self.sources.contains_key(&name) {
             return Err(crate::error::StreamlineError::Config(format!(
-                "CDC source '{}' already exists",
-                name
+                "CDC source '{name}' already exists"
             )));
         }
         self.sources.insert(name, source);
@@ -416,7 +406,7 @@ impl CdcManager {
     /// Start a specific source
     pub async fn start_source(&self, name: &str) -> Result<mpsc::Receiver<CdcEvent>> {
         let source = self.get_source(name).ok_or_else(|| {
-            crate::error::StreamlineError::Config(format!("CDC source '{}' not found", name))
+            crate::error::StreamlineError::Config(format!("CDC source '{name}' not found"))
         })?;
         source.start().await
     }
@@ -424,7 +414,7 @@ impl CdcManager {
     /// Stop a specific source
     pub async fn stop_source(&self, name: &str) -> Result<()> {
         let source = self.get_source(name).ok_or_else(|| {
-            crate::error::StreamlineError::Config(format!("CDC source '{}' not found", name))
+            crate::error::StreamlineError::Config(format!("CDC source '{name}' not found"))
         })?;
         // Stop heartbeat if running
         if let Some(hb) = self.heartbeats.get(name) {
@@ -602,8 +592,8 @@ impl Default for CdcRetryConfig {
 impl CdcRetryConfig {
     /// Calculate the backoff duration for a given attempt number.
     pub fn backoff_for_attempt(&self, attempt: u32) -> std::time::Duration {
-        let backoff_ms = (self.initial_backoff_ms as f64
-            * self.backoff_multiplier.powi(attempt as i32)) as u64;
+        let backoff_ms =
+            (self.initial_backoff_ms as f64 * self.backoff_multiplier.powi(attempt as i32)) as u64;
         let clamped = backoff_ms.min(self.max_backoff_ms);
         std::time::Duration::from_millis(clamped)
     }

@@ -36,9 +36,7 @@ pub struct ExportResult {
 /// Returns a `Vec<String>` of formatted rows (JSONL or CSV) plus aggregate
 /// stats. This placeholder reads from the in-memory content store; a
 /// production implementation would stream from the topic log.
-pub fn export_memories(
-    config: &ExportConfig,
-) -> Result<(Vec<String>, ExportResult), ExportError> {
+pub fn export_memories(config: &ExportConfig) -> Result<(Vec<String>, ExportResult), ExportError> {
     use super::tier_router;
 
     let tiers = match config.tier {
@@ -85,7 +83,11 @@ pub fn export_memories(
 
     let bytes_written = lines.iter().map(|l| l.len() as u64).sum();
     let records_exported = lines.len() as u64
-        - if config.format == ExportFormat::Csv { 1 } else { 0 };
+        - if config.format == ExportFormat::Csv {
+            1
+        } else {
+            0
+        };
 
     Ok((
         lines,

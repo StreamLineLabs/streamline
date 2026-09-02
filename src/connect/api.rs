@@ -238,7 +238,7 @@ impl ConnectError {
     fn not_found(name: &str) -> Self {
         Self {
             error_code: 404,
-            message: format!("Connector {} not found", name),
+            message: format!("Connector {name} not found"),
         }
     }
 
@@ -306,7 +306,7 @@ impl ConnectorManager {
         let hostname = std::env::var("HOSTNAME")
             .or_else(|_| std::env::var("COMPUTERNAME"))
             .unwrap_or_else(|_| "localhost".to_string());
-        let worker_id = format!("{}:8083", hostname);
+        let worker_id = format!("{hostname}:8083");
 
         // Built-in plugins
         let plugins = vec![
@@ -661,7 +661,7 @@ impl ConnectorManager {
         let state = runtime
             .task_states
             .get(task_id as usize)
-            .ok_or_else(|| ConnectError::not_found(&format!("{}:{}", name, task_id)))?;
+            .ok_or_else(|| ConnectError::not_found(&format!("{name}:{task_id}")))?;
 
         Ok(TaskStatus {
             id: task_id,
@@ -682,7 +682,7 @@ impl ConnectorManager {
         let state = runtime
             .task_states
             .get_mut(task_id as usize)
-            .ok_or_else(|| ConnectError::not_found(&format!("{}:{}", name, task_id)))?;
+            .ok_or_else(|| ConnectError::not_found(&format!("{name}:{task_id}")))?;
 
         *state = TaskState::Running;
 
@@ -843,10 +843,7 @@ impl ConnectorManager {
     // ---- Offset Management ----
 
     /// Get offsets for a source connector
-    pub fn get_connector_offsets(
-        &self,
-        name: &str,
-    ) -> Result<ConnectorOffsets, ConnectError> {
+    pub fn get_connector_offsets(&self, name: &str) -> Result<ConnectorOffsets, ConnectError> {
         let connectors = self.connectors.read();
         if !connectors.contains_key(name) {
             return Err(ConnectError::not_found(name));
@@ -858,7 +855,10 @@ impl ConnectorManager {
             connector: name.to_string(),
             offsets: offsets
                 .into_iter()
-                .map(|(key, value)| OffsetEntry { partition: key, offset: value })
+                .map(|(key, value)| OffsetEntry {
+                    partition: key,
+                    offset: value,
+                })
                 .collect(),
         })
     }
@@ -910,7 +910,9 @@ impl ConnectorManager {
         let connectors = self.connectors.read();
 
         // Only allow offset reset when connector is stopped or paused
-        let runtime = connectors.get(name).ok_or_else(|| ConnectError::not_found(name))?;
+        let runtime = connectors
+            .get(name)
+            .ok_or_else(|| ConnectError::not_found(name))?;
         if runtime.state == ConnectorState::Running {
             return Err(ConnectError::bad_request(
                 "Cannot reset offsets while connector is running. Pause or stop it first.",
