@@ -290,7 +290,7 @@ pub mod observability;
 
 // Network module with XDP support (Linux only)
 #[cfg(target_os = "linux")]
-pub(crate) mod network;
+pub mod network;
 
 // Auto-tuning with ML-based optimization
 #[doc(hidden)]

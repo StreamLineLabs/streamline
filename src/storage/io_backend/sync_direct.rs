@@ -268,13 +268,12 @@ impl SyncDirectFile {
                         "O_DIRECT not supported, falling back to standard I/O"
                     );
                     let file = options.open(path).map_err(|e| {
-                        StreamlineError::storage_msg(format!("Failed to open file: {}", e))
+                        StreamlineError::storage_msg(format!("Failed to open file: {e}"))
                     })?;
                     Ok((file, false))
                 } else {
                     Err(StreamlineError::storage_msg(format!(
-                        "O_DIRECT not supported for {:?}: {}",
-                        path, e
+                        "O_DIRECT not supported for {path:?}: {e}"
                     )))
                 }
             }

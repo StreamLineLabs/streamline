@@ -6,8 +6,8 @@
 use super::{
     config::{QueuePairConfig, RdmaConfig},
     device::Gid,
-    memory::{LocalKey, MemoryRegion, RemoteKey},
-    AccessFlags, QueuePairType, RdmaError, RdmaMtu, RdmaResult,
+    memory::{LocalKey, RemoteKey},
+    QueuePairType, RdmaError, RdmaMtu, RdmaResult,
 };
 use parking_lot::RwLock;
 use std::collections::HashMap;
@@ -17,7 +17,7 @@ use std::sync::Arc;
 use tracing::{debug, info, warn};
 
 /// Queue pair number
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub struct QueuePairNum(pub u32);
 
 /// Queue pair state
@@ -205,9 +205,6 @@ pub struct QueuePair {
     /// Current state
     state: RwLock<QueuePairState>,
 
-    /// Configuration
-    config: QueuePairConfig,
-
     /// Send queue depth
     send_depth: u32,
 
@@ -261,7 +258,6 @@ impl QueuePair {
             qp_num,
             qp_type,
             state: RwLock::new(QueuePairState::Reset),
-            config: config.clone(),
             send_depth: config.max_send_wr,
             recv_depth: config.max_recv_wr,
             outstanding_sends: AtomicU32::new(0),
@@ -363,8 +359,7 @@ impl QueuePair {
         let state = *self.state.read();
         if state != QueuePairState::Rts {
             return Err(RdmaError::QueuePairError(format!(
-                "Cannot post send in state {}",
-                state
+                "Cannot post send in state {state}"
             )));
         }
 
@@ -392,8 +387,7 @@ impl QueuePair {
         let state = *self.state.read();
         if state != QueuePairState::Rtr && state != QueuePairState::Rts {
             return Err(RdmaError::QueuePairError(format!(
-                "Cannot post recv in state {}",
-                state
+                "Cannot post recv in state {state}"
             )));
         }
 
@@ -493,12 +487,6 @@ pub struct QueuePairStats {
     pub send_errors: u64,
     /// Receive errors
     pub recv_errors: u64,
-}
-
-impl Default for QueuePairNum {
-    fn default() -> Self {
-        Self(0)
-    }
 }
 
 /// Connection information for exchange

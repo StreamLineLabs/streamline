@@ -40,8 +40,6 @@
 #[cfg(target_os = "linux")]
 use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU32, Ordering};
 #[cfg(target_os = "linux")]
-use std::sync::Arc;
-#[cfg(target_os = "linux")]
 use tracing::{debug, info, warn};
 
 #[cfg(target_os = "linux")]
@@ -386,8 +384,7 @@ impl SqpollManager {
             };
             warn!("io_uring_setup failed: {} (errno={})", error_msg, errno);
             return Err(StreamlineError::storage_msg(format!(
-                "io_uring_setup failed: {} (errno={})",
-                error_msg, errno
+                "io_uring_setup failed: {error_msg} (errno={errno})"
             )));
         }
 
@@ -475,8 +472,7 @@ impl SqpollManager {
             // errno value. Reading it immediately after a failed syscall is correct.
             let errno = unsafe { *libc::__errno_location() };
             return Err(StreamlineError::storage_msg(format!(
-                "SQPOLL wakeup failed: errno={}",
-                errno
+                "SQPOLL wakeup failed: errno={errno}"
             )));
         }
 

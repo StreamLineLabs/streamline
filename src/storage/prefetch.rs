@@ -26,7 +26,6 @@ pub const DEFAULT_PREFETCH_SIZE: usize = 256 * 1024;
 /// posix_fadvise advice values (Linux)
 #[cfg(target_os = "linux")]
 mod fadvise_flags {
-    pub const POSIX_FADV_NORMAL: libc::c_int = 0;
     pub const POSIX_FADV_RANDOM: libc::c_int = 1;
     pub const POSIX_FADV_SEQUENTIAL: libc::c_int = 2;
     pub const POSIX_FADV_WILLNEED: libc::c_int = 3;

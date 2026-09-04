@@ -596,11 +596,11 @@ impl VersionRouter {
             return Some(versions[0].version.clone());
         }
 
-        let mut rng_val = (std::time::SystemTime::now()
+        let mut rng_val = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()
             .subsec_nanos()
-            % total_weight) as u32;
+            % total_weight;
 
         for v in versions {
             if rng_val < v.traffic_weight {

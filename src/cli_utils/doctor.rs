@@ -767,13 +767,13 @@ fn check_memory_usage() -> DiagnosticResult {
                     if rss_mb > 4096 {
                         return DiagnosticResult::warn(
                             "Memory usage",
-                            format!("Process using {} MB RSS", rss_mb),
+                            format!("Process using {rss_mb} MB RSS"),
                             "Consider increasing system memory or reducing cache sizes",
                         );
                     } else {
                         return DiagnosticResult::pass(
                             "Memory usage",
-                            format!("Process using {} MB RSS", rss_mb),
+                            format!("Process using {rss_mb} MB RSS"),
                         );
                     }
                 }
@@ -927,19 +927,13 @@ fn check_system_resources() -> DiagnosticResult {
                 if avail_gb < 1.0 {
                     return DiagnosticResult::warn(
                         "System resources",
-                        format!(
-                            "{} CPU cores, {:.1}GB available memory",
-                            cpu_count, avail_gb
-                        ),
+                        format!("{cpu_count} CPU cores, {avail_gb:.1}GB available memory"),
                         "Low available memory may impact performance",
                     );
                 } else {
                     return DiagnosticResult::pass(
                         "System resources",
-                        format!(
-                            "{} CPU cores, {:.1}GB available memory",
-                            cpu_count, avail_gb
-                        ),
+                        format!("{cpu_count} CPU cores, {avail_gb:.1}GB available memory"),
                     );
                 }
             }

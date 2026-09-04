@@ -356,10 +356,7 @@ fn is_root() -> bool {
 /// Get the CPU governor for a CPU
 #[cfg(target_os = "linux")]
 fn get_cpu_governor(cpu: usize) -> io::Result<String> {
-    let path = format!(
-        "/sys/devices/system/cpu/cpu{}/cpufreq/scaling_governor",
-        cpu
-    );
+    let path = format!("/sys/devices/system/cpu/cpu{cpu}/cpufreq/scaling_governor");
     fs::read_to_string(&path).map(|s| s.trim().to_string())
 }
 
@@ -374,10 +371,7 @@ fn get_cpu_governor(_cpu: usize) -> io::Result<String> {
 /// Set the CPU governor for a CPU
 #[cfg(target_os = "linux")]
 fn set_cpu_governor(cpu: usize, governor: &str) -> io::Result<()> {
-    let path = format!(
-        "/sys/devices/system/cpu/cpu{}/cpufreq/scaling_governor",
-        cpu
-    );
+    let path = format!("/sys/devices/system/cpu/cpu{cpu}/cpufreq/scaling_governor");
     fs::write(&path, governor)
 }
 

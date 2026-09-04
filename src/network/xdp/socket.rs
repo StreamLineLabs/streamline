@@ -5,7 +5,7 @@ use parking_lot::{Mutex, RwLock};
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
-use tracing::{debug, info, trace, warn};
+use tracing::{debug, info, warn};
 
 /// UMEM (User Memory) region for AF_XDP
 ///
@@ -83,7 +83,7 @@ impl Umem {
 
         // For now, use regular aligned allocation
         let layout = std::alloc::Layout::from_size_align(size, 4096)
-            .map_err(|e| XdpError::Umem(format!("Invalid layout: {}", e)))?;
+            .map_err(|e| XdpError::Umem(format!("Invalid layout: {e}")))?;
 
         let ptr = unsafe { std::alloc::alloc_zeroed(layout) };
 
@@ -150,7 +150,7 @@ impl Umem {
     ///
     /// # Safety
     /// Caller must ensure frame is valid and has exclusive access
-    pub unsafe fn frame_data_mut(&self, frame: &mut UmemFrame) -> &mut [u8] {
+    pub unsafe fn frame_data_mut(&mut self, frame: &mut UmemFrame) -> &mut [u8] {
         let ptr = self.frame_ptr(frame);
         let max_len = (frame.frame_size - frame.headroom) as usize;
         std::slice::from_raw_parts_mut(ptr, max_len)
@@ -303,9 +303,9 @@ impl XskRing {
     /// Produce entries into the ring
     pub fn produce(&mut self, descs: &[XskDesc]) -> u32 {
         let n = std::cmp::min(descs.len() as u32, self.free());
-        for i in 0..n as usize {
+        for (i, desc) in descs.iter().take(n as usize).enumerate() {
             let idx = (self.producer + i as u32) & self.mask;
-            self.entries[idx as usize] = descs[i];
+            self.entries[idx as usize] = *desc;
         }
         self.producer = self.producer.wrapping_add(n);
         n
@@ -393,6 +393,7 @@ impl AfXdpSocket {
         info!(
             if_index = self.if_index,
             queue_id = self.queue_id,
+            xsk_map_fd = ?xsk_map_fd,
             "Binding AF_XDP socket"
         );
 
@@ -506,6 +507,12 @@ impl AfXdpSocket {
 
         // In production, convert descriptors back to frames
         // For now, return empty (frames would be tracked separately)
+        if !descs.is_empty() {
+            debug!(
+                completed = descs.len(),
+                "Consumed AF_XDP completion descriptors"
+            );
+        }
         Vec::new()
     }
 

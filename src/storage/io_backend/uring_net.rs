@@ -27,7 +27,7 @@ use std::collections::VecDeque;
 #[cfg(target_os = "linux")]
 use std::net::SocketAddr;
 #[cfg(target_os = "linux")]
-use std::os::unix::io::{AsRawFd, RawFd};
+use std::os::unix::io::RawFd;
 #[cfg(target_os = "linux")]
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 #[cfg(target_os = "linux")]
@@ -36,7 +36,7 @@ use std::sync::Arc;
 #[cfg(target_os = "linux")]
 use parking_lot::{Mutex, RwLock};
 #[cfg(target_os = "linux")]
-use tracing::{debug, error, info, warn};
+use tracing::{debug, info, warn};
 
 #[cfg(target_os = "linux")]
 use crate::error::{Result, StreamlineError};
@@ -257,8 +257,6 @@ pub struct NetBufferPool {
     buffers: Vec<NetBuffer>,
     /// Free buffer IDs
     free_list: Mutex<VecDeque<NetBufferId>>,
-    /// Configuration
-    config: UringNetConfig,
     /// Statistics
     stats: RwLock<NetBufferPoolStats>,
 }
@@ -277,10 +275,11 @@ pub struct NetBufferPoolStats {
 impl NetBufferPool {
     /// Create a new buffer pool
     pub fn new(config: UringNetConfig) -> Self {
-        let mut buffers = Vec::with_capacity(config.buffer_count);
-        let mut free_list = VecDeque::with_capacity(config.buffer_count);
+        let buffer_count = config.buffer_count;
+        let mut buffers = Vec::with_capacity(buffer_count);
+        let mut free_list = VecDeque::with_capacity(buffer_count);
 
-        for i in 0..config.buffer_count {
+        for i in 0..buffer_count {
             let id = NetBufferId::new(i as u32);
             buffers.push(NetBuffer::new(id, config.buffer_size));
             free_list.push_back(id);
@@ -296,10 +295,9 @@ impl NetBufferPool {
         Self {
             buffers,
             free_list: Mutex::new(free_list),
-            config,
             stats: RwLock::new(NetBufferPoolStats {
-                total_buffers: config.buffer_count,
-                free_buffers: config.buffer_count,
+                total_buffers: buffer_count,
+                free_buffers: buffer_count,
                 ..Default::default()
             }),
         }
@@ -530,8 +528,7 @@ impl UringNetManager {
         if result < 0 {
             let errno = unsafe { *libc::__errno_location() };
             return Err(StreamlineError::storage_msg(format!(
-                "io_uring_setup for network failed: errno={}",
-                errno
+                "io_uring_setup for network failed: errno={errno}"
             )));
         }
 

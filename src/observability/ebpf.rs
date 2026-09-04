@@ -12,8 +12,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::Arc;
-use tracing::{debug, info, warn};
+use tracing::info;
 
 /// eBPF configuration
 #[derive(Debug, Clone)]

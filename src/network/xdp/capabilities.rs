@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
-use tracing::{debug, info, warn};
+use tracing::{debug, info};
 
 /// XDP system capabilities
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -127,13 +127,13 @@ impl XdpCapabilities {
 
     /// Get the best available XDP mode for an interface
     pub fn best_mode_for(&self, interface: &str) -> Option<XdpMode> {
-        self.interfaces.get(interface).and_then(|iface| {
+        self.interfaces.get(interface).map(|iface| {
             if iface.offload_mode {
-                Some(XdpMode::Offload)
+                XdpMode::Offload
             } else if iface.native_mode {
-                Some(XdpMode::Native)
+                XdpMode::Native
             } else {
-                Some(XdpMode::Skb)
+                XdpMode::Skb
             }
         })
     }
@@ -197,7 +197,7 @@ impl XdpCapabilities {
         Self::detect_xdp_support(kernel_version)
     }
 
-    fn check_capability(_cap: &str) -> bool {
+    fn check_capability(cap: &str) -> bool {
         // In a real implementation, we'd use capget() syscall or parse /proc/self/status
         // For now, check if we can access /sys/kernel/debug (requires CAP_SYS_ADMIN)
         // or if we're root
@@ -206,17 +206,20 @@ impl XdpCapabilities {
             return true;
         }
 
+        let capability_bit = match cap {
+            "net_admin" => 12,
+            "sys_admin" => 21,
+            "bpf" => 39,
+            _ => return false,
+        };
+
         // Check /proc/self/status for capabilities
         if let Ok(status) = fs::read_to_string("/proc/self/status") {
             for line in status.lines() {
                 if line.starts_with("CapEff:") {
                     if let Some(hex) = line.split_whitespace().nth(1) {
                         if let Ok(caps) = u64::from_str_radix(hex, 16) {
-                            // CAP_NET_ADMIN = 12, CAP_SYS_ADMIN = 21, CAP_BPF = 39
-                            let net_admin = caps & (1 << 12) != 0;
-                            let sys_admin = caps & (1 << 21) != 0;
-                            let bpf = caps & (1 << 39) != 0;
-                            return net_admin || sys_admin || bpf;
+                            return caps & (1_u64 << capability_bit) != 0;
                         }
                     }
                 }
@@ -252,24 +255,24 @@ impl XdpCapabilities {
     }
 
     fn detect_single_interface(name: &str) -> Option<InterfaceXdpCapabilities> {
-        let base = format!("/sys/class/net/{}", name);
+        let base = format!("/sys/class/net/{name}");
 
-        let index = fs::read_to_string(format!("{}/ifindex", base))
+        let index = fs::read_to_string(format!("{base}/ifindex"))
             .ok()
             .and_then(|s| s.trim().parse().ok())
             .unwrap_or(0);
 
-        let driver = fs::read_link(format!("{}/device/driver", base))
+        let driver = fs::read_link(format!("{base}/device/driver"))
             .ok()
             .and_then(|p| p.file_name().map(|s| s.to_string_lossy().to_string()))
             .unwrap_or_else(|| "unknown".to_string());
 
-        let operstate = fs::read_to_string(format!("{}/operstate", base))
+        let operstate = fs::read_to_string(format!("{base}/operstate"))
             .ok()
             .map(|s| s.trim().to_string())
             .unwrap_or_else(|| "unknown".to_string());
 
-        let mtu = fs::read_to_string(format!("{}/mtu", base))
+        let mtu = fs::read_to_string(format!("{base}/mtu"))
             .ok()
             .and_then(|s| s.trim().parse().ok())
             .unwrap_or(1500);
@@ -278,8 +281,8 @@ impl XdpCapabilities {
         let (native_mode, zero_copy) = Self::detect_driver_xdp_support(&driver);
 
         // Detect number of queues
-        let rx_queues = Self::count_queues(&format!("{}/queues", base), "rx-");
-        let tx_queues = Self::count_queues(&format!("{}/queues", base), "tx-");
+        let rx_queues = Self::count_queues(&format!("{base}/queues"), "rx-");
+        let tx_queues = Self::count_queues(&format!("{base}/queues"), "tx-");
 
         Some(InterfaceXdpCapabilities {
             name: name.to_string(),

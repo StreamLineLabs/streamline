@@ -1047,7 +1047,11 @@ fn get_disk_usage(path: &std::path::Path) -> (u64, u64) {
             unsafe {
                 let mut stat: libc::statvfs = std::mem::zeroed();
                 if libc::statvfs(cstr.as_ptr(), &mut stat) == 0 {
-                    let total = stat.f_blocks as u64 * stat.f_frsize as u64;
+                    #[cfg(target_os = "macos")]
+                    let blocks = u64::from(stat.f_blocks);
+                    #[cfg(not(target_os = "macos"))]
+                    let blocks = stat.f_blocks;
+                    let total = blocks * stat.f_frsize;
                     return (used, total);
                 }
             }

@@ -1,7 +1,6 @@
 //! DPDK EAL (Environment Abstraction Layer) management
 
 use super::{DpdkError, DpdkResult, EalConfig, HugePageSize};
-use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
@@ -210,7 +209,7 @@ impl Eal {
                 // Range like "0-3"
                 let range: Vec<&str> = part.split('-').collect();
                 if range.len() != 2 {
-                    return Err(DpdkError::Config(format!("Invalid core range: {}", part)));
+                    return Err(DpdkError::Config(format!("Invalid core range: {part}")));
                 }
                 let start: u32 = range[0]
                     .parse()
@@ -223,7 +222,7 @@ impl Eal {
                 // Single core like "0"
                 let _: u32 = part
                     .parse()
-                    .map_err(|_| DpdkError::Config(format!("Invalid core: {}", part)))?;
+                    .map_err(|_| DpdkError::Config(format!("Invalid core: {part}")))?;
                 count += 1;
             }
         }
@@ -262,13 +261,13 @@ impl Eal {
             HugePageSize::Size1GB => "hugepages-1048576kB",
         };
 
-        let base_path = format!("/sys/kernel/mm/hugepages/{}", size_dir);
+        let base_path = format!("/sys/kernel/mm/hugepages/{size_dir}");
 
-        if let Ok(total) = fs::read_to_string(format!("{}/nr_hugepages", base_path)) {
+        if let Ok(total) = fs::read_to_string(format!("{base_path}/nr_hugepages")) {
             info.total_pages = total.trim().parse().unwrap_or(0);
         }
 
-        if let Ok(free) = fs::read_to_string(format!("{}/free_hugepages", base_path)) {
+        if let Ok(free) = fs::read_to_string(format!("{base_path}/free_hugepages")) {
             info.free_pages = free.trim().parse().unwrap_or(0);
         }
 
@@ -302,7 +301,7 @@ impl Eal {
                 max_rx_queues: 16,
                 max_tx_queues: 16,
                 speed_capabilities: 0x0F, // 10G capable
-                device_name: format!("dpdk{}", idx),
+                device_name: format!("dpdk{idx}"),
             });
         }
 
@@ -321,7 +320,7 @@ impl Eal {
                     }
 
                     // Read device info
-                    let pci = fs::read_link(format!("/sys/class/net/{}/device", name))
+                    let pci = fs::read_link(format!("/sys/class/net/{name}/device"))
                         .ok()
                         .and_then(|p| p.file_name().map(|s| s.to_string_lossy().to_string()))
                         .unwrap_or_default();
@@ -437,14 +436,18 @@ fn check_root() -> bool {
 }
 
 fn check_capability(cap: &str) -> bool {
+    let capability_bit = match cap {
+        "net_admin" => 12,
+        _ => return false,
+    };
+
     // Check /proc/self/status for capabilities
     if let Ok(status) = fs::read_to_string("/proc/self/status") {
         for line in status.lines() {
             if line.starts_with("CapEff:") {
                 if let Some(hex) = line.split_whitespace().nth(1) {
                     if let Ok(caps) = u64::from_str_radix(hex, 16) {
-                        // CAP_NET_ADMIN = 12
-                        return caps & (1 << 12) != 0;
+                        return caps & (1_u64 << capability_bit) != 0;
                     }
                 }
             }
@@ -477,7 +480,7 @@ fn detect_compatible_nics() -> usize {
     if let Ok(entries) = fs::read_dir("/sys/class/net") {
         for entry in entries.flatten() {
             let name = entry.file_name().to_string_lossy().to_string();
-            let driver_path = format!("/sys/class/net/{}/device/driver", name);
+            let driver_path = format!("/sys/class/net/{name}/device/driver");
 
             if let Ok(driver_link) = fs::read_link(&driver_path) {
                 if let Some(driver) = driver_link.file_name() {

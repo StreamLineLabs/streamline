@@ -428,7 +428,7 @@ impl AsyncFile for DirectFile {
                 Ok(())
             })
             .await
-            .map_err(|e| StreamlineError::storage_msg(format!("Task join error: {}", e)))?
+            .map_err(|e| StreamlineError::storage_msg(format!("Task join error: {e}")))?
             .map_err(StreamlineError::from)
         }
 

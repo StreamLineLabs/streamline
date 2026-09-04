@@ -274,16 +274,10 @@ impl PortWidth {
 }
 
 /// Global Identifier (GID) for addressing
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub struct Gid {
     /// Raw GID bytes (16 bytes)
     pub raw: [u8; 16],
-}
-
-impl Default for Gid {
-    fn default() -> Self {
-        Self { raw: [0u8; 16] }
-    }
 }
 
 impl Gid {
@@ -426,7 +420,7 @@ impl DeviceManager {
         }
 
         let entries = std::fs::read_dir(path)
-            .map_err(|e| RdmaError::DeviceError(format!("Failed to read sysfs: {}", e)))?;
+            .map_err(|e| RdmaError::DeviceError(format!("Failed to read sysfs: {e}")))?;
 
         let mut devices = Vec::new();
         for entry in entries.flatten() {
@@ -449,7 +443,7 @@ impl DeviceManager {
     /// Probe a specific device for capabilities
     #[cfg(target_os = "linux")]
     fn probe_device(&self, name: &str) -> RdmaResult<RdmaDevice> {
-        let base_path = format!("/sys/class/infiniband/{}", name);
+        let base_path = format!("/sys/class/infiniband/{name}");
 
         // Read basic device attributes
         let fw_version = self
@@ -477,7 +471,7 @@ impl DeviceManager {
         };
 
         // Count ports
-        let ports_path = format!("{}/ports", base_path);
+        let ports_path = format!("{base_path}/ports");
         let num_ports = std::fs::read_dir(&ports_path)
             .map(|entries| entries.count() as u8)
             .unwrap_or(0);
@@ -536,7 +530,7 @@ impl DeviceManager {
     /// Probe a port for its configuration
     #[cfg(target_os = "linux")]
     fn probe_port(&self, device: &str, port_num: u8) -> RdmaResult<PortInfo> {
-        let port_path = format!("/sys/class/infiniband/{}/ports/{}", device, port_num);
+        let port_path = format!("/sys/class/infiniband/{device}/ports/{port_num}");
 
         // Read port state
         let state_str = self
@@ -600,7 +594,7 @@ impl DeviceManager {
     /// Read a sysfs attribute
     #[cfg(target_os = "linux")]
     fn read_sysfs_attr(&self, base: &str, attr: &str) -> Option<String> {
-        let path = format!("{}/{}", base, attr);
+        let path = format!("{base}/{attr}");
         std::fs::read_to_string(path)
             .ok()
             .map(|s| s.trim().to_string())

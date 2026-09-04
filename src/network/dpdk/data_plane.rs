@@ -7,7 +7,7 @@ use super::{
 use parking_lot::RwLock;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
-use tracing::{debug, error, info, warn};
+use tracing::{error, info};
 
 /// DPDK data plane for kernel-bypass networking
 ///

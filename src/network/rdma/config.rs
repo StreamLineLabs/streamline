@@ -483,9 +483,11 @@ mod tests {
 
     #[test]
     fn test_validation() {
-        let mut config = RdmaConfig::default();
-        config.enabled = true;
-        config.port = 0;
+        let mut config = RdmaConfig {
+            enabled: true,
+            port: 0,
+            ..Default::default()
+        };
         assert!(config.validate().is_err());
 
         config.port = 1;

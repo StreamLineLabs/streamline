@@ -6,7 +6,7 @@ use super::{
 use parking_lot::RwLock;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, info};
 
 /// DPDK Ethernet port
 ///
@@ -408,6 +408,9 @@ impl DpdkPort {
             .iter()
             .map(|q| QueueStatsSnapshot {
                 queue_id: q.queue_id,
+                port_id: q.port_id,
+                ring_size: q.ring_size,
+                core_affinity: q.core_affinity,
                 packets: q.stats.packets.load(Ordering::Relaxed),
                 bytes: q.stats.bytes.load(Ordering::Relaxed),
                 errors: q.stats.errors.load(Ordering::Relaxed),
@@ -420,6 +423,9 @@ impl DpdkPort {
             .iter()
             .map(|q| QueueStatsSnapshot {
                 queue_id: q.queue_id,
+                port_id: q.port_id,
+                ring_size: q.ring_size,
+                core_affinity: None,
                 packets: q.stats.packets.load(Ordering::Relaxed),
                 bytes: q.stats.bytes.load(Ordering::Relaxed),
                 errors: q.stats.errors.load(Ordering::Relaxed),
@@ -448,6 +454,9 @@ pub struct PortStatsSnapshot {
 #[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
 pub struct QueueStatsSnapshot {
     pub queue_id: u16,
+    pub port_id: u16,
+    pub ring_size: u16,
+    pub core_affinity: Option<u32>,
     pub packets: u64,
     pub bytes: u64,
     pub errors: u64,

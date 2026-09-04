@@ -93,7 +93,7 @@ pub enum XdpError {
 pub type XdpResult<T> = Result<T, XdpError>;
 
 /// XDP program attach mode
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
 pub enum XdpMode {
     /// SKB mode (software fallback, works on all interfaces)
     #[default]

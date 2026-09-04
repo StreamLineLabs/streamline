@@ -2,10 +2,8 @@
 
 use super::{DpdkError, DpdkResult, MempoolConfig};
 use parking_lot::Mutex;
-use std::ptr::NonNull;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Arc;
-use tracing::{debug, trace, warn};
+use tracing::{debug, warn};
 
 /// DPDK memory pool for packet buffers
 ///
@@ -61,7 +59,7 @@ impl MbufPool {
 
         // Allocate memory (in production, from huge pages)
         let layout = std::alloc::Layout::from_size_align(total_size, 4096)
-            .map_err(|e| DpdkError::Memory(format!("Invalid layout: {}", e)))?;
+            .map_err(|e| DpdkError::Memory(format!("Invalid layout: {e}")))?;
 
         let base_addr = unsafe { std::alloc::alloc_zeroed(layout) };
         if base_addr.is_null() {
@@ -111,9 +109,6 @@ impl MbufPool {
                 .peak_usage
                 .fetch_max(in_use as u64, Ordering::Relaxed);
 
-            let mbuf_size = Self::mbuf_size(&self.config);
-            let offset = index as usize * mbuf_size;
-
             Some(Mbuf {
                 pool_index: index,
                 data_offset: 128 + 128, // After header and headroom
@@ -138,8 +133,6 @@ impl MbufPool {
         let available = std::cmp::min(count, free_list.len());
 
         let mut mbufs = Vec::with_capacity(available);
-        let mbuf_size = Self::mbuf_size(&self.config);
-
         for _ in 0..available {
             if let Some(index) = free_list.pop() {
                 mbufs.push(Mbuf {
@@ -340,11 +333,6 @@ impl Mbuf {
         self.queue = 0;
         self.hash = 0;
         self.timestamp = 0;
-    }
-
-    /// Get pool index (for internal use)
-    pub(crate) fn pool_index(&self) -> u32 {
-        self.pool_index
     }
 }
 
