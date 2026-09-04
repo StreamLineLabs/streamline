@@ -110,20 +110,13 @@ jobs:
           arguments: --all-features
 
       - name: Check unsafe usage
-        run: |
-          set -euo pipefail
-          UNSAFE_COUNT=$(grep -rn 'unsafe ' src/ --include='*.rs' | grep -v '// SAFETY:' | grep -cv '#\[' || true)
-          echo "Unsafe blocks without SAFETY comment: $UNSAFE_COUNT" >> "$GITHUB_STEP_SUMMARY"
-          if [ "$UNSAFE_COUNT" -gt "$UNSAFE_BUDGET" ]; then
-            echo "::error::$UNSAFE_COUNT unsafe blocks lack SAFETY documentation (budget: $UNSAFE_BUDGET)"
-            exit 1
-          fi
+        run: python3 scripts/check_unsafe_budget.py
         env:
-          # Baseline measured from this tree. This is a coarse regression
-          # ratchet, not a proof of soundness: it counts source lines mentioning
-          # `unsafe ` that do not themselves carry a `// SAFETY:` comment.
+          # Baseline measured from this tree. This remains a source-level
+          # ratchet, not a proof of soundness: it counts unsafe source lines
+          # without an adjacent `SAFETY:` comment and ignores commented-out code.
           # It may only be lowered, never raised.
-          UNSAFE_BUDGET: '177'
+          UNSAFE_BUDGET: '120'
 
   api-compatibility:
     name: Kafka API Compatibility

@@ -1097,22 +1097,34 @@ mod tests {
         // SAFETY: every method forwards to `System` with the same arguments;
         // `record` performs no allocation of its own.
         unsafe impl GlobalAlloc for Probe {
+            // SAFETY: The caller contract is exactly `GlobalAlloc::alloc`'s,
+            // and the same layout is forwarded to `System`.
             unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
                 record(layout.size());
+                // SAFETY: forwards the caller-validated layout unchanged.
                 unsafe { System.alloc(layout) }
             }
 
+            // SAFETY: The caller contract is exactly `GlobalAlloc::alloc_zeroed`'s,
+            // and the same layout is forwarded to `System`.
             unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
                 record(layout.size());
+                // SAFETY: forwards the caller-validated layout unchanged.
                 unsafe { System.alloc_zeroed(layout) }
             }
 
+            // SAFETY: The caller contract is exactly `GlobalAlloc::realloc`'s;
+            // the pointer, layout, and new size are forwarded unchanged.
             unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
                 record(new_size);
+                // SAFETY: forwards the caller-validated allocation unchanged.
                 unsafe { System.realloc(ptr, layout, new_size) }
             }
 
+            // SAFETY: The caller contract is exactly `GlobalAlloc::dealloc`'s,
+            // and the same pointer and layout are forwarded to `System`.
             unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
+                // SAFETY: forwards the caller-validated allocation unchanged.
                 unsafe { System.dealloc(ptr, layout) }
             }
         }

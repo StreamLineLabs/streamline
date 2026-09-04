@@ -845,7 +845,7 @@ fn test_io_backend_uring_detection() {
     #[cfg(all(target_os = "linux", feature = "io-uring"))]
     {
         // Just verify it doesn't crash - actual availability depends on kernel
-        println!("io_uring available: {}", use_uring);
+        println!("io_uring available: {use_uring}");
     }
 }
 

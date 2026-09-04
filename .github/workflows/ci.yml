@@ -31,6 +31,23 @@ jobs:
           components: rustfmt
       - run: cargo fmt --all -- --check
 
+  openapi:
+    name: OpenAPI
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify generated specification
+        run: python3 scripts/generate_openapi.py --check
+      - name: Lint OpenAPI specification
+        run: >-
+          npx --yes @stoplight/spectral-cli@6.15.0 lint
+          --ruleset .spectral.yaml
+          --fail-severity error
+          openapi/streamline-api-v1.yaml
+
   test:
     name: Lint & Test (Rust 1.88)
     runs-on: ubuntu-latest

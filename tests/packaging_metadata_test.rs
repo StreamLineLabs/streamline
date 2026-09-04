@@ -278,6 +278,60 @@ fn ci_msrv_matches_the_manifest_rust_version() {
     );
 }
 
+/// Linux-only networking modules must be compiled in both default and
+/// all-feature builds on the pinned toolchain. macOS checks cannot exercise
+/// XDP, DPDK, RDMA, or io_uring code.
+#[test]
+fn ci_compiles_all_linux_targets_on_the_pinned_toolchain() {
+    let ci = read_manifest(".github/workflows/ci.yml");
+    for command in [
+        "cargo check --all-targets --locked",
+        "cargo clippy --all-targets --locked -- -D warnings",
+        "cargo clippy --all-targets --all-features --locked -- -D warnings",
+    ] {
+        assert!(
+            ci.contains(command),
+            "ci.yml must run `{command}` on ubuntu with Rust 1.88"
+        );
+    }
+    assert!(ci.contains("runs-on: ubuntu-latest"));
+    assert!(ci.contains("RUSTUP_TOOLCHAIN: '1.88'"));
+}
+
+/// `TcpKeepalive::with_retries` is available on Linux only when socket2's
+/// platform-complete API feature is enabled.
+#[test]
+fn socket2_enables_linux_keepalive_retry_configuration() {
+    let manifest = read_manifest("Cargo.toml");
+    assert!(
+        manifest.contains(r#"socket2 = { version = "0.5", features = ["all"] }"#),
+        "socket2 must enable its `all` feature so Linux keepalive retries compile"
+    );
+}
+
+/// The generated specification is a release artifact. CI must reject both
+/// generator drift and OpenAPI/Spectral structural regressions.
+#[test]
+fn ci_checks_the_generated_openapi_with_pinned_spectral() {
+    let ci = read_manifest(".github/workflows/ci.yml");
+    assert!(ci.contains("python3 scripts/generate_openapi.py --check"));
+    assert!(ci.contains("@stoplight/spectral-cli@6.15.0 lint"));
+    assert!(ci.contains("--ruleset .spectral.yaml"));
+    assert!(ci.contains("--fail-severity error"));
+
+    let rules = read_manifest(".spectral.yaml");
+    assert!(
+        rules.contains("spectral:oas"),
+        "the checked-in Spectral ruleset must extend the standard OAS rules"
+    );
+
+    let generator = read_manifest("scripts/generate_openapi.py");
+    assert!(
+        !generator.contains("streamline-docs"),
+        "the core generator must update only its source-of-truth spec; docs sync is a separate repository workflow"
+    );
+}
+
 /// Publishing the core workspace must go through exactly one workflow. A second
 /// workflow that also runs `cargo publish` on this workspace can race the
 /// release gate and cannot honour the member-crate publish order.
@@ -996,8 +1050,7 @@ fn wasm_sdk_publish_uses_its_root_package_identity_and_build_script() {
         .find(|step| step.contains("name: Dry run"))
         .expect("publish-wasm must exercise npm packing in dry runs");
     assert!(
-        dry_run.contains("working-directory: sdk")
-            && dry_run.contains("npm pack --dry-run"),
+        dry_run.contains("working-directory: sdk") && dry_run.contains("npm pack --dry-run"),
         "publish-wasm dry runs must pack the root npm package:\n{dry_run}"
     );
 }

@@ -44,6 +44,10 @@ pub struct SerdeCompat<T> {
     _marker: PhantomData<T>,
 }
 
+// SAFETY: `read` constructs `T` through Serde and writes it into the provided
+// `MaybeUninit` exactly once only after deserialization succeeds. All bytes are
+// consumed through wincode's `Reader`, so the implementation preserves the
+// `SchemaRead` initialization and error-propagation contract.
 unsafe impl<'de, C, T> wincode::SchemaRead<'de, C> for SerdeCompat<T>
 where
     C: wincode::config::Config,
@@ -62,6 +66,9 @@ where
     }
 }
 
+// SAFETY: `size_of` and `write` serialize the same `T` with the same wincode
+// configuration. The serializer owns all interaction with `Writer`, so this
+// implementation preserves `SchemaWrite`'s size/write consistency contract.
 unsafe impl<C, T> wincode::SchemaWrite<C> for SerdeCompat<T>
 where
     C: wincode::config::Config,
