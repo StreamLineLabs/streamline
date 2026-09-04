@@ -24,7 +24,7 @@
 ```bash
 # Start the server — that's it, no config needed
 $ streamline --playground
-[INFO] Streamline v0.2.0 — listening on 0.0.0.0:9092 (Kafka) / 0.0.0.0:9094 (HTTP)
+[INFO] Streamline v0.4.0 — listening on 0.0.0.0:9092 (Kafka) / 0.0.0.0:9094 (HTTP)
 [INFO] Playground mode: created topics [demo-events, demo-logs, demo-metrics, demo-orders]
 
 # Create a topic with 3 partitions

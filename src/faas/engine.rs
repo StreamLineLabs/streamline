@@ -329,7 +329,7 @@ impl WasmExecutionEngine {
     pub fn invoke(&self, _instance: &FunctionInstance, _input: &[u8]) -> Result<Vec<u8>> {
         Err(StreamlineError::Config(
             super::function::FaasError::RuntimeNotAvailable(
-                "WASM runtime integration is in progress (wasmtime planned for v0.3.0). \
+                "WASM runtime integration is in progress and is not available in v0.4.0. \
                  Enable the 'wasm-runtime' feature and ensure wasmtime is configured."
                     .to_string(),
             )
@@ -342,7 +342,7 @@ impl WasmExecutionEngine {
     pub fn invoke(&self, _instance: &FunctionInstance, _input: &[u8]) -> Result<Vec<u8>> {
         Err(StreamlineError::Config(
             super::function::FaasError::RuntimeNotAvailable(
-                "WASM runtime not yet integrated. FaaS execution requires the 'wasm-runtime' feature flag (coming in v0.3.0)".to_string()
+                "WASM runtime integration is not available in v0.4.0; the 'wasm-runtime' feature flag alone does not provide execution yet".to_string()
             ).to_string()
         ))
     }
@@ -622,7 +622,7 @@ impl FaasEngine {
     fn execute_wasm(&self, _func: &FaasFunction, _input: &[u8]) -> Result<Vec<u8>> {
         Err(StreamlineError::Config(
             super::function::FaasError::RuntimeNotAvailable(
-                "WASM runtime integration is in progress (wasmtime planned for v0.3.0). \
+                "WASM runtime integration is in progress and is not available in v0.4.0. \
                  Enable the 'wasm-runtime' feature and ensure wasmtime is configured."
                     .to_string(),
             )
@@ -635,7 +635,7 @@ impl FaasEngine {
     fn execute_wasm(&self, _func: &FaasFunction, _input: &[u8]) -> Result<Vec<u8>> {
         Err(StreamlineError::Config(
             super::function::FaasError::RuntimeNotAvailable(
-                "WASM runtime not yet integrated. FaaS execution requires the 'wasm-runtime' feature flag (coming in v0.3.0)".to_string()
+                "WASM runtime integration is not available in v0.4.0; the 'wasm-runtime' feature flag alone does not provide execution yet".to_string()
             ).to_string()
         ))
     }

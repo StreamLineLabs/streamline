@@ -4,7 +4,7 @@ resolver = "2"
 
 [package]
 name = "streamline"
-version = "0.3.0"
+version = "0.4.0"
 edition = "2021"
 authors = ["Jose David Baena"]
 description = "A developer-first, operationally simple streaming solution with Kafka protocol compatibility"
@@ -298,7 +298,10 @@ crossterm = "0.28"
 strsim = "0.11"
 
 # Analytics engine (workspace crate, isolates heavy DuckDB C++ compilation)
-streamline-analytics = { path = "crates/streamline-analytics", optional = true }
+# `version` is required alongside `path` so `cargo package`/`cargo publish` can
+# rewrite this into a registry dependency. Keep it in lockstep with
+# crates/streamline-analytics/Cargo.toml.
+streamline-analytics = { path = "crates/streamline-analytics", version = "0.4.0", optional = true }
 
 # DuckDB for embedded analytics (optional - analytics feature)
 # Note: duckdb is now compiled inside the streamline-analytics workspace crate.
@@ -309,7 +312,8 @@ duckdb = { version = "1.1", features = ["bundled", "vtab"], optional = true }
 rusqlite = { version = "0.31", features = ["bundled"], optional = true }
 
 # WebAssembly transformation engine (workspace crate, isolates wasmtime compilation)
-streamline-wasm = { path = "crates/streamline-wasm" }
+# `version` is required alongside `path` for publishing (see note above).
+streamline-wasm = { path = "crates/streamline-wasm", version = "0.4.0" }
 
 # WebAssembly runtime (optional - wasm-transforms feature, enables real WASM execution)
 wasmtime = { version = "36.0.14", optional = true }

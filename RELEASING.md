@@ -261,14 +261,14 @@ cd streamline-node-sdk/testcontainers && npm publish
 
 ## Hotfix Process
 
-For patch releases (e.g., v0.2.1):
+For patch releases (e.g., v0.4.1):
 
 ```bash
-git checkout -b release/v0.2.1 v0.2.0
+git checkout -b release/v0.4.1 v0.4.0
 # Apply fixes
-git tag -a v0.2.1 -m "Hotfix: v0.2.1"
-git push origin v0.2.1
-# Same automated pipeline runs
+git tag -a v0.4.1 -m "Hotfix: v0.4.1"
+git push origin v0.4.1
+# Same automated pipeline runs — including the release gate
 ```
 
 ## Version Numbering
