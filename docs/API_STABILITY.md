@@ -59,6 +59,7 @@ Stable modules follow [Semantic Versioning 2.0.0](https://semver.org/):
 | `wasm` | 0.2.0 | WebAssembly transform runtime |
 | `graphql` | 0.2.0 | GraphQL API |
 | `transport` | 0.2.0 | QUIC/WebTransport |
+| `network` | 0.4.0 | Linux XDP, DPDK, and RDMA networking backends |
 | `timeseries` | 0.2.0 | Time-series native storage |
 | `dsl` | 0.2.0 | Stream processing DSL |
 | `ai` | 0.2.0 | AI-powered features |
@@ -114,7 +115,7 @@ in CI — once for the default build and once with `--features serverless`.
 ### 🔒 Internal (crate-visible only)
 
 These modules are `pub(crate)` and not part of the public API:
-`dlq`, `lineage`, `playground`, `plugin`, `policy`, `pubsub`, `replay`, `smart_partition`, `testing`, `stateful`, `lifecycle`, `obs_pipeline`, `multitenancy`, `network`
+`dlq`, `lineage`, `playground`, `plugin`, `policy`, `pubsub`, `replay`, `smart_partition`, `testing`, `stateful`, `lifecycle`, `obs_pipeline`, `multitenancy`
 
 ## Deprecation Process
 

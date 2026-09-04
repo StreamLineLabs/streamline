@@ -226,7 +226,7 @@ import-direction rule in CI. The summary below mirrors it — update both togeth
 |-----------|---------|
 | Stable | `server`, `storage`, `consumer`, `protocol`, `config`, `error`, `analytics`, `embedded` |
 | Beta | `transaction`, `cluster`, `replication`, `schema`, `auth`, `metrics`, `telemetry`, `observability`, `gateway`, `connect`, `featurestore`, `ffi` |
-| Experimental | `sink`, `streamql`, `cdc`, `edge`, `wasm`, `graphql`, `transport`, `timeseries`, `dsl`, `ai` |
+| Experimental | `sink`, `streamql`, `cdc`, `edge`, `wasm`, `graphql`, `transport`, `network`, `timeseries`, `dsl`, `ai` |
 
 **Import direction rule**: Stable modules must not import Beta or Experimental
 modules, and Beta modules must not import Experimental modules. Pre-existing
