@@ -100,6 +100,15 @@ const MIN_SOUND_SCC: (u64, u64, u64) = (3, 8, 4);
 struct LockedPackage {
     name: String,
     version: String,
+    dependencies: Vec<String>,
+}
+
+impl LockedPackage {
+    fn depends_on(&self, package: &str) -> bool {
+        self.dependencies
+            .iter()
+            .any(|dependency| lockfile_dependency_name(dependency) == package)
+    }
 }
 
 fn workspace_lockfile() -> PathBuf {
@@ -109,12 +118,15 @@ fn workspace_lockfile() -> PathBuf {
 /// Minimal `Cargo.lock` reader.
 ///
 /// `Cargo.lock` is a restricted TOML subset: a flat sequence of `[[package]]`
-/// tables whose `name`/`version` values are always simple quoted strings. That
-/// keeps this parser dependency-free and immune to a TOML crate bump.
+/// tables whose names, versions, and dependency entries are simple quoted
+/// strings. That keeps this parser dependency-free and immune to a TOML crate
+/// bump.
 fn parse_lockfile(contents: &str) -> Vec<LockedPackage> {
     let mut packages = Vec::new();
     let mut name: Option<String> = None;
     let mut version: Option<String> = None;
+    let mut dependencies = Vec::new();
+    let mut in_dependencies = false;
 
     let unquote = |line: &str| -> Option<String> {
         let value = line.split_once('=')?.1.trim();
@@ -131,23 +143,45 @@ fn parse_lockfile(contents: &str) -> Vec<LockedPackage> {
                 packages.push(LockedPackage {
                     name: n,
                     version: v,
+                    dependencies: std::mem::take(&mut dependencies),
                 });
             }
             name = None;
             version = None;
+            dependencies.clear();
+            in_dependencies = false;
         } else if line.starts_with("name = ") && name.is_none() {
             name = unquote(line);
         } else if line.starts_with("version = ") && version.is_none() {
             version = unquote(line);
+        } else if line == "dependencies = [" {
+            in_dependencies = true;
+        } else if in_dependencies && line == "]" {
+            in_dependencies = false;
+        } else if in_dependencies {
+            let dependency = line
+                .strip_suffix(',')
+                .and_then(|value| value.strip_prefix('"'))
+                .and_then(|value| value.strip_suffix('"'));
+            if let Some(dependency) = dependency {
+                dependencies.push(dependency.to_owned());
+            }
         }
     }
     if let (Some(n), Some(v)) = (name, version) {
         packages.push(LockedPackage {
             name: n,
             version: v,
+            dependencies,
         });
     }
     packages
+}
+
+fn lockfile_dependency_name(dependency: &str) -> &str {
+    dependency
+        .split_once(' ')
+        .map_or(dependency, |(name, _)| name)
 }
 
 fn locked_packages() -> Vec<LockedPackage> {
@@ -645,68 +679,51 @@ fn packaging_target_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/packaging")
 }
 
-/// Resolving *this* workspace proves nothing about a published crate: the
-/// resolution is bound by `Cargo.lock`, which no consumer ever sees. This is the
-/// sanity check that the repository's own graph is consistent; the
+/// `Cargo.lock` proves only that this workspace's committed graph is internally
+/// consistent; no consumer sees it. Parse it directly so this sanity check never
+/// asks Cargo to load optional target packages from a registry cache. The
 /// publication-surviving proof is
 /// `fresh_consumer_resolves_one_wincode_from_the_packaged_crates`.
 #[test]
 fn workspace_resolves_a_single_wincode() {
-    let output = run_cargo(&["metadata", "--format-version", "1", "--locked", "--offline"]);
-    assert!(
-        output.status.success(),
-        "`cargo metadata --locked` failed:\n{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-
-    let metadata: serde_json::Value =
-        serde_json::from_slice(&output.stdout).expect("cargo metadata emitted invalid JSON");
-
-    let nodes = metadata["resolve"]["nodes"]
-        .as_array()
-        .expect("cargo metadata resolve.nodes");
-
-    let wincode_ids: Vec<&str> = nodes
+    let packages = locked_packages();
+    let wincode: Vec<_> = packages
         .iter()
-        .filter_map(|node| node["id"].as_str())
-        .filter(|id| package_name_of(id) == "wincode")
+        .filter(|package| package.name == "wincode")
         .collect();
 
     assert_eq!(
-        wincode_ids.len(),
+        wincode.len(),
         1,
-        "expected exactly one `wincode` in the resolved graph, found {wincode_ids:?}"
+        "expected exactly one `wincode` in Cargo.lock, found {:?}",
+        wincode
+            .iter()
+            .map(|package| &package.version)
+            .collect::<Vec<_>>()
     );
-    let wincode_id = wincode_ids[0];
-    assert!(
-        wincode_id.ends_with("wincode@0.4.9"),
-        "the resolved wincode must be 0.4.9; found {wincode_id}"
+    assert_eq!(
+        wincode[0].version, "0.4.9",
+        "the workspace must resolve wincode 0.4.9"
     );
 
     // The fork's edge and the root's direct edge must be the same node, or
     // `src/bincode_compat.rs` would hand a configuration from one `wincode` to a
     // `SerdeCompat` compiled against another.
     for owner in [FORK_PACKAGE, "streamline"] {
-        let node = nodes
+        let owners: Vec<_> = packages
             .iter()
-            .find(|node| {
-                node["id"]
-                    .as_str()
-                    .is_some_and(|id| package_name_of(id) == owner)
-            })
-            .unwrap_or_else(|| panic!("the resolved graph must contain `{owner}`"));
-
-        let targets: Vec<&str> = node["dependencies"]
-            .as_array()
-            .unwrap_or_else(|| panic!("`{owner}` dependencies"))
-            .iter()
-            .filter_map(|dep| dep.as_str())
+            .filter(|package| package.name == owner)
             .collect();
-
+        assert_eq!(
+            owners.len(),
+            1,
+            "Cargo.lock must contain exactly one workspace package named `{owner}`"
+        );
         assert!(
-            targets.contains(&wincode_id),
-            "`{owner}` resolves to a different wincode than the pinned one.\n  \
-             pinned: {wincode_id}\n  {owner} -> {targets:?}"
+            owners[0].depends_on("wincode"),
+            "`{owner}` must depend on the sole locked wincode 0.4.9 node; found \
+             dependencies {:?}",
+            owners[0].dependencies
         );
     }
 }
@@ -1279,7 +1296,7 @@ fn msrv_pins_are_activated_by_the_feature_that_needs_them() {
 }
 
 #[test]
-fn lockfile_parser_extracts_name_and_version() {
+fn lockfile_parser_extracts_package_graph() {
     // Guards the assertions above against a silently broken parser.
     let sample = r#"
 version = 4
@@ -1288,20 +1305,37 @@ version = 4
 name = "alpha"
 version = "1.2.3"
 dependencies = [
- "beta",
+ "beta 0.41.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "wincode",
 ]
 
 [[package]]
 name = "beta"
 version = "0.41.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[[package]]
+name = "wincode"
+version = "0.4.9"
 "#;
     let packages = parse_lockfile(sample);
-    assert_eq!(packages.len(), 2);
+    assert_eq!(packages.len(), 3);
     assert_eq!(packages[0].name, "alpha");
     assert_eq!(packages[0].version, "1.2.3");
+    assert!(packages[0].depends_on("beta"));
+    assert!(packages[0].depends_on("wincode"));
+    assert_eq!(
+        packages[0].dependencies,
+        [
+            "beta 0.41.0 (registry+https://github.com/rust-lang/crates.io-index)",
+            "wincode",
+        ]
+    );
     assert_eq!(packages[1].name, "beta");
     assert_eq!(packages[1].version, "0.41.0");
+    assert!(packages[1].dependencies.is_empty());
+    assert_eq!(packages[2].name, "wincode");
+    assert_eq!(packages[2].version, "0.4.9");
     assert_eq!(major_minor("0.36.2"), (0, 36));
     assert!(major_minor("0.41.0") >= MIN_QUICK_XML);
     assert!(major_minor("0.37.5") < MIN_QUICK_XML);
