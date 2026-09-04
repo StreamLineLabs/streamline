@@ -1511,6 +1511,117 @@ fn uncommented(chunk: &str) -> impl Iterator<Item = &str> {
     chunk.lines().filter(|l| !l.trim_start().starts_with('#'))
 }
 
+fn workflow_run_script(step: &str) -> String {
+    let mut lines = step.lines();
+    let run_line = lines
+        .find(|line| line.trim_start().starts_with("run:"))
+        .expect("workflow step must contain a run command");
+    let trimmed = run_line.trim();
+    if let Some(inline) = trimmed.strip_prefix("run: ") {
+        if inline != "|" {
+            return inline.to_string();
+        }
+    }
+    assert_eq!(trimmed, "run: |", "unsupported workflow run syntax");
+    let script_indent = run_line.len() - run_line.trim_start().len() + 2;
+
+    lines
+        .map(|line| {
+            if line.trim().is_empty() {
+                String::new()
+            } else {
+                line.get(script_indent..)
+                    .unwrap_or_else(|| panic!("run block line is under-indented: {line}"))
+                    .to_string()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+#[cfg(unix)]
+fn write_executable(path: &Path, contents: &str) {
+    use std::os::unix::fs::PermissionsExt;
+
+    std::fs::write(path, contents)
+        .unwrap_or_else(|error| panic!("failed to write {}: {error}", path.display()));
+    let mut permissions = std::fs::metadata(path)
+        .unwrap_or_else(|error| panic!("failed to stat {}: {error}", path.display()))
+        .permissions();
+    permissions.set_mode(0o755);
+    std::fs::set_permissions(path, permissions)
+        .unwrap_or_else(|error| panic!("failed to chmod {}: {error}", path.display()));
+}
+
+#[cfg(unix)]
+fn run_workflow_script(
+    script: &str,
+    directory: &Path,
+    bin_directory: &Path,
+    environment: &[(&str, &str)],
+) -> std::process::Output {
+    const ALLOWED_ENVIRONMENT: &[&str] = &[
+        "BASELINE_AVAILABLE",
+        "BASELINE_EXIT_CODE",
+        "BASE_REF",
+        "FAIL_BENCH",
+        "FAIL_CARGO",
+        "FAIL_PROFILE",
+        "GITHUB_OUTPUT",
+        "GITHUB_STEP_SUMMARY",
+        "STUB_EXIT_CODE",
+        "STUB_LOG",
+        "STUB_NAME",
+    ];
+
+    let mut command = std::process::Command::new("/bin/bash");
+    command
+        .env_clear()
+        .args(["--noprofile", "--norc", "-c", script])
+        .current_dir(directory)
+        .env("PATH", format!("{}:/usr/bin:/bin", bin_directory.display()))
+        .env("HOME", directory)
+        .env("TMPDIR", directory)
+        .env("LANG", "C")
+        .env("LC_ALL", "C");
+    for (name, value) in environment {
+        assert!(
+            ALLOWED_ENVIRONMENT.contains(name),
+            "`{name}` is not in the workflow harness environment allowlist"
+        );
+        command.env(name, value);
+    }
+    command.output().expect("execute workflow run block")
+}
+
+#[cfg(unix)]
+fn assert_exit_code(output: &std::process::Output, expected: i32, context: &str) {
+    assert_eq!(
+        output.status.code(),
+        Some(expected),
+        "{context} returned {:?}, expected {expected}\nstdout:\n{}\nstderr:\n{}",
+        output.status.code(),
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+}
+
+#[cfg(unix)]
+fn read_marker_log(path: &Path) -> String {
+    std::fs::read_to_string(path)
+        .unwrap_or_else(|error| panic!("failed to read marker log {}: {error}", path.display()))
+}
+
+#[cfg(unix)]
+fn assert_marker(path: &Path, expected: &str) {
+    let markers = read_marker_log(path);
+    assert!(
+        markers.lines().any(|line| line == expected),
+        "expected marker `{expected}` in {}:\n{markers}",
+        path.display()
+    );
+}
+
 /// `rust-toolchain.toml` pins the toolchain this workspace builds with, and it
 /// takes precedence over whatever toolchain a setup action makes default.
 ///
@@ -1671,6 +1782,645 @@ fn benchmark_jobs_running_repository_code_are_read_only() {
         ],
         "{WORKFLOW}: only the artifact-only publish/comment jobs may hold \
          writable permissions"
+    );
+}
+
+#[test]
+fn benchmark_comparison_keeps_pr_mandatory_and_reports_missing_baseline() {
+    const WORKFLOW: &str = "benchmarks-unified.yml";
+    let body = read_workflow(WORKFLOW);
+    let compare = split_jobs(&body)
+        .into_iter()
+        .find(|job| job_name(job) == "compare")
+        .expect("benchmarks-unified.yml must define the compare job");
+    let steps = split_steps(&compare);
+
+    let step_index = |name: &str| {
+        steps
+            .iter()
+            .position(|step| step.contains(&format!("name: {name}")))
+            .unwrap_or_else(|| panic!("compare job must define a `{name}` step"))
+    };
+    let pr_index = step_index("Bench PR");
+    let baseline_index = step_index("Bench historical main baseline");
+    let report_index = step_index("Build comparison report");
+    let upload_index = step_index("Upload comparison");
+    assert!(
+        pr_index < baseline_index && baseline_index < report_index && report_index < upload_index,
+        "the mandatory PR run must precede optional baseline collection, reporting, and upload"
+    );
+
+    let pr = &steps[pr_index];
+    assert!(pr.contains(
+        "cargo bench --bench storage_benchmarks --bench protocol_benchmarks -- --save-baseline pr"
+    ));
+    assert!(
+        !pr.contains("continue-on-error")
+            && !pr.contains("|| true")
+            && !pr.contains("|| :")
+            && !pr.contains("set +e"),
+        "the PR benchmark build/run is the gate and must never be swallowed"
+    );
+
+    let baseline = &steps[baseline_index];
+    assert!(baseline.contains("id: baseline"));
+    assert!(baseline.contains("baseline_ref=\"origin/${BASE_REF}\""));
+    assert!(baseline.contains("if git checkout --detach \"$baseline_ref\" &&"));
+    assert!(baseline.contains(
+        "cargo bench --bench storage_benchmarks --bench protocol_benchmarks -- --save-baseline main"
+    ));
+    assert!(baseline.contains("available=true"));
+    assert!(baseline.contains("available=false"));
+    assert!(baseline.contains("::warning::Historical baseline"));
+    assert!(
+        !baseline.contains("continue-on-error"),
+        "baseline failure must be handled explicitly so its status reaches the report"
+    );
+
+    let report = &steps[report_index];
+    assert!(report.contains("steps.baseline.outputs.available"));
+    assert!(report.contains("steps.baseline.outputs.exit_code"));
+    assert!(report.contains("Comparison skipped:"));
+    assert!(report.contains("neutral result for the comparison only"));
+    assert!(report.contains("cat diff.md >> \"$GITHUB_STEP_SUMMARY\""));
+    assert!(
+        !report.contains("critcmp main pr || true"),
+        "a real comparison-tool failure must not be hidden"
+    );
+
+    let upload = &steps[upload_index];
+    assert!(upload.contains("path: diff.md"));
+}
+
+#[test]
+fn benchmark_push_to_main_still_runs_mandatory_benchmarks() {
+    const WORKFLOW: &str = "benchmarks-unified.yml";
+    let body = read_workflow(WORKFLOW);
+    let jobs = split_jobs(&body);
+    let resolve = jobs
+        .iter()
+        .find(|job| job_name(job) == "resolve")
+        .expect("benchmarks-unified.yml must define the resolve job");
+    assert!(
+        resolve.contains(r#"push)         echo "mode=smoke"   >> "$GITHUB_OUTPUT" ;;"#),
+        "pushes to main must select smoke mode so a newly merged benchmark failure is visible"
+    );
+
+    let bench = jobs
+        .iter()
+        .find(|job| job_name(job) == "bench")
+        .expect("benchmarks-unified.yml must define the bench job");
+    let microbenchmarks = split_steps(bench)
+        .into_iter()
+        .find(|step| step.contains("name: Microbenchmarks"))
+        .expect("bench job must define the Microbenchmarks step");
+    let pipeline_steps: Vec<_> = split_steps(bench)
+        .into_iter()
+        .filter(|step| uncommented(step).any(|line| line.contains("| tee")))
+        .collect();
+    assert!(
+        !pipeline_steps.is_empty(),
+        "bench job must keep its benchmark artifact pipelines"
+    );
+    for step in pipeline_steps {
+        let pipefail = step.find("set -euo pipefail").unwrap_or_else(|| {
+            panic!("a benchmark step using `tee` must enable pipefail:\n{step}")
+        });
+        let first_pipeline = step
+            .find("| tee")
+            .expect("pipeline-bearing benchmark step must contain tee");
+        assert!(
+            pipefail < first_pipeline,
+            "pipefail must be enabled before the first benchmark pipeline:\n{step}"
+        );
+    }
+
+    let cli_benchmarks = split_steps(bench)
+        .into_iter()
+        .find(|step| step.contains("name: CLI benchmarks"))
+        .expect("bench job must define current-revision CLI benchmarks");
+    assert!(cli_benchmarks.contains("set -euo pipefail"));
+    for profile in ["quick", "throughput", "latency"] {
+        let line = cli_benchmarks
+            .lines()
+            .find(|line| line.contains(&format!("benchmark --profile {profile}")))
+            .unwrap_or_else(|| panic!("CLI benchmark step must run `{profile}`"));
+        assert!(
+            !line.contains("|| true"),
+            "current-revision CLI benchmark `{profile}` must fail the job"
+        );
+    }
+    assert!(
+        !uncommented(bench).any(|line| {
+            (line.contains("cargo bench") || line.contains("streamline-cli benchmark"))
+                && (line.contains("|| true") || line.contains("|| :") || line.contains("set +e"))
+        }),
+        "no current-revision benchmark invocation may be neutral; only the historical \
+         origin/main baseline may be converted into a skipped comparison"
+    );
+
+    assert!(
+        !microbenchmarks.contains("|| true"),
+        "no mandatory push-to-main benchmark pipeline may suppress a failure"
+    );
+    for benchmark in [
+        "storage_benchmarks",
+        "protocol_benchmarks",
+        "latency_benchmarks",
+        "zerocopy_benchmarks",
+    ] {
+        let line = microbenchmarks
+            .lines()
+            .find(|line| line.contains(benchmark))
+            .unwrap_or_else(|| panic!("main smoke mode must run `{benchmark}`"));
+        assert!(
+            line.contains("| tee") && microbenchmarks.contains("set -euo pipefail"),
+            "`{benchmark}` must fail the push-to-main job through pipefail when the \
+             new main cannot build or run it"
+        );
+    }
+}
+
+#[test]
+#[cfg(unix)]
+fn benchmark_binary_snapshot_propagates_source_command_failures() {
+    const WORKFLOW: &str = "benchmarks-unified.yml";
+    let body = read_workflow(WORKFLOW);
+    let bench = split_jobs(&body)
+        .into_iter()
+        .find(|job| job_name(job) == "bench")
+        .expect("benchmarks-unified.yml must define the bench job");
+    let snapshot = split_steps(&bench)
+        .into_iter()
+        .find(|step| step.contains("name: Binary size & startup snapshot"))
+        .expect("bench job must define the binary snapshot step");
+    let script = workflow_run_script(&snapshot);
+
+    assert!(script.contains("binary_bytes=\"$(stat "));
+    assert!(script.contains("binary_human=\"$(du -sh "));
+    assert!(
+        script
+            .find("binary_bytes=")
+            .expect("binary byte assignment")
+            < script.find("| tee").expect("snapshot tee pipeline")
+    );
+    assert!(
+        script
+            .find("binary_human=")
+            .expect("binary human assignment")
+            < script.find("| tee").expect("snapshot tee pipeline")
+    );
+
+    let failing_fixture = std::fs::read_to_string(
+        repo_root().join("tests/fixtures/benchmark_snapshot/failing-command.sh"),
+    )
+    .expect("benchmark snapshot failure fixture must exist");
+
+    for failing_tool in ["stat", "du"] {
+        let temp = tempfile::tempdir().expect("create snapshot test directory");
+        let bin = temp.path().join("bin");
+        let marker = temp.path().join("stub.log");
+        std::fs::create_dir_all(&bin).expect("create fixture bin directory");
+        std::fs::create_dir_all(temp.path().join("target/release"))
+            .expect("create fake release directory");
+        std::fs::write(temp.path().join("target/release/streamline"), "")
+            .expect("create fake binary");
+
+        for tool in ["stat", "du"] {
+            let contents = if tool == failing_tool {
+                failing_fixture.as_str()
+            } else if tool == "stat" {
+                "#!/bin/sh\nprintf '123\\n'\n"
+            } else {
+                "#!/bin/sh\nprintf '4.0K\\ttarget/release/streamline\\n'\n"
+            };
+            let path = bin.join(tool);
+            write_executable(&path, contents);
+        }
+
+        let output = run_workflow_script(
+            &script,
+            temp.path(),
+            &bin,
+            &[
+                ("STUB_EXIT_CODE", "23"),
+                (
+                    "STUB_LOG",
+                    marker.to_str().expect("marker path must be UTF-8"),
+                ),
+                ("STUB_NAME", failing_tool),
+            ],
+        );
+        assert_exit_code(&output, 23, "binary snapshot failure");
+        assert!(
+            read_marker_log(&marker)
+                .lines()
+                .any(|line| line == failing_tool),
+            "binary snapshot did not invoke the intended `{failing_tool}` stub"
+        );
+        assert!(
+            !temp
+                .path()
+                .join("benchmark-results/binary-size.txt")
+                .exists(),
+            "binary snapshot formatted output after `{failing_tool}` failed"
+        );
+    }
+}
+
+#[test]
+#[cfg(unix)]
+fn benchmark_workflow_failure_paths_execute_fail_closed() {
+    const WORKFLOW: &str = "benchmarks-unified.yml";
+    let step = |job: &str, name: &str| {
+        steps_of(WORKFLOW, job)
+            .into_iter()
+            .find(|step| step.contains(&format!("name: {name}")))
+            .unwrap_or_else(|| panic!("{WORKFLOW}: `{job}` must define `{name}`"))
+    };
+
+    let cargo_stub = "#!/bin/sh\n\
+        printf 'cargo:%s\\n' \"$*\" >> \"$STUB_LOG\"\n\
+        if [ \"${FAIL_CARGO:-0}\" = 1 ]; then exit 31; fi\n\
+        case \" $* \" in\n\
+          *\" --bench ${FAIL_BENCH:-__none__} \"*) exit 32 ;;\n\
+        esac\n\
+        printf 'benchmark output\\n'\n";
+
+    let pr_script = workflow_run_script(&step("compare", "Bench PR"));
+    let pr_dir = tempfile::tempdir().expect("create PR harness directory");
+    let pr_bin = pr_dir.path().join("bin");
+    let pr_marker = pr_dir.path().join("stub.log");
+    std::fs::create_dir_all(&pr_bin).expect("create PR harness bin");
+    write_executable(&pr_bin.join("cargo"), cargo_stub);
+    let pr = run_workflow_script(
+        &pr_script,
+        pr_dir.path(),
+        &pr_bin,
+        &[
+            ("FAIL_CARGO", "1"),
+            (
+                "STUB_LOG",
+                pr_marker.to_str().expect("marker path must be UTF-8"),
+            ),
+        ],
+    );
+    assert_exit_code(&pr, 31, "PR benchmark cargo failure");
+    assert_marker(
+        &pr_marker,
+        "cargo:bench --bench storage_benchmarks --bench protocol_benchmarks -- --save-baseline pr",
+    );
+
+    let micro_script = workflow_run_script(&step("bench", "Microbenchmarks"));
+    for benchmark in [
+        "storage_benchmarks",
+        "protocol_benchmarks",
+        "latency_benchmarks",
+        "zerocopy_benchmarks",
+    ] {
+        let temp = tempfile::tempdir().expect("create microbenchmark harness directory");
+        let bin = temp.path().join("bin");
+        let marker = temp.path().join("stub.log");
+        std::fs::create_dir_all(&bin).expect("create microbenchmark harness bin");
+        write_executable(&bin.join("cargo"), cargo_stub);
+        let output = run_workflow_script(
+            &micro_script,
+            temp.path(),
+            &bin,
+            &[
+                ("FAIL_BENCH", benchmark),
+                (
+                    "STUB_LOG",
+                    marker.to_str().expect("marker path must be UTF-8"),
+                ),
+            ],
+        );
+        assert_exit_code(
+            &output,
+            32,
+            &format!("microbenchmark `{benchmark}` cargo failure"),
+        );
+        assert_marker(
+            &marker,
+            &format!("cargo:bench --bench {benchmark} -- --output-format bencher"),
+        );
+    }
+
+    let temp = tempfile::tempdir().expect("create tee harness directory");
+    let bin = temp.path().join("bin");
+    let marker = temp.path().join("stub.log");
+    std::fs::create_dir_all(&bin).expect("create tee harness bin");
+    write_executable(&bin.join("cargo"), cargo_stub);
+    write_executable(
+        &bin.join("tee"),
+        "#!/bin/sh\n\
+         printf 'tee:%s\\n' \"$*\" >> \"$STUB_LOG\"\n\
+         /bin/cat >/dev/null\n\
+         exit 33\n",
+    );
+    let tee = run_workflow_script(
+        &micro_script,
+        temp.path(),
+        &bin,
+        &[(
+            "STUB_LOG",
+            marker.to_str().expect("marker path must be UTF-8"),
+        )],
+    );
+    assert_exit_code(&tee, 33, "microbenchmark tee failure");
+    assert_marker(
+        &marker,
+        "cargo:bench --bench storage_benchmarks -- --output-format bencher",
+    );
+    assert_marker(&marker, "tee:benchmark-results/storage.txt");
+
+    let cli_script = workflow_run_script(&step("bench", "CLI benchmarks (release/publish)"));
+    for profile in ["quick", "throughput", "latency"] {
+        let temp = tempfile::tempdir().expect("create CLI benchmark harness directory");
+        let bin = temp.path().join("bin");
+        let release = temp.path().join("target/release");
+        let marker = temp.path().join("stub.log");
+        std::fs::create_dir_all(&bin).expect("create CLI harness bin");
+        std::fs::create_dir_all(&release).expect("create fake release directory");
+        write_executable(&bin.join("sleep"), "#!/bin/sh\nexit 0\n");
+        write_executable(
+            &release.join("streamline"),
+            "#!/bin/sh\n\
+             printf 'server:%s\\n' \"$*\" >> \"$STUB_LOG\"\n\
+             exec /bin/sleep 600\n",
+        );
+        write_executable(
+            &release.join("streamline-cli"),
+            "#!/bin/sh\n\
+             printf 'cli:%s\\n' \"$*\" >> \"$STUB_LOG\"\n\
+             case \" $* \" in\n\
+               *\" --profile ${FAIL_PROFILE} \"*) exit 34 ;;\n\
+             esac\n\
+             printf '{}\\n'\n",
+        );
+        let output = run_workflow_script(
+            &cli_script,
+            temp.path(),
+            &bin,
+            &[
+                ("FAIL_PROFILE", profile),
+                (
+                    "STUB_LOG",
+                    marker.to_str().expect("marker path must be UTF-8"),
+                ),
+            ],
+        );
+        assert_exit_code(&output, 34, &format!("CLI benchmark `{profile}` failure"));
+        assert_marker(&marker, "server:--in-memory --log-level warn");
+        assert_marker(
+            &marker,
+            &format!("cli:benchmark --profile {profile} --format json"),
+        );
+    }
+
+    let nightly_script = workflow_run_script(&step("nightly", "Run comparative suite"))
+        .replace(
+            "${{ github.event.inputs.targets || 'streamline,kafka,redpanda' }}",
+            "streamline,kafka,redpanda",
+        )
+        .replace("${{ github.event.inputs.duration || '60' }}", "60");
+    let nightly_dir = tempfile::tempdir().expect("create nightly harness directory");
+    let nightly_bin = nightly_dir.path().join("bin");
+    let nightly_release = nightly_dir.path().join("target/release");
+    let nightly_marker = nightly_dir.path().join("stub.log");
+    std::fs::create_dir_all(&nightly_bin).expect("create nightly harness bin");
+    std::fs::create_dir_all(&nightly_release).expect("create nightly release directory");
+    write_executable(
+        &nightly_release.join("streamline-cli"),
+        "#!/bin/sh\n\
+         printf 'cli:%s\\n' \"$*\" >> \"$STUB_LOG\"\n\
+         exit 35\n",
+    );
+    let nightly = run_workflow_script(
+        &nightly_script,
+        nightly_dir.path(),
+        &nightly_bin,
+        &[(
+            "STUB_LOG",
+            nightly_marker.to_str().expect("marker path must be UTF-8"),
+        )],
+    );
+    assert_exit_code(&nightly, 35, "nightly comparative benchmark failure");
+    assert_marker(
+        &nightly_marker,
+        "cli:benchmark --compare streamline,kafka,redpanda --duration 60 --format json",
+    );
+
+    let comparison_script = workflow_run_script(&step("compare", "Build comparison report"));
+    let comparison_dir = tempfile::tempdir().expect("create comparison harness directory");
+    let comparison_bin = comparison_dir.path().join("bin");
+    let comparison_marker = comparison_dir.path().join("stub.log");
+    std::fs::create_dir_all(&comparison_bin).expect("create comparison harness bin");
+    write_executable(
+        &comparison_bin.join("critcmp"),
+        "#!/bin/sh\n\
+         printf 'critcmp:%s\\n' \"$*\" >> \"$STUB_LOG\"\n\
+         exit 36\n",
+    );
+    let summary = comparison_dir.path().join("summary.md");
+    let comparison = run_workflow_script(
+        &comparison_script,
+        comparison_dir.path(),
+        &comparison_bin,
+        &[
+            ("BASE_REF", "main"),
+            ("BASELINE_AVAILABLE", "true"),
+            ("BASELINE_EXIT_CODE", "0"),
+            (
+                "STUB_LOG",
+                comparison_marker
+                    .to_str()
+                    .expect("marker path must be UTF-8"),
+            ),
+            (
+                "GITHUB_STEP_SUMMARY",
+                summary.to_str().expect("summary path must be UTF-8"),
+            ),
+        ],
+    );
+    assert_exit_code(&comparison, 36, "critcmp command-substitution failure");
+    assert_marker(&comparison_marker, "critcmp:main pr");
+
+    let baseline_script = workflow_run_script(&step("compare", "Bench historical main baseline"));
+    let baseline_dir = tempfile::tempdir().expect("create baseline harness directory");
+    let baseline_bin = baseline_dir.path().join("bin");
+    let baseline_marker = baseline_dir.path().join("stub.log");
+    std::fs::create_dir_all(&baseline_bin).expect("create baseline harness bin");
+    write_executable(
+        &baseline_bin.join("git"),
+        "#!/bin/sh\n\
+         printf 'git:%s\\n' \"$*\" >> \"$STUB_LOG\"\n\
+         exit 0\n",
+    );
+    write_executable(
+        &baseline_bin.join("cargo"),
+        "#!/bin/sh\n\
+         printf 'cargo:%s\\n' \"$*\" >> \"$STUB_LOG\"\n\
+         exit 37\n",
+    );
+    let github_output = baseline_dir.path().join("github-output");
+    let baseline = run_workflow_script(
+        &baseline_script,
+        baseline_dir.path(),
+        &baseline_bin,
+        &[
+            ("BASE_REF", "main"),
+            (
+                "STUB_LOG",
+                baseline_marker.to_str().expect("marker path must be UTF-8"),
+            ),
+            (
+                "GITHUB_OUTPUT",
+                github_output.to_str().expect("output path must be UTF-8"),
+            ),
+        ],
+    );
+    assert_exit_code(
+        &baseline,
+        0,
+        "historical origin/main failure must remain neutral after the PR benchmark passed",
+    );
+    assert_marker(&baseline_marker, "git:checkout --detach origin/main");
+    assert_marker(
+        &baseline_marker,
+        "cargo:bench --bench storage_benchmarks --bench protocol_benchmarks -- --save-baseline main",
+    );
+    let outputs = std::fs::read_to_string(&github_output).expect("read baseline outputs");
+    assert!(outputs.contains("available=false"));
+    assert!(outputs.contains("exit_code=37"));
+    assert!(String::from_utf8_lossy(&baseline.stdout)
+        .contains("comparison will be reported as skipped"));
+
+    let baseline_summary = baseline_dir.path().join("summary.md");
+    let report = run_workflow_script(
+        &comparison_script,
+        baseline_dir.path(),
+        &baseline_bin,
+        &[
+            ("BASE_REF", "main"),
+            ("BASELINE_AVAILABLE", "false"),
+            ("BASELINE_EXIT_CODE", "37"),
+            (
+                "STUB_LOG",
+                baseline_marker.to_str().expect("marker path must be UTF-8"),
+            ),
+            (
+                "GITHUB_STEP_SUMMARY",
+                baseline_summary
+                    .to_str()
+                    .expect("baseline summary path must be UTF-8"),
+            ),
+        ],
+    );
+    assert_exit_code(
+        &report,
+        0,
+        "baseline-unavailable report must be emitted successfully",
+    );
+    for path in [baseline_dir.path().join("diff.md"), baseline_summary] {
+        let contents = std::fs::read_to_string(&path)
+            .unwrap_or_else(|error| panic!("failed to read {}: {error}", path.display()));
+        assert!(contents.contains("Comparison skipped:"));
+        assert!(contents.contains("exit code `37`"));
+        assert!(contents.contains("neutral result for the comparison only"));
+    }
+}
+
+#[test]
+#[cfg(unix)]
+fn benchmark_harness_ignores_inherited_shell_environment() {
+    const CHILD_ENV: &str = "STREAMLINE_BENCHMARK_HARNESS_CHILD";
+    const TEST_NAME: &str = "benchmark_harness_ignores_inherited_shell_environment";
+
+    if std::env::var_os(CHILD_ENV).is_some() {
+        let microbenchmarks = steps_of("benchmarks-unified.yml", "bench")
+            .into_iter()
+            .find(|step| step.contains("name: Microbenchmarks"))
+            .expect("bench job must define the Microbenchmarks step");
+        let script = workflow_run_script(&microbenchmarks);
+        let temp = tempfile::tempdir().expect("create isolated harness directory");
+        let bin = temp.path().join("bin");
+        let marker = temp.path().join("intended.log");
+        std::fs::create_dir_all(&bin).expect("create isolated harness bin");
+        write_executable(
+            &bin.join("cargo"),
+            "#!/bin/sh\n\
+             printf 'cargo:%s\\n' \"$*\" >> \"$STUB_LOG\"\n\
+             exit 41\n",
+        );
+
+        let output = run_workflow_script(
+            &script,
+            temp.path(),
+            &bin,
+            &[(
+                "STUB_LOG",
+                marker.to_str().expect("marker path must be UTF-8"),
+            )],
+        );
+        assert_exit_code(&output, 41, "isolated benchmark cargo failure");
+        assert_marker(
+            &marker,
+            "cargo:bench --bench storage_benchmarks -- --output-format bencher",
+        );
+        return;
+    }
+
+    let temp = tempfile::tempdir().expect("create hostile environment directory");
+    let hostile_bin = temp.path().join("hostile-bin");
+    let hostile_marker = temp.path().join("hostile.log");
+    let bash_env = temp.path().join("bash-env");
+    std::fs::create_dir_all(&hostile_bin).expect("create hostile bin directory");
+
+    let hostile_script = format!(
+        "#!/bin/sh\nprintf 'path:%s\\n' \"$0\" >> '{}'\nexit 91\n",
+        hostile_marker.display()
+    );
+    for command in ["cargo", "mkdir", "tee"] {
+        write_executable(&hostile_bin.join(command), &hostile_script);
+    }
+    std::fs::write(
+        &bash_env,
+        format!(
+            "printf 'bash-env\\n' >> '{}'\n\
+             shopt -s expand_aliases\n\
+             alias cargo='{}'\n",
+            hostile_marker.display(),
+            hostile_bin.join("cargo").display(),
+        ),
+    )
+    .expect("write hostile BASH_ENV");
+
+    let exported_mkdir = format!(
+        "() {{ printf 'exported-mkdir\\n' >> '{}'; return 92; }}",
+        hostile_marker.display()
+    );
+    let output = std::process::Command::new(
+        std::env::current_exe().expect("resolve current packaging test binary"),
+    )
+    .args(["--exact", TEST_NAME, "--nocapture"])
+    .env(CHILD_ENV, "1")
+    .env("BASH_ENV", &bash_env)
+    .env("BASH_FUNC_mkdir%%", exported_mkdir)
+    .env("PATH", format!("{}:/usr/bin:/bin", hostile_bin.display()))
+    .output()
+    .expect("run benchmark harness isolation child");
+
+    assert!(
+        output.status.success(),
+        "isolated harness child failed:\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+    assert!(
+        !hostile_marker.exists(),
+        "BASH_ENV, exported functions, or inherited PATH escaped the harness allowlist:\n{}",
+        std::fs::read_to_string(&hostile_marker).unwrap_or_default()
     );
 }
 
