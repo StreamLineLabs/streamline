@@ -404,10 +404,6 @@ impl DynamicFile {
     }
 }
 
-// Implement Send + Sync for DynamicFile
-unsafe impl Send for DynamicFile {}
-unsafe impl Sync for DynamicFile {}
-
 #[async_trait]
 impl AsyncFile for DynamicFile {
     async fn read_at(&self, buf: Vec<u8>, offset: u64) -> IoResult<usize> {

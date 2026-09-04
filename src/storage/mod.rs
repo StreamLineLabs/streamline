@@ -203,9 +203,9 @@ pub use io_backend::{
 
 // Re-export io_uring types when available
 #[cfg(all(target_os = "linux", feature = "io-uring"))]
-pub use io_backend::{
-    get_uring_backend, is_uring_available, IoWorker, IoWorkerConfig, UringFile, UringFileSystem,
-};
+pub use io_backend::uring::is_uring_available;
+#[cfg(all(target_os = "linux", feature = "io-uring"))]
+pub use io_backend::{get_uring_backend, IoWorker, IoWorkerConfig, UringFile, UringFileSystem};
 
 // Re-export async index types
 pub use async_index::{AsyncIndexBuilder, AsyncSegmentIndex};
