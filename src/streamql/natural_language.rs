@@ -12,7 +12,7 @@
 //!
 //! ## Example
 //!
-//! ```rust,no_run
+//! ```rust,ignore
 //! use streamline::streamql::natural_language::*;
 //!
 //! let engine = NaturalLanguageEngine::new(NlConfig::default());

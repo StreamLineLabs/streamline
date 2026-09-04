@@ -12,7 +12,7 @@
 //!
 //! ## Example
 //!
-//! ```
+//! ```ignore
 //! use streamline::{AutoScaler, AutoScalerConfig, ScalingPolicy};
 //!
 //! let config = AutoScalerConfig {

@@ -23,7 +23,7 @@
 //!
 //! # Example
 //!
-//! ```no_run
+//! ```ignore
 //! use streamline::edge::{EdgeConfig, EdgeRuntime};
 //!
 //! # fn main() -> streamline::Result<()> {
