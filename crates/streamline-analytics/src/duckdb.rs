@@ -285,16 +285,20 @@ impl DuckDBEngine {
             AnalyticsError::DuckDb(format!("Failed to create DuckDB connection: {e}"))
         })?;
 
-        // Disable automatic extension installation to avoid failures on
-        // systems where dynamic extension loading is restricted (e.g., macOS
-        // code-signing policy).  The bundled build already includes core
-        // extensions; we only need to LOAD them.
-        let _ = connection.execute_batch(
-            "SET autoinstall_known_extensions=false; SET autoload_known_extensions=true;",
-        );
-        // Try to load the JSON extension (bundled) so that ->> and JSON
-        // functions are available.  Ignore errors if not bundled.
-        let _ = connection.execute_batch("LOAD json;");
+        // Queries expose record values as JSON. Keep extension installation
+        // offline and fail initialization if the statically linked JSON
+        // extension cannot be loaded.
+        connection
+            .execute_batch(
+                "SET autoinstall_known_extensions=false; \
+                 SET autoload_known_extensions=false;",
+            )
+            .map_err(|e| {
+                AnalyticsError::duckdb(format!("Failed to disable DuckDB extension downloads: {e}"))
+            })?;
+        connection.execute_batch("LOAD json;").map_err(|e| {
+            AnalyticsError::duckdb(format!("Failed to load bundled DuckDB JSON extension: {e}"))
+        })?;
 
         info!("DuckDB analytics engine initialized");
 

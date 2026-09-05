@@ -139,6 +139,26 @@ fn workspace_path_dependency_versions_match_member_crates() {
 }
 
 #[test]
+fn analytics_bundles_json_without_runtime_downloads() {
+    for manifest_path in ["Cargo.toml", "crates/streamline-analytics/Cargo.toml"] {
+        let manifest = read_manifest(manifest_path);
+        let duckdb = manifest
+            .lines()
+            .find(|line| line.trim_start().starts_with("duckdb = {"))
+            .unwrap_or_else(|| panic!("{manifest_path} must declare DuckDB"));
+        assert!(
+            duckdb.contains("\"json\""),
+            "{manifest_path} must compile DuckDB's JSON extension into the binary"
+        );
+    }
+
+    let engine = read_manifest("crates/streamline-analytics/src/duckdb.rs");
+    assert!(engine.contains("SET autoinstall_known_extensions=false"));
+    assert!(engine.contains("SET autoload_known_extensions=false"));
+    assert!(engine.contains("connection.execute_batch(\"LOAD json;\").map_err"));
+}
+
+#[test]
 fn workspace_crates_share_the_root_version() {
     let root_version = package_version(&read_manifest("Cargo.toml"));
     for (name, _alias, manifest_path) in member_manifest_paths() {

@@ -307,7 +307,7 @@ streamline-analytics = { path = "crates/streamline-analytics", version = "0.4.0"
 # DuckDB for embedded analytics (optional - analytics feature)
 # Note: duckdb is now compiled inside the streamline-analytics workspace crate.
 # This dep is kept for backward compat if anything imports it directly.
-duckdb = { version = "1.1", features = ["bundled", "vtab"], optional = true }
+duckdb = { version = "1.1", features = ["bundled", "json", "vtab"], optional = true }
 
 # SQLite for lightweight embedded queries (optional - sqlite-queries feature)
 rusqlite = { version = "0.31", features = ["bundled"], optional = true }
