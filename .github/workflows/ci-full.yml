@@ -9,6 +9,7 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  CARGO_PROFILE_TEST_DEBUG: '0'
   RUST_BACKTRACE: 1
 
 jobs:
@@ -83,7 +84,10 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - run: cargo test ${{ matrix.edition.features }}
+      - name: Test within the hosted-runner memory budget
+        run: cargo test ${{ matrix.edition.features }}
+        env:
+          CARGO_BUILD_JOBS: '1'
 
   nextest:
     name: Nextest (lite)
@@ -197,6 +201,8 @@ jobs:
         run: cargo build --all-features --locked
       - name: Test with MSRV
         run: cargo test --all-features --locked
+        env:
+          CARGO_BUILD_JOBS: '1'
 
   benchmarks:
     name: Benchmark Compilation
@@ -224,4 +230,5 @@ jobs:
       - name: Run ignored tests (chaos, stress, compatibility)
         run: cargo test --all-features -- --ignored --test-threads=1
         env:
+          CARGO_BUILD_JOBS: '1'
           RUST_LOG: warn

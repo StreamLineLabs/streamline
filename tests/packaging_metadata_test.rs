@@ -298,6 +298,26 @@ fn ci_compiles_all_linux_targets_on_the_pinned_toolchain() {
     assert!(ci.contains("RUSTUP_TOOLCHAIN: '1.88'"));
 }
 
+/// The all-feature test graph includes DuckDB, Wasmtime, and Arrow. Six
+/// concurrent test-profile rustc/linker processes exceed the memory available
+/// on GitHub-hosted runners, so CI must override the workstation-oriented Cargo
+/// default while retaining complete feature coverage.
+#[test]
+fn ci_bounds_all_feature_test_memory() {
+    let ci = read_manifest(".github/workflows/ci.yml");
+    assert!(ci.contains("CARGO_PROFILE_TEST_DEBUG: '0'"));
+    assert!(ci.contains("name: Test all features within the hosted-runner memory budget"));
+    assert!(ci.contains("run: cargo test --all-features --locked"));
+    assert!(ci.contains("CARGO_BUILD_JOBS: '1'"));
+
+    let full_ci = read_manifest(".github/workflows/ci-full.yml");
+    assert!(full_ci.contains("CARGO_PROFILE_TEST_DEBUG: '0'"));
+    assert!(
+        full_ci.matches("CARGO_BUILD_JOBS: '1'").count() >= 3,
+        "ci-full.yml must bound regular, MSRV, and ignored all-feature tests"
+    );
+}
+
 /// `TcpKeepalive::with_retries` is available on Linux only when socket2's
 /// platform-complete API feature is enabled.
 #[test]

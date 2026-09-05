@@ -6,6 +6,9 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  # Test binaries for the all-feature graph are large enough that debug symbols
+  # can exhaust the memory available on GitHub-hosted runners while linking.
+  CARGO_PROFILE_TEST_DEBUG: '0'
   # Single source of truth for the MSRV in CI. Must match `rust-version` in
   # Cargo.toml and in every workspace member crate; enforced by
   # tests/packaging_metadata_test.rs.
@@ -65,7 +68,12 @@ jobs:
       - run: cargo clippy --all-targets --locked -- -D warnings
       - run: cargo test --locked
       - run: cargo clippy --all-targets --all-features --locked -- -D warnings
-      - run: cargo test --all-features --locked
+      - name: Test all features within the hosted-runner memory budget
+        run: cargo test --all-features --locked
+        env:
+          # .cargo/config.toml permits six local jobs, but the 7 GB hosted
+          # runner cannot link this dependency graph at that concurrency.
+          CARGO_BUILD_JOBS: '1'
 
   msrv:
     name: MSRV

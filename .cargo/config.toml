@@ -75,6 +75,7 @@ unused = "machete"
 # With heavy deps (duckdb, wasmtime, arrow), peak memory per rustc can be 2-4GB.
 # On a 64GB machine with 10 cores, 6 jobs keeps memory under ~24GB peak.
 # Adjust based on your system: more RAM = more jobs, freezing = fewer jobs.
+# Hosted workflows override this for all-feature test links on smaller runners.
 jobs = 6
 
 # Use sccache to cache compiled crates across clean builds and branch switches.
@@ -97,4 +98,3 @@ retry = 3
 color = "auto"
 # Show progress bar
 progress.when = "auto"
-
