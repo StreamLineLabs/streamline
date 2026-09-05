@@ -499,6 +499,19 @@ enum AutoFileSystemInner {
     EnhancedUring(EnhancedUringFileSystem),
 }
 
+impl AutoFileSystemInner {
+    fn backend_type(&self) -> IoBackendType {
+        match self {
+            Self::Standard(_) => IoBackendType::Standard,
+            Self::Direct(_) => IoBackendType::Direct,
+            #[cfg(all(target_os = "linux", feature = "io-uring"))]
+            Self::Uring(_) => IoBackendType::Uring,
+            #[cfg(all(target_os = "linux", feature = "io-uring"))]
+            Self::EnhancedUring(_) => IoBackendType::EnhancedUring,
+        }
+    }
+}
+
 impl AutoFileSystem {
     /// Create with automatic backend selection
     pub fn new() -> Self {
@@ -507,13 +520,16 @@ impl AutoFileSystem {
 
     /// Create with custom configuration
     pub fn with_config(config: AutoBackendConfig) -> Self {
-        let info = detect_backend();
+        let mut info = detect_backend();
 
-        let inner = match config.strategy {
-            BackendSelectionStrategy::Auto => Self::select_auto(&info, &config),
+        let (inner, selection_reason) = match config.strategy {
+            BackendSelectionStrategy::Auto => (Self::select_auto(&info, &config), None),
             BackendSelectionStrategy::ForceStandard => {
                 tracing::info!("Forcing standard I/O backend");
-                AutoFileSystemInner::Standard(StandardFileSystem::new())
+                (
+                    AutoFileSystemInner::Standard(StandardFileSystem::new()),
+                    Some("standard I/O forced by configuration".to_string()),
+                )
             }
             BackendSelectionStrategy::ForceDirect => {
                 tracing::info!("Forcing direct I/O backend (O_DIRECT)");
@@ -522,12 +538,18 @@ impl AutoFileSystem {
                 } else {
                     DirectFileSystem::new()
                 };
-                AutoFileSystemInner::Direct(direct)
+                (
+                    AutoFileSystemInner::Direct(direct),
+                    Some("direct I/O forced by configuration".to_string()),
+                )
             }
             #[cfg(all(target_os = "linux", feature = "io-uring"))]
             BackendSelectionStrategy::ForceUring => {
                 tracing::info!("Forcing io_uring backend");
-                AutoFileSystemInner::Uring(UringFileSystem::new())
+                (
+                    AutoFileSystemInner::Uring(UringFileSystem::new()),
+                    Some("io_uring forced by configuration".to_string()),
+                )
             }
             #[cfg(all(target_os = "linux", feature = "io-uring"))]
             BackendSelectionStrategy::ForceEnhancedUring => {
@@ -537,9 +559,23 @@ impl AutoFileSystem {
                 } else {
                     EnhancedUringFileSystem::new()
                 };
-                AutoFileSystemInner::EnhancedUring(enhanced)
+                (
+                    AutoFileSystemInner::EnhancedUring(enhanced),
+                    Some("enhanced io_uring forced by configuration".to_string()),
+                )
             }
         };
+
+        info.backend_type = inner.backend_type();
+        if let Some(reason) = selection_reason {
+            info.selection_reason = reason;
+        }
+        #[cfg(all(target_os = "linux", feature = "io-uring"))]
+        if config.strategy == BackendSelectionStrategy::Auto
+            && info.backend_type == IoBackendType::EnhancedUring
+        {
+            info.selection_reason = "enhanced io_uring configured and available".to_string();
+        }
 
         tracing::info!(
             backend = %info.backend_type,
@@ -729,6 +765,8 @@ mod auto_backend_tests {
         };
         let fs = AutoFileSystem::with_config(config);
         assert_eq!(fs.backend_type(), IoBackendType::Standard);
+        assert_eq!(fs.info().backend_type, IoBackendType::Standard);
+        assert!(fs.info().selection_reason.contains("forced"));
         assert!(!fs.is_uring());
     }
 
