@@ -216,10 +216,7 @@ impl MySqlCdcSource {
         match self.load_schemas_from_server().await {
             Ok(server_schemas) => {
                 schemas = server_schemas;
-                info!(
-                    "Loaded {} table schemas from MySQL server",
-                    schemas.len()
-                );
+                info!("Loaded {} table schemas from MySQL server", schemas.len());
             }
             Err(e) => {
                 warn!(
@@ -235,7 +232,7 @@ impl MySqlCdcSource {
                         (self.config.database.clone(), table.clone())
                     };
 
-                    let key = format!("{}.{}", db, tbl);
+                    let key = format!("{db}.{tbl}");
                     schemas.insert(
                         key,
                         TableSchema {
@@ -313,9 +310,8 @@ impl MySqlCdcSource {
             "SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, DATA_TYPE, \
              COLUMN_TYPE, IS_NULLABLE, COLUMN_KEY, ORDINAL_POSITION \
              FROM INFORMATION_SCHEMA.COLUMNS \
-             WHERE {} \
-             ORDER BY TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION",
-            table_filter
+             WHERE {table_filter} \
+             ORDER BY TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION"
         );
 
         // For primary key detection:
@@ -325,9 +321,8 @@ impl MySqlCdcSource {
         let _pk_query = format!(
             "SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME \
              FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE \
-             WHERE CONSTRAINT_NAME = 'PRIMARY' AND {} \
-             ORDER BY TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION",
-            table_filter
+             WHERE CONSTRAINT_NAME = 'PRIMARY' AND {table_filter} \
+             ORDER BY TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION"
         );
 
         // Return error to trigger fallback — a real MySQL driver integration
@@ -414,7 +409,7 @@ impl MySqlCdcSource {
 
         // Get schema for column names
         let schemas = self.table_schemas.read();
-        let schema_key = format!("{}.{}", database, table);
+        let schema_key = format!("{database}.{table}");
         let schema = schemas.get(&schema_key);
 
         for row in &event.rows {
@@ -490,10 +485,10 @@ impl MySqlCdcSource {
                     if let Some(col) = s.columns.get(i) {
                         (col.name.clone(), col.data_type.clone())
                     } else {
-                        (format!("col_{}", i), "unknown".to_string())
+                        (format!("col_{i}"), "unknown".to_string())
                     }
                 } else {
-                    (format!("col_{}", i), "unknown".to_string())
+                    (format!("col_{i}"), "unknown".to_string())
                 };
 
                 CdcColumnValue {
@@ -1036,6 +1031,9 @@ mod tests {
         let config = MySqlCdcConfig::default();
         let source = MySqlCdcSource::new(config);
         let events = source.read_next_binlog_events().await.unwrap();
-        assert!(events.is_empty(), "Should return empty when no driver linked");
+        assert!(
+            events.is_empty(),
+            "Should return empty when no driver linked"
+        );
     }
 }

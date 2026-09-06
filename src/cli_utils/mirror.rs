@@ -123,10 +123,10 @@ impl MirrorKafkaClient {
         let mut buf = BytesMut::new();
         header
             .encode(&mut buf, api_version)
-            .map_err(|e| crate::StreamlineError::protocol_msg(format!("encode header: {}", e)))?;
+            .map_err(|e| crate::StreamlineError::protocol_msg(format!("encode header: {e}")))?;
         request
             .encode(&mut buf, api_version)
-            .map_err(|e| crate::StreamlineError::protocol_msg(format!("encode request: {}", e)))?;
+            .map_err(|e| crate::StreamlineError::protocol_msg(format!("encode request: {e}")))?;
 
         let len = buf.len() as i32;
         let mut msg = BytesMut::with_capacity(4 + buf.len());
@@ -145,9 +145,9 @@ impl MirrorKafkaClient {
 
         let mut cursor = &resp_buf[..];
         let _resp_header = ResponseHeader::decode(&mut cursor, api_version)
-            .map_err(|e| crate::StreamlineError::protocol_msg(format!("decode header: {}", e)))?;
+            .map_err(|e| crate::StreamlineError::protocol_msg(format!("decode header: {e}")))?;
         let response = Resp::decode(&mut cursor, api_version)
-            .map_err(|e| crate::StreamlineError::protocol_msg(format!("decode response: {}", e)))?;
+            .map_err(|e| crate::StreamlineError::protocol_msg(format!("decode response: {e}")))?;
 
         Ok(response)
     }
@@ -477,11 +477,9 @@ pub fn run_mirror(config: &MirrorConfig, stop_flag: Arc<AtomicBool>) -> crate::R
                                     .with_name(TopicName(StrBytes::from_string(
                                         topic_name.to_string(),
                                     )))
-                                    .with_partition_data(vec![
-                                        PartitionProduceData::default()
-                                            .with_index(partition_resp.partition_index)
-                                            .with_records(Some(records.clone())),
-                                    ]);
+                                    .with_partition_data(vec![PartitionProduceData::default()
+                                        .with_index(partition_resp.partition_index)
+                                        .with_records(Some(records.clone()))]);
 
                                 let request = ProduceRequest::default()
                                     .with_acks(-1)
@@ -504,11 +502,7 @@ pub fn run_mirror(config: &MirrorConfig, stop_flag: Arc<AtomicBool>) -> crate::R
                             }
                             Err(e) => {
                                 stats.errors.fetch_add(1, Ordering::Relaxed);
-                                eprintln!(
-                                    "  {} Streamline connection failed: {}",
-                                    "!".yellow(),
-                                    e
-                                );
+                                eprintln!("  {} Streamline connection failed: {}", "!".yellow(), e);
                             }
                         }
                     }
@@ -597,7 +591,7 @@ pub fn run_mirror(config: &MirrorConfig, stop_flag: Arc<AtomicBool>) -> crate::R
         format_number(total_records).green()
     );
     println!("  Bytes mirrored:   {}", format_bytes(total_bytes).green());
-    println!("  Duration:         {:?}", elapsed);
+    println!("  Duration:         {elapsed:?}");
     println!(
         "  Errors:           {}",
         if errors == 0 {
@@ -629,7 +623,7 @@ fn print_banner() {
 fn print_step(num: u32, message: &str) {
     println!(
         "  {} {}",
-        format!("[{}/5]", num).cyan().bold(),
+        format!("[{num}/5]").cyan().bold(),
         message.bold()
     );
 }
@@ -654,7 +648,7 @@ fn format_bytes(bytes: u64) -> String {
     } else if bytes >= 1024 {
         format!("{:.1} KB", bytes as f64 / 1024.0)
     } else {
-        format!("{} B", bytes)
+        format!("{bytes} B")
     }
 }
 

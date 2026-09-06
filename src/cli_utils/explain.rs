@@ -122,26 +122,23 @@ pub mod explanations {
 
         if let Some(k) = key {
             ctx.step_with_details(
-                format!("Computed partition from key '{}'", k),
-                format!("hash(key) mod num_partitions = partition {}", partition),
+                format!("Computed partition from key '{k}'"),
+                format!("hash(key) mod num_partitions = partition {partition}"),
             );
         } else {
             ctx.step_with_details(
-                format!("Selected partition {}", partition),
+                format!("Selected partition {partition}"),
                 "Round-robin selection (no key provided)",
             );
         }
 
         ctx.step_with_details(
-            format!(
-                "Appended record to topic '{}' partition {}",
-                topic, partition
-            ),
+            format!("Appended record to topic '{topic}' partition {partition}"),
             "Record written to active segment file",
         );
 
         ctx.step_with_details(
-            format!("Assigned offset {}", offset),
+            format!("Assigned offset {offset}"),
             "Monotonically increasing sequence number",
         );
 
@@ -149,8 +146,7 @@ pub mod explanations {
 
         ctx.print();
         ctx.print_kafka_equivalent(&format!(
-            "kafka-console-producer.sh --broker-list localhost:9092 --topic {}",
-            topic
+            "kafka-console-producer.sh --broker-list localhost:9092 --topic {topic}"
         ));
     }
 
@@ -169,33 +165,23 @@ pub mod explanations {
         );
 
         ctx.step_with_details(
-            format!(
-                "Located segment files for topic '{}' partition {}",
-                topic, partition
-            ),
-            format!(
-                "Segment files in data/topics/{}/partition-{}/",
-                topic, partition
-            ),
+            format!("Located segment files for topic '{topic}' partition {partition}"),
+            format!("Segment files in data/topics/{topic}/partition-{partition}/"),
         );
 
         ctx.step_with_details(
-            format!("Seeked to offset {}", start_offset),
+            format!("Seeked to offset {start_offset}"),
             "Used sparse index for O(log n) lookup",
         );
 
         ctx.step_with_details(
-            format!(
-                "Read {} record(s) from offset {} to {}",
-                record_count, start_offset, end_offset
-            ),
+            format!("Read {record_count} record(s) from offset {start_offset} to {end_offset}"),
             "Sequential read for optimal disk I/O",
         );
 
         ctx.print();
         ctx.print_kafka_equivalent(&format!(
-            "kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic {} --from-beginning",
-            topic
+            "kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic {topic} --from-beginning"
         ));
     }
 
@@ -207,12 +193,12 @@ pub mod explanations {
         retention_ms: i64,
     ) {
         ctx.step_with_details(
-            format!("Validated topic name '{}'", topic),
+            format!("Validated topic name '{topic}'"),
             "Checked: not empty, valid characters, not reserved",
         );
 
         ctx.step_with_details(
-            format!("Created {} partition(s)", partitions),
+            format!("Created {partitions} partition(s)"),
             "Each partition is an independent ordered log",
         );
 
@@ -228,7 +214,7 @@ pub mod explanations {
                 if retention_ms < 0 {
                     "infinite".to_string()
                 } else {
-                    format!("{}", retention_ms)
+                    format!("{retention_ms}")
                 }
             ),
         );
@@ -237,8 +223,7 @@ pub mod explanations {
 
         ctx.print();
         ctx.print_kafka_equivalent(&format!(
-            "kafka-topics.sh --create --topic {} --partitions {} --bootstrap-server localhost:9092",
-            topic, partitions
+            "kafka-topics.sh --create --topic {topic} --partitions {partitions} --bootstrap-server localhost:9092"
         ));
     }
 
@@ -251,8 +236,8 @@ pub mod explanations {
         assigned_partitions: &[(String, i32)],
     ) {
         ctx.step_with_details(
-            format!("Joined consumer group '{}'", group_id),
-            format!("Member ID: {}", member_id),
+            format!("Joined consumer group '{group_id}'"),
+            format!("Member ID: {member_id}"),
         );
 
         ctx.step_with_details(
@@ -269,7 +254,7 @@ pub mod explanations {
             format!("Assigned {} partition(s)", assigned_partitions.len()),
             assigned_partitions
                 .iter()
-                .map(|(t, p)| format!("{}[{}]", t, p))
+                .map(|(t, p)| format!("{t}[{p}]"))
                 .collect::<Vec<_>>()
                 .join(", "),
         );
@@ -288,8 +273,8 @@ pub mod explanations {
         offset: i64,
     ) {
         ctx.step_with_details(
-            format!("Committed offset {} for {}[{}]", offset, topic, partition),
-            format!("Consumer group: {}", group_id),
+            format!("Committed offset {offset} for {topic}[{partition}]"),
+            format!("Consumer group: {group_id}"),
         );
 
         ctx.step_with_details(
@@ -316,11 +301,8 @@ pub mod explanations {
         bytes_fetched: usize,
     ) {
         ctx.step_with_details(
-            format!("Fetch request for {}[{}]", topic, partition),
-            format!(
-                "Starting offset: {}, max bytes: {}",
-                fetch_offset, max_bytes
-            ),
+            format!("Fetch request for {topic}[{partition}]"),
+            format!("Starting offset: {fetch_offset}, max bytes: {max_bytes}"),
         );
 
         ctx.step_with_details(
@@ -329,10 +311,7 @@ pub mod explanations {
         );
 
         ctx.step_with_details(
-            format!(
-                "Fetched {} records ({} bytes)",
-                records_fetched, bytes_fetched
-            ),
+            format!("Fetched {records_fetched} records ({bytes_fetched} bytes)"),
             "Batched for network efficiency",
         );
 

@@ -251,12 +251,19 @@ impl GeneticOptimizer {
         }
 
         // Sort by fitness (descending)
-        self.population
-            .sort_by(|a, b| b.fitness.partial_cmp(&a.fitness).unwrap_or(std::cmp::Ordering::Equal));
+        self.population.sort_by(|a, b| {
+            b.fitness
+                .partial_cmp(&a.fitness)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
 
         // Update best ever
         if let Some(best) = self.population.first() {
-            if self.best_ever.as_ref().map_or(true, |current| best.fitness > current.fitness) {
+            if self
+                .best_ever
+                .as_ref()
+                .is_none_or(|current| best.fitness > current.fitness)
+            {
                 self.best_ever = Some(best.clone());
             }
         }
@@ -301,12 +308,13 @@ impl GeneticOptimizer {
         for _ in 0..tournament_size {
             let idx = rng.gen_range(0..self.population.len());
             let candidate = &self.population[idx];
-            if best.map_or(true, |b| candidate.fitness > b.fitness) {
+            if best.is_none_or(|b| candidate.fitness > b.fitness) {
                 best = Some(candidate);
             }
         }
 
-        best.cloned().unwrap_or_else(|| Individual::random(&self.bounds))
+        best.cloned()
+            .unwrap_or_else(|| Individual::random(&self.bounds))
     }
 
     /// Get best individual
@@ -552,7 +560,11 @@ impl BayesianOptimizer {
     pub fn observe(&mut self, params: Vec<f64>, fitness: f64) {
         self.observations.push((params.clone(), fitness));
 
-        if self.best.as_ref().map_or(true, |(_, best_fitness)| fitness > *best_fitness) {
+        if self
+            .best
+            .as_ref()
+            .is_none_or(|(_, best_fitness)| fitness > *best_fitness)
+        {
             self.best = Some((params, fitness));
         }
     }
@@ -584,7 +596,10 @@ impl BayesianOptimizer {
 
             let acquisition_value = self.acquisition_function(&candidate);
 
-            if best_candidate.as_ref().map_or(true, |(_, best_val)| acquisition_value > *best_val) {
+            if best_candidate
+                .as_ref()
+                .is_none_or(|(_, best_val)| acquisition_value > *best_val)
+            {
                 best_candidate = Some((candidate, acquisition_value));
             }
         }

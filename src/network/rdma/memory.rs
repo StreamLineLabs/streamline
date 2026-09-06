@@ -14,7 +14,7 @@ use std::sync::Arc;
 use tracing::{debug, warn};
 
 /// Memory region handle
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub struct MemoryRegionHandle(pub u32);
 
 /// Remote memory key for RDMA operations
@@ -180,12 +180,6 @@ pub struct MemoryRegionStats {
     pub ref_count: u32,
 }
 
-impl Default for MemoryRegionHandle {
-    fn default() -> Self {
-        Self(0)
-    }
-}
-
 /// Memory pool for efficient buffer allocation
 pub struct MemoryPool {
     /// Pool name
@@ -286,7 +280,7 @@ impl MemoryPool {
 
         // Allocate aligned memory
         let layout = Layout::from_size_align(self.buffer_size, 4096)
-            .map_err(|e| RdmaError::MemoryError(format!("Invalid layout: {}", e)))?;
+            .map_err(|e| RdmaError::MemoryError(format!("Invalid layout: {e}")))?;
 
         // SAFETY: alloc is safe because layout was successfully created above with
         // valid size (self.buffer_size) and 4096-byte alignment. The returned pointer
@@ -481,13 +475,13 @@ impl MemoryManager {
             // 2MB huge page alignment
             (
                 Layout::from_size_align(size, 2 * 1024 * 1024)
-                    .map_err(|e| RdmaError::MemoryError(format!("Invalid layout: {}", e)))?,
+                    .map_err(|e| RdmaError::MemoryError(format!("Invalid layout: {e}")))?,
                 true,
             )
         } else {
             (
                 Layout::from_size_align(size, 4096)
-                    .map_err(|e| RdmaError::MemoryError(format!("Invalid layout: {}", e)))?,
+                    .map_err(|e| RdmaError::MemoryError(format!("Invalid layout: {e}")))?,
                 false,
             )
         };

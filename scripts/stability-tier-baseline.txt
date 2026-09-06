@@ -1,0 +1,44 @@
+# Stability-tier violation baseline — DO NOT ADD TO THIS FILE.
+#
+# Format: <tier-rule> <path> <imported module>
+#
+# Each line is a pre-existing violation of the import-direction rule in
+# docs/API_STABILITY.md, recorded so the lint can fail closed on *new*
+# violations while the existing debt is paid down. Removing a line is
+# always allowed (and required once the import is gone); adding one is
+# not. Regenerate with: scripts/check_stability_tiers.sh --write-baseline
+#
+# Generated from docs/API_STABILITY.md tier tables.
+stable-to-weaker src/consumer/coordinator.rs metrics
+stable-to-weaker src/protocol/internal.rs cluster
+stable-to-weaker src/protocol/kafka.rs auth
+stable-to-weaker src/protocol/kafka.rs cluster
+stable-to-weaker src/protocol/kafka.rs metrics
+stable-to-weaker src/protocol/kafka.rs replication
+stable-to-weaker src/protocol/kafka.rs transaction
+stable-to-weaker src/protocol/kafka/auth_handlers.rs auth
+stable-to-weaker src/protocol/kafka/data_plane.rs replication
+stable-to-weaker src/protocol/kafka/tests/misc.rs cluster
+stable-to-weaker src/server/ai_api.rs ai
+stable-to-weaker src/server/cluster_api.rs metrics
+stable-to-weaker src/server/dashboard_api.rs metrics
+stable-to-weaker src/server/failover_api.rs replication
+stable-to-weaker src/server/featurestore_api.rs featurestore
+stable-to-weaker src/server/fleet_api.rs edge
+stable-to-weaker src/server/graphql_routes.rs graphql
+stable-to-weaker src/server/http.rs connect
+stable-to-weaker src/server/http.rs metrics
+stable-to-weaker src/server/http.rs schema
+stable-to-weaker src/server/lineage_api.rs schema
+stable-to-weaker src/server/mod.rs ai
+stable-to-weaker src/server/mod.rs cluster
+stable-to-weaker src/server/mod.rs metrics
+stable-to-weaker src/server/mod.rs transaction
+stable-to-weaker src/server/observability_api.rs observability
+stable-to-weaker src/server/query_api.rs streamql
+stable-to-weaker src/server/raft_cluster_api.rs cluster
+stable-to-weaker src/server/schema_api.rs schema
+stable-to-weaker src/server/schema_ui.rs schema
+stable-to-weaker src/server/search_api.rs ai
+stable-to-weaker src/server/streamql_api.rs streamql
+stable-to-weaker src/server/wasm_api.rs wasm

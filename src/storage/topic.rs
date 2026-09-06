@@ -140,7 +140,7 @@ impl std::str::FromStr for CleanupPolicy {
             "compact" => Ok(CleanupPolicy::Compact),
             "delete,compact" => Ok(CleanupPolicy::DeleteCompact),
             "compact,delete" => Ok(CleanupPolicy::CompactDelete),
-            _ => Err(format!("Invalid cleanup policy '{}'", value)),
+            _ => Err(format!("Invalid cleanup policy '{value}'")),
         }
     }
 }
@@ -219,17 +219,15 @@ pub fn validate_topic_name(name: &str) -> Result<()> {
     // Check for filesystem special names
     if name == "." || name == ".." {
         return Err(StreamlineError::InvalidTopicName(format!(
-            "Topic name '{}' is a reserved filesystem name",
-            name
+            "Topic name '{name}' is a reserved filesystem name"
         )));
     }
 
     // Check character pattern - all characters must be valid
     if !name.chars().all(is_valid_topic_char) {
         return Err(StreamlineError::InvalidTopicName(format!(
-            "Topic name '{}' contains invalid characters. \
-             Only alphanumeric characters, dots, underscores, and hyphens are allowed",
-            name
+            "Topic name '{name}' contains invalid characters. \
+             Only alphanumeric characters, dots, underscores, and hyphens are allowed"
         )));
     }
 
@@ -356,7 +354,7 @@ pub fn partition_to_shard_hashed(topic: &str, partition_id: u32, shard_count: us
 fn atomic_write(path: &Path, data: &[u8]) -> Result<()> {
     // Create temp file in same directory (ensures same filesystem for atomic rename)
     let parent = path.parent().ok_or_else(|| {
-        StreamlineError::storage_msg(format!("Cannot get parent directory of {:?}", path))
+        StreamlineError::storage_msg(format!("Cannot get parent directory of {path:?}"))
     })?;
 
     let temp_name = format!(
@@ -377,21 +375,17 @@ fn atomic_write(path: &Path, data: &[u8]) -> Result<()> {
             .open(&temp_path)
             .map_err(|e| {
                 StreamlineError::storage_msg(format!(
-                    "Failed to create temp file {:?}: {}",
-                    temp_path, e
+                    "Failed to create temp file {temp_path:?}: {e}"
                 ))
             })?;
 
         file.write_all(data).map_err(|e| {
-            StreamlineError::storage_msg(format!(
-                "Failed to write temp file {:?}: {}",
-                temp_path, e
-            ))
+            StreamlineError::storage_msg(format!("Failed to write temp file {temp_path:?}: {e}"))
         })?;
 
         // fsync to ensure data is on disk before rename
         file.sync_all().map_err(|e| {
-            StreamlineError::storage_msg(format!("Failed to sync temp file {:?}: {}", temp_path, e))
+            StreamlineError::storage_msg(format!("Failed to sync temp file {temp_path:?}: {e}"))
         })?;
     }
 
@@ -399,25 +393,18 @@ fn atomic_write(path: &Path, data: &[u8]) -> Result<()> {
     fs::rename(&temp_path, path).map_err(|e| {
         // Clean up temp file on failure
         let _ = fs::remove_file(&temp_path);
-        StreamlineError::storage_msg(format!(
-            "Failed to rename {:?} to {:?}: {}",
-            temp_path, path, e
-        ))
+        StreamlineError::storage_msg(format!("Failed to rename {temp_path:?} to {path:?}: {e}"))
     })?;
 
     // Sync parent directory to ensure the rename is persisted
     // This is CRITICAL for durability on crash - directory fsync is REQUIRED
     // on Linux/POSIX to persist file renames
     let dir = File::open(parent).map_err(|e| {
-        StreamlineError::storage_msg(format!(
-            "Failed to open directory {:?} for sync: {}",
-            parent, e
-        ))
+        StreamlineError::storage_msg(format!("Failed to open directory {parent:?} for sync: {e}"))
     })?;
     dir.sync_all().map_err(|e| {
         StreamlineError::storage_msg(format!(
-            "Failed to sync directory {:?} - rename durability not guaranteed: {}",
-            parent, e
+            "Failed to sync directory {parent:?} - rename durability not guaranteed: {e}"
         ))
     })?;
 
@@ -1493,8 +1480,7 @@ impl Topic {
 
         if new_count <= current_count {
             return Err(StreamlineError::Config(format!(
-                "New partition count ({}) must be greater than current count ({})",
-                new_count, current_count
+                "New partition count ({new_count}) must be greater than current count ({current_count})"
             )));
         }
 
@@ -1665,7 +1651,11 @@ pub struct TopicManager {
     /// When a topic has an active contract, every append validates the
     /// record and rejects violations with `ContractRejection`.
     #[cfg(feature = "attestation")]
-    contracts: std::sync::Arc<std::sync::RwLock<std::collections::HashMap<String, crate::contracts::produce_guard::Contract>>>,
+    contracts: std::sync::Arc<
+        std::sync::RwLock<
+            std::collections::HashMap<String, crate::contracts::produce_guard::Contract>,
+        >,
+    >,
 }
 
 impl TopicManager {
@@ -1691,7 +1681,9 @@ impl TopicManager {
             #[cfg(feature = "semantic-topics")]
             embed_handle: None,
             #[cfg(feature = "attestation")]
-            contracts: std::sync::Arc::new(std::sync::RwLock::new(std::collections::HashMap::new())),
+            contracts: std::sync::Arc::new(
+                std::sync::RwLock::new(std::collections::HashMap::new()),
+            ),
         })
     }
 
@@ -1711,7 +1703,9 @@ impl TopicManager {
             #[cfg(feature = "semantic-topics")]
             embed_handle: None,
             #[cfg(feature = "attestation")]
-            contracts: std::sync::Arc::new(std::sync::RwLock::new(std::collections::HashMap::new())),
+            contracts: std::sync::Arc::new(
+                std::sync::RwLock::new(std::collections::HashMap::new()),
+            ),
         };
 
         // Load existing topics
@@ -1807,9 +1801,7 @@ impl TopicManager {
         if let Ok(map) = self.contracts.read() {
             if let Some(contract) = map.get(topic) {
                 crate::contracts::produce_guard::validate_record(topic, partition, value, contract)
-                    .map_err(|rejection| {
-                        StreamlineError::InvalidData(rejection.to_string())
-                    })?;
+                    .map_err(|rejection| StreamlineError::InvalidData(rejection.to_string()))?;
             }
         }
         Ok(())
@@ -1955,10 +1947,9 @@ impl TopicManager {
         validate_topic_name(name)?;
 
         // Validate partition count
-        if num_partitions < MIN_PARTITIONS || num_partitions > MAX_PARTITIONS {
+        if !(MIN_PARTITIONS..=MAX_PARTITIONS).contains(&num_partitions) {
             return Err(StreamlineError::Config(format!(
-                "Invalid partition count {} for topic '{}': must be between {} and {}",
-                num_partitions, name, MIN_PARTITIONS, MAX_PARTITIONS
+                "Invalid partition count {num_partitions} for topic '{name}': must be between {MIN_PARTITIONS} and {MAX_PARTITIONS}"
             )));
         }
 
@@ -2659,7 +2650,9 @@ impl TopicManager {
             #[cfg(feature = "semantic-topics")]
             embed_handle: None,
             #[cfg(feature = "attestation")]
-            contracts: std::sync::Arc::new(std::sync::RwLock::new(std::collections::HashMap::new())),
+            contracts: std::sync::Arc::new(
+                std::sync::RwLock::new(std::collections::HashMap::new()),
+            ),
         };
 
         // Load existing topics asynchronously
@@ -3179,7 +3172,7 @@ mod tests {
         // Append records
         for i in 0..10 {
             manager
-                .append("offset-test", 0, None, Bytes::from(format!("value{}", i)))
+                .append("offset-test", 0, None, Bytes::from(format!("value{i}")))
                 .unwrap();
         }
 
@@ -3206,10 +3199,10 @@ mod tests {
         // Append same data to both
         for i in 0..5 {
             in_mem
-                .append("test-topic", 0, None, Bytes::from(format!("value{}", i)))
+                .append("test-topic", 0, None, Bytes::from(format!("value{i}")))
                 .unwrap();
             on_disk
-                .append("test-topic", 0, None, Bytes::from(format!("value{}", i)))
+                .append("test-topic", 0, None, Bytes::from(format!("value{i}")))
                 .unwrap();
         }
 
@@ -3398,7 +3391,7 @@ mod tests {
         // Verify result is always within bounds
         for i in 0..100 {
             let shard = partition_to_shard_hashed("test", i, 8);
-            assert!(shard < 8, "shard {} should be < 8", shard);
+            assert!(shard < 8, "shard {shard} should be < 8");
         }
     }
 }

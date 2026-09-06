@@ -80,7 +80,7 @@ pub fn hex_sha256(value: &[u8]) -> String {
     let mut s = String::with_capacity(digest.len() * 2);
     for b in digest {
         use std::fmt::Write;
-        let _ = write!(s, "{:02x}", b);
+        let _ = write!(s, "{b:02x}");
     }
     s
 }
@@ -146,7 +146,10 @@ mod tests {
     fn payload_sha256_is_lowercase_hex_64_chars() {
         let a = att("k", b"hello");
         assert_eq!(a.payload_sha256.len(), 64);
-        assert!(a.payload_sha256.chars().all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase()));
+        assert!(a
+            .payload_sha256
+            .chars()
+            .all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase()));
     }
 
     #[test]

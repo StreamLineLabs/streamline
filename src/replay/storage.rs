@@ -115,7 +115,7 @@ impl RecordingMetadata {
     pub fn save(&self, path: impl AsRef<Path>) -> Result<()> {
         let path = path.as_ref();
         let content = serde_json::to_string_pretty(self).map_err(|e| {
-            StreamlineError::storage_msg(format!("Failed to serialize metadata: {}", e))
+            StreamlineError::storage_msg(format!("Failed to serialize metadata: {e}"))
         })?;
         std::fs::write(path, content).map_err(|e| {
             StreamlineError::storage_msg(format!(
@@ -213,11 +213,11 @@ impl RecordedMessage {
                     .map(Bytes::from)
             })
             .transpose()
-            .map_err(|e| StreamlineError::storage_msg(format!("Invalid base64 key: {}", e)))?;
+            .map_err(|e| StreamlineError::storage_msg(format!("Invalid base64 key: {e}")))?;
 
         let value = base64::Engine::decode(&base64::engine::general_purpose::STANDARD, &self.value)
             .map(Bytes::from)
-            .map_err(|e| StreamlineError::storage_msg(format!("Invalid base64 value: {}", e)))?;
+            .map_err(|e| StreamlineError::storage_msg(format!("Invalid base64 value: {e}")))?;
 
         let headers: Result<Vec<_>> = self
             .headers
@@ -227,7 +227,7 @@ impl RecordedMessage {
                     base64::Engine::decode(&base64::engine::general_purpose::STANDARD, &h.value)
                         .map(Bytes::from)
                         .map_err(|e| {
-                            StreamlineError::storage_msg(format!("Invalid base64 header: {}", e))
+                            StreamlineError::storage_msg(format!("Invalid base64 header: {e}"))
                         })?;
                 Ok(crate::storage::record::Header {
                     key: h.key.clone(),
@@ -319,7 +319,7 @@ impl Recording {
             ))
         })? {
             let entry = entry.map_err(|e| {
-                StreamlineError::storage_msg(format!("Failed to read directory entry: {}", e))
+                StreamlineError::storage_msg(format!("Failed to read directory entry: {e}"))
             })?;
             let path = entry.path();
             if path.extension().map(|e| e == "ndjson").unwrap_or(false) {
@@ -374,10 +374,10 @@ impl Recording {
 
         // Write as NDJSON
         let json = serde_json::to_string(message).map_err(|e| {
-            StreamlineError::storage_msg(format!("Failed to serialize message: {}", e))
+            StreamlineError::storage_msg(format!("Failed to serialize message: {e}"))
         })?;
-        writeln!(writer, "{}", json)
-            .map_err(|e| StreamlineError::storage_msg(format!("Failed to write message: {}", e)))?;
+        writeln!(writer, "{json}")
+            .map_err(|e| StreamlineError::storage_msg(format!("Failed to write message: {e}")))?;
 
         let bytes_written = json.len() as u64 + 1; // +1 for newline
         self.current_segment_records += 1;
@@ -408,7 +408,7 @@ impl Recording {
     fn rotate_segment(&mut self) -> Result<()> {
         if let Some(mut writer) = self.current_writer.take() {
             writer.flush().map_err(|e| {
-                StreamlineError::storage_msg(format!("Failed to flush segment: {}", e))
+                StreamlineError::storage_msg(format!("Failed to flush segment: {e}"))
             })?;
 
             // Record segment metadata
@@ -535,16 +535,14 @@ impl Iterator for RecordingIterator {
                         Ok(msg) => return Some(Ok(msg)),
                         Err(e) => {
                             return Some(Err(StreamlineError::storage_msg(format!(
-                                "Failed to parse recorded message: {}",
-                                e
+                                "Failed to parse recorded message: {e}"
                             ))))
                         }
                     }
                 }
                 Err(e) => {
                     return Some(Err(StreamlineError::storage_msg(format!(
-                        "Failed to read from segment: {}",
-                        e
+                        "Failed to read from segment: {e}"
                     ))))
                 }
             }
@@ -604,7 +602,7 @@ mod tests {
                 i,
                 chrono::Utc::now().timestamp_millis(),
                 None,
-                Bytes::from(format!("value-{}", i)),
+                Bytes::from(format!("value-{i}")),
             );
             let msg = RecordedMessage::from_record(&record, "events", 0);
             recording.write(&msg).unwrap();
@@ -627,7 +625,7 @@ mod tests {
         let mut recording = Recording::create(&recording_dir, metadata).unwrap();
 
         for i in 0..10 {
-            let record = Record::new(i, 1234567890 + i, None, Bytes::from(format!("value-{}", i)));
+            let record = Record::new(i, 1234567890 + i, None, Bytes::from(format!("value-{i}")));
             let msg = RecordedMessage::from_record(&record, "events", 0);
             recording.write(&msg).unwrap();
         }

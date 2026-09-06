@@ -98,8 +98,7 @@ fn test_describe_configs_header_versions() {
             KafkaHandler::request_header_version(ApiKey::DescribeConfigs as i16, version);
         assert_eq!(
             header_version, 1,
-            "DescribeConfigs v{} should use request header v1",
-            version
+            "DescribeConfigs v{version} should use request header v1"
         );
     }
 
@@ -321,8 +320,7 @@ fn test_alter_configs_header_versions() {
             KafkaHandler::request_header_version(ApiKey::AlterConfigs as i16, version);
         assert_eq!(
             header_version, 1,
-            "AlterConfigs v{} should use request header v1",
-            version
+            "AlterConfigs v{version} should use request header v1"
         );
     }
 
@@ -412,8 +410,7 @@ fn test_incremental_alter_configs_header_always_flexible() {
             KafkaHandler::request_header_version(ApiKey::IncrementalAlterConfigs as i16, version);
         assert_eq!(
             header_version, 2,
-            "IncrementalAlterConfigs v{} should use request header v2 (always flexible)",
-            version
+            "IncrementalAlterConfigs v{version} should use request header v2 (always flexible)"
         );
     }
 }

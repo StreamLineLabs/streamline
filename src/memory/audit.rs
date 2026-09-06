@@ -72,7 +72,11 @@ pub fn log_event(audit: &MemoryAuditLog, event: MemoryAuditEvent) {
 pub fn get_events(audit: &MemoryAuditLog, since: Option<i64>) -> Vec<MemoryAuditEvent> {
     let events = read_or_recover(&audit.events);
     match since {
-        Some(ts) => events.iter().filter(|e| e.timestamp >= ts).cloned().collect(),
+        Some(ts) => events
+            .iter()
+            .filter(|e| e.timestamp >= ts)
+            .cloned()
+            .collect(),
         None => events.clone(),
     }
 }

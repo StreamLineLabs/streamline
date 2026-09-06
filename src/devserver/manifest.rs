@@ -109,7 +109,7 @@ impl DevManifest {
     /// Parse a manifest from YAML string
     pub fn from_yaml(yaml: &str) -> Result<Self> {
         let manifest: Self = serde_yaml::from_str(yaml)
-            .map_err(|e| StreamlineError::Config(format!("Invalid manifest YAML: {}", e)))?;
+            .map_err(|e| StreamlineError::Config(format!("Invalid manifest YAML: {e}")))?;
         manifest.validate()?;
         Ok(manifest)
     }

@@ -94,7 +94,7 @@ impl ReplSession {
 
     fn prompt(&self) -> String {
         if let Some(topic) = &self.current_topic {
-            format!("streamline({})> ", topic)
+            format!("streamline({topic})> ")
         } else {
             "streamline> ".to_string()
         }
@@ -185,7 +185,7 @@ impl Command {
             Some("help") | Some("?") | Some("h") => Command::Help,
             Some("exit") | Some("quit") | Some("q!") => Command::Exit,
             Some("") | None => Command::Unknown(String::new()),
-            Some(cmd) => Command::Unknown(format!("unknown command: {}", cmd)),
+            Some(cmd) => Command::Unknown(format!("unknown command: {cmd}")),
         }
     }
 }
@@ -300,14 +300,14 @@ impl Highlighter for ReplHelper {
         default: bool,
     ) -> std::borrow::Cow<'b, str> {
         if default {
-            std::borrow::Cow::Owned(format!("\x1b[1;32m{}\x1b[0m", prompt))
+            std::borrow::Cow::Owned(format!("\x1b[1;32m{prompt}\x1b[0m"))
         } else {
             std::borrow::Cow::Borrowed(prompt)
         }
     }
 
     fn highlight_hint<'h>(&self, hint: &'h str) -> std::borrow::Cow<'h, str> {
-        std::borrow::Cow::Owned(format!("\x1b[90m{}\x1b[0m", hint))
+        std::borrow::Cow::Owned(format!("\x1b[90m{hint}\x1b[0m"))
     }
 
     fn highlight_char(&self, line: &str, pos: usize, forced: bool) -> bool {
@@ -401,14 +401,14 @@ pub fn run_repl(config: ReplConfig) -> Result<(), Box<dyn std::error::Error>> {
                                 }
                             }
                         }
-                        Err(e) => println!("Error listing topics: {}", e),
+                        Err(e) => println!("Error listing topics: {e}"),
                     },
                     Command::Topic(name) => {
                         if session.topic_manager.get_topic_stats(&name).is_ok() {
                             session.current_topic = Some(name.clone());
-                            println!("Selected topic: {}", name);
+                            println!("Selected topic: {name}");
                         } else {
-                            println!("Topic not found: {}", name);
+                            println!("Topic not found: {name}");
                         }
                     }
                     Command::Produce(msg) => {
@@ -419,8 +419,8 @@ pub fn run_repl(config: ReplConfig) -> Result<(), Box<dyn std::error::Error>> {
                                 None,
                                 bytes::Bytes::from(msg),
                             ) {
-                                Ok(offset) => println!("Produced at offset {}", offset),
-                                Err(e) => println!("Error: {}", e),
+                                Ok(offset) => println!("Produced at offset {offset}"),
+                                Err(e) => println!("Error: {e}"),
                             }
                         } else {
                             println!("No topic selected. Use 'topic <name>' first.");
@@ -445,7 +445,7 @@ pub fn run_repl(config: ReplConfig) -> Result<(), Box<dyn std::error::Error>> {
                                         }
                                     }
                                 }
-                                Err(e) => println!("Error: {}", e),
+                                Err(e) => println!("Error: {e}"),
                             }
                         } else {
                             println!("No topic selected. Use 'topic <name>' first.");
@@ -465,7 +465,7 @@ pub fn run_repl(config: ReplConfig) -> Result<(), Box<dyn std::error::Error>> {
                                         );
                                     }
                                 }
-                                Err(e) => println!("Error: {}", e),
+                                Err(e) => println!("Error: {e}"),
                             }
                         } else {
                             println!("No topic selected. Use 'topic <name>' first.");
@@ -477,7 +477,7 @@ pub fn run_repl(config: ReplConfig) -> Result<(), Box<dyn std::error::Error>> {
                             // DuckDB analytics integration: execute SQL against stream data.
                             // When the analytics engine is available, it will be invoked here.
                             println!("Executing SQL via analytics engine...");
-                            println!("Query: {}", sql);
+                            println!("Query: {sql}");
                             println!("(Analytics engine integration pending — query logged)");
                         }
                         #[cfg(not(feature = "analytics"))]
@@ -489,13 +489,13 @@ pub fn run_repl(config: ReplConfig) -> Result<(), Box<dyn std::error::Error>> {
                     }
                     Command::Set(key, value) => {
                         session.variables.insert(key.clone(), value.clone());
-                        println!("{} = {}", key, value);
+                        println!("{key} = {value}");
                     }
                     Command::Get(key) => {
                         if let Some(value) = session.variables.get(&key) {
-                            println!("{} = {}", key, value);
+                            println!("{key} = {value}");
                         } else {
-                            println!("Variable not found: {}", key);
+                            println!("Variable not found: {key}");
                         }
                     }
                     Command::Variables => {
@@ -503,7 +503,7 @@ pub fn run_repl(config: ReplConfig) -> Result<(), Box<dyn std::error::Error>> {
                             println!("No variables set");
                         } else {
                             for (key, value) in &session.variables {
-                                println!("{} = {}", key, value);
+                                println!("{key} = {value}");
                             }
                         }
                     }
@@ -516,7 +516,7 @@ pub fn run_repl(config: ReplConfig) -> Result<(), Box<dyn std::error::Error>> {
                     }
                     Command::Unknown(msg) => {
                         if !msg.is_empty() {
-                            println!("{}", msg);
+                            println!("{msg}");
                         }
                     }
                 }
@@ -529,7 +529,7 @@ pub fn run_repl(config: ReplConfig) -> Result<(), Box<dyn std::error::Error>> {
                 break;
             }
             Err(err) => {
-                println!("Error: {:?}", err);
+                println!("Error: {err:?}");
                 break;
             }
         }

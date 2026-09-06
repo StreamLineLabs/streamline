@@ -180,8 +180,7 @@ impl WatermarkTracker {
         // Advance the watermark if the emit interval has elapsed.
         let emit_interval = Duration::from_millis(self.config.emit_interval_ms);
         if state.last_emit_at.elapsed() >= emit_interval {
-            let new_watermark =
-                state.max_event_time_ms - self.config.max_lateness_ms as i64;
+            let new_watermark = state.max_event_time_ms - self.config.max_lateness_ms as i64;
             if new_watermark > state.watermark_ms {
                 state.watermark_ms = new_watermark;
                 debug!(
@@ -227,7 +226,7 @@ impl WatermarkTracker {
         let mut topics = self.topics.write().await;
         let state = topics
             .get_mut(topic)
-            .ok_or_else(|| StreamlineError::Query(format!("Topic '{}' not tracked", topic)))?;
+            .ok_or_else(|| StreamlineError::Query(format!("Topic '{topic}' not tracked")))?;
 
         if watermark_ms < state.watermark_ms {
             return Err(StreamlineError::Query(

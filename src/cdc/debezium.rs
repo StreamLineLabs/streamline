@@ -12,11 +12,10 @@
 //! }
 //! ```
 
-use super::change_event::{ChangeEvent, Operation, SourceInfo};
+use super::change_event::ChangeEvent;
 use super::schema::{ColumnSchema, TableSchema};
-use super::{CdcEvent, CdcOperation};
+use super::CdcEvent;
 use crate::error::Result;
-use chrono::Utc;
 use serde::{Deserialize, Serialize};
 
 // ---------------------------------------------------------------------------
@@ -304,10 +303,9 @@ pub fn map_db_type_to_debezium(db_type: &str) -> (String, Option<String>) {
         "time" | "time without time zone" => {
             ("int64".into(), Some("io.debezium.time.MicroTime".into()))
         }
-        "timetz" | "time with time zone" => (
-            "string".into(),
-            Some("io.debezium.time.ZonedTime".into()),
-        ),
+        "timetz" | "time with time zone" => {
+            ("string".into(), Some("io.debezium.time.ZonedTime".into()))
+        }
         "timestamp" | "timestamp without time zone" | "datetime" => (
             "int64".into(),
             Some("io.debezium.time.MicroTimestamp".into()),
@@ -323,22 +321,13 @@ pub fn map_db_type_to_debezium(db_type: &str) -> (String, Option<String>) {
         "year" => ("int32".into(), None),
 
         // -- UUID -------------------------------------------------------------
-        "uuid" => (
-            "string".into(),
-            Some("io.debezium.data.Uuid".into()),
-        ),
+        "uuid" => ("string".into(), Some("io.debezium.data.Uuid".into())),
 
         // -- JSON / JSONB -----------------------------------------------------
-        "json" | "jsonb" => (
-            "string".into(),
-            Some("io.debezium.data.Json".into()),
-        ),
+        "json" | "jsonb" => ("string".into(), Some("io.debezium.data.Json".into())),
 
         // -- XML --------------------------------------------------------------
-        "xml" => (
-            "string".into(),
-            Some("io.debezium.data.Xml".into()),
-        ),
+        "xml" => ("string".into(), Some("io.debezium.data.Xml".into())),
 
         // -- Arrays (PostgreSQL) ----------------------------------------------
         _ if base.starts_with('_') || lower.contains("[]") => ("string".into(), None),
@@ -364,10 +353,7 @@ pub fn map_db_type_to_debezium(db_type: &str) -> (String, Option<String>) {
 /// When no `TableSchema` is available, infer minimal Debezium fields from the
 /// column values present in the CDC event itself.
 fn infer_fields_from_event(event: &CdcEvent) -> Vec<DebeziumField> {
-    let cols = event
-        .after
-        .as_ref()
-        .or(event.before.as_ref());
+    let cols = event.after.as_ref().or(event.before.as_ref());
 
     match cols {
         Some(columns) => columns
@@ -394,8 +380,10 @@ fn infer_fields_from_event(event: &CdcEvent) -> Vec<DebeziumField> {
 
 #[cfg(test)]
 mod tests {
+    use super::super::change_event::Operation;
     use super::*;
     use crate::cdc::{CdcColumnValue, CdcEvent, CdcOperation};
+    use chrono::Utc;
 
     fn sample_event() -> CdcEvent {
         let mut event = CdcEvent::new(
@@ -478,10 +466,7 @@ mod tests {
         let ts = sample_table_schema();
         let envelope = DebeziumEnvelope::from_cdc_event(&event, "myserver", Some(&ts));
 
-        assert_eq!(
-            envelope.schema.name,
-            "myserver.public.users.Envelope"
-        );
+        assert_eq!(envelope.schema.name, "myserver.public.users.Envelope");
         assert_eq!(envelope.schema.schema_type, "struct");
         assert!(!envelope.schema.optional);
         assert_eq!(envelope.schema.fields.len(), 6); // before, after, source, op, ts_ms, transaction

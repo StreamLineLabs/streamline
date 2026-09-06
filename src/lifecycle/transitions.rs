@@ -671,7 +671,7 @@ mod tests {
         // Submit 3 jobs
         for i in 0..3 {
             let job = MigrationJob::new(
-                format!("seg-{:03}", i),
+                format!("seg-{i:03}"),
                 StorageTier::Memory,
                 StorageTier::Ssd,
                 "Test",

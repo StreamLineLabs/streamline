@@ -204,7 +204,7 @@ fn test_delete_topics_response_multiple() {
 
     for i in 0..5 {
         let mut result = DeletableTopicResult::default();
-        result.name = Some(TopicName(StrBytes::from_string(format!("topic-{}", i))));
+        result.name = Some(TopicName(StrBytes::from_string(format!("topic-{i}"))));
         result.error_code = if i % 2 == 0 { 0 } else { 3 };
         response.responses.push(result);
     }
@@ -306,7 +306,7 @@ fn test_create_partitions_request_multiple_topics() {
 
     for i in 1..=5 {
         let mut topic = CreatePartitionsTopic::default();
-        topic.name = TopicName(StrBytes::from_string(format!("expand-topic-{}", i)));
+        topic.name = TopicName(StrBytes::from_string(format!("expand-topic-{i}")));
         topic.count = i * 4;
         request.topics.push(topic);
     }
@@ -740,7 +740,7 @@ fn test_describe_cluster_response_multiple_brokers() {
     for i in 1..=3 {
         let mut broker = DescribeClusterBroker::default();
         broker.broker_id = BrokerId(i);
-        broker.host = StrBytes::from_string(format!("broker-{}.example.com", i));
+        broker.host = StrBytes::from_string(format!("broker-{i}.example.com"));
         broker.port = 9092;
         response.brokers.push(broker);
     }
@@ -937,7 +937,7 @@ fn test_delete_groups_response_multiple() {
 
     for i in 0..4 {
         let mut result = DeletableGroupResult::default();
-        result.group_id = GroupId(StrBytes::from_string(format!("group-{}", i)));
+        result.group_id = GroupId(StrBytes::from_string(format!("group-{i}")));
         result.error_code = if i == 2 { 68 } else { 0 };
         response.results.push(result);
     }

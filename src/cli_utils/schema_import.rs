@@ -96,15 +96,19 @@ struct SchemaRegistryClient {
 }
 
 impl SchemaRegistryClient {
-    fn new(base_url: &str, auth: Option<String>) -> Self {
-        Self {
+    fn new(base_url: &str, auth: Option<String>) -> Result<Self, String> {
+        Ok(Self {
             base_url: base_url.trim_end_matches('/').to_string(),
             auth,
-            client: reqwest::blocking::Client::builder()
+            // Previously `.unwrap_or_default()`. `reqwest::blocking::Client::default()`
+            // is `Client::new()`, which panics without a process-wide crypto
+            // provider, so the failure is surfaced instead of swallowed.
+            client: crate::http_client::blocking_builder()
+                .map_err(|e| format!("Failed to create HTTP client: {e}"))?
                 .timeout(std::time::Duration::from_secs(30))
                 .build()
-                .unwrap_or_default(),
-        }
+                .map_err(|e| format!("Failed to create HTTP client: {e}"))?,
+        })
     }
 
     fn get(&self, path: &str) -> Result<reqwest::blocking::Response, String> {
@@ -117,8 +121,7 @@ impl SchemaRegistryClient {
             }
         }
 
-        req.send()
-            .map_err(|e| format!("HTTP request failed: {}", e))
+        req.send().map_err(|e| format!("HTTP request failed: {e}"))
     }
 
     fn list_subjects(&self) -> Result<Vec<String>, String> {
@@ -130,12 +133,12 @@ impl SchemaRegistryClient {
 
         response
             .json::<Vec<String>>()
-            .map_err(|e| format!("Failed to parse subjects: {}", e))
+            .map_err(|e| format!("Failed to parse subjects: {e}"))
     }
 
     fn get_versions(&self, subject: &str) -> Result<Vec<i32>, String> {
         let encoded = encode_subject(subject);
-        let response = self.get(&format!("/subjects/{}/versions", encoded))?;
+        let response = self.get(&format!("/subjects/{encoded}/versions"))?;
 
         if !response.status().is_success() {
             return Err(format!(
@@ -147,12 +150,12 @@ impl SchemaRegistryClient {
 
         response
             .json::<Vec<i32>>()
-            .map_err(|e| format!("Failed to parse versions: {}", e))
+            .map_err(|e| format!("Failed to parse versions: {e}"))
     }
 
     fn get_schema(&self, subject: &str, version: i32) -> Result<SchemaRegistryResponse, String> {
         let encoded = encode_subject(subject);
-        let response = self.get(&format!("/subjects/{}/versions/{}", encoded, version))?;
+        let response = self.get(&format!("/subjects/{encoded}/versions/{version}"))?;
 
         if !response.status().is_success() {
             return Err(format!(
@@ -165,12 +168,12 @@ impl SchemaRegistryClient {
 
         response
             .json::<SchemaRegistryResponse>()
-            .map_err(|e| format!("Failed to parse schema: {}", e))
+            .map_err(|e| format!("Failed to parse schema: {e}"))
     }
 
     fn get_compatibility(&self, subject: &str) -> Result<Option<String>, String> {
         let encoded = encode_subject(subject);
-        let response = self.get(&format!("/config/{}", encoded));
+        let response = self.get(&format!("/config/{encoded}"));
 
         match response {
             Ok(resp) if resp.status().is_success() => {
@@ -181,7 +184,7 @@ impl SchemaRegistryClient {
                 }
                 resp.json::<CompatResponse>()
                     .map(|c| c.compatibility_level)
-                    .map_err(|e| format!("Failed to parse compatibility: {}", e))
+                    .map_err(|e| format!("Failed to parse compatibility: {e}"))
             }
             _ => Ok(None), // Subject-level config not set
         }
@@ -222,7 +225,8 @@ pub fn run_schema_import(config: &SchemaImportConfig) -> crate::Result<SchemaImp
     println!();
     print_step(1, "Connecting to Schema Registry...");
 
-    let client = SchemaRegistryClient::new(&config.schema_registry_url, config.auth.clone());
+    let client = SchemaRegistryClient::new(&config.schema_registry_url, config.auth.clone())
+        .map_err(crate::StreamlineError::Config)?;
 
     // Test connection by listing subjects
     let all_subjects = match client.list_subjects() {
@@ -282,7 +286,7 @@ pub fn run_schema_import(config: &SchemaImportConfig) -> crate::Result<SchemaImp
                     subject,
                     e
                 );
-                result.errors.push(format!("{}: {}", subject, e));
+                result.errors.push(format!("{subject}: {e}"));
                 continue;
             }
         };
@@ -329,9 +333,7 @@ pub fn run_schema_import(config: &SchemaImportConfig) -> crate::Result<SchemaImp
                         version,
                         e
                     );
-                    result
-                        .errors
-                        .push(format!("{}:{}: {}", subject, version, e));
+                    result.errors.push(format!("{subject}:{version}: {e}"));
                 }
             }
         }
@@ -365,7 +367,7 @@ pub fn run_schema_import(config: &SchemaImportConfig) -> crate::Result<SchemaImp
         }
 
         for (subject, schemas) in &by_subject {
-            println!("  {}", format!("Subject: {}", subject).cyan().bold());
+            println!("  {}", format!("Subject: {subject}").cyan().bold());
             for schema in schemas {
                 let schema_preview = if schema.schema.len() > 60 {
                     format!("{}...", &schema.schema[..60])
@@ -392,7 +394,7 @@ pub fn run_schema_import(config: &SchemaImportConfig) -> crate::Result<SchemaImp
                     );
                 }
                 if let Some(ref compat) = schema.compatibility {
-                    println!("      Compatibility: {}", compat);
+                    println!("      Compatibility: {compat}");
                 }
             }
             println!();
@@ -405,7 +407,8 @@ pub fn run_schema_import(config: &SchemaImportConfig) -> crate::Result<SchemaImp
     } else {
         // Register schemas in the Streamline Schema Registry
         let streamline_client =
-            SchemaRegistryClient::new(&config.streamline_registry_url, config.auth.clone());
+            SchemaRegistryClient::new(&config.streamline_registry_url, config.auth.clone())
+                .map_err(crate::StreamlineError::Config)?;
 
         let mut registered = 0usize;
         for schema in &result.schemas {
@@ -532,7 +535,7 @@ fn print_banner() {
 fn print_step(num: u32, message: &str) {
     println!(
         "  {} {}",
-        format!("[{}/5]", num).cyan().bold(),
+        format!("[{num}/5]").cyan().bold(),
         message.bold()
     );
 }

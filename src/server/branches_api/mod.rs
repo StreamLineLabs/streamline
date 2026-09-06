@@ -7,33 +7,42 @@
 //!   * `DELETE /api/v1/branches/:id`          — discard a branch
 //!   * `POST   /api/v1/branches/:id/messages` — append to branch write topic
 //!   * `GET    /api/v1/branches/:id/messages?partition=&after=`
-//!                                            — read next message after offset
+//!     — read next message after offset
 //!   * `POST   /api/v1/branches/:id/run`      — run a transform on branch
 //!   * `POST   /api/v1/branches/:id/diff`     — diff branch vs base
 //!   * `POST   /api/v1/branches/:id/merge`    — merge branch into target topic
 //!
 //! Branch IDs are URL-encoded `<base_topic>:<name>`. Backed by a process-
-//! global in-memory [`BranchStore`]; production swaps to the log layer.
+//! global in-memory `BranchStore`; production swaps to the log layer.
 
-mod types;
 mod handlers;
+mod types;
 
-pub use types::*;
 pub use handlers::BranchesApiState;
+pub use types::*;
 
-use axum::{routing::{get, post}, Router};
+use axum::{
+    routing::{get, post},
+    Router,
+};
 
 use handlers::{
-    create_branch, list_branches, get_branch, discard_branch,
-    append_branch, read_branch, run_handler, diff_handler, merge_handler,
+    append_branch, create_branch, diff_handler, discard_branch, get_branch, list_branches,
+    merge_handler, read_branch, run_handler,
 };
 
 /// Build the branches API router wired to the given [`BranchesApiState`].
 pub fn create_branches_api_router(state: BranchesApiState) -> Router {
     Router::new()
         .route("/api/v1/branches", post(create_branch).get(list_branches))
-        .route("/api/v1/branches/:id", get(get_branch).delete(discard_branch))
-        .route("/api/v1/branches/:id/messages", post(append_branch).get(read_branch))
+        .route(
+            "/api/v1/branches/:id",
+            get(get_branch).delete(discard_branch),
+        )
+        .route(
+            "/api/v1/branches/:id/messages",
+            post(append_branch).get(read_branch),
+        )
         .route("/api/v1/branches/:id/run", post(run_handler))
         .route("/api/v1/branches/:id/diff", post(diff_handler))
         .route("/api/v1/branches/:id/merge", post(merge_handler))
@@ -43,11 +52,11 @@ pub fn create_branches_api_router(state: BranchesApiState) -> Router {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::Arc;
+    use crate::branches::BranchStore;
     use axum::body::{to_bytes, Body};
     use axum::http::Request;
     use axum::http::StatusCode;
-    use crate::branches::BranchStore;
+    use std::sync::Arc;
     use tower::ServiceExt;
 
     fn fresh_state() -> BranchesApiState {
@@ -307,8 +316,7 @@ mod tests {
         let views: Vec<BranchView> = serde_json::from_slice(&bytes).unwrap();
         assert!(
             views.is_empty(),
-            "tenant-b store leaked tenant-a's branch: {:?}",
-            views
+            "tenant-b store leaked tenant-a's branch: {views:?}"
         );
 
         // Direct store inspection confirms.
@@ -455,16 +463,14 @@ mod tests {
 
     #[test]
     fn read_branch_query_defaults_after() {
-        let q: ReadBranchQuery =
-            serde_json::from_str(r#"{"partition": 0}"#).unwrap();
+        let q: ReadBranchQuery = serde_json::from_str(r#"{"partition": 0}"#).unwrap();
         assert_eq!(q.partition, 0);
         assert_eq!(q.after, -1);
     }
 
     #[test]
     fn read_branch_query_explicit_after() {
-        let q: ReadBranchQuery =
-            serde_json::from_str(r#"{"partition": 2, "after": 99}"#).unwrap();
+        let q: ReadBranchQuery = serde_json::from_str(r#"{"partition": 2, "after": 99}"#).unwrap();
         assert_eq!(q.partition, 2);
         assert_eq!(q.after, 99);
     }

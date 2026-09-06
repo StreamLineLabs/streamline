@@ -11,9 +11,9 @@ use std::hint::black_box;
 use std::time::Instant;
 
 use streamline::{
-    analyze_key_distribution, analyze_throughput_skew, gini_coefficient,
-    predict_rebalance_benefit, BrokerState, PartitionAssignment, PartitionMetrics, RebalanceConfig,
-    RebalanceMode, SkewAnalyzer, SkewAnalyzerConfig, SkewSeverity, SmartRebalancer,
+    analyze_key_distribution, analyze_throughput_skew, predict_rebalance_benefit, BrokerState,
+    PartitionAssignment, PartitionMetrics, RebalanceConfig, RebalanceMode, SkewSeverity,
+    SmartRebalancer,
 };
 
 // ── Data generators ─────────────────────────────────────────────────────
@@ -74,9 +74,7 @@ fn hot_partitions_throughputs(count: usize, base: f64, hot_count: usize) -> Vec<
 }
 
 fn progressive_degradation(count: usize, base: f64) -> Vec<f64> {
-    (0..count)
-        .map(|i| base * (1.0 + 0.1 * i as f64))
-        .collect()
+    (0..count).map(|i| base * (1.0 + 0.1 * i as f64)).collect()
 }
 
 fn zipfian_throughputs(count: usize, base: f64) -> Vec<f64> {
@@ -167,9 +165,7 @@ fn make_assignments(brokers: &[BrokerState]) -> Vec<PartitionAssignment> {
 }
 
 fn make_uniform_keys(count: usize) -> HashMap<String, u64> {
-    (0..count)
-        .map(|i| (format!("key-{:08}", i), 10))
-        .collect()
+    (0..count).map(|i| (format!("key-{i:08}"), 10)).collect()
 }
 
 fn make_zipfian_keys(count: usize) -> HashMap<String, u64> {
@@ -177,7 +173,7 @@ fn make_zipfian_keys(count: usize) -> HashMap<String, u64> {
     for i in 0..count {
         let rank = i + 1;
         let freq = (1_000_000.0 / (rank as f64).powf(1.0)) as u64;
-        map.insert(format!("key-{:08}", i), freq.max(1));
+        map.insert(format!("key-{i:08}"), freq.max(1));
     }
     map
 }
@@ -485,8 +481,7 @@ fn perf_analyze_throughput_skew_small() {
 
     assert!(
         elapsed.as_millis() < 1_000,
-        "1000 analyses of 30 partitions should complete in <1s (took {:?})",
-        elapsed
+        "1000 analyses of 30 partitions should complete in <1s (took {elapsed:?})"
     );
 }
 
@@ -502,8 +497,7 @@ fn perf_analyze_throughput_skew_large() {
 
     assert!(
         elapsed.as_millis() < 2_000,
-        "100 analyses of 2000 partitions should complete in <2s (took {:?})",
-        elapsed
+        "100 analyses of 2000 partitions should complete in <2s (took {elapsed:?})"
     );
 }
 
@@ -519,8 +513,7 @@ fn perf_key_distribution_100k() {
 
     assert!(
         elapsed.as_secs() < 10,
-        "10 key-distribution analyses of 100K keys should complete in <10s (took {:?})",
-        elapsed
+        "10 key-distribution analyses of 100K keys should complete in <10s (took {elapsed:?})"
     );
 }
 
@@ -544,8 +537,7 @@ fn perf_plan_rebalance_large() {
 
     assert!(
         elapsed.as_millis() < 5_000,
-        "100 rebalance plans for 2000 partitions should complete in <5s (took {:?})",
-        elapsed
+        "100 rebalance plans for 2000 partitions should complete in <5s (took {elapsed:?})"
     );
 }
 
@@ -566,7 +558,6 @@ fn perf_validate_plan_large() {
 
     assert!(
         elapsed.as_millis() < 2_000,
-        "1000 validations for 2000-partition plan should complete in <2s (took {:?})",
-        elapsed
+        "1000 validations for 2000-partition plan should complete in <2s (took {elapsed:?})"
     );
 }

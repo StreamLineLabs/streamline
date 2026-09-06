@@ -134,14 +134,9 @@ fn test_benchmark_profile_descriptions() {
         let desc = profile.description();
         assert!(
             !desc.is_empty(),
-            "Profile {:?} should have a description",
-            profile
+            "Profile {profile:?} should have a description"
         );
-        assert!(
-            desc.len() > 10,
-            "Profile {:?} description too short",
-            profile
-        );
+        assert!(desc.len() > 10, "Profile {profile:?} description too short");
     }
 
     // Check specific descriptions contain expected keywords
@@ -234,9 +229,7 @@ fn test_message_generator_output() {
             let msg = generator.generate(seq);
             assert!(
                 !msg.is_empty(),
-                "Generator {:?} produced empty message at seq {}",
-                generator,
-                seq
+                "Generator {generator:?} produced empty message at seq {seq}"
             );
 
             // Most generators produce JSON

@@ -15,7 +15,6 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Arc;
 use tokio::sync::RwLock;
 
 // ---------------------------------------------------------------------------
@@ -99,9 +98,7 @@ impl DeliveryTracker {
         transaction_id: Option<String>,
     ) {
         let mut committed = self.committed.write().await;
-        let source_positions = committed
-            .entry(source.to_string())
-            .or_default();
+        let source_positions = committed.entry(source.to_string()).or_default();
 
         source_positions.insert(
             table.to_string(),
@@ -117,10 +114,7 @@ impl DeliveryTracker {
     }
 
     /// Get all committed positions for a source.
-    pub async fn get_positions(
-        &self,
-        source: &str,
-    ) -> HashMap<String, CommittedPosition> {
+    pub async fn get_positions(&self, source: &str) -> HashMap<String, CommittedPosition> {
         self.committed
             .read()
             .await
@@ -141,14 +135,15 @@ impl DeliveryTracker {
     pub async fn checkpoint(&self) -> Result<Vec<u8>> {
         let committed = self.committed.read().await;
         serde_json::to_vec(&*committed)
-            .map_err(|e| StreamlineError::storage_msg(format!("Checkpoint serialize error: {}", e)))
+            .map_err(|e| StreamlineError::storage_msg(format!("Checkpoint serialize error: {e}")))
     }
 
     /// Restore from a checkpoint.
     pub async fn restore(&self, data: &[u8]) -> Result<()> {
         let positions: HashMap<String, HashMap<String, CommittedPosition>> =
-            serde_json::from_slice(data)
-                .map_err(|e| StreamlineError::storage_msg(format!("Checkpoint restore error: {}", e)))?;
+            serde_json::from_slice(data).map_err(|e| {
+                StreamlineError::storage_msg(format!("Checkpoint restore error: {e}"))
+            })?;
         *self.committed.write().await = positions;
         Ok(())
     }
@@ -158,18 +153,18 @@ impl DeliveryTracker {
         let data = self.checkpoint().await?;
         let temp_path = path.with_extension("tmp");
         std::fs::write(&temp_path, &data).map_err(|e| {
-            StreamlineError::storage_msg(format!("Failed to write CDC checkpoint: {}", e))
+            StreamlineError::storage_msg(format!("Failed to write CDC checkpoint: {e}"))
         })?;
         // fsync the temp file before rename
         let f = std::fs::File::open(&temp_path).map_err(|e| {
-            StreamlineError::storage_msg(format!("Failed to open CDC checkpoint for sync: {}", e))
+            StreamlineError::storage_msg(format!("Failed to open CDC checkpoint for sync: {e}"))
         })?;
         f.sync_all().map_err(|e| {
-            StreamlineError::storage_msg(format!("Failed to sync CDC checkpoint: {}", e))
+            StreamlineError::storage_msg(format!("Failed to sync CDC checkpoint: {e}"))
         })?;
         drop(f);
         std::fs::rename(&temp_path, path).map_err(|e| {
-            StreamlineError::storage_msg(format!("Failed to finalize CDC checkpoint: {}", e))
+            StreamlineError::storage_msg(format!("Failed to finalize CDC checkpoint: {e}"))
         })?;
         Ok(())
     }
@@ -180,7 +175,7 @@ impl DeliveryTracker {
             return Ok(());
         }
         let data = std::fs::read(path).map_err(|e| {
-            StreamlineError::storage_msg(format!("Failed to read CDC checkpoint: {}", e))
+            StreamlineError::storage_msg(format!("Failed to read CDC checkpoint: {e}"))
         })?;
         self.restore(&data).await
     }
@@ -304,6 +299,7 @@ impl CdcDlq {
     }
 
     /// Add a failed event to the DLQ.
+    #[allow(clippy::too_many_arguments)] // mirrors the DLQ entry's field set
     pub async fn add(
         &self,
         source: &str,
@@ -388,7 +384,7 @@ impl CdcDlq {
         let entry = entries
             .iter_mut()
             .find(|e| e.id == id)
-            .ok_or_else(|| StreamlineError::Config(format!("DLQ entry '{}' not found", id)))?;
+            .ok_or_else(|| StreamlineError::Config(format!("DLQ entry '{id}' not found")))?;
         entry.replayed = true;
         self.total_replayed.fetch_add(1, Ordering::Relaxed);
         Ok(())
@@ -423,8 +419,7 @@ impl CdcDlq {
 
     /// Calculate retry backoff for a given attempt.
     pub fn backoff_for_attempt(&self, attempt: u32) -> std::time::Duration {
-        let ms = (self.config.retry_backoff_ms as f64
-            * 2.0f64.powi(attempt as i32)) as u64;
+        let ms = (self.config.retry_backoff_ms as f64 * 2.0f64.powi(attempt as i32)) as u64;
         let clamped = ms.min(self.config.max_backoff_ms);
         std::time::Duration::from_millis(clamped)
     }
@@ -524,7 +519,16 @@ mod tests {
         let dlq = CdcDlq::new(CdcDlqConfig::default());
 
         let id = dlq
-            .add("src", "t", "INSERT", "pos", "err", DlqErrorClass::Unknown, 0, None)
+            .add(
+                "src",
+                "t",
+                "INSERT",
+                "pos",
+                "err",
+                DlqErrorClass::Unknown,
+                0,
+                None,
+            )
             .await;
 
         dlq.mark_replayed(&id).await.unwrap();
@@ -537,9 +541,39 @@ mod tests {
     async fn test_dlq_stats() {
         let dlq = CdcDlq::new(CdcDlqConfig::default());
 
-        dlq.add("src1", "t", "INSERT", "p1", "e1", DlqErrorClass::SchemaError, 0, None).await;
-        dlq.add("src1", "t", "UPDATE", "p2", "e2", DlqErrorClass::WriteError, 0, None).await;
-        dlq.add("src2", "t", "DELETE", "p3", "e3", DlqErrorClass::ConnectionError, 0, None).await;
+        dlq.add(
+            "src1",
+            "t",
+            "INSERT",
+            "p1",
+            "e1",
+            DlqErrorClass::SchemaError,
+            0,
+            None,
+        )
+        .await;
+        dlq.add(
+            "src1",
+            "t",
+            "UPDATE",
+            "p2",
+            "e2",
+            DlqErrorClass::WriteError,
+            0,
+            None,
+        )
+        .await;
+        dlq.add(
+            "src2",
+            "t",
+            "DELETE",
+            "p3",
+            "e3",
+            DlqErrorClass::ConnectionError,
+            0,
+            None,
+        )
+        .await;
 
         let stats = dlq.stats().await;
         assert_eq!(stats.total_entries, 3);

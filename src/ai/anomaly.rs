@@ -140,7 +140,11 @@ impl AnomalyDetector {
         // Pick the result with the highest score
         let result = [zscore_result, ma_result, iqr_result]
             .into_iter()
-            .max_by(|a, b| a.score.partial_cmp(&b.score).unwrap_or(std::cmp::Ordering::Equal))
+            .max_by(|a, b| {
+                a.score
+                    .partial_cmp(&b.score)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
             .unwrap_or_else(AnomalyResult::normal);
 
         if result.is_anomaly {
@@ -159,7 +163,9 @@ impl AnomalyDetector {
             // Re-record the event with the topic set
             let event = AnomalyEvent {
                 id: uuid::Uuid::new_v4().to_string(),
-                anomaly_type: result.anomaly_type.unwrap_or(AnomalyType::StatisticalOutlier),
+                anomaly_type: result
+                    .anomaly_type
+                    .unwrap_or(AnomalyType::StatisticalOutlier),
                 severity: result.score,
                 timestamp_ms: chrono::Utc::now().timestamp_millis(),
                 observed_value: value,
@@ -419,7 +425,9 @@ impl DetectionEngine {
     fn record_event(&mut self, result: &AnomalyResult, observed: f64, topic: Option<String>) {
         let event = AnomalyEvent {
             id: uuid::Uuid::new_v4().to_string(),
-            anomaly_type: result.anomaly_type.unwrap_or(AnomalyType::StatisticalOutlier),
+            anomaly_type: result
+                .anomaly_type
+                .unwrap_or(AnomalyType::StatisticalOutlier),
             severity: result.score,
             timestamp_ms: chrono::Utc::now().timestamp_millis(),
             observed_value: observed,
@@ -577,7 +585,7 @@ impl StatisticalDetector {
             )
             .with_details(AnomalyDetails {
                 expected: format!("{:.2} ± {:.2}", self.mean, self.std_dev * threshold as f64),
-                actual: format!("{:.2}", value),
+                actual: format!("{value:.2}"),
                 z_score: Some(z_score),
                 distance: None,
                 context: Some(format!("Based on {} samples", self.values.len())),
@@ -739,18 +747,14 @@ impl MovingAverageDetector {
 
         if threshold > 0.0 && deviation > threshold {
             let score = (deviation / (std_dev * 5.0)).min(1.0) as f32;
-            AnomalyResult::anomaly(
-                AnomalyType::MovingAverageDeviation,
-                score,
-                self.sensitivity,
-            )
-            .with_details(AnomalyDetails {
-                expected: format!("{:.2} ± {:.2}", self.ema, threshold),
-                actual: format!("{:.2}", value),
-                z_score: Some(deviation / std_dev),
-                distance: None,
-                context: Some(format!("EMA window {} samples", self.values.len())),
-            })
+            AnomalyResult::anomaly(AnomalyType::MovingAverageDeviation, score, self.sensitivity)
+                .with_details(AnomalyDetails {
+                    expected: format!("{:.2} ± {:.2}", self.ema, threshold),
+                    actual: format!("{value:.2}"),
+                    z_score: Some(deviation / std_dev),
+                    distance: None,
+                    context: Some(format!("EMA window {} samples", self.values.len())),
+                })
         } else {
             AnomalyResult::normal()
         }
@@ -825,14 +829,11 @@ impl IqrDetector {
 
             AnomalyResult::anomaly(AnomalyType::StatisticalOutlier, score, self.sensitivity)
                 .with_details(AnomalyDetails {
-                    expected: format!("[{:.2}, {:.2}] (IQR={:.2}, k={:.1})", lower, upper, iqr, k),
-                    actual: format!("{:.2}", value),
+                    expected: format!("[{lower:.2}, {upper:.2}] (IQR={iqr:.2}, k={k:.1})"),
+                    actual: format!("{value:.2}"),
                     z_score: None,
                     distance: None,
-                    context: Some(format!(
-                        "IQR method: Q1={:.2}, Q3={:.2}, {} samples",
-                        q1, q3, n
-                    )),
+                    context: Some(format!("IQR method: Q1={q1:.2}, Q3={q3:.2}, {n} samples")),
                 })
         } else {
             AnomalyResult::normal()

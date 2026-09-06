@@ -29,7 +29,7 @@ pub use autoscaler::{
 };
 pub use config::{ClusterConfig, InterBrokerTlsConfig};
 pub use failover::{FailoverConfig, FailoverEvent, FailoverHandler};
-pub use health::{ClusterHealthMonitor, ClusterHealthReport, ClusterHealthStatus, ClusterStats};
+pub use health::{ClusterHealthMonitor, ClusterHealthReport, ClusterStats};
 pub use membership::MembershipManager;
 pub use node::{BrokerInfo, NodeId, NodeState};
 pub use rack::RackAwareAssigner;
@@ -37,9 +37,7 @@ pub use raft::{
     ClusterCommand, ClusterMetadata, ClusterResponse, PartitionAssignment, StreamlineRaft,
     TopicAssignment,
 };
-pub use rebalancer::{
-    PartitionMovement, PartitionRebalancer, RebalanceStrategy, RebalancePlan, RebalancerConfig,
-};
+pub use rebalancer::{PartitionRebalancer, RebalancePlan, RebalanceStrategy, RebalancerConfig};
 pub use tls::InterBrokerTls;
 
 use crate::error::{Result, StreamlineError};
@@ -121,9 +119,7 @@ impl ClusterManager {
         let (raft, store, rpc_handler) =
             raft::initialize_raft(node_id, data_dir, cluster_id, raft_config)
                 .await
-                .map_err(|e| {
-                    StreamlineError::Cluster(format!("Failed to initialize Raft: {}", e))
-                })?;
+                .map_err(|e| StreamlineError::Cluster(format!("Failed to initialize Raft: {e}")))?;
 
         // Create membership manager
         let membership = Arc::new(MembershipManager::new(node_id, config.clone()));
@@ -140,7 +136,7 @@ impl ClusterManager {
         let inter_broker_tls = if config.inter_broker_tls.enabled {
             info!(node_id, "Initializing inter-broker TLS");
             Some(InterBrokerTls::new(&config.inter_broker_tls).map_err(|e| {
-                StreamlineError::Cluster(format!("Failed to initialize inter-broker TLS: {}", e))
+                StreamlineError::Cluster(format!("Failed to initialize inter-broker TLS: {e}"))
             })?)
         } else {
             None
@@ -297,7 +293,7 @@ impl ClusterManager {
             self.config.inter_broker_addr.to_string(),
         )
         .await
-        .map_err(|e| StreamlineError::Cluster(format!("Bootstrap failed: {}", e)))?;
+        .map_err(|e| StreamlineError::Cluster(format!("Bootstrap failed: {e}")))?;
 
         // Register self as broker (with rack info if configured)
         let broker = BrokerInfo {
@@ -337,9 +333,7 @@ impl ClusterManager {
             node_id: self.node_id,
             raft_addr: self.config.inter_broker_addr.to_string(),
             advertised_addr: self.config.advertised_addr.to_string(),
-            version: Some(
-                crate::cluster::version::StreamlineVersion::current().semver(),
-            ),
+            version: Some(crate::cluster::version::StreamlineVersion::current().semver()),
         };
 
         let timeout = std::time::Duration::from_secs(10);
@@ -438,7 +432,7 @@ impl ClusterManager {
                                 ));
                             }
                             Err(e) => {
-                                last_error = Some(format!("Failed to connect to leader: {}", e));
+                                last_error = Some(format!("Failed to connect to leader: {e}"));
                             }
                         }
                     } else {
@@ -447,7 +441,7 @@ impl ClusterManager {
                 }
                 Err(e) => {
                     warn!(%seed_addr, error = %e, "Failed to connect to seed node");
-                    last_error = Some(format!("Connection failed: {}", e));
+                    last_error = Some(format!("Connection failed: {e}"));
                 }
             }
         }
@@ -477,7 +471,7 @@ impl ClusterManager {
                     .to_string(),
             )
         })?
-        .map_err(|e| StreamlineError::Cluster(format!("Raft write failed: {:?}", e)))?;
+        .map_err(|e| StreamlineError::Cluster(format!("Raft write failed: {e:?}")))?;
 
         Ok(response.data)
     }
@@ -560,8 +554,7 @@ impl ClusterManager {
                 Ok(())
             }
             ClusterResponse::Error(e) => Err(StreamlineError::Cluster(format!(
-                "Failed to create topic: {}",
-                e
+                "Failed to create topic: {e}"
             ))),
             _ => Ok(()),
         }
@@ -628,10 +621,7 @@ impl ClusterManager {
     }
 
     /// Plan a partition rebalance based on current cluster state
-    pub async fn plan_rebalance(
-        &self,
-        strategy: RebalanceStrategy,
-    ) -> RebalancePlan {
+    pub async fn plan_rebalance(&self, strategy: RebalanceStrategy) -> RebalancePlan {
         let metadata = self.metadata().await;
         self.rebalancer.plan_rebalance(&metadata, strategy)
     }
@@ -659,7 +649,9 @@ impl ClusterManager {
             match self.propose_command(cmd).await {
                 Ok(_) => {
                     // Update leader
-                    let epoch = self.metadata().await
+                    let epoch = self
+                        .metadata()
+                        .await
                         .get_partition(&movement.topic, movement.partition_id)
                         .map(|p| p.leader_epoch + 1)
                         .unwrap_or(1);
@@ -705,8 +697,7 @@ impl ClusterManager {
     pub async fn handle_node_failure(&self, failed_node: NodeId) -> Result<usize> {
         info!(
             node_id = self.node_id,
-            failed_node,
-            "Handling node failure, planning rebalance"
+            failed_node, "Handling node failure, planning rebalance"
         );
 
         // Mark the node as dead
@@ -722,7 +713,10 @@ impl ClusterManager {
             .await;
 
         if plan.movements.is_empty() {
-            info!(failed_node, "No partition movements needed after node failure");
+            info!(
+                failed_node,
+                "No partition movements needed after node failure"
+            );
             return Ok(0);
         }
 
@@ -733,8 +727,7 @@ impl ClusterManager {
     pub async fn handle_node_join(&self, new_node: NodeId) -> Result<usize> {
         info!(
             node_id = self.node_id,
-            new_node,
-            "New node joined, checking if rebalance is needed"
+            new_node, "New node joined, checking if rebalance is needed"
         );
 
         let plan = self

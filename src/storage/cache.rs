@@ -8,13 +8,12 @@
 //!
 //! ```
 //! use streamline::storage::cache::{SegmentCache, CacheConfig};
-//! use bytes::Bytes;
 //!
 //! let config = CacheConfig::default();
 //! let cache = SegmentCache::new(config);
 //!
 //! // Cache some data
-//! let data = Bytes::from(vec![1, 2, 3, 4, 5]);
+//! let data = vec![1, 2, 3, 4, 5].into();
 //! cache.put("my-topic", 0, 0, 100, data);
 //!
 //! // Retrieve cached data

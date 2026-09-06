@@ -43,43 +43,43 @@ use tokio::time::{interval, Duration};
 use tracing::{debug, error, info, warn};
 
 // Iceberg and Arrow imports (only with iceberg feature)
-#[cfg(feature = "iceberg")]
+#[cfg(iceberg_backend)]
 use arrow::array::{
     ArrayRef, BinaryBuilder, Int64Builder, StringBuilder, TimestampMillisecondBuilder,
 };
-#[cfg(feature = "iceberg")]
+#[cfg(iceberg_backend)]
 use arrow::datatypes::{DataType, Field, Schema as ArrowSchema, TimeUnit};
-#[cfg(feature = "iceberg")]
+#[cfg(iceberg_backend)]
 use arrow::record_batch::RecordBatch;
-#[cfg(feature = "iceberg")]
+#[cfg(iceberg_backend)]
 use chrono::{TimeZone, Utc};
 // Note: FileIOBuilder may be needed for future features like remote storage
-// #[cfg(feature = "iceberg")]
+// #[cfg(iceberg_backend)]
 // use iceberg::io::FileIOBuilder;
-#[cfg(feature = "iceberg")]
+#[cfg(iceberg_backend)]
 use iceberg::spec::{NestedField, PrimitiveType, Schema as IcebergSchema, Type};
-#[cfg(feature = "iceberg")]
+#[cfg(iceberg_backend)]
 use iceberg::table::Table;
-#[cfg(feature = "iceberg")]
+#[cfg(iceberg_backend)]
 use iceberg::{Catalog, NamespaceIdent, TableCreation, TableIdent};
-#[cfg(feature = "iceberg")]
+#[cfg(iceberg_backend)]
 use iceberg_catalog_rest::{RestCatalog, RestCatalogConfig};
 // Note: HMS and Glue catalog support disabled until upstream hive_metastore dependency is fixed
-// #[cfg(feature = "iceberg")]
+// #[cfg(iceberg_backend)]
 // use iceberg_catalog_hms::{HmsCatalog, HmsCatalogConfig};
-// #[cfg(feature = "iceberg")]
+// #[cfg(iceberg_backend)]
 // use iceberg_catalog_glue::{GlueCatalog, GlueCatalogConfig};
-#[cfg(feature = "iceberg")]
+#[cfg(iceberg_backend)]
 use crate::sink::config::CatalogType;
-#[cfg(feature = "iceberg")]
+#[cfg(iceberg_backend)]
 use parquet::arrow::ArrowWriter;
-#[cfg(feature = "iceberg")]
+#[cfg(iceberg_backend)]
 use parquet::basic::Compression;
-#[cfg(feature = "iceberg")]
+#[cfg(iceberg_backend)]
 use parquet::file::properties::WriterProperties;
-#[cfg(feature = "iceberg")]
+#[cfg(iceberg_backend)]
 use std::fs::File;
-#[cfg(feature = "iceberg")]
+#[cfg(iceberg_backend)]
 use std::path::Path;
 
 // Catalog availability:
@@ -114,16 +114,16 @@ pub struct IcebergSink {
     /// Shutdown signal
     shutdown_tx: Option<tokio::sync::watch::Sender<bool>>,
     /// Iceberg catalog (currently only REST catalog is supported)
-    #[cfg(feature = "iceberg")]
+    #[cfg(iceberg_backend)]
     catalog: Option<Arc<RestCatalog>>,
     /// Iceberg table handle
-    #[cfg(feature = "iceberg")]
+    #[cfg(iceberg_backend)]
     table: Arc<RwLock<Option<Table>>>,
     /// Iceberg table identifier (for loading table in commit)
-    #[cfg(feature = "iceberg")]
+    #[cfg(iceberg_backend)]
     table_ident: Option<TableIdent>,
     /// Arrow schema for record batches
-    #[cfg(feature = "iceberg")]
+    #[cfg(iceberg_backend)]
     arrow_schema: Option<Arc<ArrowSchema>>,
 }
 
@@ -147,13 +147,13 @@ impl IcebergSink {
             metrics: Arc::new(RwLock::new(SinkMetrics::default())),
             buffer: Arc::new(RwLock::new(HashMap::new())),
             shutdown_tx: None,
-            #[cfg(feature = "iceberg")]
+            #[cfg(iceberg_backend)]
             catalog: None,
-            #[cfg(feature = "iceberg")]
+            #[cfg(iceberg_backend)]
             table: Arc::new(RwLock::new(None)),
-            #[cfg(feature = "iceberg")]
+            #[cfg(iceberg_backend)]
             table_ident: None,
-            #[cfg(feature = "iceberg")]
+            #[cfg(iceberg_backend)]
             arrow_schema: None,
         })
     }
@@ -186,7 +186,7 @@ impl IcebergSink {
     }
 
     /// Create Arrow schema for Streamline records
-    #[cfg(feature = "iceberg")]
+    #[cfg(iceberg_backend)]
     fn create_arrow_schema() -> ArrowSchema {
         ArrowSchema::new(vec![
             Field::new("offset", DataType::Int64, false),
@@ -203,7 +203,7 @@ impl IcebergSink {
     }
 
     /// Create Iceberg schema for the table
-    #[cfg(feature = "iceberg")]
+    #[cfg(iceberg_backend)]
     fn create_iceberg_schema() -> Result<IcebergSchema> {
         IcebergSchema::builder()
             .with_fields(vec![
@@ -243,7 +243,7 @@ impl IcebergSink {
     }
 
     /// Convert records to Arrow RecordBatch
-    #[cfg(feature = "iceberg")]
+    #[cfg(iceberg_backend)]
     fn records_to_arrow_batch(
         records: &[Record],
         schema: &Arc<ArrowSchema>,
@@ -322,7 +322,7 @@ impl IcebergSink {
     }
 
     /// Compute partition value from timestamp based on strategy
-    #[cfg(feature = "iceberg")]
+    #[cfg(iceberg_backend)]
     fn compute_partition_value(
         timestamp_ms: i64,
         strategy: &crate::sink::config::PartitioningStrategy,
@@ -340,7 +340,7 @@ impl IcebergSink {
     }
 
     /// Compute partition value from record field (field-based partitioning)
-    #[cfg(feature = "iceberg")]
+    #[cfg(iceberg_backend)]
     fn compute_field_partition_value(record: &Record, field_name: &str) -> Option<String> {
         // Try to extract the field value from JSON-encoded record value
         if let Ok(json_value) = serde_json::from_slice::<serde_json::Value>(record.value.as_ref()) {
@@ -372,7 +372,7 @@ impl IcebergSink {
     }
 
     /// Get partition value for a record based on partitioning config
-    #[cfg(feature = "iceberg")]
+    #[cfg(iceberg_backend)]
     fn get_partition_value(
         record: &Record,
         config: &crate::sink::config::PartitioningConfig,
@@ -397,7 +397,7 @@ impl IcebergSink {
 
     /// Base schema field names always present in the Iceberg table.
     /// Not considered "user data" fields for schema evolution purposes.
-    #[cfg(feature = "iceberg")]
+    #[cfg(iceberg_backend)]
     const BASE_SCHEMA_FIELDS: &'static [&'static str] = &[
         "offset",
         "timestamp",
@@ -408,7 +408,7 @@ impl IcebergSink {
     ];
 
     /// Infer an Arrow [`DataType`] from a JSON value.
-    #[cfg(feature = "iceberg")]
+    #[cfg(iceberg_backend)]
     fn infer_arrow_type(value: &serde_json::Value) -> DataType {
         match value {
             serde_json::Value::Null => DataType::Utf8,
@@ -430,7 +430,7 @@ impl IcebergSink {
     ///
     /// Compatible promotions follow Iceberg's type promotion rules:
     /// `int` → `long`, `float` → `double`, `int` → `double`, `long` → `double`.
-    #[cfg(feature = "iceberg")]
+    #[cfg(iceberg_backend)]
     #[allow(dead_code)] // Tested; will be used when schema ALTER is wired in
     fn is_compatible_promotion(from: &DataType, to: &DataType) -> bool {
         matches!(
@@ -452,7 +452,7 @@ impl IcebergSink {
     ///
     /// Returns the list of new `(field_name, inferred_type)` pairs detected.
     /// Returns an empty list if records aren't JSON or all fields are already known.
-    #[cfg(feature = "iceberg")]
+    #[cfg(iceberg_backend)]
     fn check_schema_evolution(
         schema: &ArrowSchema,
         records: &[Record],
@@ -529,7 +529,7 @@ impl IcebergSink {
     /// Write Arrow RecordBatch to a Parquet file
     ///
     /// Returns the path to the written file and the number of bytes written.
-    #[cfg(feature = "iceberg")]
+    #[cfg(iceberg_backend)]
     fn write_parquet_file(
         batch: &RecordBatch,
         output_dir: &str,
@@ -599,7 +599,7 @@ impl IcebergSink {
     ///
     /// This creates a DataFile entry and appends it to the table via a transaction.
     /// Uses exponential backoff retry for transient failures.
-    #[cfg(feature = "iceberg")]
+    #[cfg(iceberg_backend)]
     #[allow(clippy::too_many_arguments)]
     async fn register_data_file(
         catalog: &Arc<RestCatalog>,
@@ -677,7 +677,7 @@ impl IcebergSink {
     }
 
     /// Internal helper to attempt a single data file registration
-    #[cfg(feature = "iceberg")]
+    #[cfg(iceberg_backend)]
     async fn try_register_data_file(
         catalog: &Arc<RestCatalog>,
         table_ident: &TableIdent,
@@ -724,7 +724,7 @@ impl IcebergSink {
     }
 
     /// Initialize Iceberg catalog connection
-    #[cfg(feature = "iceberg")]
+    #[cfg(iceberg_backend)]
     async fn initialize_catalog(&mut self) -> Result<()> {
         info!(
             sink = %self.name,
@@ -820,7 +820,7 @@ impl IcebergSink {
     }
 
     /// Stub initialize_catalog for non-iceberg builds
-    #[cfg(not(feature = "iceberg"))]
+    #[cfg(not(iceberg_backend))]
     #[allow(unused)]
     async fn initialize_catalog(&mut self) -> Result<()> {
         warn!(
@@ -832,7 +832,7 @@ impl IcebergSink {
 
     /// Start the consumer loop
     #[allow(clippy::too_many_arguments)]
-    #[cfg(feature = "iceberg")]
+    #[cfg(iceberg_backend)]
     async fn consumer_loop(
         name: String,
         topics: Vec<String>,
@@ -916,7 +916,7 @@ impl IcebergSink {
 
     /// Start the consumer loop (non-iceberg version)
     #[allow(clippy::too_many_arguments)]
-    #[cfg(not(feature = "iceberg"))]
+    #[cfg(not(iceberg_backend))]
     async fn consumer_loop(
         name: String,
         topics: Vec<String>,
@@ -1033,7 +1033,7 @@ impl IcebergSink {
     }
 
     /// Commit buffered records to Iceberg (iceberg feature enabled)
-    #[cfg(feature = "iceberg")]
+    #[cfg(iceberg_backend)]
     #[allow(clippy::too_many_arguments)]
     async fn commit_buffer(
         name: &str,
@@ -1061,8 +1061,12 @@ impl IcebergSink {
         debug!(sink = %name, records = total_records, "Committing buffer to Iceberg");
 
         // Check schema evolution policy against incoming records
-        let _new_fields =
-            Self::check_schema_evolution(arrow_schema, &all_records, &config.schema_evolution, name)?;
+        let _new_fields = Self::check_schema_evolution(
+            arrow_schema,
+            &all_records,
+            &config.schema_evolution,
+            name,
+        )?;
 
         // Convert records to Arrow RecordBatch
         let batch = Self::records_to_arrow_batch(&all_records, arrow_schema, config)?;
@@ -1160,7 +1164,7 @@ impl IcebergSink {
     }
 
     /// Commit buffered records (non-iceberg fallback)
-    #[cfg(not(feature = "iceberg"))]
+    #[cfg(not(iceberg_backend))]
     async fn commit_buffer(
         name: &str,
         _config: &IcebergSinkConfig,
@@ -1247,7 +1251,7 @@ impl SinkConnector for IcebergSink {
         let metrics = self.metrics.clone();
         let buffer = self.buffer.clone();
 
-        #[cfg(feature = "iceberg")]
+        #[cfg(iceberg_backend)]
         {
             let table = self.table.clone();
             let catalog = self
@@ -1287,7 +1291,7 @@ impl SinkConnector for IcebergSink {
             });
         }
 
-        #[cfg(not(feature = "iceberg"))]
+        #[cfg(not(iceberg_backend))]
         {
             tokio::spawn(async move {
                 Self::consumer_loop(
@@ -1347,7 +1351,7 @@ impl SinkConnector for IcebergSink {
 
         // Flush remaining buffer
         let mut offsets = HashMap::new();
-        #[cfg(feature = "iceberg")]
+        #[cfg(iceberg_backend)]
         {
             if let (Some(arrow_schema), Some(catalog), Some(table_ident)) =
                 (&self.arrow_schema, &self.catalog, &self.table_ident)
@@ -1370,7 +1374,7 @@ impl SinkConnector for IcebergSink {
             }
         }
 
-        #[cfg(not(feature = "iceberg"))]
+        #[cfg(not(iceberg_backend))]
         {
             if let Err(e) = Self::commit_buffer(
                 &self.name,
@@ -1429,7 +1433,7 @@ impl SinkConnector for IcebergSink {
 
     async fn flush(&mut self) -> Result<()> {
         let mut offsets = HashMap::new();
-        #[cfg(feature = "iceberg")]
+        #[cfg(iceberg_backend)]
         {
             if let (Some(arrow_schema), Some(catalog), Some(table_ident)) =
                 (&self.arrow_schema, &self.catalog, &self.table_ident)
@@ -1449,7 +1453,7 @@ impl SinkConnector for IcebergSink {
             }
         }
 
-        #[cfg(not(feature = "iceberg"))]
+        #[cfg(not(iceberg_backend))]
         {
             Self::commit_buffer(
                 &self.name,
@@ -1636,7 +1640,7 @@ mod tests {
         assert!(!healthy);
     }
 
-    #[cfg(feature = "iceberg")]
+    #[cfg(iceberg_backend)]
     #[test]
     fn test_create_arrow_schema() {
         let schema = IcebergSink::create_arrow_schema();
@@ -1658,7 +1662,7 @@ mod tests {
         assert!(schema.field(5).is_nullable()); // _partition_value
     }
 
-    #[cfg(feature = "iceberg")]
+    #[cfg(iceberg_backend)]
     #[test]
     fn test_compute_partition_value_hour() {
         use crate::sink::config::PartitioningStrategy;
@@ -1673,7 +1677,7 @@ mod tests {
         assert_eq!(result, Some("2026-01-06-12".to_string()));
     }
 
-    #[cfg(feature = "iceberg")]
+    #[cfg(iceberg_backend)]
     #[test]
     fn test_compute_partition_value_day() {
         use crate::sink::config::PartitioningStrategy;
@@ -1686,7 +1690,7 @@ mod tests {
         assert_eq!(result, Some("2026-01-06".to_string()));
     }
 
-    #[cfg(feature = "iceberg")]
+    #[cfg(iceberg_backend)]
     #[test]
     fn test_compute_partition_value_month() {
         use crate::sink::config::PartitioningStrategy;
@@ -1701,7 +1705,7 @@ mod tests {
         assert_eq!(result, Some("2026-01".to_string()));
     }
 
-    #[cfg(feature = "iceberg")]
+    #[cfg(iceberg_backend)]
     #[test]
     fn test_compute_partition_value_none() {
         use crate::sink::config::PartitioningStrategy;
@@ -1713,7 +1717,7 @@ mod tests {
         assert!(result.is_none());
     }
 
-    #[cfg(feature = "iceberg")]
+    #[cfg(iceberg_backend)]
     #[test]
     fn test_records_to_arrow_batch() {
         use crate::storage::Header;
@@ -1753,7 +1757,7 @@ mod tests {
         assert_eq!(batch.num_columns(), 6);
     }
 
-    #[cfg(feature = "iceberg")]
+    #[cfg(iceberg_backend)]
     #[test]
     fn test_create_iceberg_schema() {
         let schema = IcebergSink::create_iceberg_schema().unwrap();
@@ -1764,7 +1768,7 @@ mod tests {
         assert_eq!(fields.fields().len(), 6);
     }
 
-    #[cfg(feature = "iceberg")]
+    #[cfg(iceberg_backend)]
     #[test]
     fn test_write_parquet_file() {
         use crate::storage::Header;
@@ -1841,7 +1845,7 @@ mod tests {
         assert_eq!(metadata.file_metadata().num_rows(), 3);
     }
 
-    #[cfg(feature = "iceberg")]
+    #[cfg(iceberg_backend)]
     #[test]
     fn test_write_parquet_file_no_partition() {
         use bytes::Bytes;
@@ -1885,7 +1889,7 @@ mod tests {
         assert!(file_path.ends_with(".parquet"));
     }
 
-    #[cfg(feature = "iceberg")]
+    #[cfg(iceberg_backend)]
     #[test]
     fn test_field_based_partitioning_json_value() {
         use crate::sink::config::{PartitioningConfig, PartitioningStrategy};
@@ -1913,7 +1917,7 @@ mod tests {
         assert_eq!(result, Some("us-west-2".to_string()));
     }
 
-    #[cfg(feature = "iceberg")]
+    #[cfg(iceberg_backend)]
     #[test]
     fn test_field_based_partitioning_numeric_field() {
         use crate::sink::config::{PartitioningConfig, PartitioningStrategy};
@@ -1940,7 +1944,7 @@ mod tests {
         assert_eq!(result, Some("42".to_string()));
     }
 
-    #[cfg(feature = "iceberg")]
+    #[cfg(iceberg_backend)]
     #[test]
     fn test_field_based_partitioning_missing_field() {
         use crate::sink::config::{PartitioningConfig, PartitioningStrategy};
@@ -1967,7 +1971,7 @@ mod tests {
         assert!(result.is_none());
     }
 
-    #[cfg(feature = "iceberg")]
+    #[cfg(iceberg_backend)]
     #[test]
     fn test_field_based_partitioning_from_key() {
         use crate::sink::config::{PartitioningConfig, PartitioningStrategy};
@@ -1994,7 +1998,7 @@ mod tests {
         assert_eq!(result, Some("cust-123".to_string()));
     }
 
-    #[cfg(feature = "iceberg")]
+    #[cfg(iceberg_backend)]
     #[test]
     fn test_compression_options() {
         use crate::sink::config::ParquetCompression;
@@ -2050,7 +2054,7 @@ mod tests {
         }
     }
 
-    #[cfg(feature = "iceberg")]
+    #[cfg(iceberg_backend)]
     #[test]
     fn test_retry_config_defaults() {
         let config = create_test_config();
@@ -2061,7 +2065,7 @@ mod tests {
     // ---- Integration test helpers ----
 
     /// Helper: Create a test record with a JSON value payload.
-    #[cfg(feature = "iceberg")]
+    #[cfg(iceberg_backend)]
     fn make_json_record(offset: i64, json: &str) -> Record {
         use bytes::Bytes;
         Record {
@@ -2075,7 +2079,7 @@ mod tests {
     }
 
     /// Helper: Create a batch of test records from JSON payloads.
-    #[cfg(feature = "iceberg")]
+    #[cfg(iceberg_backend)]
     fn make_record_batch_for_test(payloads: &[&str]) -> Vec<Record> {
         payloads
             .iter()
@@ -2088,14 +2092,14 @@ mod tests {
     ///
     /// Provides helpers to validate Iceberg sink behavior (schema evolution,
     /// Parquet writing, partitioning) without requiring a real catalog server.
-    #[cfg(feature = "iceberg")]
+    #[cfg(iceberg_backend)]
     struct MockIcebergContext {
         _output_dir: TempDir,
         config: IcebergSinkConfig,
         schema: Arc<ArrowSchema>,
     }
 
-    #[cfg(feature = "iceberg")]
+    #[cfg(iceberg_backend)]
     impl MockIcebergContext {
         fn new() -> Self {
             let output_dir = TempDir::new().expect("Failed to create temp dir");
@@ -2111,8 +2115,7 @@ mod tests {
 
         /// Write records to a Parquet file and return `(file_path, rows_written)`.
         fn write_records(&self, records: &[Record]) -> Result<(String, u64)> {
-            let batch =
-                IcebergSink::records_to_arrow_batch(records, &self.schema, &self.config)?;
+            let batch = IcebergSink::records_to_arrow_batch(records, &self.schema, &self.config)?;
             let partition = records
                 .first()
                 .and_then(|r| IcebergSink::get_partition_value(r, &self.config.partitioning));
@@ -2137,15 +2140,13 @@ mod tests {
 
     // ---- Schema evolution tests ----
 
-    #[cfg(feature = "iceberg")]
+    #[cfg(iceberg_backend)]
     #[test]
     fn test_schema_evolution_strict_rejects_unknown_fields() {
         use crate::sink::config::IcebergSchemaEvolution;
 
         let schema = Arc::new(IcebergSink::create_arrow_schema());
-        let records = make_record_batch_for_test(&[
-            r#"{"new_field": "value", "another": 42}"#,
-        ]);
+        let records = make_record_batch_for_test(&[r#"{"new_field": "value", "another": 42}"#]);
 
         let result = IcebergSink::check_schema_evolution(
             &schema,
@@ -2158,15 +2159,13 @@ mod tests {
         assert!(err.contains("strict"));
     }
 
-    #[cfg(feature = "iceberg")]
+    #[cfg(iceberg_backend)]
     #[test]
     fn test_schema_evolution_add_new_columns_allows_unknown_fields() {
         use crate::sink::config::IcebergSchemaEvolution;
 
         let schema = Arc::new(IcebergSink::create_arrow_schema());
-        let records = make_record_batch_for_test(&[
-            r#"{"region": "us-west-2", "count": 5}"#,
-        ]);
+        let records = make_record_batch_for_test(&[r#"{"region": "us-west-2", "count": 5}"#]);
 
         let result = IcebergSink::check_schema_evolution(
             &schema,
@@ -2182,15 +2181,13 @@ mod tests {
         assert!(field_names.contains(&"count"));
     }
 
-    #[cfg(feature = "iceberg")]
+    #[cfg(iceberg_backend)]
     #[test]
     fn test_schema_evolution_add_and_promote() {
         use crate::sink::config::IcebergSchemaEvolution;
 
         let schema = Arc::new(IcebergSink::create_arrow_schema());
-        let records = make_record_batch_for_test(&[
-            r#"{"temperature": 98.6, "active": true}"#,
-        ]);
+        let records = make_record_batch_for_test(&[r#"{"temperature": 98.6, "active": true}"#]);
 
         let result = IcebergSink::check_schema_evolution(
             &schema,
@@ -2203,7 +2200,7 @@ mod tests {
         assert_eq!(new_fields.len(), 2);
     }
 
-    #[cfg(feature = "iceberg")]
+    #[cfg(iceberg_backend)]
     #[test]
     fn test_schema_evolution_no_new_fields_for_binary_values() {
         use crate::sink::config::IcebergSchemaEvolution;
@@ -2229,7 +2226,7 @@ mod tests {
         assert!(result.unwrap().is_empty());
     }
 
-    #[cfg(feature = "iceberg")]
+    #[cfg(iceberg_backend)]
     #[test]
     fn test_schema_evolution_empty_records() {
         use crate::sink::config::IcebergSchemaEvolution;
@@ -2249,7 +2246,7 @@ mod tests {
 
     // ---- Type inference tests ----
 
-    #[cfg(feature = "iceberg")]
+    #[cfg(iceberg_backend)]
     #[test]
     fn test_infer_arrow_type() {
         assert_eq!(
@@ -2257,7 +2254,7 @@ mod tests {
             DataType::Int64
         );
         assert_eq!(
-            IcebergSink::infer_arrow_type(&serde_json::json!(3.14)),
+            IcebergSink::infer_arrow_type(&serde_json::json!(2.5)),
             DataType::Float64
         );
         assert_eq!(
@@ -2282,7 +2279,7 @@ mod tests {
         );
     }
 
-    #[cfg(feature = "iceberg")]
+    #[cfg(iceberg_backend)]
     #[test]
     fn test_is_compatible_promotion() {
         // Valid promotions
@@ -2330,13 +2327,17 @@ mod tests {
 
         // Verify status messages are non-empty and descriptive
         assert!(!CatalogType::Rest.status_message().is_empty());
-        assert!(CatalogType::Hive.status_message().contains("hive_metastore"));
-        assert!(CatalogType::Glue.status_message().contains("hive_metastore"));
+        assert!(CatalogType::Hive
+            .status_message()
+            .contains("hive_metastore"));
+        assert!(CatalogType::Glue
+            .status_message()
+            .contains("hive_metastore"));
     }
 
     // ---- Mock integration tests ----
 
-    #[cfg(feature = "iceberg")]
+    #[cfg(iceberg_backend)]
     #[test]
     fn test_mock_context_write_and_evolve() {
         use crate::sink::config::IcebergSchemaEvolution;
@@ -2365,7 +2366,7 @@ mod tests {
         assert!(strict.is_err());
     }
 
-    #[cfg(feature = "iceberg")]
+    #[cfg(iceberg_backend)]
     #[test]
     fn test_mock_context_schema_compatible_records() {
         use crate::sink::config::IcebergSchemaEvolution;

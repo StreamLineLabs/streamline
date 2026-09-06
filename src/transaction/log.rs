@@ -60,10 +60,7 @@ impl TransactionLog {
         let log_dir = data_dir.join("__transaction_log");
         if enabled {
             fs::create_dir_all(&log_dir).map_err(|e| {
-                StreamlineError::Storage(format!(
-                    "Failed to create transaction log directory: {}",
-                    e
-                ))
+                StreamlineError::Storage(format!("Failed to create transaction log directory: {e}"))
             })?;
         }
 
@@ -81,11 +78,11 @@ impl TransactionLog {
         }
 
         let json = serde_json::to_string(entry).map_err(|e| {
-            StreamlineError::Storage(format!("Failed to serialize transaction log entry: {}", e))
+            StreamlineError::Storage(format!("Failed to serialize transaction log entry: {e}"))
         })?;
 
         let log_file = self.log_dir.join("current.log");
-        let line = format!("{}\n", json);
+        let line = format!("{json}\n");
 
         fs::OpenOptions::new()
             .create(true)
@@ -97,7 +94,7 @@ impl TransactionLog {
                 f.sync_data()
             })
             .map_err(|e| {
-                StreamlineError::Storage(format!("Failed to write transaction log: {}", e))
+                StreamlineError::Storage(format!("Failed to write transaction log: {e}"))
             })?;
 
         self.sequence += 1;
@@ -111,18 +108,15 @@ impl TransactionLog {
         }
 
         let snapshot_file = self.log_dir.join("snapshot.json");
-        let json = serde_json::to_string_pretty(transactions).map_err(|e| {
-            StreamlineError::Storage(format!("Failed to serialize snapshot: {}", e))
-        })?;
+        let json = serde_json::to_string_pretty(transactions)
+            .map_err(|e| StreamlineError::Storage(format!("Failed to serialize snapshot: {e}")))?;
 
         // Write to temp file first, then rename for atomicity
         let temp_file = self.log_dir.join("snapshot.json.tmp");
-        fs::write(&temp_file, &json).map_err(|e| {
-            StreamlineError::Storage(format!("Failed to write snapshot: {}", e))
-        })?;
-        fs::rename(&temp_file, &snapshot_file).map_err(|e| {
-            StreamlineError::Storage(format!("Failed to finalize snapshot: {}", e))
-        })?;
+        fs::write(&temp_file, &json)
+            .map_err(|e| StreamlineError::Storage(format!("Failed to write snapshot: {e}")))?;
+        fs::rename(&temp_file, &snapshot_file)
+            .map_err(|e| StreamlineError::Storage(format!("Failed to finalize snapshot: {e}")))?;
 
         info!(
             count = transactions.len(),
@@ -143,18 +137,13 @@ impl TransactionLog {
             return Ok(Vec::new());
         }
 
-        let json = fs::read_to_string(&snapshot_file).map_err(|e| {
-            StreamlineError::Storage(format!("Failed to read snapshot: {}", e))
-        })?;
+        let json = fs::read_to_string(&snapshot_file)
+            .map_err(|e| StreamlineError::Storage(format!("Failed to read snapshot: {e}")))?;
 
-        let metadata: Vec<TransactionMetadata> = serde_json::from_str(&json).map_err(|e| {
-            StreamlineError::Storage(format!("Failed to parse snapshot: {}", e))
-        })?;
+        let metadata: Vec<TransactionMetadata> = serde_json::from_str(&json)
+            .map_err(|e| StreamlineError::Storage(format!("Failed to parse snapshot: {e}")))?;
 
-        info!(
-            count = metadata.len(),
-            "Loaded transactions from snapshot"
-        );
+        info!(count = metadata.len(), "Loaded transactions from snapshot");
         Ok(metadata)
     }
 
@@ -170,7 +159,7 @@ impl TransactionLog {
         }
 
         let content = fs::read_to_string(&log_file).map_err(|e| {
-            StreamlineError::Storage(format!("Failed to read transaction log: {}", e))
+            StreamlineError::Storage(format!("Failed to read transaction log: {e}"))
         })?;
 
         let mut entries = Vec::new();
@@ -186,10 +175,7 @@ impl TransactionLog {
             }
         }
 
-        info!(
-            count = entries.len(),
-            "Replayed transaction log entries"
-        );
+        info!(count = entries.len(), "Replayed transaction log entries");
         Ok(entries)
     }
 
@@ -202,7 +188,7 @@ impl TransactionLog {
         let log_file = self.log_dir.join("current.log");
         if log_file.exists() {
             fs::write(&log_file, "").map_err(|e| {
-                StreamlineError::Storage(format!("Failed to truncate transaction log: {}", e))
+                StreamlineError::Storage(format!("Failed to truncate transaction log: {e}"))
             })?;
         }
 

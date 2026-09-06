@@ -158,7 +158,7 @@ impl PolicyLoader {
     /// Load policies from an environment variable
     pub fn load_from_env(&self, var: &str) -> Result<PolicyDocument> {
         let content = std::env::var(var).map_err(|_| {
-            StreamlineError::Config(format!("Environment variable '{}' not set", var))
+            StreamlineError::Config(format!("Environment variable '{var}' not set"))
         })?;
 
         let content = self.substitute_variables(&content);
@@ -169,7 +169,7 @@ impl PolicyLoader {
     fn parse_content(&self, content: &str) -> Result<PolicyDocument> {
         // Try YAML first (YAML is a superset of JSON)
         serde_yaml::from_str(content)
-            .map_err(|e| StreamlineError::Config(format!("Failed to parse policy document: {}", e)))
+            .map_err(|e| StreamlineError::Config(format!("Failed to parse policy document: {e}")))
     }
 
     /// Resolve a path relative to the base directory
@@ -199,7 +199,7 @@ impl PolicyLoader {
 
         // Replace ${VAR} syntax
         for (key, value) in &self.variables {
-            result = result.replace(&format!("${{{}}}", key), value);
+            result = result.replace(&format!("${{{key}}}"), value);
         }
 
         // Replace $VAR syntax (only if not followed by {)
@@ -212,7 +212,7 @@ impl PolicyLoader {
                 self.variables
                     .get(var)
                     .cloned()
-                    .unwrap_or_else(|| format!("${}", var))
+                    .unwrap_or_else(|| format!("${var}"))
             })
             .to_string();
 

@@ -18,7 +18,7 @@
       { "name": "StreamQL Reference", "url": "https://streamlinelabs.dev/docs/api/streamql" }
     ],
     "keywords": ["streamline", "streaming", "kafka", "streamql", "sql"],
-    "version": "0.3.0"
+    "version": "0.4.0"
   },
   "dependencies": {
     "grafanaDependency": ">=10.0.0",

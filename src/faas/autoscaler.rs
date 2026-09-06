@@ -15,7 +15,6 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Arc;
 use tokio::sync::RwLock;
 
 // ---------------------------------------------------------------------------
@@ -154,12 +153,10 @@ impl AutoScaler {
                     return None;
                 }
             }
-        } else {
-            if let Some(last) = self.last_scale_down.read().await.get(function_name) {
-                let elapsed = now.signed_duration_since(*last).num_seconds();
-                if elapsed < policy.scale_down_cooldown_secs as i64 {
-                    return None;
-                }
+        } else if let Some(last) = self.last_scale_down.read().await.get(function_name) {
+            let elapsed = now.signed_duration_since(*last).num_seconds();
+            if elapsed < policy.scale_down_cooldown_secs as i64 {
+                return None;
             }
         }
 
@@ -219,8 +216,7 @@ impl AutoScaler {
 
         // RPS-based scaling
         if policy.target_rps_per_instance > 0.0 {
-            let needed =
-                (metrics.current_rps / policy.target_rps_per_instance).ceil() as u32;
+            let needed = (metrics.current_rps / policy.target_rps_per_instance).ceil() as u32;
             desired = desired.max(needed);
         }
 
@@ -235,15 +231,14 @@ impl AutoScaler {
             && metrics.active_instances > policy.min_instances
         {
             desired = desired.min(
-                (metrics.current_rps / policy.target_rps_per_instance).ceil().max(1.0) as u32,
+                (metrics.current_rps / policy.target_rps_per_instance)
+                    .ceil()
+                    .max(1.0) as u32,
             );
         }
 
         // Scale-to-zero
-        if metrics.current_rps == 0.0
-            && metrics.queue_depth == 0
-            && policy.min_instances == 0
-        {
+        if metrics.current_rps == 0.0 && metrics.queue_depth == 0 && policy.min_instances == 0 {
             desired = 0;
         }
 
@@ -358,9 +353,9 @@ impl ColdStartPool {
     /// Acquire a pre-warmed instance for a function. Returns None on miss.
     pub async fn acquire(&self, function_name: &str) -> Option<WarmInstance> {
         let mut pool = self.pool.write().await;
-        let idx = pool.iter().position(|i| {
-            i.function_name == function_name && !i.assigned
-        })?;
+        let idx = pool
+            .iter()
+            .position(|i| i.function_name == function_name && !i.assigned)?;
 
         let mut instance = pool[idx].clone();
         instance.assigned = true;
@@ -409,9 +404,7 @@ impl ColdStartPool {
         let now = Utc::now();
         let ttl = chrono::Duration::seconds(self.config.warm_ttl_secs as i64);
         let before = pool.len();
-        pool.retain(|i| {
-            i.assigned || now.signed_duration_since(i.warmed_at) < ttl
-        });
+        pool.retain(|i| i.assigned || now.signed_duration_since(i.warmed_at) < ttl);
         before - pool.len()
     }
 
@@ -504,9 +497,8 @@ impl InvocationMeter {
     /// Record a completed invocation.
     pub async fn record(&self, mut record: InvocationRecord) {
         // Compute cost
-        let gb_sec =
-            (record.memory_bytes as f64 / (1024.0 * 1024.0 * 1024.0))
-                * (record.duration_ms as f64 / 1000.0);
+        let gb_sec = (record.memory_bytes as f64 / (1024.0 * 1024.0 * 1024.0))
+            * (record.duration_ms as f64 / 1000.0);
         record.cost_units = gb_sec * self.cost_per_gb_sec + self.cost_per_invocation;
 
         // Update aggregates
@@ -571,11 +563,7 @@ impl VersionRouter {
     }
 
     /// Register a new version for a function.
-    pub async fn add_version(
-        &self,
-        function_name: &str,
-        version: FunctionVersion,
-    ) -> Result<()> {
+    pub async fn add_version(&self, function_name: &str, version: FunctionVersion) -> Result<()> {
         let mut map = self.versions.write().await;
         let versions = map.entry(function_name.to_string()).or_default();
 
@@ -608,11 +596,11 @@ impl VersionRouter {
             return Some(versions[0].version.clone());
         }
 
-        let mut rng_val = (std::time::SystemTime::now()
+        let mut rng_val = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()
             .subsec_nanos()
-            % total_weight) as u32;
+            % total_weight;
 
         for v in versions {
             if rng_val < v.traffic_weight {
@@ -638,14 +626,13 @@ impl VersionRouter {
     pub async fn promote(&self, function_name: &str, version: &str) -> Result<()> {
         let mut map = self.versions.write().await;
         let versions = map.get_mut(function_name).ok_or_else(|| {
-            StreamlineError::Config(format!("Function {} not found", function_name))
+            StreamlineError::Config(format!("Function {function_name} not found"))
         })?;
 
         let found = versions.iter().any(|v| v.version == version);
         if !found {
             return Err(StreamlineError::Config(format!(
-                "Version {} not found",
-                version
+                "Version {version} not found"
             )));
         }
 
@@ -679,7 +666,7 @@ fn uuid_v4() -> String {
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_nanos();
-    format!("{:032x}", t)
+    format!("{t:032x}")
 }
 
 // ---------------------------------------------------------------------------
@@ -694,10 +681,13 @@ mod tests {
     async fn test_autoscaler_high_load() {
         let scaler = AutoScaler::new();
         scaler
-            .set_policy("fn1", ScalingPolicy {
-                target_rps_per_instance: 50.0,
-                ..Default::default()
-            })
+            .set_policy(
+                "fn1",
+                ScalingPolicy {
+                    target_rps_per_instance: 50.0,
+                    ..Default::default()
+                },
+            )
             .await;
 
         let metrics = FunctionMetricsSnapshot {
@@ -716,10 +706,13 @@ mod tests {
     async fn test_autoscaler_scale_to_zero() {
         let scaler = AutoScaler::new();
         scaler
-            .set_policy("fn2", ScalingPolicy {
-                min_instances: 0,
-                ..Default::default()
-            })
+            .set_policy(
+                "fn2",
+                ScalingPolicy {
+                    min_instances: 0,
+                    ..Default::default()
+                },
+            )
             .await;
 
         let metrics = FunctionMetricsSnapshot {
@@ -778,24 +771,30 @@ mod tests {
         let router = VersionRouter::new();
 
         router
-            .add_version("fn1", FunctionVersion {
-                version: "v1".to_string(),
-                traffic_weight: 90,
-                deployed_at: Utc::now(),
-                stable: true,
-                error_rate: 0.0,
-            })
+            .add_version(
+                "fn1",
+                FunctionVersion {
+                    version: "v1".to_string(),
+                    traffic_weight: 90,
+                    deployed_at: Utc::now(),
+                    stable: true,
+                    error_rate: 0.0,
+                },
+            )
             .await
             .unwrap();
 
         router
-            .add_version("fn1", FunctionVersion {
-                version: "v2".to_string(),
-                traffic_weight: 10,
-                deployed_at: Utc::now(),
-                stable: false,
-                error_rate: 0.0,
-            })
+            .add_version(
+                "fn1",
+                FunctionVersion {
+                    version: "v2".to_string(),
+                    traffic_weight: 10,
+                    deployed_at: Utc::now(),
+                    stable: false,
+                    error_rate: 0.0,
+                },
+            )
             .await
             .unwrap();
 
@@ -818,24 +817,30 @@ mod tests {
     async fn test_duplicate_version() {
         let router = VersionRouter::new();
         router
-            .add_version("fn1", FunctionVersion {
-                version: "v1".to_string(),
-                traffic_weight: 100,
-                deployed_at: Utc::now(),
-                stable: true,
-                error_rate: 0.0,
-            })
+            .add_version(
+                "fn1",
+                FunctionVersion {
+                    version: "v1".to_string(),
+                    traffic_weight: 100,
+                    deployed_at: Utc::now(),
+                    stable: true,
+                    error_rate: 0.0,
+                },
+            )
             .await
             .unwrap();
 
         let result = router
-            .add_version("fn1", FunctionVersion {
-                version: "v1".to_string(),
-                traffic_weight: 0,
-                deployed_at: Utc::now(),
-                stable: false,
-                error_rate: 0.0,
-            })
+            .add_version(
+                "fn1",
+                FunctionVersion {
+                    version: "v1".to_string(),
+                    traffic_weight: 0,
+                    deployed_at: Utc::now(),
+                    stable: false,
+                    error_rate: 0.0,
+                },
+            )
             .await;
         assert!(result.is_err());
     }

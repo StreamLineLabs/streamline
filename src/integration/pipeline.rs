@@ -616,8 +616,7 @@ impl PipelineManager {
 
         if self.pipelines.contains_key(&name) {
             return Err(StreamlineError::Config(format!(
-                "Pipeline '{}' already exists",
-                name
+                "Pipeline '{name}' already exists"
             )));
         }
 
@@ -646,7 +645,7 @@ impl PipelineManager {
     pub async fn start_pipeline(&self, name: &str) -> Result<()> {
         let pipeline = self
             .get_pipeline(name)
-            .ok_or_else(|| StreamlineError::Config(format!("Pipeline '{}' not found", name)))?;
+            .ok_or_else(|| StreamlineError::Config(format!("Pipeline '{name}' not found")))?;
         pipeline.start().await
     }
 
@@ -654,7 +653,7 @@ impl PipelineManager {
     pub async fn stop_pipeline(&self, name: &str) -> Result<()> {
         let pipeline = self
             .get_pipeline(name)
-            .ok_or_else(|| StreamlineError::Config(format!("Pipeline '{}' not found", name)))?;
+            .ok_or_else(|| StreamlineError::Config(format!("Pipeline '{name}' not found")))?;
         pipeline.stop().await
     }
 

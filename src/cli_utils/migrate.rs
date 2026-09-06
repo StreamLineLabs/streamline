@@ -186,7 +186,7 @@ fn print_banner() {
 fn print_step(num: u32, message: &str) {
     println!(
         "  {} {}",
-        format!("[{}/4]", num).cyan().bold(),
+        format!("[{num}/4]").cyan().bold(),
         message.bold()
     );
 }
@@ -481,8 +481,8 @@ pub fn generate_migration_report(results: &[TopicMigrationResult]) -> String {
     report.push_str("## Summary\n\n");
     let succeeded = results.iter().filter(|r| r.success).count();
     let failed = results.iter().filter(|r| !r.success).count();
-    report.push_str(&format!("- Topics migrated: {}\n", succeeded));
-    report.push_str(&format!("- Topics failed: {}\n\n", failed));
+    report.push_str(&format!("- Topics migrated: {succeeded}\n"));
+    report.push_str(&format!("- Topics failed: {failed}\n\n"));
 
     report.push_str("## Details\n\n");
     report.push_str("| Topic | Status | Message |\n");

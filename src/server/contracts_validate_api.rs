@@ -10,7 +10,12 @@
 //!     returns 200 on success or 400 with a [`ContractRejection`] payload.
 //!   * `POST /api/v1/contracts/apply` — register a contract for a topic.
 
-use axum::{http::StatusCode, response::{IntoResponse, Response}, routing::post, Json, Router};
+use axum::{
+    http::StatusCode,
+    response::{IntoResponse, Response},
+    routing::post,
+    Json, Router,
+};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::{Mutex, OnceLock};
@@ -71,7 +76,7 @@ fn parse_expected(s: &str) -> Result<ExpectedType, String> {
         "bool" | "boolean" => Ok(ExpectedType::Bool),
         "object" => Ok(ExpectedType::Object),
         "array" => Ok(ExpectedType::Array),
-        other => Err(format!("unknown expected type: {}", other)),
+        other => Err(format!("unknown expected type: {other}")),
     }
 }
 
@@ -139,16 +144,10 @@ fn rejection_response(topic: &str, r: ContractRejection) -> Response {
 // ---------------------------------------------------------------------------
 
 /// Global in-memory contract registry.
-fn contract_registry() -> &'static Mutex<HashMap<String, StoredContract>> {
-    static REGISTRY: OnceLock<Mutex<HashMap<String, StoredContract>>> = OnceLock::new();
+/// Applied-contract version counter, keyed by topic.
+fn contract_registry() -> &'static Mutex<HashMap<String, u32>> {
+    static REGISTRY: OnceLock<Mutex<HashMap<String, u32>>> = OnceLock::new();
     REGISTRY.get_or_init(|| Mutex::new(HashMap::new()))
-}
-
-#[derive(Debug, Clone)]
-struct StoredContract {
-    topic: String,
-    version: u32,
-    contract: Contract,
 }
 
 #[derive(Debug, Deserialize)]
@@ -177,47 +176,27 @@ async fn apply_handler(Json(req): Json<ApplyContractRequest>) -> Response {
             .into_response();
     }
 
-    let mut assertions = Vec::with_capacity(req.assertions.len());
+    // Validate every assertion up-front; `apply` only records the resulting
+    // version, so the parsed assertions themselves are not retained.
     for a in &req.assertions {
-        match parse_expected(&a.expected) {
-            Ok(ty) => assertions.push(FieldAssertion {
-                path: a.path.clone(),
-                expected: ty,
-            }),
-            Err(msg) => {
-                return (
-                    StatusCode::BAD_REQUEST,
-                    Json(serde_json::json!({
-                        "status": "invalid_contract",
-                        "message": msg
-                    })),
-                )
-                    .into_response();
-            }
+        if let Err(msg) = parse_expected(&a.expected) {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({
+                    "status": "invalid_contract",
+                    "message": msg
+                })),
+            )
+                .into_response();
         }
     }
 
-    let mut registry = contract_registry().lock().unwrap();
-    let version = registry
-        .get(&req.topic)
-        .map(|c| c.version + 1)
-        .unwrap_or(1);
+    let mut registry = contract_registry()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
+    let version = registry.get(&req.topic).map_or(1, |v| v + 1);
 
-    let contract = Contract {
-        topic: req.topic.clone(),
-        version,
-        schema_id: None,
-        assertions,
-    };
-
-    registry.insert(
-        req.topic.clone(),
-        StoredContract {
-            topic: req.topic.clone(),
-            version,
-            contract,
-        },
-    );
+    registry.insert(req.topic.clone(), version);
 
     (
         StatusCode::CREATED,

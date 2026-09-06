@@ -3,16 +3,16 @@
 //! This module contains handlers for the new consumer group protocol
 //! (KIP-848) including consumer group heartbeat and describe operations.
 
-
-use crate::consumer::kip848::HeartbeatRequest as Kip848HeartbeatRequest;
+use super::KafkaHandler;
 use crate::consumer::kip848::heartbeat::TopicAssignment as Kip848TopicAssignment;
+use crate::consumer::kip848::HeartbeatRequest as Kip848HeartbeatRequest;
 use crate::error::Result;
 use crate::protocol::handlers::error_codes::*;
 use kafka_protocol::messages::{
-    ConsumerGroupDescribeRequest, ConsumerGroupDescribeResponse, ConsumerGroupHeartbeatRequest, ConsumerGroupHeartbeatResponse,
+    ConsumerGroupDescribeRequest, ConsumerGroupDescribeResponse, ConsumerGroupHeartbeatRequest,
+    ConsumerGroupHeartbeatResponse,
 };
 use kafka_protocol::protocol::StrBytes;
-use super::KafkaHandler;
 use tracing::{debug, info, warn};
 
 impl KafkaHandler {
@@ -226,8 +226,7 @@ impl KafkaHandler {
                         .with_group_id(group_id.clone())
                         .with_group_state(StrBytes::from_static_str(""))
                         .with_error_message(Some(StrBytes::from_string(format!(
-                            "Group {} not found",
-                            group_id_str
+                            "Group {group_id_str} not found"
                         ))))
                 }
                 Err(e) => {
@@ -241,7 +240,7 @@ impl KafkaHandler {
                         .with_error_code(UNKNOWN_SERVER_ERROR)
                         .with_group_id(group_id.clone())
                         .with_group_state(StrBytes::from_static_str(""))
-                        .with_error_message(Some(StrBytes::from_string(format!("Error: {}", e))))
+                        .with_error_message(Some(StrBytes::from_string(format!("Error: {e}"))))
                 }
             };
 
@@ -264,5 +263,4 @@ impl KafkaHandler {
         // In a full implementation, we would need to expose member details
         vec![]
     }
-
 }

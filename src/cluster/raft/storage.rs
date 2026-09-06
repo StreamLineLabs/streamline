@@ -5,6 +5,7 @@
 
 use super::state_machine::ClusterMetadata;
 use super::types::{ClusterCommand, ClusterResponse, StreamlineTypeConfig};
+use crate::bincode_compat;
 use crate::cluster::node::NodeId;
 use openraft::storage::{LogState, RaftSnapshotBuilder, Snapshot};
 use openraft::{
@@ -156,7 +157,7 @@ impl StreamlineStore {
 
         if state_path.exists() {
             let bytes = std::fs::read(&state_path)?;
-            let state: PersistedState = bincode::deserialize(&bytes)
+            let state: PersistedState = bincode_compat::deserialize(&bytes)
                 .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
 
             if let Ok(mut vote) = self.vote.try_write() {
@@ -198,7 +199,7 @@ impl StreamlineStore {
 
         if log_path.exists() {
             let bytes = std::fs::read(&log_path)?;
-            let log_data: LogPersistence = bincode::deserialize(&bytes)
+            let log_data: LogPersistence = bincode_compat::deserialize(&bytes)
                 .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
 
             if let Ok(mut log) = self.log.try_write() {
@@ -226,7 +227,7 @@ impl StreamlineStore {
 
         if snapshot_path.exists() {
             let bytes = std::fs::read(&snapshot_path)?;
-            let snap: StoredSnapshot = bincode::deserialize(&bytes)
+            let snap: StoredSnapshot = bincode_compat::deserialize(&bytes)
                 .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
 
             if let Ok(mut snapshot) = self.snapshot.try_write() {
@@ -264,7 +265,7 @@ impl StreamlineStore {
             state_machine: &sm,
         };
 
-        let bytes = bincode::serialize(&state)
+        let bytes = bincode_compat::serialize(&state)
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
         tokio::fs::write(self.state_path(), bytes).await?;
         Ok(())
@@ -285,7 +286,7 @@ impl StreamlineStore {
             last_purged_log_id: &purged,
         };
 
-        let bytes = bincode::serialize(&persistence)
+        let bytes = bincode_compat::serialize(&persistence)
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
         tokio::fs::write(self.log_path(), bytes).await?;
         Ok(())
@@ -294,7 +295,7 @@ impl StreamlineStore {
     async fn save_snapshot(&self) -> Result<(), std::io::Error> {
         let snapshot = self.snapshot.read().await;
         if let Some(snap) = snapshot.as_ref() {
-            let bytes = bincode::serialize(snap)
+            let bytes = bincode_compat::serialize(snap)
                 .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
             tokio::fs::write(self.snapshot_path(), bytes).await?;
         }
@@ -411,7 +412,9 @@ pub struct FallbackSnapshotBuilder {
 /// This avoids a panic when `set_self_ref()` was not called.
 pub enum SnapshotBuilderEnum {
     Normal(SnapshotBuilderWrapper),
-    Fallback(FallbackSnapshotBuilder),
+    // Boxed: `FallbackSnapshotBuilder` carries a full cloned state-machine
+    // state, which is ~32x the size of the `Normal` variant.
+    Fallback(Box<FallbackSnapshotBuilder>),
 }
 
 impl RaftSnapshotBuilder<StreamlineTypeConfig> for SnapshotBuilderWrapper {
@@ -420,7 +423,7 @@ impl RaftSnapshotBuilder<StreamlineTypeConfig> for SnapshotBuilderWrapper {
     ) -> Result<Snapshot<StreamlineTypeConfig>, StorageError<NodeId>> {
         let sm = self.store.state_machine.read().await;
 
-        let data = bincode::serialize(&sm.metadata).map_err(|e| {
+        let data = bincode_compat::serialize(&sm.metadata).map_err(|e| {
             error!(error = %e, "Failed to serialize metadata");
             io_err(ErrorSubject::StateMachine, ErrorVerb::Read, e)
         })?;
@@ -469,7 +472,7 @@ impl RaftSnapshotBuilder<StreamlineTypeConfig> for FallbackSnapshotBuilder {
     async fn build_snapshot(
         &mut self,
     ) -> Result<Snapshot<StreamlineTypeConfig>, StorageError<NodeId>> {
-        let data = bincode::serialize(&self.state_machine.metadata).map_err(|e| {
+        let data = bincode_compat::serialize(&self.state_machine.metadata).map_err(|e| {
             error!(error = %e, "Fallback: Failed to serialize metadata");
             io_err(ErrorSubject::StateMachine, ErrorVerb::Read, e)
         })?;
@@ -689,9 +692,9 @@ impl openraft::RaftStorage<StreamlineTypeConfig> for StreamlineStore {
                 );
                 // Build a fallback snapshot inline from the current state machine.
                 // This is less efficient but avoids a panic in production.
-                SnapshotBuilderEnum::Fallback(FallbackSnapshotBuilder {
+                SnapshotBuilderEnum::Fallback(Box::new(FallbackSnapshotBuilder {
                     state_machine: self.state_machine.read().await.clone(),
-                })
+                }))
             }
         }
     }
@@ -710,7 +713,7 @@ impl openraft::RaftStorage<StreamlineTypeConfig> for StreamlineStore {
         info!(snapshot_id = %meta.snapshot_id, "Installing snapshot");
 
         let data = snapshot.into_inner();
-        let metadata: ClusterMetadata = bincode::deserialize(&data).map_err(|e| {
+        let metadata: ClusterMetadata = bincode_compat::deserialize(&data).map_err(|e| {
             error!(error = %e, "Failed to deserialize snapshot");
             io_err(ErrorSubject::StateMachine, ErrorVerb::Read, e)
         })?;
@@ -935,7 +938,7 @@ impl openraft::RaftStorage<StreamlineTypeConfig> for Arc<StreamlineStore> {
         info!(snapshot_id = %meta.snapshot_id, "Installing snapshot");
 
         let data = snapshot.into_inner();
-        let metadata: ClusterMetadata = bincode::deserialize(&data).map_err(|e| {
+        let metadata: ClusterMetadata = bincode_compat::deserialize(&data).map_err(|e| {
             error!(error = %e, "Failed to deserialize snapshot");
             io_err(ErrorSubject::StateMachine, ErrorVerb::Read, e)
         })?;

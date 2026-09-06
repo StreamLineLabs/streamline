@@ -61,7 +61,11 @@ impl BranchStore {
     }
 
     pub fn list(&self) -> Vec<BranchMeta> {
-        lock_or_recover(&self.inner).metas.values().cloned().collect()
+        lock_or_recover(&self.inner)
+            .metas
+            .values()
+            .cloned()
+            .collect()
     }
 
     pub fn discard(&self, id: &BranchId) -> Result<(), BranchStoreError> {
@@ -109,7 +113,7 @@ impl BranchStore {
     }
 
     /// Transition a branch to [`BranchState::Merged`]. Writes are preserved
-    /// (unlike [`discard`]) so callers can still read them for auditing.
+    /// (unlike [`Self::discard`]) so callers can still read them for auditing.
     pub fn mark_merged(&self, id: &BranchId) -> Result<(), BranchStoreError> {
         let mut s = lock_or_recover(&self.inner);
         match s.metas.get_mut(id) {

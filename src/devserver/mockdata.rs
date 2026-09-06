@@ -93,11 +93,11 @@ fn evaluate_variable(var: &str, index: usize, rng: &mut impl Rng) -> (String, bo
     }
 
     if let Some(prefix_str) = var.strip_prefix("seq:") {
-        return (format!("{}{}", prefix_str, index), true);
+        return (format!("{prefix_str}{index}"), true);
     }
 
     // Unknown variable - return as-is
-    (format!("{{{{{}}}}}", var), false)
+    (format!("{{{{{var}}}}}"), false)
 }
 
 /// Generate a batch of messages from a template

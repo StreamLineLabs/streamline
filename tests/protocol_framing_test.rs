@@ -66,8 +66,7 @@ fn verify_framing(data: &[u8]) -> Result<(), String> {
 
     if size != actual_body_len {
         return Err(format!(
-            "Size mismatch: prefix says {} but actual body is {} bytes",
-            size, actual_body_len
+            "Size mismatch: prefix says {size} but actual body is {actual_body_len} bytes"
         ));
     }
 
@@ -208,11 +207,7 @@ fn test_partial_body_read_detection() {
 
     // Verify framing detects the incomplete body
     let result = verify_framing(&partial_data);
-    assert!(
-        result.is_err(),
-        "Should detect incomplete body: {:?}",
-        result
-    );
+    assert!(result.is_err(), "Should detect incomplete body: {result:?}");
 }
 
 #[test]
@@ -265,8 +260,7 @@ fn test_multiple_sequential_requests_framing() {
         // Need at least 4 bytes for size
         assert!(
             pipelined.len() - offset >= 4,
-            "Not enough bytes for size prefix at offset {}",
-            offset
+            "Not enough bytes for size prefix at offset {offset}"
         );
 
         let size = u32::from_be_bytes([
@@ -288,9 +282,7 @@ fn test_multiple_sequential_requests_framing() {
         let message = &pipelined[offset..offset + 4 + size];
         assert!(
             verify_framing(message).is_ok(),
-            "Message {} at offset {} has invalid framing",
-            parsed_count,
-            offset
+            "Message {parsed_count} at offset {offset} has invalid framing"
         );
 
         offset += 4 + size;
@@ -353,8 +345,7 @@ fn test_framing_with_different_api_versions() {
         let request = build_framed_request(18, version, 1);
         assert!(
             verify_framing(&request).is_ok(),
-            "Framing should be valid for ApiVersions v{}",
-            version
+            "Framing should be valid for ApiVersions v{version}"
         );
 
         // All should have valid size prefix
@@ -362,8 +353,7 @@ fn test_framing_with_different_api_versions() {
         assert_eq!(
             size,
             request.len() - 4,
-            "Size should match body for v{}",
-            version
+            "Size should match body for v{version}"
         );
     }
 }

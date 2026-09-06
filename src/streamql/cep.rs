@@ -240,7 +240,7 @@ impl PatternElementBuilder {
     ) -> Self {
         let field_str = field.into();
         self.conditions.push(EventCondition {
-            expression: format!("{} {:?} {:?}", field_str, operator, value),
+            expression: format!("{field_str} {operator:?} {value:?}"),
             field: field_str,
             operator,
             value,
@@ -676,8 +676,7 @@ impl CepEngine {
 
         if patterns.remove(name).is_none() {
             return Err(StreamlineError::Config(format!(
-                "Pattern '{}' not found",
-                name
+                "Pattern '{name}' not found"
             )));
         }
         matchers.remove(name);
@@ -866,7 +865,10 @@ mod tests {
             .with_timestamp(3000)
             .with_field("event_type", "purchase");
         let matches = matcher.process_event(&purchase);
-        assert!(matches.is_empty(), "Pattern should not match because logout (negated) occurred");
+        assert!(
+            matches.is_empty(),
+            "Pattern should not match because logout (negated) occurred"
+        );
     }
 
     #[test]
@@ -875,26 +877,44 @@ mod tests {
         let pattern = Pattern::builder("skip_bad")
             .with_contiguity(Contiguity::Relaxed)
             .begin("start")
-            .where_field("event_type", ConditionOperator::Eq, ConditionValue::String("A".into()))
+            .where_field(
+                "event_type",
+                ConditionOperator::Eq,
+                ConditionValue::String("A".into()),
+            )
             .not_followed_by("bad")
-            .where_field("event_type", ConditionOperator::Eq, ConditionValue::String("B".into()))
+            .where_field(
+                "event_type",
+                ConditionOperator::Eq,
+                ConditionValue::String("B".into()),
+            )
             .followed_by("end")
-            .where_field("event_type", ConditionOperator::Eq, ConditionValue::String("C".into()))
+            .where_field(
+                "event_type",
+                ConditionOperator::Eq,
+                ConditionValue::String("C".into()),
+            )
             .within(10_000)
             .build();
 
         let mut matcher = PatternMatcher::new(pattern);
 
         // A event
-        let a = CepEvent::new("A").with_timestamp(1000).with_field("event_type", "A");
+        let a = CepEvent::new("A")
+            .with_timestamp(1000)
+            .with_field("event_type", "A");
         assert!(matcher.process_event(&a).is_empty());
 
         // Some other event (not B)
-        let d = CepEvent::new("D").with_timestamp(2000).with_field("event_type", "D");
+        let d = CepEvent::new("D")
+            .with_timestamp(2000)
+            .with_field("event_type", "D");
         assert!(matcher.process_event(&d).is_empty());
 
         // C event — should match since B never appeared
-        let c = CepEvent::new("C").with_timestamp(3000).with_field("event_type", "C");
+        let c = CepEvent::new("C")
+            .with_timestamp(3000)
+            .with_field("event_type", "C");
         let matches = matcher.process_event(&c);
         assert_eq!(matches.len(), 1, "Should match: A ... C without B");
     }

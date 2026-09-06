@@ -238,15 +238,12 @@ impl DeterministicReplayEngine {
             + serde_json::to_string(&aggregation_state)
                 .unwrap_or_default()
                 .len() as u64
-            + serde_json::to_string(&variables)
-                .unwrap_or_default()
-                .len() as u64;
+            + serde_json::to_string(&variables).unwrap_or_default().len() as u64;
 
         let max_bytes = self.config.max_state_size_mb * 1024 * 1024;
         if size_bytes > max_bytes {
             return Err(format!(
-                "State size ({} bytes) exceeds limit ({} bytes)",
-                size_bytes, max_bytes
+                "State size ({size_bytes} bytes) exceeds limit ({max_bytes} bytes)"
             ));
         }
 
@@ -294,7 +291,7 @@ impl DeterministicReplayEngine {
             info!(id = %id, "State capture deleted");
             Ok(())
         } else {
-            Err(format!("Capture '{}' not found", id))
+            Err(format!("Capture '{id}' not found"))
         }
     }
 
@@ -304,7 +301,7 @@ impl DeterministicReplayEngine {
         {
             let captures = self.captures.read().await;
             if !captures.contains_key(capture_id) {
-                return Err(format!("Capture '{}' not found", capture_id));
+                return Err(format!("Capture '{capture_id}' not found"));
             }
         }
 
@@ -332,7 +329,7 @@ impl DeterministicReplayEngine {
         let mut sessions = self.sessions.write().await;
         let session = sessions
             .get_mut(session_id)
-            .ok_or_else(|| format!("Session '{}' not found", session_id))?;
+            .ok_or_else(|| format!("Session '{session_id}' not found"))?;
 
         if session.status == DebugStatus::Completed {
             return Err("Session already completed".to_string());
@@ -372,7 +369,7 @@ impl DeterministicReplayEngine {
         let mut sessions = self.sessions.write().await;
         let session = sessions
             .get_mut(session_id)
-            .ok_or_else(|| format!("Session '{}' not found", session_id))?;
+            .ok_or_else(|| format!("Session '{session_id}' not found"))?;
 
         if session.status == DebugStatus::Completed {
             return Err("Session already completed".to_string());
@@ -405,7 +402,7 @@ impl DeterministicReplayEngine {
         let mut sessions = self.sessions.write().await;
         let session = sessions
             .get_mut(session_id)
-            .ok_or_else(|| format!("Session '{}' not found", session_id))?;
+            .ok_or_else(|| format!("Session '{session_id}' not found"))?;
 
         if session.status == DebugStatus::Completed {
             return Err("Session already completed".to_string());
@@ -452,7 +449,7 @@ impl DeterministicReplayEngine {
         let mut sessions = self.sessions.write().await;
         let session = sessions
             .get_mut(session_id)
-            .ok_or_else(|| format!("Session '{}' not found", session_id))?;
+            .ok_or_else(|| format!("Session '{session_id}' not found"))?;
 
         let bp_id = Uuid::new_v4().to_string();
         let bp = Breakpoint {
@@ -468,21 +465,17 @@ impl DeterministicReplayEngine {
     }
 
     /// Remove a breakpoint from a debug session.
-    pub async fn remove_breakpoint(
-        &self,
-        session_id: &str,
-        bp_id: &str,
-    ) -> Result<(), String> {
+    pub async fn remove_breakpoint(&self, session_id: &str, bp_id: &str) -> Result<(), String> {
         let mut sessions = self.sessions.write().await;
         let session = sessions
             .get_mut(session_id)
-            .ok_or_else(|| format!("Session '{}' not found", session_id))?;
+            .ok_or_else(|| format!("Session '{session_id}' not found"))?;
 
         let before = session.breakpoints.len();
         session.breakpoints.retain(|bp| bp.id != bp_id);
 
         if session.breakpoints.len() == before {
-            return Err(format!("Breakpoint '{}' not found", bp_id));
+            return Err(format!("Breakpoint '{bp_id}' not found"));
         }
         Ok(())
     }
@@ -492,7 +485,7 @@ impl DeterministicReplayEngine {
         let sessions = self.sessions.read().await;
         let session = sessions
             .get(session_id)
-            .ok_or_else(|| format!("Session '{}' not found", session_id))?;
+            .ok_or_else(|| format!("Session '{session_id}' not found"))?;
 
         let captures = self.captures.read().await;
         captures
@@ -573,7 +566,14 @@ mod tests {
     async fn test_capture_and_get() {
         let engine = DeterministicReplayEngine::new(default_config());
         let id = engine
-            .capture_state("snap1", sample_offsets(), HashMap::new(), HashMap::new(), HashMap::new(), 1000)
+            .capture_state(
+                "snap1",
+                sample_offsets(),
+                HashMap::new(),
+                HashMap::new(),
+                HashMap::new(),
+                1000,
+            )
             .await
             .unwrap();
 
@@ -590,15 +590,36 @@ mod tests {
         };
         let engine = DeterministicReplayEngine::new(cfg);
         engine
-            .capture_state("a", HashMap::new(), HashMap::new(), HashMap::new(), HashMap::new(), 0)
+            .capture_state(
+                "a",
+                HashMap::new(),
+                HashMap::new(),
+                HashMap::new(),
+                HashMap::new(),
+                0,
+            )
             .await
             .unwrap();
         engine
-            .capture_state("b", HashMap::new(), HashMap::new(), HashMap::new(), HashMap::new(), 0)
+            .capture_state(
+                "b",
+                HashMap::new(),
+                HashMap::new(),
+                HashMap::new(),
+                HashMap::new(),
+                0,
+            )
             .await
             .unwrap();
         let err = engine
-            .capture_state("c", HashMap::new(), HashMap::new(), HashMap::new(), HashMap::new(), 0)
+            .capture_state(
+                "c",
+                HashMap::new(),
+                HashMap::new(),
+                HashMap::new(),
+                HashMap::new(),
+                0,
+            )
             .await
             .unwrap_err();
         assert!(err.contains("Maximum capture limit"));
@@ -608,11 +629,25 @@ mod tests {
     async fn test_list_captures() {
         let engine = DeterministicReplayEngine::new(default_config());
         engine
-            .capture_state("x", HashMap::new(), HashMap::new(), HashMap::new(), HashMap::new(), 0)
+            .capture_state(
+                "x",
+                HashMap::new(),
+                HashMap::new(),
+                HashMap::new(),
+                HashMap::new(),
+                0,
+            )
             .await
             .unwrap();
         engine
-            .capture_state("y", HashMap::new(), HashMap::new(), HashMap::new(), HashMap::new(), 0)
+            .capture_state(
+                "y",
+                HashMap::new(),
+                HashMap::new(),
+                HashMap::new(),
+                HashMap::new(),
+                0,
+            )
             .await
             .unwrap();
         assert_eq!(engine.list_captures().await.len(), 2);
@@ -622,7 +657,14 @@ mod tests {
     async fn test_delete_capture() {
         let engine = DeterministicReplayEngine::new(default_config());
         let id = engine
-            .capture_state("del", HashMap::new(), HashMap::new(), HashMap::new(), HashMap::new(), 0)
+            .capture_state(
+                "del",
+                HashMap::new(),
+                HashMap::new(),
+                HashMap::new(),
+                HashMap::new(),
+                0,
+            )
             .await
             .unwrap();
         engine.delete_capture(&id).await.unwrap();
@@ -640,7 +682,14 @@ mod tests {
     async fn test_create_debug_session() {
         let engine = DeterministicReplayEngine::new(default_config());
         let cap_id = engine
-            .capture_state("s", HashMap::new(), HashMap::new(), HashMap::new(), HashMap::new(), 0)
+            .capture_state(
+                "s",
+                HashMap::new(),
+                HashMap::new(),
+                HashMap::new(),
+                HashMap::new(),
+                0,
+            )
             .await
             .unwrap();
         let sess_id = engine.create_debug_session(&cap_id).await.unwrap();
@@ -660,7 +709,14 @@ mod tests {
     async fn test_step() {
         let engine = DeterministicReplayEngine::new(default_config());
         let cap_id = engine
-            .capture_state("st", HashMap::new(), HashMap::new(), HashMap::new(), HashMap::new(), 0)
+            .capture_state(
+                "st",
+                HashMap::new(),
+                HashMap::new(),
+                HashMap::new(),
+                HashMap::new(),
+                0,
+            )
             .await
             .unwrap();
         let sid = engine.create_debug_session(&cap_id).await.unwrap();
@@ -675,7 +731,14 @@ mod tests {
     async fn test_step_over() {
         let engine = DeterministicReplayEngine::new(default_config());
         let cap_id = engine
-            .capture_state("so", HashMap::new(), HashMap::new(), HashMap::new(), HashMap::new(), 0)
+            .capture_state(
+                "so",
+                HashMap::new(),
+                HashMap::new(),
+                HashMap::new(),
+                HashMap::new(),
+                0,
+            )
             .await
             .unwrap();
         let sid = engine.create_debug_session(&cap_id).await.unwrap();
@@ -687,7 +750,14 @@ mod tests {
     async fn test_continue_to_completion() {
         let engine = DeterministicReplayEngine::new(default_config());
         let cap_id = engine
-            .capture_state("ct", HashMap::new(), HashMap::new(), HashMap::new(), HashMap::new(), 0)
+            .capture_state(
+                "ct",
+                HashMap::new(),
+                HashMap::new(),
+                HashMap::new(),
+                HashMap::new(),
+                0,
+            )
             .await
             .unwrap();
         let sid = engine.create_debug_session(&cap_id).await.unwrap();
@@ -702,7 +772,14 @@ mod tests {
     async fn test_add_and_remove_breakpoint() {
         let engine = DeterministicReplayEngine::new(default_config());
         let cap_id = engine
-            .capture_state("bp", HashMap::new(), HashMap::new(), HashMap::new(), HashMap::new(), 0)
+            .capture_state(
+                "bp",
+                HashMap::new(),
+                HashMap::new(),
+                HashMap::new(),
+                HashMap::new(),
+                0,
+            )
             .await
             .unwrap();
         let sid = engine.create_debug_session(&cap_id).await.unwrap();
@@ -724,7 +801,14 @@ mod tests {
     async fn test_remove_missing_breakpoint() {
         let engine = DeterministicReplayEngine::new(default_config());
         let cap_id = engine
-            .capture_state("rb", HashMap::new(), HashMap::new(), HashMap::new(), HashMap::new(), 0)
+            .capture_state(
+                "rb",
+                HashMap::new(),
+                HashMap::new(),
+                HashMap::new(),
+                HashMap::new(),
+                0,
+            )
             .await
             .unwrap();
         let sid = engine.create_debug_session(&cap_id).await.unwrap();
@@ -736,7 +820,14 @@ mod tests {
     async fn test_breakpoint_pauses_session() {
         let engine = DeterministicReplayEngine::new(default_config());
         let cap_id = engine
-            .capture_state("bph", HashMap::new(), HashMap::new(), HashMap::new(), HashMap::new(), 0)
+            .capture_state(
+                "bph",
+                HashMap::new(),
+                HashMap::new(),
+                HashMap::new(),
+                HashMap::new(),
+                0,
+            )
             .await
             .unwrap();
         let sid = engine.create_debug_session(&cap_id).await.unwrap();
@@ -756,7 +847,14 @@ mod tests {
     async fn test_inspect_state() {
         let engine = DeterministicReplayEngine::new(default_config());
         let cap_id = engine
-            .capture_state("insp", sample_offsets(), HashMap::new(), HashMap::new(), HashMap::new(), 500)
+            .capture_state(
+                "insp",
+                sample_offsets(),
+                HashMap::new(),
+                HashMap::new(),
+                HashMap::new(),
+                500,
+            )
             .await
             .unwrap();
         let sid = engine.create_debug_session(&cap_id).await.unwrap();
@@ -776,7 +874,14 @@ mod tests {
     async fn test_stats() {
         let engine = DeterministicReplayEngine::new(default_config());
         let cap_id = engine
-            .capture_state("stats", HashMap::new(), HashMap::new(), HashMap::new(), HashMap::new(), 0)
+            .capture_state(
+                "stats",
+                HashMap::new(),
+                HashMap::new(),
+                HashMap::new(),
+                HashMap::new(),
+                0,
+            )
             .await
             .unwrap();
         let sid = engine.create_debug_session(&cap_id).await.unwrap();
@@ -792,7 +897,14 @@ mod tests {
     async fn test_step_completed_session_errors() {
         let engine = DeterministicReplayEngine::new(default_config());
         let cap_id = engine
-            .capture_state("comp", HashMap::new(), HashMap::new(), HashMap::new(), HashMap::new(), 0)
+            .capture_state(
+                "comp",
+                HashMap::new(),
+                HashMap::new(),
+                HashMap::new(),
+                HashMap::new(),
+                0,
+            )
             .await
             .unwrap();
         let sid = engine.create_debug_session(&cap_id).await.unwrap();
@@ -812,7 +924,14 @@ mod tests {
         };
         let engine = DeterministicReplayEngine::new(cfg);
         let cap_id = engine
-            .capture_state("nobp", HashMap::new(), HashMap::new(), HashMap::new(), HashMap::new(), 0)
+            .capture_state(
+                "nobp",
+                HashMap::new(),
+                HashMap::new(),
+                HashMap::new(),
+                HashMap::new(),
+                0,
+            )
             .await
             .unwrap();
         let sid = engine.create_debug_session(&cap_id).await.unwrap();

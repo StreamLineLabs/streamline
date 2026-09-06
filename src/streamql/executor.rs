@@ -533,8 +533,7 @@ impl QueryExecutor {
             "FIRST" => Ok(values.first().cloned().unwrap_or(Value::Null)),
             "LAST" => Ok(values.last().cloned().unwrap_or(Value::Null)),
             _ => Err(StreamlineError::Query(format!(
-                "Unknown aggregate function: {}",
-                func_name
+                "Unknown aggregate function: {func_name}"
             ))),
         }
     }
@@ -633,7 +632,7 @@ impl QueryExecutor {
                             .values
                             .iter()
                             .cloned()
-                            .chain(std::iter::repeat(Value::Null).take(right_schema.columns.len()))
+                            .chain(std::iter::repeat_n(Value::Null, right_schema.columns.len()))
                             .collect();
                         result.push(Row::new(combined_values));
                     }
@@ -675,10 +674,10 @@ impl QueryExecutor {
 
                     if !matched {
                         // Add nulls for left side with right row
-                        let combined_values: Vec<Value> = std::iter::repeat(Value::Null)
-                            .take(left_schema.columns.len())
-                            .chain(right_row.values.iter().cloned())
-                            .collect();
+                        let combined_values: Vec<Value> =
+                            std::iter::repeat_n(Value::Null, left_schema.columns.len())
+                                .chain(right_row.values.iter().cloned())
+                                .collect();
                         result.push(Row::new(combined_values));
                     }
                 }
@@ -725,7 +724,7 @@ impl QueryExecutor {
                             .values
                             .iter()
                             .cloned()
-                            .chain(std::iter::repeat(Value::Null).take(right_schema.columns.len()))
+                            .chain(std::iter::repeat_n(Value::Null, right_schema.columns.len()))
                             .collect();
                         result.push(Row::new(combined_values));
                     }
@@ -734,10 +733,10 @@ impl QueryExecutor {
                 // Add unmatched right rows
                 for (i, right_row) in right_rows.iter().enumerate() {
                     if !right_matched[i] {
-                        let combined_values: Vec<Value> = std::iter::repeat(Value::Null)
-                            .take(left_schema.columns.len())
-                            .chain(right_row.values.iter().cloned())
-                            .collect();
+                        let combined_values: Vec<Value> =
+                            std::iter::repeat_n(Value::Null, left_schema.columns.len())
+                                .chain(right_row.values.iter().cloned())
+                                .collect();
                         result.push(Row::new(combined_values));
                     }
                 }

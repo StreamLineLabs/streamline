@@ -1,0 +1,67 @@
+[package]
+name = "streamline-serde-wincode"
+version = "0.4.0"
+edition = "2024"
+rust-version = "1.88"
+authors = [
+    "Ash Manning <10554686+A-Manning@users.noreply.github.com>",
+    "Jose David Baena",
+]
+description = "serde compatibility for wincode (a maintained fork of serde-wincode 0.1.2, pinned to wincode 0.4.9 for MSRV 1.88)"
+license = "Apache-2.0"
+repository = "https://github.com/streamlinelabs/streamline"
+homepage = "https://github.com/streamlinelabs/streamline"
+documentation = "https://docs.rs/streamline-serde-wincode"
+readme = "README.md"
+keywords = ["serde", "wincode", "serialization", "bincode"]
+categories = ["encoding", "no-std"]
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
+[lib]
+name = "streamline_serde_wincode"
+path = "src/lib.rs"
+
+[dependencies]
+serde = { version = "1.0", default-features = false }
+thiserror = { version = "2", default-features = false }
+# THE REASON THIS FORK EXISTS.
+#
+# Upstream `serde-wincode` 0.1.2 requires `wincode = ">=0.4, <1"`. That range
+# spans three mutually semver-incompatible 0.x lines, so Cargo does not unify it
+# with a `=0.4.9` requirement elsewhere in the graph — it resolves *both*, and a
+# consumer of a published `streamline` ends up compiling `serde-wincode` against
+# wincode 0.6 (rust-version 1.89.0, different ABI) while `streamline` itself
+# uses 0.4.9. `tests/dependency_security_test.rs` proves that against a real
+# lockless consumer.
+#
+# `[patch]` cannot fix it: patches are not propagated to consumers of a
+# published crate. The requirement therefore has to be exact in a manifest that
+# is itself published, which is this one.
+wincode = { version = "=0.4.9", default-features = false }
+
+[dev-dependencies]
+# Upstream's dev-dependency on `bincode` 1.3.3 is deliberately absent: bincode is
+# unmaintained at every version (RUSTSEC-2025-0141, `patched = []`) and is banned
+# from this workspace's graph by tests/dependency_security_test.rs. The byte
+# equality it was used to assert is asserted against hard-coded bincode 1.3.3
+# output instead — see `src/lib.rs`.
+serde = { version = "1.0", default-features = false, features = ["derive"] }
+
+[features]
+default = ["std"]
+alloc = ["serde/alloc", "wincode/alloc"]
+std = ["alloc", "thiserror/std"]
+
+[lints.clippy]
+all = { level = "deny", priority = -1 }
+assertions_on_result_states = "allow"
+let_unit_value = "allow"
+wildcard_imports = "deny"
+print_stdout = "deny"
+print_stderr = "deny"
+
+[lints.rust]
+let_underscore_drop = "deny"

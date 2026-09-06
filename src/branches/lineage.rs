@@ -59,7 +59,7 @@ impl LineageLog {
 
     /// Records a branch creation event.
     pub fn record_branch_creation(&self, event: &BranchLineageEvent) {
-        let mut events = self.events.lock().expect("lineage lock poisoned");
+        let mut events = self.events.lock().unwrap_or_else(|e| e.into_inner());
         if events.len() >= self.capacity {
             events.pop_front();
         }
@@ -68,12 +68,17 @@ impl LineageLog {
 
     /// Returns all recorded lineage events (oldest first).
     pub fn events(&self) -> Vec<BranchLineageEvent> {
-        self.events.lock().expect("lineage lock poisoned").iter().cloned().collect()
+        self.events
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .iter()
+            .cloned()
+            .collect()
     }
 
     /// Returns the number of recorded events.
     pub fn len(&self) -> usize {
-        self.events.lock().expect("lineage lock poisoned").len()
+        self.events.lock().unwrap_or_else(|e| e.into_inner()).len()
     }
 
     /// Returns true if no events have been recorded.
@@ -144,7 +149,8 @@ mod tests {
 
     #[test]
     fn from_meta() {
-        let meta = crate::branches::metadata::BranchMeta::new("orders", "exp-a", vec![5, 10], "bob");
+        let meta =
+            crate::branches::metadata::BranchMeta::new("orders", "exp-a", vec![5, 10], "bob");
         let evt = BranchLineageEvent::from_meta(&meta);
         assert_eq!(evt.branch_name, "orders:exp-a");
         assert_eq!(evt.base_topic, "orders");

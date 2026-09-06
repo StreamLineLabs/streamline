@@ -109,7 +109,7 @@ pub enum RdmaError {
 pub type RdmaResult<T> = Result<T, RdmaError>;
 
 /// RDMA transport type
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
 pub enum RdmaTransport {
     /// InfiniBand
     InfiniBand,
@@ -163,7 +163,7 @@ impl Default for RdmaPortState {
 }
 
 /// RDMA MTU size
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum RdmaMtu {
     /// 256 bytes
     Mtu256,
@@ -197,7 +197,7 @@ impl RdmaMtu {
 }
 
 /// Queue pair type
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum QueuePairType {
     /// Reliable Connection (most common)
     RC,

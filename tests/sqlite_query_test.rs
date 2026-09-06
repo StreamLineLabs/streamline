@@ -29,7 +29,7 @@ fn create_test_env() -> (SQLiteQueryEngine, Arc<TopicManager>) {
     // Produce records across 2 partitions.
     for i in 0..10 {
         let partition = i % 2;
-        let key = format!("key-{}", i);
+        let key = format!("key-{i}");
         let value = format!(
             r#"{{"id":{},"user":"user-{}","amount":{},"status":"{}"}}"#,
             i,
@@ -256,8 +256,7 @@ fn test_invalid_sql_syntax() {
     let err_msg = result.unwrap_err().to_string();
     assert!(
         err_msg.contains("SQLite") || err_msg.contains("error"),
-        "Error should mention SQLite: {}",
-        err_msg
+        "Error should mention SQLite: {err_msg}"
     );
 }
 
@@ -349,27 +348,12 @@ fn test_multiple_topics() {
     tm.create_topic("orders", 1).unwrap();
     tm.create_topic("users", 1).unwrap();
 
-    tm.append(
-        "orders",
-        0,
-        None,
-        Bytes::from(r#"{"total":100}"#),
-    )
-    .unwrap();
-    tm.append(
-        "orders",
-        0,
-        None,
-        Bytes::from(r#"{"total":200}"#),
-    )
-    .unwrap();
-    tm.append(
-        "users",
-        0,
-        None,
-        Bytes::from(r#"{"name":"alice"}"#),
-    )
-    .unwrap();
+    tm.append("orders", 0, None, Bytes::from(r#"{"total":100}"#))
+        .unwrap();
+    tm.append("orders", 0, None, Bytes::from(r#"{"total":200}"#))
+        .unwrap();
+    tm.append("users", 0, None, Bytes::from(r#"{"name":"alice"}"#))
+        .unwrap();
 
     let engine = SQLiteQueryEngine::new(tm).unwrap();
 
@@ -460,7 +444,10 @@ fn test_cross_topic_join() {
 fn test_distinct_keys() {
     let (engine, _) = create_test_env();
     let result = engine
-        .execute_query("SELECT COUNT(DISTINCT key) as unique_keys FROM events", None)
+        .execute_query(
+            "SELECT COUNT(DISTINCT key) as unique_keys FROM events",
+            None,
+        )
         .unwrap();
 
     assert_eq!(scalar(&result), "10");

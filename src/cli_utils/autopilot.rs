@@ -156,7 +156,7 @@ impl std::fmt::Display for MigrationStrategy {
         match self {
             Self::FullReplication => write!(f, "full-replication"),
             Self::IncrementalReplication { start_offset } => {
-                write!(f, "incremental(from={})", start_offset)
+                write!(f, "incremental(from={start_offset})")
             }
             Self::ConfigOnly => write!(f, "config-only"),
         }
@@ -515,7 +515,7 @@ impl MigrationAutopilot {
                 self.progress.bytes_replicated += plan.topic.size_bytes;
             }
             MigrationStrategy::IncrementalReplication { start_offset } => {
-                println!("    Incremental replication from offset {}", start_offset);
+                println!("    Incremental replication from offset {start_offset}");
             }
         }
 

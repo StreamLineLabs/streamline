@@ -129,7 +129,7 @@ impl AlertCondition {
         }
 
         for (key, value) in &self.labels {
-            let expected = format!("{}={}", key, value);
+            let expected = format!("{key}={value}");
             if !labels_str.contains(&expected) {
                 return false;
             }
@@ -489,7 +489,7 @@ impl AlertManager {
     /// Check if labels match
     fn labels_match(&self, labels_str: &str, expected: &HashMap<String, String>) -> bool {
         for (key, value) in expected {
-            let expected = format!("{}={}", key, value);
+            let expected = format!("{key}={value}");
             if !labels_str.contains(&expected) {
                 return false;
             }

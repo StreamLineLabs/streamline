@@ -26,20 +26,53 @@ const WELL_KNOWN_TYPES: &[(&str, &str)] = &[
     ("google.protobuf.Any", "google/protobuf/any.proto"),
     ("google.protobuf.Duration", "google/protobuf/duration.proto"),
     ("google.protobuf.Empty", "google/protobuf/empty.proto"),
-    ("google.protobuf.FieldMask", "google/protobuf/field_mask.proto"),
+    (
+        "google.protobuf.FieldMask",
+        "google/protobuf/field_mask.proto",
+    ),
     ("google.protobuf.Struct", "google/protobuf/struct.proto"),
-    ("google.protobuf.Timestamp", "google/protobuf/timestamp.proto"),
+    (
+        "google.protobuf.Timestamp",
+        "google/protobuf/timestamp.proto",
+    ),
     ("google.protobuf.Value", "google/protobuf/struct.proto"),
     ("google.protobuf.ListValue", "google/protobuf/struct.proto"),
-    ("google.protobuf.BoolValue", "google/protobuf/wrappers.proto"),
-    ("google.protobuf.BytesValue", "google/protobuf/wrappers.proto"),
-    ("google.protobuf.DoubleValue", "google/protobuf/wrappers.proto"),
-    ("google.protobuf.FloatValue", "google/protobuf/wrappers.proto"),
-    ("google.protobuf.Int32Value", "google/protobuf/wrappers.proto"),
-    ("google.protobuf.Int64Value", "google/protobuf/wrappers.proto"),
-    ("google.protobuf.StringValue", "google/protobuf/wrappers.proto"),
-    ("google.protobuf.UInt32Value", "google/protobuf/wrappers.proto"),
-    ("google.protobuf.UInt64Value", "google/protobuf/wrappers.proto"),
+    (
+        "google.protobuf.BoolValue",
+        "google/protobuf/wrappers.proto",
+    ),
+    (
+        "google.protobuf.BytesValue",
+        "google/protobuf/wrappers.proto",
+    ),
+    (
+        "google.protobuf.DoubleValue",
+        "google/protobuf/wrappers.proto",
+    ),
+    (
+        "google.protobuf.FloatValue",
+        "google/protobuf/wrappers.proto",
+    ),
+    (
+        "google.protobuf.Int32Value",
+        "google/protobuf/wrappers.proto",
+    ),
+    (
+        "google.protobuf.Int64Value",
+        "google/protobuf/wrappers.proto",
+    ),
+    (
+        "google.protobuf.StringValue",
+        "google/protobuf/wrappers.proto",
+    ),
+    (
+        "google.protobuf.UInt32Value",
+        "google/protobuf/wrappers.proto",
+    ),
+    (
+        "google.protobuf.UInt64Value",
+        "google/protobuf/wrappers.proto",
+    ),
 ];
 
 /// Protobuf schema validator
@@ -212,8 +245,7 @@ impl ProtobufValidator {
 
         if syntax != "proto2" && syntax != "proto3" {
             return Err(SchemaError::InvalidSchema(format!(
-                "Unknown syntax: {}",
-                syntax
+                "Unknown syntax: {syntax}"
             )));
         }
 
@@ -655,15 +687,12 @@ impl ProtobufValidator {
     }
 
     /// Collect all defined type names in a schema (messages + enums, including nested)
-    fn collect_defined_types(
-        &self,
-        schema: &ProtobufSchema,
-    ) -> HashSet<String> {
+    fn collect_defined_types(&self, schema: &ProtobufSchema) -> HashSet<String> {
         let mut types = HashSet::new();
         let prefix = schema.package.as_deref().unwrap_or("");
 
         for msg in &schema.messages {
-            self.collect_message_types(msg, prefix, &mut types);
+            Self::collect_message_types(msg, prefix, &mut types);
         }
         for enum_def in &schema.enums {
             let full_name = if prefix.is_empty() {
@@ -678,12 +707,7 @@ impl ProtobufValidator {
         types
     }
 
-    fn collect_message_types(
-        &self,
-        msg: &MessageDefinition,
-        prefix: &str,
-        types: &mut HashSet<String>,
-    ) {
+    fn collect_message_types(msg: &MessageDefinition, prefix: &str, types: &mut HashSet<String>) {
         let full_name = if prefix.is_empty() {
             msg.name.clone()
         } else {
@@ -693,7 +717,7 @@ impl ProtobufValidator {
         types.insert(msg.name.clone());
 
         for nested in &msg.nested_messages {
-            self.collect_message_types(nested, &full_name, types);
+            Self::collect_message_types(nested, &full_name, types);
         }
         for nested_enum in &msg.nested_enums {
             let enum_full = format!("{}.{}", full_name, nested_enum.name);
@@ -765,8 +789,8 @@ impl ProtobufValidator {
 
             // If there are imports, the type might come from an imported file
             // We allow unresolved types when imports are present (they may provide the type)
-            let has_relevant_import = !imports.is_empty()
-                && !imports.iter().all(|i| self.is_well_known_import(i));
+            let has_relevant_import =
+                !imports.is_empty() && !imports.iter().all(|i| self.is_well_known_import(i));
             if has_relevant_import {
                 continue;
             }
@@ -1305,10 +1329,8 @@ message Address {
 }
 "#;
 
-        let result = validator.validate_with_references(
-            main_schema,
-            &[("address.proto", ref_schema)],
-        );
+        let result =
+            validator.validate_with_references(main_schema, &[("address.proto", ref_schema)]);
         assert!(result.is_ok());
     }
 

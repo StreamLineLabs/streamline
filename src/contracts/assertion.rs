@@ -19,6 +19,31 @@ pub struct AssertionResult {
     pub failures: u64,
     /// Detailed failure info (first N failures)
     pub failure_details: Vec<String>,
+    /// `true` when the assertion could not be evaluated because the invariant
+    /// is not supported by this engine (or not supported in this evaluation
+    /// mode). Unsupported assertions are always reported as **failures** so a
+    /// contract can never appear to pass on a check that was never run.
+    #[serde(default)]
+    pub unsupported: bool,
+}
+
+impl AssertionResult {
+    /// Build a failing result for an invariant that this engine cannot evaluate.
+    ///
+    /// This deliberately reports `passed == false`: silently returning success
+    /// for an unimplemented check would make contract enforcement dishonest.
+    fn unsupported(name: impl Into<String>, reason: impl Into<String>, records: u64) -> Self {
+        let reason = reason.into();
+        Self {
+            name: name.into(),
+            passed: false,
+            message: format!("Unsupported invariant: {reason}"),
+            records_checked: records,
+            failures: 1,
+            failure_details: vec![reason],
+            unsupported: true,
+        }
+    }
 }
 
 /// Types of assertions that can be evaluated.
@@ -168,6 +193,7 @@ impl AssertionEngine {
             records_checked: messages.len() as u64,
             failures: failure_count,
             failure_details: failures,
+            unsupported: false,
         }
     }
 
@@ -220,6 +246,7 @@ impl AssertionEngine {
                     records_checked: messages.len() as u64,
                     failures: failure_count,
                     failure_details: failures,
+                    unsupported: false,
                 }
             }
             ContractInvariant::Uniqueness(uniqueness) => {
@@ -242,7 +269,7 @@ impl AssertionEngine {
                     if !seen.insert(key.clone()) {
                         failure_count += 1;
                         if failures.len() < self.max_failure_details {
-                            failures.push(format!("Message {}: duplicate key '{}'", i, key));
+                            failures.push(format!("Message {i}: duplicate key '{key}'"));
                         }
                     }
                 }
@@ -253,32 +280,28 @@ impl AssertionEngine {
                     message: if failure_count == 0 {
                         "Uniqueness constraint holds".to_string()
                     } else {
-                        format!("{} uniqueness violations", failure_count)
+                        format!("{failure_count} uniqueness violations")
                     },
                     records_checked: messages.len() as u64,
                     failures: failure_count,
                     failure_details: failures,
+                    unsupported: false,
                 }
             }
-            ContractInvariant::RateLimit { max_per_second } => AssertionResult {
-                name: "invariant:rate_limit".to_string(),
-                passed: true,
-                message: format!(
-                    "Rate limit check (max {}/s) — batch mode, skipped",
-                    max_per_second
+            ContractInvariant::RateLimit { max_per_second } => AssertionResult::unsupported(
+                "invariant:rate_limit",
+                format!(
+                    "rate limit (max {max_per_second}/s) cannot be evaluated in batch mode; \
+                     messages carry no arrival timestamps here. Remove the invariant or run \
+                     it through the streaming validator."
                 ),
-                records_checked: messages.len() as u64,
-                failures: 0,
-                failure_details: Vec::new(),
-            },
-            ContractInvariant::JsonSchema { schema: _ } => AssertionResult {
-                name: "invariant:json_schema".to_string(),
-                passed: true,
-                message: "JSON Schema validation not yet implemented".to_string(),
-                records_checked: messages.len() as u64,
-                failures: 0,
-                failure_details: Vec::new(),
-            },
+                messages.len() as u64,
+            ),
+            ContractInvariant::JsonSchema { schema: _ } => AssertionResult::unsupported(
+                "invariant:json_schema",
+                "JSON Schema validation is not implemented by the assertion engine",
+                messages.len() as u64,
+            ),
         }
     }
 
@@ -295,10 +318,7 @@ impl AssertionEngine {
             if size > max_size {
                 failure_count += 1;
                 if failures.len() < self.max_failure_details {
-                    failures.push(format!(
-                        "Message {}: size {} exceeds max {}",
-                        i, size, max_size
-                    ));
+                    failures.push(format!("Message {i}: size {size} exceeds max {max_size}"));
                 }
             }
         }
@@ -307,13 +327,14 @@ impl AssertionEngine {
             name: "message_size".to_string(),
             passed: failure_count == 0,
             message: if failure_count == 0 {
-                format!("All messages within {} byte limit", max_size)
+                format!("All messages within {max_size} byte limit")
             } else {
-                format!("{} messages exceed {} byte limit", failure_count, max_size)
+                format!("{failure_count} messages exceed {max_size} byte limit")
             },
             records_checked: messages.len() as u64,
             failures: failure_count,
             failure_details: failures,
+            unsupported: false,
         }
     }
 
@@ -410,5 +431,81 @@ mod tests {
             .unwrap();
         assert!(!uniqueness.passed);
         assert_eq!(uniqueness.failures, 1);
+    }
+
+    /// Regression: an invariant the engine cannot evaluate must NOT be reported
+    /// as passing. Previously `RateLimit` returned `passed: true` with a
+    /// "skipped" message, which silently green-lit unenforced contracts.
+    #[test]
+    fn test_rate_limit_invariant_reports_unsupported_failure() {
+        let contract =
+            StreamContract::new("test", "events").with_invariant(ContractInvariant::RateLimit {
+                max_per_second: 100.0,
+            });
+
+        let engine = AssertionEngine::new(contract);
+        let results = engine.validate_messages(&[json!({"id": "a"})]);
+
+        let rate = results
+            .iter()
+            .find(|r| r.name == "invariant:rate_limit")
+            .expect("rate limit assertion must be reported");
+        assert!(!rate.passed, "unsupported invariant must not pass");
+        assert!(rate.unsupported, "must be flagged unsupported");
+        assert_eq!(rate.failures, 1);
+        assert!(rate.message.starts_with("Unsupported invariant:"));
+    }
+
+    /// Regression: JSON Schema invariants are not implemented; they must fail
+    /// closed rather than report success.
+    #[test]
+    fn test_json_schema_invariant_reports_unsupported_failure() {
+        let contract =
+            StreamContract::new("test", "events").with_invariant(ContractInvariant::JsonSchema {
+                schema: "{\"type\":\"object\"}".to_string(),
+            });
+
+        let engine = AssertionEngine::new(contract);
+        let results = engine.validate_messages(&[json!({"id": "a"})]);
+
+        let schema = results
+            .iter()
+            .find(|r| r.name == "invariant:json_schema")
+            .expect("json schema assertion must be reported");
+        assert!(!schema.passed, "unsupported invariant must not pass");
+        assert!(schema.unsupported);
+        assert_eq!(schema.failures, 1);
+    }
+
+    /// Supported invariants must never be flagged unsupported.
+    #[test]
+    fn test_supported_invariants_are_not_flagged_unsupported() {
+        let contract = StreamContract::new("test", "events")
+            .with_field("id", FieldType::String)
+            .with_invariant(ContractInvariant::Uniqueness(UniquenessInvariant {
+                fields: vec!["id".to_string()],
+            }));
+
+        let engine = AssertionEngine::new(contract);
+        let results = engine.validate_messages(&[json!({"id": "a"}), json!({"id": "b"})]);
+
+        assert!(results.iter().all(|r| !r.unsupported));
+        assert!(results.iter().all(|r| r.passed));
+    }
+
+    /// Older persisted reports have no `unsupported` field; it must default to
+    /// `false` so deserialization stays backward compatible.
+    #[test]
+    fn test_assertion_result_deserializes_without_unsupported_field() {
+        let legacy = r#"{
+            "name": "field:id",
+            "passed": true,
+            "message": "ok",
+            "records_checked": 1,
+            "failures": 0,
+            "failure_details": []
+        }"#;
+        let parsed: AssertionResult = serde_json::from_str(legacy).unwrap();
+        assert!(!parsed.unsupported);
     }
 }

@@ -39,8 +39,8 @@ pub enum NotificationChannel {
 impl std::fmt::Display for NotificationChannel {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Webhook { url, .. } => write!(f, "webhook({})", url),
-            Self::Slack { channel, .. } => write!(f, "slack(#{})", channel),
+            Self::Webhook { url, .. } => write!(f, "webhook({url})"),
+            Self::Slack { channel, .. } => write!(f, "slack(#{channel})"),
             Self::PagerDuty { .. } => write!(f, "pagerduty"),
             Self::Log => write!(f, "log"),
         }
@@ -109,28 +109,28 @@ impl std::fmt::Display for AlertCondition {
             Self::ThresholdExceeded {
                 metric, threshold, ..
             } => {
-                write!(f, "{} > {}", metric, threshold)
+                write!(f, "{metric} > {threshold}")
             }
             Self::ThresholdBelow {
                 metric, threshold, ..
             } => {
-                write!(f, "{} < {}", metric, threshold)
+                write!(f, "{metric} < {threshold}")
             }
             Self::RateOfChange {
                 metric,
                 rate_threshold,
                 ..
             } => {
-                write!(f, "rate({}) > {}/s", metric, rate_threshold)
+                write!(f, "rate({metric}) > {rate_threshold}/s")
             }
             Self::ConsumerLag { group_id, max_lag } => {
-                write!(f, "lag({}) > {}", group_id, max_lag)
+                write!(f, "lag({group_id}) > {max_lag}")
             }
             Self::NoData {
                 topic,
                 timeout_secs,
             } => {
-                write!(f, "no_data({}) > {}s", topic, timeout_secs)
+                write!(f, "no_data({topic}) > {timeout_secs}s")
             }
         }
     }
@@ -268,7 +268,7 @@ impl AlertingEngine {
             .write()
             .await
             .remove(rule_id)
-            .ok_or_else(|| StreamlineError::Internal(format!("Alert rule not found: {}", rule_id)))
+            .ok_or_else(|| StreamlineError::Internal(format!("Alert rule not found: {rule_id}")))
             .map(|_| ())
     }
 
@@ -367,8 +367,7 @@ impl AlertingEngine {
             }
         }
         Err(StreamlineError::Internal(format!(
-            "Alert not found: {}",
-            alert_id
+            "Alert not found: {alert_id}"
         )))
     }
 
@@ -405,7 +404,7 @@ impl AlertingEngine {
         let mut statuses = self.slo_statuses.write().await;
         let status = statuses
             .get_mut(slo_id)
-            .ok_or_else(|| StreamlineError::Internal(format!("SLO not found: {}", slo_id)))?;
+            .ok_or_else(|| StreamlineError::Internal(format!("SLO not found: {slo_id}")))?;
 
         status.current = current_value;
         status.budget_remaining = current_value - status.target;

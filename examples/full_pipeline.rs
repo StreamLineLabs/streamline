@@ -38,7 +38,7 @@ async fn main() -> Result<()> {
     println!("1. Creating Topics:");
     for (topic, partitions) in &topics {
         streamline.create_topic(topic, *partitions)?;
-        println!("   ✓ {} ({} partitions)", topic, partitions);
+        println!("   ✓ {topic} ({partitions} partitions)");
     }
     println!();
 
@@ -54,7 +54,7 @@ async fn main() -> Result<()> {
     println!("   └──────────────┘     └──────────────┘     └──────┬───────┘");
     println!("                                                     │");
     println!("   ┌──────────────┐     ┌──────────────┐     ┌──────▼───────┐");
-    println!("   │   Iceberg    │◀────│  Lakehouse   │◀────│ AI Classify  │");
+    println!("   │   Parquet    │◀────│  Lakehouse   │◀────│ AI Classify  │");
     println!("   │  [warehouse] │     │  [parquet]   │     │ [category]   │");
     println!("   └──────────────┘     └──────────────┘     └──────┬───────┘");
     println!("                                                     │");
@@ -90,15 +90,15 @@ async fn main() -> Result<()> {
         ),
         (
             "Lakehouse Sink",
-            "iceberg-warehouse",
+            "parquet-warehouse",
             "Store in Parquet format with partitioning",
         ),
     ];
 
     for (i, (stage, component, description)) in stages.iter().enumerate() {
         println!("   Stage {}: {}", i + 1, stage);
-        println!("     Component: {}", component);
-        println!("     Description: {}", description);
+        println!("     Component: {component}");
+        println!("     Description: {description}");
         println!();
     }
 
@@ -159,10 +159,7 @@ async fn main() -> Result<()> {
         } else {
             "low"
         };
-        println!(
-            "   [AI Enrich] Sentiment: {}, Priority: {}",
-            sentiment, priority
-        );
+        println!("   [AI Enrich] Sentiment: {sentiment}, Priority: {priority}");
 
         // Stage 3: AI Classification
         let category = if order.amount > 10000.0 {
@@ -174,7 +171,7 @@ async fn main() -> Result<()> {
         } else {
             "standard"
         };
-        println!("   [AI Classify] Category: {}", category);
+        println!("   [AI Classify] Category: {category}");
 
         // Stage 4: Anomaly Detection
         let is_anomaly = category == "suspicious"

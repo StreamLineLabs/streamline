@@ -144,8 +144,7 @@ impl ProvisioningManager {
 
         let result = clusters.get(&id).cloned().ok_or_else(|| {
             crate::error::StreamlineError::Storage(format!(
-                "cluster {} not found after provisioning",
-                id
+                "cluster {id} not found after provisioning"
             ))
         })?;
 
@@ -159,15 +158,11 @@ impl ProvisioningManager {
     }
 
     /// Scale an existing cluster to a new size
-    pub async fn scale_cluster(
-        &self,
-        cluster_id: &str,
-        new_size: &str,
-    ) -> Result<ManagedCluster> {
+    pub async fn scale_cluster(&self, cluster_id: &str, new_size: &str) -> Result<ManagedCluster> {
         let mut clusters = self.clusters.write().await;
-        let cluster = clusters.get_mut(cluster_id).ok_or_else(|| {
-            StreamlineError::Config(format!("Cluster not found: {}", cluster_id))
-        })?;
+        let cluster = clusters
+            .get_mut(cluster_id)
+            .ok_or_else(|| StreamlineError::Config(format!("Cluster not found: {cluster_id}")))?;
 
         cluster.status = ManagedClusterStatus::Scaling;
         cluster.spec.size = new_size.to_string();
@@ -187,9 +182,9 @@ impl ProvisioningManager {
         new_version: &str,
     ) -> Result<ManagedCluster> {
         let mut clusters = self.clusters.write().await;
-        let cluster = clusters.get_mut(cluster_id).ok_or_else(|| {
-            StreamlineError::Config(format!("Cluster not found: {}", cluster_id))
-        })?;
+        let cluster = clusters
+            .get_mut(cluster_id)
+            .ok_or_else(|| StreamlineError::Config(format!("Cluster not found: {cluster_id}")))?;
 
         cluster.status = ManagedClusterStatus::Upgrading;
         cluster.spec.version = new_version.to_string();
@@ -205,9 +200,9 @@ impl ProvisioningManager {
     /// Terminate a managed cluster
     pub async fn terminate_cluster(&self, cluster_id: &str) -> Result<()> {
         let mut clusters = self.clusters.write().await;
-        let cluster = clusters.get_mut(cluster_id).ok_or_else(|| {
-            StreamlineError::Config(format!("Cluster not found: {}", cluster_id))
-        })?;
+        let cluster = clusters
+            .get_mut(cluster_id)
+            .ok_or_else(|| StreamlineError::Config(format!("Cluster not found: {cluster_id}")))?;
 
         cluster.status = ManagedClusterStatus::Terminating;
         cluster.updated_at = Utc::now();
@@ -258,7 +253,7 @@ impl ProvisioningManager {
 
         for feature in &spec.features {
             steps.push(ProvisioningStep {
-                description: format!("Enable feature: {}", feature),
+                description: format!("Enable feature: {feature}"),
                 completed: false,
             });
         }
@@ -335,9 +330,15 @@ mod tests {
     #[tokio::test]
     async fn test_list_clusters() {
         let mgr = ProvisioningManager::new();
-        mgr.provision_cluster("t1", ClusterSpec::default()).await.unwrap();
-        mgr.provision_cluster("t1", ClusterSpec::default()).await.unwrap();
-        mgr.provision_cluster("t2", ClusterSpec::default()).await.unwrap();
+        mgr.provision_cluster("t1", ClusterSpec::default())
+            .await
+            .unwrap();
+        mgr.provision_cluster("t1", ClusterSpec::default())
+            .await
+            .unwrap();
+        mgr.provision_cluster("t2", ClusterSpec::default())
+            .await
+            .unwrap();
 
         assert_eq!(mgr.list_clusters("t1").await.len(), 2);
         assert_eq!(mgr.list_clusters("t2").await.len(), 1);
@@ -359,7 +360,10 @@ mod tests {
 
     #[test]
     fn test_managed_cluster_status_display() {
-        assert_eq!(ManagedClusterStatus::Provisioning.to_string(), "provisioning");
+        assert_eq!(
+            ManagedClusterStatus::Provisioning.to_string(),
+            "provisioning"
+        );
         assert_eq!(ManagedClusterStatus::Running.to_string(), "running");
         assert_eq!(ManagedClusterStatus::Terminating.to_string(), "terminating");
     }

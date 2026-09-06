@@ -186,9 +186,9 @@ impl MetricsExporter {
             for (name, values) in &snapshot.counters {
                 for (labels, value) in values {
                     if labels.is_empty() {
-                        output.push_str(&format!("{} {}\n", name, value));
+                        output.push_str(&format!("{name} {value}\n"));
                     } else {
-                        output.push_str(&format!("{}{{{}}} {}\n", name, labels, value));
+                        output.push_str(&format!("{name}{{{labels}}} {value}\n"));
                     }
                 }
             }
@@ -197,9 +197,9 @@ impl MetricsExporter {
             for (name, values) in &snapshot.gauges {
                 for (labels, value) in values {
                     if labels.is_empty() {
-                        output.push_str(&format!("{} {}\n", name, value));
+                        output.push_str(&format!("{name} {value}\n"));
                     } else {
-                        output.push_str(&format!("{}{{{}}} {}\n", name, labels, value));
+                        output.push_str(&format!("{name}{{{labels}}} {value}\n"));
                     }
                 }
             }
@@ -210,7 +210,7 @@ impl MetricsExporter {
                     let label_str = if labels.is_empty() {
                         String::new()
                     } else {
-                        format!("{{{}}}", labels)
+                        format!("{{{labels}}}")
                     };
 
                     for bucket in &histogram.buckets {
@@ -261,12 +261,9 @@ impl MetricsExporter {
                     let tags = if labels.is_empty() {
                         String::new()
                     } else {
-                        format!(",{}", labels)
+                        format!(",{labels}")
                     };
-                    output.push_str(&format!(
-                        "{}{} value={}i {}\n",
-                        name, tags, value, timestamp
-                    ));
+                    output.push_str(&format!("{name}{tags} value={value}i {timestamp}\n"));
                 }
             }
 
@@ -275,9 +272,9 @@ impl MetricsExporter {
                     let tags = if labels.is_empty() {
                         String::new()
                     } else {
-                        format!(",{}", labels)
+                        format!(",{labels}")
                     };
-                    output.push_str(&format!("{}{} value={} {}\n", name, tags, value, timestamp));
+                    output.push_str(&format!("{name}{tags} value={value} {timestamp}\n"));
                 }
             }
         }

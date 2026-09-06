@@ -39,6 +39,11 @@ pub mod registry;
 pub mod sandbox;
 pub mod trigger;
 
+pub use autoscaler::{
+    AutoScaler, ColdStartPool, ColdStartPoolConfig, ColdStartPoolStats, FunctionMetricsSnapshot,
+    FunctionUsageAggregate, FunctionVersion, InvocationMeter, InvocationRecord, ScalingDecision,
+    ScalingPolicy, ScalingReason, VersionRouter,
+};
 pub use engine::{
     ChainErrorPolicy, ChainStep, CompiledModule, DeadLetterEntry, DeadLetterQueue, FaasEngine,
     FunctionChain, FunctionInstance, InstancePool, InstancePoolStats, WasmExecutionEngine,
@@ -49,15 +54,10 @@ pub use function::{
     InvocationResult, LogLevel, RetryPolicy, VersionedFunction,
 };
 pub use registry::FunctionRegistry;
+pub use sandbox::{
+    ExecutionMetricsSnapshot, FunctionPool, ResourceLimits as SandboxResourceLimits, SandboxConfig,
+    WasmSandbox,
+};
 pub use trigger::{
     BatchConfig, HttpMethod, TriggerBinding, TriggerConfig, TriggerManager, TriggerType,
-};
-pub use sandbox::{
-    ExecutionMetricsSnapshot, FunctionPool, SandboxConfig, WasmSandbox,
-    ResourceLimits as SandboxResourceLimits,
-};
-pub use autoscaler::{
-    AutoScaler, ColdStartPool, ColdStartPoolConfig, ColdStartPoolStats, FunctionMetricsSnapshot,
-    FunctionUsageAggregate, FunctionVersion, InvocationMeter, InvocationRecord, ScalingDecision,
-    ScalingPolicy, ScalingReason, VersionRouter,
 };

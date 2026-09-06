@@ -27,10 +27,12 @@ pub mod checkpoint;
 pub mod compaction;
 pub mod compression;
 pub mod cross_topic_buffer;
+pub mod deterministic_replay;
 pub mod encryption;
-pub mod key_rotation;
+pub mod hw_acceleration;
 pub mod index;
 pub mod io_backend;
+pub mod key_rotation;
 pub mod mmap;
 pub mod partition;
 pub mod partition_maintenance;
@@ -38,18 +40,16 @@ pub mod partition_read;
 pub mod prefetch;
 pub mod producer_state;
 pub mod record;
+pub mod replay_engine;
 pub mod retention;
 pub mod segment;
 pub mod sendfile;
 pub mod state_store;
 pub mod storage_mode;
-pub mod deterministic_replay;
-pub mod replay_engine;
 pub mod timeseries;
 pub mod timetravel;
 pub mod topic;
 pub mod wal;
-pub mod hw_acceleration;
 pub mod zerocopy;
 
 // Cloud storage modules (require cloud-storage feature)
@@ -120,8 +120,8 @@ pub use replay_engine::{
 
 // Deterministic replay debugger re-exports
 pub use deterministic_replay::{
-    BreakCondition, Breakpoint, DebugSession, DebugStats, DebugStatus,
-    DeterministicReplayEngine, ReplayDebugConfig, StateCapture, StepRecord,
+    BreakCondition, Breakpoint, DebugSession, DebugStats, DebugStatus, DeterministicReplayEngine,
+    ReplayDebugConfig, StateCapture, StepRecord,
 };
 
 // Time-travel re-exports
@@ -203,45 +203,9 @@ pub use io_backend::{
 
 // Re-export io_uring types when available
 #[cfg(all(target_os = "linux", feature = "io-uring"))]
-pub use io_backend::{
-    get_uring_backend, is_uring_available, IoWorker, IoWorkerConfig, UringFile, UringFileSystem,
-};
+pub use io_backend::uring::is_uring_available;
+#[cfg(all(target_os = "linux", feature = "io-uring"))]
+pub use io_backend::{get_uring_backend, IoWorker, IoWorkerConfig, UringFile, UringFileSystem};
 
 // Re-export async index types
 pub use async_index::{AsyncIndexBuilder, AsyncSegmentIndex};
-
-
-/// Memory budget tracker for storage operations.
-pub(crate) struct MemoryBudget {
-    allocated: std::sync::atomic::AtomicUsize,
-    limit: usize,
-}
-
-impl MemoryBudget {
-    pub fn new(limit: usize) -> Self {
-        Self {
-            allocated: std::sync::atomic::AtomicUsize::new(0),
-            limit,
-        }
-    }
-
-    pub fn try_allocate(&self, bytes: usize) -> bool {
-        self.allocated
-            .fetch_update(
-                std::sync::atomic::Ordering::SeqCst,
-                std::sync::atomic::Ordering::SeqCst,
-                |current| {
-                    if current + bytes <= self.limit {
-                        Some(current + bytes)
-                    } else {
-                        None
-                    }
-                },
-            )
-            .is_ok()
-    }
-
-    pub fn release(&self, bytes: usize) {
-        self.allocated.fetch_sub(bytes, std::sync::atomic::Ordering::SeqCst);
-    }
-}

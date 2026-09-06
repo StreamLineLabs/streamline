@@ -8,6 +8,9 @@ on:
 env:
   CARGO_TERM_COLOR: always
 
+permissions:
+  contents: read
+
 jobs:
   kafka-tools:
     name: Kafka ${{ matrix.kafka-version }} Compatibility
@@ -22,13 +25,25 @@ jobs:
       - uses: Swatinem/rust-cache@v2
 
       - name: Build Streamline
-        run: cargo build --release
+        run: cargo build --release --locked
 
       - name: Start Streamline
         run: |
+          set -euo pipefail
           ./target/release/streamline &
-          echo "Waiting for Streamline to start..."
-          sleep 5
+          echo $! > streamline.pid
+          # Poll for readiness rather than sleeping a fixed amount; a server
+          # that never comes up must fail the job, not fall through into
+          # tolerant client steps.
+          for _ in $(seq 1 60); do
+            if curl -sf http://localhost:9094/health > /dev/null; then
+              echo "streamline is healthy"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::streamline did not become healthy within 60s"
+          exit 1
 
       - name: Install Java
         uses: actions/setup-java@v4
@@ -38,49 +53,94 @@ jobs:
 
       - name: Download Kafka tools
         run: |
+          set -euo pipefail
           wget -q https://archive.apache.org/dist/kafka/${{ matrix.kafka-version }}/kafka_2.13-${{ matrix.kafka-version }}.tgz
           tar -xzf kafka_2.13-${{ matrix.kafka-version }}.tgz
-          echo "KAFKA_HOME=$(pwd)/kafka_2.13-${{ matrix.kafka-version }}" >> $GITHUB_ENV
+          echo "KAFKA_HOME=$(pwd)/kafka_2.13-${{ matrix.kafka-version }}" >> "$GITHUB_ENV"
 
       - name: Test topic creation
         run: |
-          $KAFKA_HOME/bin/kafka-topics.sh \
+          set -euo pipefail
+          "$KAFKA_HOME/bin/kafka-topics.sh" \
             --bootstrap-server localhost:9092 \
             --create --topic compat-test --partitions 3 --replication-factor 1
 
       - name: Test topic listing
         run: |
-          $KAFKA_HOME/bin/kafka-topics.sh \
+          set -euo pipefail
+          "$KAFKA_HOME/bin/kafka-topics.sh" \
             --bootstrap-server localhost:9092 \
-            --list
+            --list | tee topics.txt
+          grep -qx 'compat-test' topics.txt
 
       - name: Test topic describe
         run: |
-          $KAFKA_HOME/bin/kafka-topics.sh \
+          set -euo pipefail
+          "$KAFKA_HOME/bin/kafka-topics.sh" \
             --bootstrap-server localhost:9092 \
-            --describe --topic compat-test
+            --describe --topic compat-test | tee describe.txt
+          grep -q 'compat-test' describe.txt
+          # Three partitions were requested; three must be reported back.
+          PARTITIONS=$(grep -c 'Partition:' describe.txt)
+          if [ "$PARTITIONS" -ne 3 ]; then
+            echo "::error::expected 3 partitions, describe reported $PARTITIONS"
+            exit 1
+          fi
 
       - name: Test producer
         run: |
+          set -euo pipefail
           echo "Hello from Kafka ${{ matrix.kafka-version }}" | \
-            $KAFKA_HOME/bin/kafka-console-producer.sh \
+            "$KAFKA_HOME/bin/kafka-console-producer.sh" \
             --broker-list localhost:9092 \
             --topic compat-test
 
-      - name: Test consumer
+      - name: Test consumer returns the produced message
         run: |
-          timeout 10 $KAFKA_HOME/bin/kafka-console-consumer.sh \
+          set -euo pipefail
+          EXPECTED="Hello from Kafka ${{ matrix.kafka-version }}"
+          # No `|| true`: a timeout, an empty read, or a payload mismatch is a
+          # compatibility failure. Previously this step could not fail.
+          timeout 60 "$KAFKA_HOME/bin/kafka-console-consumer.sh" \
             --bootstrap-server localhost:9092 \
             --topic compat-test \
             --from-beginning \
-            --max-messages 1 || true
+            --max-messages 1 > consumed.txt
+          echo "consumed: $(cat consumed.txt)"
+          if [ ! -s consumed.txt ]; then
+            echo "::error::consumer returned no messages"
+            exit 1
+          fi
+          grep -qxF "$EXPECTED" consumed.txt
+
+      - name: Test consumer group offset commit
+        run: |
+          set -euo pipefail
+          timeout 60 "$KAFKA_HOME/bin/kafka-console-consumer.sh" \
+            --bootstrap-server localhost:9092 \
+            --topic compat-test \
+            --group compat-group \
+            --from-beginning \
+            --max-messages 1 > grouped.txt
+          grep -qxF "Hello from Kafka ${{ matrix.kafka-version }}" grouped.txt
+
+          "$KAFKA_HOME/bin/kafka-consumer-groups.sh" \
+            --bootstrap-server localhost:9092 --list | tee groups.txt
+          grep -qx 'compat-group' groups.txt
 
       - name: Test metadata fetch
         run: |
-          $KAFKA_HOME/bin/kafka-broker-api-versions.sh \
-            --bootstrap-server localhost:9092
+          set -euo pipefail
+          "$KAFKA_HOME/bin/kafka-broker-api-versions.sh" \
+            --bootstrap-server localhost:9092 | tee api-versions.txt
+          # The broker must actually advertise the core APIs.
+          grep -q 'Produce' api-versions.txt
+          grep -q 'Fetch' api-versions.txt
+          grep -q 'ApiVersions' api-versions.txt
 
       - name: Cleanup
         if: always()
         run: |
-          pkill streamline || true
+          if [ -f streamline.pid ]; then
+            kill "$(cat streamline.pid)" 2>/dev/null || true
+          fi

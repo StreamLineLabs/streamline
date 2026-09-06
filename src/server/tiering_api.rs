@@ -6,7 +6,7 @@ use crate::storage::tiering_policy::{
 use axum::{
     extract::{Path, State},
     http::StatusCode,
-    routing::{delete, get, put},
+    routing::get,
     Json, Router,
 };
 use std::sync::Arc;

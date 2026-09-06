@@ -6,11 +6,7 @@
 //!   replication status in real time
 //! - **Schema Browser**: Inspect topic schemas and field types
 
-use axum::{
-    extract::State,
-    response::Html,
-    Json,
-};
+use axum::{extract::State, response::Html, Json};
 use serde::{Deserialize, Serialize};
 
 use super::WebUiState;
@@ -77,16 +73,27 @@ pub async fn api_execute_query(
 ) -> Json<QueryEditorResult> {
     let start = std::time::Instant::now();
 
-    // Proxy to Streamline's analytics API
+    // Proxy to Streamline's unified query API
     match state.client.execute_query(&req.sql, req.max_rows).await {
-        Ok(result) => Json(QueryEditorResult {
-            columns: result.columns,
-            rows: result.rows,
-            row_count: result.row_count,
-            execution_time_ms: start.elapsed().as_millis() as u64,
-            truncated: result.truncated,
-            error: None,
-        }),
+        Ok(result) => {
+            let truncated = result.metadata.truncated;
+            let row_count = result.rows.len();
+            Json(QueryEditorResult {
+                columns: result
+                    .columns
+                    .into_iter()
+                    .map(|column| ColumnInfo {
+                        name: column.name,
+                        data_type: column.col_type,
+                    })
+                    .collect(),
+                rows: result.rows,
+                row_count,
+                execution_time_ms: result.metadata.execution_time_ms,
+                truncated,
+                error: None,
+            })
+        }
         Err(e) => Json(QueryEditorResult {
             columns: Vec::new(),
             rows: Vec::new(),
@@ -99,24 +106,50 @@ pub async fn api_execute_query(
 }
 
 /// Get query suggestions / autocomplete data.
-pub async fn api_query_suggestions(
-    State(state): State<WebUiState>,
-) -> Json<QuerySuggestions> {
+pub async fn api_query_suggestions(State(state): State<WebUiState>) -> Json<QuerySuggestions> {
     let topics = state.client.list_topics().await.unwrap_or_default();
 
     let topic_names: Vec<String> = topics
         .iter()
-        .map(|t| t.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string())
+        .map(|t| t.name.clone())
         .filter(|n| !n.is_empty())
         .collect();
 
     let sql_functions = vec![
-        "SELECT", "FROM", "WHERE", "GROUP BY", "ORDER BY", "LIMIT",
-        "COUNT", "SUM", "AVG", "MIN", "MAX", "DISTINCT",
-        "streamline_topic", "HAVING", "JOIN", "LEFT JOIN",
-        "AS", "AND", "OR", "NOT", "IN", "LIKE", "BETWEEN",
-        "CASE", "WHEN", "THEN", "ELSE", "END",
-        "ROW_NUMBER", "RANK", "LAG", "LEAD", "OVER", "PARTITION BY",
+        "SELECT",
+        "FROM",
+        "WHERE",
+        "GROUP BY",
+        "ORDER BY",
+        "LIMIT",
+        "COUNT",
+        "SUM",
+        "AVG",
+        "MIN",
+        "MAX",
+        "DISTINCT",
+        "streamline_topic",
+        "HAVING",
+        "JOIN",
+        "LEFT JOIN",
+        "AS",
+        "AND",
+        "OR",
+        "NOT",
+        "IN",
+        "LIKE",
+        "BETWEEN",
+        "CASE",
+        "WHEN",
+        "THEN",
+        "ELSE",
+        "END",
+        "ROW_NUMBER",
+        "RANK",
+        "LAG",
+        "LEAD",
+        "OVER",
+        "PARTITION BY",
     ]
     .into_iter()
     .map(String::from)
@@ -215,9 +248,7 @@ pub struct ClusterHealthSummary {
 }
 
 /// Get cluster topology data for visualization.
-pub async fn api_cluster_topology(
-    State(state): State<WebUiState>,
-) -> Json<ClusterTopology> {
+pub async fn api_cluster_topology(State(state): State<WebUiState>) -> Json<ClusterTopology> {
     let mut nodes = Vec::new();
     let mut edges = Vec::new();
 
@@ -238,16 +269,10 @@ pub async fn api_cluster_topology(
 
     if let Ok(topics) = state.client.list_topics().await {
         for topic in &topics {
-            let name = topic
-                .get("name")
-                .and_then(|v| v.as_str())
-                .unwrap_or("unknown");
-            let partitions = topic
-                .get("partitions")
-                .and_then(|v| v.as_u64())
-                .unwrap_or(1) as u32;
+            let name = topic.name.as_str();
+            let partitions = topic.partition_count as u32;
 
-            let topic_id = format!("topic-{}", name);
+            let topic_id = format!("topic-{name}");
             nodes.push(TopologyNode {
                 id: topic_id.clone(),
                 node_type: NodeType::Topic,
@@ -274,12 +299,9 @@ pub async fn api_cluster_topology(
     let mut total_groups = 0u32;
     if let Ok(groups) = state.client.list_consumer_groups().await {
         for group in &groups {
-            let group_id = group
-                .get("group_id")
-                .and_then(|v| v.as_str())
-                .unwrap_or("unknown");
+            let group_id = group.group_id.as_str();
 
-            let node_id = format!("group-{}", group_id);
+            let node_id = format!("group-{group_id}");
             nodes.push(TopologyNode {
                 id: node_id,
                 node_type: NodeType::ConsumerGroup,
@@ -337,31 +359,27 @@ pub async fn api_topic_schema(
     axum::extract::Path(topic_name): axum::extract::Path<String>,
 ) -> Json<TopicSchemaInfo> {
     // Try to fetch recent messages and infer schema
-    match state
-        .client
-        .browse_messages(&topic_name, 0, 0, 5)
-        .await
-    {
+    match state.client.browse_messages(&topic_name, 0, 0, 5).await {
         Ok(messages) => {
             let mut fields = Vec::new();
             let mut sample = None;
 
-            if let Some(first) = messages.first() {
-                if let Some(value) = first.get("value").and_then(|v| v.as_str()) {
-                    if let Ok(json) = serde_json::from_str::<serde_json::Value>(value) {
-                        sample = Some(json.clone());
-                        if let Some(obj) = json.as_object() {
-                            for (key, val) in obj {
-                                fields.push(SchemaField {
-                                    name: key.clone(),
-                                    data_type: infer_json_type(val),
-                                    nullable: val.is_null(),
-                                    sample_value: Some(val.clone()),
-                                });
-                            }
-                        }
+            if let Some(json) = messages
+                .records
+                .first()
+                .and_then(|r| decode_record_value(&r.value))
+            {
+                if let Some(obj) = json.as_object() {
+                    for (key, val) in obj {
+                        fields.push(SchemaField {
+                            name: key.clone(),
+                            data_type: infer_json_type(val),
+                            nullable: val.is_null(),
+                            sample_value: Some(val.clone()),
+                        });
                     }
                 }
+                sample = Some(json);
             }
 
             Json(TopicSchemaInfo {
@@ -379,6 +397,19 @@ pub async fn api_topic_schema(
             message_format: "unknown".to_string(),
             inferred: false,
         }),
+    }
+}
+
+/// Decode a consumed record value into a JSON document.
+///
+/// The messages API returns already-parsed JSON when the payload is valid JSON,
+/// and a plain string otherwise. A string payload may itself contain embedded
+/// JSON, so it is parsed opportunistically before falling back to the raw value.
+fn decode_record_value(value: &serde_json::Value) -> Option<serde_json::Value> {
+    match value {
+        serde_json::Value::Null => None,
+        serde_json::Value::String(s) => serde_json::from_str::<serde_json::Value>(s).ok(),
+        other => Some(other.clone()),
     }
 }
 
@@ -405,20 +436,27 @@ fn infer_json_type(value: &serde_json::Value) -> String {
 
 /// Render the SQL query editor page.
 pub async fn query_editor_page(State(state): State<WebUiState>) -> Html<String> {
-    let html = state.templates.render_query_editor();
-    Html(html)
+    Html(state.templates.query_page(
+        "SQL Query Editor",
+        "Execute SQL queries on streaming data",
+        "SELECT * FROM streamline_topic('demo-events') LIMIT 10",
+    ))
 }
 
 /// Render the cluster topology page.
 pub async fn topology_page(State(state): State<WebUiState>) -> Html<String> {
-    let html = state.templates.render_topology();
-    Html(html)
+    Html(state.templates.feature_dashboard(
+        "Cluster Topology",
+        "Broker, topic, and consumer group layout",
+        "Visualise broker health, partition distribution, and replication status.",
+        &[],
+        &[],
+    ))
 }
 
 /// Render the schema browser page.
 pub async fn schema_browser_page(State(state): State<WebUiState>) -> Html<String> {
-    let html = state.templates.render_schema_browser();
-    Html(html)
+    Html(state.templates.schema_list())
 }
 
 #[cfg(test)]
@@ -428,7 +466,7 @@ mod tests {
     #[test]
     fn test_infer_json_type() {
         assert_eq!(infer_json_type(&serde_json::json!(42)), "integer");
-        assert_eq!(infer_json_type(&serde_json::json!(3.14)), "float");
+        assert_eq!(infer_json_type(&serde_json::json!(2.5)), "float");
         assert_eq!(infer_json_type(&serde_json::json!("hello")), "string");
         assert_eq!(infer_json_type(&serde_json::json!(true)), "boolean");
         assert_eq!(infer_json_type(&serde_json::json!(null)), "null");
@@ -439,6 +477,27 @@ mod tests {
     #[test]
     fn test_default_max_rows() {
         assert_eq!(default_max_rows(), 100);
+    }
+
+    #[test]
+    fn test_decode_record_value_object_payload() {
+        // The messages API returns already-parsed JSON for JSON payloads.
+        let value = serde_json::json!({"user_id": 7, "score": 1.5});
+        let decoded = decode_record_value(&value).expect("object payload must decode");
+        assert_eq!(decoded, value);
+    }
+
+    #[test]
+    fn test_decode_record_value_embedded_json_string() {
+        let value = serde_json::json!(r#"{"user_id":7}"#);
+        let decoded = decode_record_value(&value).expect("embedded JSON must decode");
+        assert_eq!(decoded["user_id"], 7);
+    }
+
+    #[test]
+    fn test_decode_record_value_non_json_string_and_null() {
+        assert!(decode_record_value(&serde_json::json!("plain text")).is_none());
+        assert!(decode_record_value(&serde_json::Value::Null).is_none());
     }
 
     #[test]

@@ -694,9 +694,7 @@ fn test_error_codes_are_unique() {
     for (code, name) in &codes {
         assert!(
             seen_codes.insert(*code),
-            "Duplicate error code value {}: {}",
-            code,
-            name
+            "Duplicate error code value {code}: {name}"
         );
     }
 }
@@ -799,8 +797,7 @@ fn test_error_codes_in_valid_range() {
         // Valid range: -1 to 127 (i16 allows more, but Kafka uses -1 to ~105)
         assert!(
             (-1..=127).contains(&code),
-            "Error code {} is outside valid range [-1, 127]",
-            code
+            "Error code {code} is outside valid range [-1, 127]"
         );
     }
 }

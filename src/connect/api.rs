@@ -238,7 +238,7 @@ impl ConnectError {
     fn not_found(name: &str) -> Self {
         Self {
             error_code: 404,
-            message: format!("Connector {} not found", name),
+            message: format!("Connector {name} not found"),
         }
     }
 
@@ -306,7 +306,7 @@ impl ConnectorManager {
         let hostname = std::env::var("HOSTNAME")
             .or_else(|_| std::env::var("COMPUTERNAME"))
             .unwrap_or_else(|_| "localhost".to_string());
-        let worker_id = format!("{}:8083", hostname);
+        let worker_id = format!("{hostname}:8083");
 
         // Built-in plugins
         let plugins = vec![
@@ -661,7 +661,7 @@ impl ConnectorManager {
         let state = runtime
             .task_states
             .get(task_id as usize)
-            .ok_or_else(|| ConnectError::not_found(&format!("{}:{}", name, task_id)))?;
+            .ok_or_else(|| ConnectError::not_found(&format!("{name}:{task_id}")))?;
 
         Ok(TaskStatus {
             id: task_id,
@@ -682,7 +682,7 @@ impl ConnectorManager {
         let state = runtime
             .task_states
             .get_mut(task_id as usize)
-            .ok_or_else(|| ConnectError::not_found(&format!("{}:{}", name, task_id)))?;
+            .ok_or_else(|| ConnectError::not_found(&format!("{name}:{task_id}")))?;
 
         *state = TaskState::Running;
 
@@ -843,10 +843,7 @@ impl ConnectorManager {
     // ---- Offset Management ----
 
     /// Get offsets for a source connector
-    pub fn get_connector_offsets(
-        &self,
-        name: &str,
-    ) -> Result<ConnectorOffsets, ConnectError> {
+    pub fn get_connector_offsets(&self, name: &str) -> Result<ConnectorOffsets, ConnectError> {
         let connectors = self.connectors.read();
         if !connectors.contains_key(name) {
             return Err(ConnectError::not_found(name));
@@ -858,7 +855,10 @@ impl ConnectorManager {
             connector: name.to_string(),
             offsets: offsets
                 .into_iter()
-                .map(|(key, value)| OffsetEntry { partition: key, offset: value })
+                .map(|(key, value)| OffsetEntry {
+                    partition: key,
+                    offset: value,
+                })
                 .collect(),
         })
     }
@@ -885,12 +885,34 @@ impl ConnectorManager {
         Ok(())
     }
 
+    /// Alter offsets for a source connector while it is paused or stopped.
+    pub fn alter_connector_offsets(
+        &self,
+        name: &str,
+        offsets: HashMap<String, String>,
+    ) -> Result<(), ConnectError> {
+        let connectors = self.connectors.read();
+        let runtime = connectors
+            .get(name)
+            .ok_or_else(|| ConnectError::not_found(name))?;
+        if runtime.state == ConnectorState::Running {
+            return Err(ConnectError::bad_request(
+                "Cannot alter offsets while connector is running. Pause or stop it first.",
+            ));
+        }
+        drop(connectors);
+
+        self.commit_offsets(name, offsets)
+    }
+
     /// Reset (delete) offsets for a source connector
     pub fn reset_connector_offsets(&self, name: &str) -> Result<(), ConnectError> {
         let connectors = self.connectors.read();
 
         // Only allow offset reset when connector is stopped or paused
-        let runtime = connectors.get(name).ok_or_else(|| ConnectError::not_found(name))?;
+        let runtime = connectors
+            .get(name)
+            .ok_or_else(|| ConnectError::not_found(name))?;
         if runtime.state == ConnectorState::Running {
             return Err(ConnectError::bad_request(
                 "Cannot reset offsets while connector is running. Pause or stop it first.",
@@ -948,6 +970,11 @@ pub struct OffsetEntry {
     pub partition: String,
     /// Offset value
     pub offset: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct AlterConnectorOffsetsRequest {
+    offsets: Vec<OffsetEntry>,
 }
 
 /// Health report for all connectors
@@ -1239,6 +1266,37 @@ async fn get_connector_offsets(
     }
 }
 
+/// Alter offsets for a source connector.
+async fn alter_connector_offsets(
+    State(state): State<ConnectApiState>,
+    Path(name): Path<String>,
+    Json(payload): Json<AlterConnectorOffsetsRequest>,
+) -> Response {
+    let offsets = payload
+        .offsets
+        .into_iter()
+        .map(|entry| (entry.partition, entry.offset))
+        .collect();
+
+    match state
+        .connector_manager
+        .alter_connector_offsets(&name, offsets)
+    {
+        Ok(()) => Json(serde_json::json!({
+            "message": format!("Offsets for connector {} have been altered successfully", name)
+        }))
+        .into_response(),
+        Err(e) => {
+            let status = match e.error_code {
+                400 => StatusCode::BAD_REQUEST,
+                404 => StatusCode::NOT_FOUND,
+                _ => StatusCode::INTERNAL_SERVER_ERROR,
+            };
+            (status, Json(e)).into_response()
+        }
+    }
+}
+
 /// Reset offsets for a source connector (must be paused/stopped)
 async fn reset_connector_offsets(
     State(state): State<ConnectApiState>,
@@ -1259,49 +1317,63 @@ async fn reset_connector_offsets(
 
 /// Create the Connect REST API router
 pub fn create_connect_router(state: ConnectApiState) -> Router {
-    Router::new()
+    create_connect_router_inner()
         // Worker info
         .route("/", get(get_worker_info))
+        .with_state(state)
+}
+
+/// Create the Connect REST API router without the `GET /` worker-info route.
+///
+/// Used when the root path is already owned by another router (for example the
+/// playground dashboard), since axum panics on overlapping method routes.
+pub fn create_connect_router_without_root(state: ConnectApiState) -> Router {
+    create_connect_router_inner().with_state(state)
+}
+
+fn create_connect_router_inner() -> Router<ConnectApiState> {
+    Router::new()
         // Health monitoring
         .route("/connectors/health", get(connectors_health))
         // Connectors
         .route("/connectors", get(list_connectors).post(create_connector))
         .route(
-            "/connectors/{name}",
+            "/connectors/:name",
             get(get_connector).delete(delete_connector),
         )
         .route(
-            "/connectors/{name}/config",
+            "/connectors/:name/config",
             get(get_connector_config).put(update_connector_config),
         )
-        .route("/connectors/{name}/status", get(get_connector_status))
-        .route("/connectors/{name}/pause", put(pause_connector))
-        .route("/connectors/{name}/resume", put(resume_connector))
-        .route("/connectors/{name}/restart", post(restart_connector))
+        .route("/connectors/:name/status", get(get_connector_status))
+        .route("/connectors/:name/pause", put(pause_connector))
+        .route("/connectors/:name/resume", put(resume_connector))
+        .route("/connectors/:name/restart", post(restart_connector))
         // Offsets
         .route(
-            "/connectors/{name}/offsets",
-            get(get_connector_offsets).delete(reset_connector_offsets),
+            "/connectors/:name/offsets",
+            get(get_connector_offsets)
+                .patch(alter_connector_offsets)
+                .delete(reset_connector_offsets),
         )
         // Dead letter queue
-        .route("/connectors/{name}/dlq", get(get_connector_dlq))
+        .route("/connectors/:name/dlq", get(get_connector_dlq))
         // Tasks
-        .route("/connectors/{name}/tasks", get(get_connector_tasks))
+        .route("/connectors/:name/tasks", get(get_connector_tasks))
         .route(
-            "/connectors/{name}/tasks/{task_id}/status",
+            "/connectors/:name/tasks/:task_id/status",
             get(get_task_status),
         )
         .route(
-            "/connectors/{name}/tasks/{task_id}/restart",
+            "/connectors/:name/tasks/:task_id/restart",
             post(restart_task),
         )
         // Plugins
         .route("/connector-plugins", get(get_connector_plugins))
         .route(
-            "/connector-plugins/{plugin_name}/config/validate",
+            "/connector-plugins/:plugin_name/config/validate",
             put(validate_connector_config),
         )
-        .with_state(state)
 }
 
 #[cfg(test)]
@@ -1447,6 +1519,28 @@ mod tests {
 
         let offsets = manager.get_connector_offsets("reset-test").unwrap();
         assert!(offsets.offsets.is_empty());
+    }
+
+    #[test]
+    fn test_offset_alter_requires_paused_connector() {
+        let manager = ConnectorManager::new();
+        create_test_connector(&manager, "alter-test");
+
+        let mut offsets = HashMap::new();
+        offsets.insert("partition-0".to_string(), "10".to_string());
+        let result = manager.alter_connector_offsets("alter-test", offsets.clone());
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().error_code, 400);
+
+        manager.pause_connector("alter-test").unwrap();
+        manager
+            .alter_connector_offsets("alter-test", offsets)
+            .unwrap();
+
+        let stored = manager.get_connector_offsets("alter-test").unwrap();
+        assert_eq!(stored.offsets.len(), 1);
+        assert_eq!(stored.offsets[0].partition, "partition-0");
+        assert_eq!(stored.offsets[0].offset, "10");
     }
 
     #[test]

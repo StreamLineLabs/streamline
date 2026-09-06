@@ -1,5 +1,60 @@
 name: Publish All SDKs
 
+# Every job in this workflow publishes something irrevocable to a public
+# registry, so three invariants are enforced mechanically here and asserted by
+# `tests/packaging_metadata_test.rs`:
+#
+#   1. **Nothing publishes ahead of the gated core.** Every publishing job
+#      declares
+#      `needs: [verify-core-version, verify-release-credentials, release-gate, publish-rust-crate]`.
+#      Previously the ecosystem jobs had no `needs:` at all, so a manual run
+#      published npm, PyPI, Maven Central, NuGet and a Go tag concurrently with
+#      — or before — the release gate and the crates.io publish. An SDK release
+#      that reaches users before the server it talks to is not recoverable by
+#      re-running anything.
+#
+#   2. **Nothing publishes a version it has not verified.** Each job checks out
+#      the SDK repository into `sdk/` and runs
+#      `scripts/release/verify-sdk-version.sh` against that checkout *before*
+#      building or publishing. The `version` input used to be little more than a
+#      label: the jobs checked out each SDK's default branch and published
+#      whatever version it happened to declare, so a "0.4.1" release could ship
+#      0.4.0 artefacts and report success.
+#
+#   3. **Nothing starts a release that cannot finish.** `verify-release-credentials`
+#      runs before every publisher and fails a real run when a secret a *later*
+#      step needs is missing. The Go SDK tag is the case that motivated it: it
+#      is pushed after crates.io, npm, PyPI, Maven Central and NuGet have all
+#      published irrevocably, and it needs a credential none of them do.
+#
+# The SDK repositories are checked out into `sdk/` rather than over the
+# workspace root so that this repository's release-control scripts stay on disk
+# and can be run against the checkout. Nothing here writes to an SDK repository
+# except the Go job, which creates that SDK's release tag.
+#
+# ── Secrets ────────────────────────────────────────────────────────────────
+#
+#   CARGO_REGISTRY_TOKEN / CRATES_IO_TOKEN  crates.io (either name works)
+#   NPM_TOKEN                               npm (Node.js and WASM SDKs)
+#   PYPI_TOKEN                              PyPI
+#   OSSRH_USERNAME / OSSRH_TOKEN            Maven Central (Java and Kotlin)
+#   GPG_PRIVATE_KEY / GPG_PASSPHRASE        Maven Central artifact signing
+#   NUGET_API_KEY                           NuGet
+#   GO_SDK_RELEASE_TOKEN                    **cross-repository write.** A token
+#     with `contents: write` on streamlinelabs/streamline-go-sdk — a
+#     fine-grained PAT or a GitHub App installation token. A Go module's
+#     published version *is* its git tag, so publishing the Go SDK means
+#     pushing a tag into a different repository. The automatic GITHUB_TOKEN
+#     cannot do that: it is scoped to streamlinelabs/streamline and this
+#     workflow grants it only `contents: read`. Without a dedicated credential
+#     the Go job used to fail at `git push` — after every other ecosystem had
+#     already published.
+#
+# Dry runs perform exactly the same version verification as real runs — a dry
+# run that skips the checks cannot tell you whether the real run would be safe.
+# They do *not* require any publishing credential: the one safe way to rehearse
+# a release must not be the hardest one to run.
+
 on:
   workflow_dispatch:
     inputs:
@@ -15,92 +70,199 @@ concurrency:
   group: publish-sdks
   cancel-in-progress: false
 
+permissions:
+  contents: read
+
 jobs:
-  publish-rust-crate:
-    name: Publish Rust Crate (crates.io)
+  # The core workspace crates are published by the single reusable publish
+  # workflow, which enforces dependency order (streamline-serde-wincode,
+  # streamline-wasm and streamline-analytics before streamline). This job used
+  # to run a bare `cargo publish` here, which was both a second uncontrolled
+  # publishing path and incapable of publishing the workspace members it
+  # depends on.
+  verify-core-version:
+    name: Verify core crate version
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
       - name: Verify version
+        env:
+          EXPECTED: ${{ inputs.version }}
         run: |
-          TOML_VER=$(grep '^version' Cargo.toml | head -1 | sed 's/.*"\(.*\)"/\1/')
-          if [ "$TOML_VER" != "${{ inputs.version }}" ]; then
-            echo "::error::Cargo.toml version ($TOML_VER) doesn't match input (${{ inputs.version }})"
-            exit 1
-          fi
-      - name: Publish to crates.io
-        if: ${{ !inputs.dry_run }}
-        run: cargo publish --token ${{ secrets.CRATES_IO_TOKEN }}
-      - name: Dry run
-        if: ${{ inputs.dry_run }}
-        run: cargo publish --dry-run
+          set -euo pipefail
+          # The root crate is this repository, so it is verified with the same
+          # reader the SDK jobs use.
+          ./scripts/release/verify-sdk-version.sh \
+            --ecosystem rust --dir . --expected "$EXPECTED"
+
+  # Credential preflight — the last line of defence against an unfinishable
+  # release.
+  #
+  # The Go SDK tag is pushed *after* crates.io, npm, PyPI, Maven Central and
+  # NuGet have already published, and it is the only step that writes to
+  # another repository. When its credential was missing the workflow failed
+  # there, leaving five irrevocable publications and no Go release — a state no
+  # re-run can fix, because the fix is a repository-settings change.
+  #
+  # Checking it here, in a job with no dependencies that every publisher waits
+  # on, turns that into a run in which nothing happened at all.
+  #
+  # Secrets cannot be referenced from a job- or step-level `if:`, so the check
+  # is made inside the script, which is driven by the resolved mode and covered
+  # by `scripts/release/tests/release-scripts.test.sh`.
+  verify-release-credentials:
+    name: Verify release credentials
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Require every credential a real release will need
+        env:
+          # A dry run publishes nothing and must stay runnable without any
+          # publishing secret.
+          MODE: ${{ inputs.dry_run && 'dry-run' || 'publish' }}
+          # Cross-repository write credential for the Go SDK's release tag.
+          # Passed through the environment; the script only tests it for
+          # emptiness and never echoes it.
+          GO_SDK_RELEASE_TOKEN: ${{ secrets.GO_SDK_RELEASE_TOKEN }}
+        run: |
+          set -euo pipefail
+          ./scripts/release/require-release-credentials.sh --mode "$MODE"
+
+  # The same reusable release gate `release.yml` runs before a tag publishes.
+  # Without it, a `workflow_dispatch` with `dry_run: false` published this
+  # workspace to crates.io with no stability, security, Kafka-compatibility,
+  # test or documentation check having run — a publishing path that bypassed
+  # every release control. crates.io publishes are irrevocable, so the gate is
+  # required here regardless of `dry_run`.
+  release-gate:
+    name: Release Gate
+    uses: ./.github/workflows/release-gate.yml
+    permissions:
+      contents: read
+      checks: write
+    with:
+      check_only: false
+
+  publish-rust-crate:
+    name: Publish Rust Crate (crates.io)
+    needs: [verify-core-version, verify-release-credentials, release-gate]
+    uses: ./.github/workflows/publish-crate.yml
+    with:
+      dry_run: ${{ inputs.dry_run }}
+    secrets: inherit
 
   publish-rust-sdk:
     name: Publish Rust SDK (crates.io)
+    needs: [verify-core-version, verify-release-credentials, release-gate, publish-rust-crate]
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/checkout@v4
         with:
           repository: streamlinelabs/streamline-rust-sdk
+          path: sdk
       - uses: dtolnay/rust-toolchain@stable
+      - name: Verify SDK version
+        env:
+          EXPECTED: ${{ inputs.version }}
+        run: ./scripts/release/verify-sdk-version.sh --ecosystem rust --dir sdk --expected "$EXPECTED"
       - name: Publish
         if: ${{ !inputs.dry_run }}
-        run: cargo publish --token ${{ secrets.CRATES_IO_TOKEN }}
+        working-directory: sdk
+        env:
+          # Same token resolution as .github/workflows/publish-crate.yml:
+          # canonical CARGO_REGISTRY_TOKEN, with CRATES_IO_TOKEN as a fallback.
+          # Passed via the environment so the token never appears in argv.
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN || secrets.CRATES_IO_TOKEN }}
+          VISIBILITY_TIMEOUT_SECONDS: '600'
+          VISIBILITY_POLL_SECONDS: '10'
+        # Idempotent for the same reason the core publish is: a rerun after a
+        # partially completed release must skip what is already on crates.io
+        # rather than failing with "crate version is already uploaded".
+        run: ../scripts/release/publish-crates.sh --mode publish --order streamline-client
       - name: Dry run
         if: ${{ inputs.dry_run }}
-        run: cargo publish --dry-run
+        working-directory: sdk
+        run: |
+          set -euo pipefail
+          cargo publish --dry-run
+          ../scripts/release/publish-crates.sh --mode dry-run --order streamline-client
 
   publish-npm:
     name: Publish Node.js SDK (npm)
+    needs: [verify-core-version, verify-release-credentials, release-gate, publish-rust-crate]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           repository: streamlinelabs/streamline-node-sdk
+          path: sdk
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
           registry-url: 'https://registry.npmjs.org'
-      - run: npm ci && npm run build
+      - name: Verify SDK version
+        env:
+          EXPECTED: ${{ inputs.version }}
+        run: ./scripts/release/verify-sdk-version.sh --ecosystem node --dir sdk --expected "$EXPECTED"
+      - name: Build
+        working-directory: sdk
+        run: npm ci && npm run build
       - name: Publish
         if: ${{ !inputs.dry_run }}
+        working-directory: sdk
         run: npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
       - name: Dry run
         if: ${{ inputs.dry_run }}
+        working-directory: sdk
         run: npm pack --dry-run
 
   publish-pypi:
     name: Publish Python SDK (PyPI)
+    needs: [verify-core-version, verify-release-credentials, release-gate, publish-rust-crate]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           repository: streamlinelabs/streamline-python-sdk
+          path: sdk
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Verify SDK version
+        env:
+          EXPECTED: ${{ inputs.version }}
+        run: ./scripts/release/verify-sdk-version.sh --ecosystem python --dir sdk --expected "$EXPECTED"
       - run: pip install build twine
-      - run: python -m build
+      - name: Build
+        working-directory: sdk
+        run: python -m build
       - name: Publish
         if: ${{ !inputs.dry_run }}
+        working-directory: sdk
         run: twine upload dist/*
         env:
           TWINE_USERNAME: __token__
           TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
       - name: Dry run
         if: ${{ inputs.dry_run }}
+        working-directory: sdk
         run: twine check dist/*
 
   publish-maven:
     name: Publish Java SDK (Maven Central)
+    needs: [verify-core-version, verify-release-credentials, release-gate, publish-rust-crate]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           repository: streamlinelabs/streamline-java-sdk
+          path: sdk
       - uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
@@ -110,8 +272,13 @@ jobs:
           server-password: MAVEN_PASSWORD
           gpg-private-key: ${{ secrets.GPG_PRIVATE_KEY }}
           gpg-passphrase: GPG_PASSPHRASE
+      - name: Verify SDK version
+        env:
+          EXPECTED: ${{ inputs.version }}
+        run: ./scripts/release/verify-sdk-version.sh --ecosystem java --dir sdk --expected "$EXPECTED"
       - name: Publish
         if: ${{ !inputs.dry_run }}
+        working-directory: sdk
         run: mvn deploy -P release -DskipTests
         env:
           MAVEN_USERNAME: ${{ secrets.OSSRH_USERNAME }}
@@ -119,61 +286,132 @@ jobs:
           GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
       - name: Dry run
         if: ${{ inputs.dry_run }}
+        working-directory: sdk
         run: mvn package -DskipTests
 
   publish-nuget:
     name: Publish .NET SDK (NuGet)
+    needs: [verify-core-version, verify-release-credentials, release-gate, publish-rust-crate]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           repository: streamlinelabs/streamline-dotnet-sdk
+          path: sdk
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0'
-      - run: dotnet pack -c Release
+      - name: Verify SDK version
+        env:
+          EXPECTED: ${{ inputs.version }}
+        run: ./scripts/release/verify-sdk-version.sh --ecosystem dotnet --dir sdk --expected "$EXPECTED"
+      - name: Pack
+        working-directory: sdk
+        run: dotnet pack -c Release
       - name: Publish
         if: ${{ !inputs.dry_run }}
-        run: dotnet nuget push **/*.nupkg --source https://api.nuget.org/v3/index.json --api-key ${{ secrets.NUGET_API_KEY }}
+        working-directory: sdk
+        env:
+          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+        run: dotnet nuget push "**/*.nupkg" --source https://api.nuget.org/v3/index.json --api-key "$NUGET_API_KEY"
       - name: Dry run
         if: ${{ inputs.dry_run }}
+        working-directory: sdk
         run: dotnet pack -c Release --no-build
 
   publish-go:
     name: Publish Go SDK (GitHub Release)
+    needs: [verify-core-version, verify-release-credentials, release-gate, publish-rust-crate]
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/checkout@v4
         with:
           repository: streamlinelabs/streamline-go-sdk
+          path: sdk
+          # A Go module's published version *is* its tag, so the version check
+          # needs the tag history, and the publish step creates a tag.
+          fetch-depth: 0
+          # Pushing that tag writes to *another* repository. The automatic
+          # GITHUB_TOKEN cannot: it is scoped to this repository and this
+          # workflow grants it `contents: read`. A real run therefore checks
+          # out with the dedicated cross-repository credential, which
+          # `persist-credentials` leaves configured as the auth for `origin`
+          # so the push below uses it.
+          #
+          # A dry run reads the public repository with the ordinary token and
+          # persists nothing: it neither needs nor should hold a credential
+          # that can write to another repository.
+          token: ${{ inputs.dry_run && github.token || secrets.GO_SDK_RELEASE_TOKEN }}
+          persist-credentials: ${{ !inputs.dry_run }}
       - uses: actions/setup-go@v5
         with:
           go-version: '1.22'
+      # `go.mod` records no package version, so the SDK carries an in-repo
+      # `const Version` and validates its own release tag against it. The
+      # verifier checks both the constant and the tag state, and fails closed
+      # if either is missing — it cannot report equality without evidence.
+      - name: Verify SDK version
+        env:
+          EXPECTED: ${{ inputs.version }}
+        run: ./scripts/release/verify-sdk-version.sh --ecosystem go --dir sdk --expected "$EXPECTED"
       - name: Verify module
+        working-directory: sdk
         run: go build ./...
       - name: Create tag
         if: ${{ !inputs.dry_run }}
+        working-directory: sdk
+        env:
+          VERSION: ${{ inputs.version }}
+          # The checkout above persisted this same token as the credential for
+          # `origin`. It is named here so the push's authority is explicit, and
+          # so this step fails closed on its own rather than reaching `git push`
+          # unauthenticated if the secret is ever removed. `verify-release-credentials`
+          # has already checked it before anything published.
+          GO_SDK_RELEASE_TOKEN: ${{ secrets.GO_SDK_RELEASE_TOKEN }}
         run: |
-          git tag "v${{ inputs.version }}"
-          git push origin "v${{ inputs.version }}"
+          set -euo pipefail
+          if [ -z "${GO_SDK_RELEASE_TOKEN:-}" ]; then
+            echo "::error::GO_SDK_RELEASE_TOKEN is not configured; the Go SDK tag cannot be pushed to streamlinelabs/streamline-go-sdk. See RELEASING.md."
+            exit 1
+          fi
+          # The verifier above already proved that `v$VERSION` either does not
+          # exist or points at this exact commit, so this is safe to re-run.
+          if git rev-parse -q --verify "refs/tags/v${VERSION}" > /dev/null; then
+            echo "tag v${VERSION} already exists at the released commit; nothing to do"
+          else
+            git tag "v${VERSION}"
+          fi
+          git push origin "v${VERSION}"
       - name: Dry run
         if: ${{ inputs.dry_run }}
-        run: echo "Would tag and push v${{ inputs.version }}"
+        env:
+          VERSION: ${{ inputs.version }}
+        run: echo "Would tag and push v${VERSION}"
 
   publish-kotlin:
     name: Publish Kotlin SDK (Maven Central)
+    needs: [verify-core-version, verify-release-credentials, release-gate, publish-rust-crate]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           repository: streamlinelabs/streamline-kotlin-sdk
+          path: sdk
       - uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
       - uses: gradle/actions/setup-gradle@v4
+      - name: Verify SDK version
+        env:
+          EXPECTED: ${{ inputs.version }}
+        run: ./scripts/release/verify-sdk-version.sh --ecosystem kotlin --dir sdk --expected "$EXPECTED"
       - name: Publish
         if: ${{ !inputs.dry_run }}
+        working-directory: sdk
         run: ./gradlew publish
         env:
           MAVEN_USERNAME: ${{ secrets.OSSRH_USERNAME }}
@@ -182,15 +420,24 @@ jobs:
           GPG_SIGNING_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
       - name: Dry run
         if: ${{ inputs.dry_run }}
+        working-directory: sdk
         run: ./gradlew build
 
   publish-wasm:
     name: Publish WASM SDK (npm)
+    needs: [verify-core-version, verify-release-credentials, release-gate, publish-rust-crate]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           repository: streamlinelabs/streamline-wasm-sdk
+          path: sdk
+      # This job builds the standalone WASM SDK repository, not this workspace,
+      # so this repository's `rust-toolchain.toml` pin does not apply to the
+      # `sdk/` checkout and the wasm32 target is correctly installed into the
+      # action's default toolchain. Jobs that build *this* workspace must pin
+      # 1.88 instead (see release.yml / wasm-build.yml).
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown
@@ -198,16 +445,38 @@ jobs:
         with:
           node-version: '20'
           registry-url: 'https://registry.npmjs.org'
+      # The SDK's root package.json is the npm publication authority. The
+      # version verifier checks it together with Cargo.toml before the package's
+      # own build script is allowed to generate pkg/.
+      - name: Verify SDK version
+        env:
+          EXPECTED: ${{ inputs.version }}
+        run: ./scripts/release/verify-sdk-version.sh --ecosystem wasm --dir sdk --expected "$EXPECTED"
+      - name: Verify npm package identity
+        working-directory: sdk
+        run: |
+          node -e '
+            const pkg = require("./package.json");
+            if (pkg.name !== "@streamlinelabs/streamline-wasm") {
+              console.error("unexpected WASM npm package identity: " + pkg.name);
+              process.exit(1);
+            }
+          '
       - name: Install wasm-pack
         run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
       - name: Build
-        run: wasm-pack build --target web --scope streamlinelabs
+        working-directory: sdk
+        run: npm run build
       - name: Publish
         if: ${{ !inputs.dry_run }}
-        working-directory: pkg
-        run: npm publish --access public
+        working-directory: sdk
+        run: npm publish --access public --ignore-scripts
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - name: Dry run
+        if: ${{ inputs.dry_run }}
+        working-directory: sdk
+        run: npm pack --dry-run --ignore-scripts
 
   summary:
     name: Publish Summary
@@ -216,19 +485,24 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Report
+        env:
+          VERSION: ${{ inputs.version }}
+          DRY_RUN: ${{ inputs.dry_run }}
         run: |
-          echo "## SDK Publishing Results" >> $GITHUB_STEP_SUMMARY
-          echo "| SDK | Status |" >> $GITHUB_STEP_SUMMARY
-          echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Rust Core | ${{ needs.publish-rust-crate.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Rust SDK | ${{ needs.publish-rust-sdk.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| npm (Node.js) | ${{ needs.publish-npm.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| PyPI (Python) | ${{ needs.publish-pypi.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Maven Central (Java) | ${{ needs.publish-maven.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| NuGet (.NET) | ${{ needs.publish-nuget.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Go (GitHub Release) | ${{ needs.publish-go.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Maven Central (Kotlin) | ${{ needs.publish-kotlin.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| npm (WASM) | ${{ needs.publish-wasm.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Version: ${{ inputs.version }}" >> $GITHUB_STEP_SUMMARY
-          echo "Dry run: ${{ inputs.dry_run }}" >> $GITHUB_STEP_SUMMARY
+          {
+            echo "## SDK Publishing Results"
+            echo "| SDK | Status |"
+            echo "|-----|--------|"
+            echo "| Rust Core | ${{ needs.publish-rust-crate.result }} |"
+            echo "| Rust SDK | ${{ needs.publish-rust-sdk.result }} |"
+            echo "| npm (Node.js) | ${{ needs.publish-npm.result }} |"
+            echo "| PyPI (Python) | ${{ needs.publish-pypi.result }} |"
+            echo "| Maven Central (Java) | ${{ needs.publish-maven.result }} |"
+            echo "| NuGet (.NET) | ${{ needs.publish-nuget.result }} |"
+            echo "| Go (GitHub Release) | ${{ needs.publish-go.result }} |"
+            echo "| Maven Central (Kotlin) | ${{ needs.publish-kotlin.result }} |"
+            echo "| npm (WASM) | ${{ needs.publish-wasm.result }} |"
+            echo ""
+            echo "Version: ${VERSION}"
+            echo "Dry run: ${DRY_RUN}"
+          } >> "$GITHUB_STEP_SUMMARY"

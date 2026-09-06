@@ -297,8 +297,7 @@ impl IdempotentProducerManager {
 
         let state = producers.get_mut(&producer_id).ok_or_else(|| {
             StreamlineError::Protocol(format!(
-                "Unknown producer ID {} during commit_sequence",
-                producer_id
+                "Unknown producer ID {producer_id} during commit_sequence"
             ))
         })?;
 
@@ -318,10 +317,7 @@ impl IdempotentProducerManager {
 
         debug!(
             producer_id,
-            topic,
-            partition,
-            last_sequence,
-            "Committed sequence"
+            topic, partition, last_sequence, "Committed sequence"
         );
         Ok(())
     }
@@ -335,8 +331,7 @@ impl IdempotentProducerManager {
 
         let state = producers.get_mut(&producer_id).ok_or_else(|| {
             StreamlineError::Protocol(format!(
-                "Unknown producer ID {} during bump_epoch",
-                producer_id
+                "Unknown producer ID {producer_id} during bump_epoch"
             ))
         })?;
 
@@ -355,12 +350,7 @@ impl IdempotentProducerManager {
 
         self.stats.epoch_fences.fetch_add(1, Ordering::Relaxed);
 
-        info!(
-            producer_id,
-            old_epoch,
-            new_epoch,
-            "Producer epoch bumped"
-        );
+        info!(producer_id, old_epoch, new_epoch, "Producer epoch bumped");
         Ok(new_epoch)
     }
 
@@ -523,9 +513,7 @@ mod tests {
         let result = mgr.check_sequence(id, epoch, "topic", 0, 5);
         assert_eq!(
             result,
-            DeduplicationResult::Duplicate {
-                existing_offset: 5
-            }
+            DeduplicationResult::Duplicate { existing_offset: 5 }
         );
     }
 
@@ -832,12 +820,9 @@ mod tests {
         for i in 0..5 {
             let mgr = Arc::clone(&mgr);
             handles.push(thread::spawn(move || {
-                let topic = format!("topic-{}", i);
+                let topic = format!("topic-{i}");
                 let check = mgr.check_sequence(id, epoch, &topic, 0, 0);
-                assert_eq!(
-                    check,
-                    DeduplicationResult::Accept { next_sequence: 1 }
-                );
+                assert_eq!(check, DeduplicationResult::Accept { next_sequence: 1 });
                 mgr.commit_sequence(id, &topic, 0, 0).unwrap();
             }));
         }

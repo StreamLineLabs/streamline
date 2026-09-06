@@ -9,10 +9,10 @@ use axum::{
     Json,
 };
 
-use crate::branches::{BranchId, BranchMeta, BranchStore, CowReader};
 use crate::branches::diff::{DiffConfig, DiffError};
 use crate::branches::merge::{MergeConfig, MergeError};
 use crate::branches::runner::{RunConfig, RunError, TransformKind};
+use crate::branches::{BranchId, BranchMeta, BranchStore, CowReader};
 
 use super::types::*;
 
@@ -27,9 +27,7 @@ impl BranchesApiState {
     pub fn shared() -> Self {
         static STORE: OnceLock<Arc<BranchStore>> = OnceLock::new();
         Self {
-            store: STORE
-                .get_or_init(|| Arc::new(BranchStore::new()))
-                .clone(),
+            store: STORE.get_or_init(|| Arc::new(BranchStore::new())).clone(),
         }
     }
 }
@@ -41,11 +39,19 @@ pub(crate) async fn create_branch(
     if req.base_topic.is_empty() || req.name.is_empty() {
         return (
             StatusCode::BAD_REQUEST,
-            Json(ApiError::new("invalid_argument", "base_topic and name are required")),
+            Json(ApiError::new(
+                "invalid_argument",
+                "base_topic and name are required",
+            )),
         )
             .into_response();
     }
-    let meta = BranchMeta::new(&req.base_topic, &req.name, req.base_offsets, &req.created_by);
+    let meta = BranchMeta::new(
+        &req.base_topic,
+        &req.name,
+        req.base_offsets,
+        &req.created_by,
+    );
     match state.store.create(meta.clone()) {
         Ok(()) => (StatusCode::CREATED, Json(BranchView::from(meta))).into_response(),
         Err(e) => map_store_err(e),
@@ -66,7 +72,7 @@ pub(crate) async fn get_branch(
         Some(m) => (StatusCode::OK, Json(BranchView::from(m))).into_response(),
         None => (
             StatusCode::NOT_FOUND,
-            Json(ApiError::new("not_found", format!("branch {} not found", id))),
+            Json(ApiError::new("not_found", format!("branch {id} not found"))),
         )
             .into_response(),
     }
@@ -88,7 +94,10 @@ pub(crate) async fn append_branch(
     Json(req): Json<AppendBranchRequest>,
 ) -> Response {
     let bid = BranchId(id);
-    match state.store.append(&bid, req.partition, req.value.into_bytes()) {
+    match state
+        .store
+        .append(&bid, req.partition, req.value.into_bytes())
+    {
         Ok(offset) => (
             StatusCode::CREATED,
             Json(AppendBranchResponse {
@@ -112,7 +121,10 @@ pub(crate) async fn read_branch(
         None => {
             return (
                 StatusCode::NOT_FOUND,
-                Json(ApiError::new("not_found", format!("branch {} not found", bid.0))),
+                Json(ApiError::new(
+                    "not_found",
+                    format!("branch {} not found", bid.0),
+                )),
             )
                 .into_response();
         }
@@ -153,7 +165,7 @@ pub(crate) async fn run_handler(
                 StatusCode::BAD_REQUEST,
                 Json(ApiError::new(
                     "invalid_transform",
-                    format!("unknown transform: {}. Must be identity, wasm, or sql", other),
+                    format!("unknown transform: {other}. Must be identity, wasm, or sql"),
                 )),
             )
                 .into_response();
@@ -178,7 +190,7 @@ pub(crate) async fn run_handler(
             StatusCode::UNPROCESSABLE_ENTITY,
             Json(ApiError::new(
                 "transform_not_implemented",
-                format!("transform '{}' is not yet implemented", t),
+                format!("transform '{t}' is not yet implemented"),
             )),
         )
             .into_response(),
@@ -200,7 +212,7 @@ pub(crate) async fn diff_handler(
         None => {
             return (
                 StatusCode::NOT_FOUND,
-                Json(ApiError::new("not_found", format!("branch {} not found", id))),
+                Json(ApiError::new("not_found", format!("branch {id} not found"))),
             )
                 .into_response();
         }
@@ -244,7 +256,10 @@ pub(crate) async fn merge_handler(
     if req.target_topic.trim().is_empty() {
         return (
             StatusCode::BAD_REQUEST,
-            Json(ApiError::new("invalid_argument", "target_topic is required")),
+            Json(ApiError::new(
+                "invalid_argument",
+                "target_topic is required",
+            )),
         )
             .into_response();
     }

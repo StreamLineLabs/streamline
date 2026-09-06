@@ -147,10 +147,10 @@ impl ValidatorKafkaClient {
         let mut buf = BytesMut::new();
         header
             .encode(&mut buf, api_version)
-            .map_err(|e| crate::StreamlineError::protocol_msg(format!("encode header: {}", e)))?;
+            .map_err(|e| crate::StreamlineError::protocol_msg(format!("encode header: {e}")))?;
         request
             .encode(&mut buf, api_version)
-            .map_err(|e| crate::StreamlineError::protocol_msg(format!("encode request: {}", e)))?;
+            .map_err(|e| crate::StreamlineError::protocol_msg(format!("encode request: {e}")))?;
 
         let len = buf.len() as i32;
         let mut msg = BytesMut::with_capacity(4 + buf.len());
@@ -169,9 +169,9 @@ impl ValidatorKafkaClient {
 
         let mut cursor = &resp_buf[..];
         let _resp_header = ResponseHeader::decode(&mut cursor, api_version)
-            .map_err(|e| crate::StreamlineError::protocol_msg(format!("decode header: {}", e)))?;
+            .map_err(|e| crate::StreamlineError::protocol_msg(format!("decode header: {e}")))?;
         let response = Resp::decode(&mut cursor, api_version)
-            .map_err(|e| crate::StreamlineError::protocol_msg(format!("decode response: {}", e)))?;
+            .map_err(|e| crate::StreamlineError::protocol_msg(format!("decode response: {e}")))?;
 
         Ok(response)
     }
@@ -390,7 +390,7 @@ pub fn run_validation(config: &ValidatorConfig) -> crate::Result<ValidationResul
             );
             add_check(
                 &mut result,
-                &format!("Topic '{}' exists", topic_name),
+                &format!("Topic '{topic_name}' exists"),
                 "topics",
                 CheckStatus::Fail("Missing in Streamline".to_string()),
                 None,
@@ -412,11 +412,10 @@ pub fn run_validation(config: &ValidatorConfig) -> crate::Result<ValidationResul
                 );
                 add_check(
                     &mut result,
-                    &format!("Topic '{}' partitions", topic_name),
+                    &format!("Topic '{topic_name}' partitions"),
                     "topics",
                     CheckStatus::Warn(format!(
-                        "Kafka: {}, Streamline: {}",
-                        kafka_partitions, streamline_partitions
+                        "Kafka: {kafka_partitions}, Streamline: {streamline_partitions}"
                     )),
                     None,
                 );
@@ -429,7 +428,7 @@ pub fn run_validation(config: &ValidatorConfig) -> crate::Result<ValidationResul
                 );
                 add_check(
                     &mut result,
-                    &format!("Topic '{}' configuration", topic_name),
+                    &format!("Topic '{topic_name}' configuration"),
                     "topics",
                     CheckStatus::Pass,
                     None,
@@ -477,10 +476,10 @@ pub fn run_validation(config: &ValidatorConfig) -> crate::Result<ValidationResul
                 );
                 add_check(
                     &mut result,
-                    &format!("Topic '{}' message count", topic_name),
+                    &format!("Topic '{topic_name}' message count"),
                     "data",
                     CheckStatus::Pass,
-                    Some(format!("{} messages", kafka_total)),
+                    Some(format!("{kafka_total} messages")),
                 );
             } else if diff.abs() < (*kafka_total / 100).max(10) {
                 // Within 1% or 10 messages
@@ -494,9 +493,9 @@ pub fn run_validation(config: &ValidatorConfig) -> crate::Result<ValidationResul
                 );
                 add_check(
                     &mut result,
-                    &format!("Topic '{}' message count", topic_name),
+                    &format!("Topic '{topic_name}' message count"),
                     "data",
-                    CheckStatus::Warn(format!("{} messages behind", diff)),
+                    CheckStatus::Warn(format!("{diff} messages behind")),
                     None,
                 );
             } else {
@@ -510,9 +509,9 @@ pub fn run_validation(config: &ValidatorConfig) -> crate::Result<ValidationResul
                 );
                 add_check(
                     &mut result,
-                    &format!("Topic '{}' message count", topic_name),
+                    &format!("Topic '{topic_name}' message count"),
                     "data",
-                    CheckStatus::Fail(format!("{} messages behind", diff)),
+                    CheckStatus::Fail(format!("{diff} messages behind")),
                     None,
                 );
             }
@@ -531,53 +530,53 @@ pub fn run_validation(config: &ValidatorConfig) -> crate::Result<ValidationResul
         // List consumer groups on both Kafka and Streamline using ListGroups API
         use kafka_protocol::messages::{ListGroupsRequest, ListGroupsResponse};
 
-        let kafka_groups: Vec<String> =
-            match kafka_client.send_request::<ListGroupsRequest, ListGroupsResponse>(
+        let kafka_groups: Vec<String> = match kafka_client
+            .send_request::<ListGroupsRequest, ListGroupsResponse>(
                 ApiKey::ListGroups,
                 4,
                 &ListGroupsRequest::default(),
             ) {
-                Ok(resp) => resp
-                    .groups
-                    .iter()
-                    .map(|g| g.group_id.as_str().to_string())
-                    .collect(),
-                Err(e) => {
-                    println!("  {} Failed to list Kafka groups: {}", "!".yellow(), e);
-                    vec![]
-                }
-            };
+            Ok(resp) => resp
+                .groups
+                .iter()
+                .map(|g| g.group_id.as_str().to_string())
+                .collect(),
+            Err(e) => {
+                println!("  {} Failed to list Kafka groups: {}", "!".yellow(), e);
+                vec![]
+            }
+        };
 
-        let streamline_groups: Vec<String> =
-            match streamline_client.send_request::<ListGroupsRequest, ListGroupsResponse>(
+        let streamline_groups: Vec<String> = match streamline_client
+            .send_request::<ListGroupsRequest, ListGroupsResponse>(
                 ApiKey::ListGroups,
                 4,
                 &ListGroupsRequest::default(),
             ) {
-                Ok(resp) => resp
-                    .groups
-                    .iter()
-                    .map(|g| g.group_id.as_str().to_string())
-                    .collect(),
-                Err(e) => {
-                    println!(
-                        "  {} Failed to list Streamline groups: {}",
-                        "!".yellow(),
-                        e
-                    );
-                    vec![]
-                }
-            };
+            Ok(resp) => resp
+                .groups
+                .iter()
+                .map(|g| g.group_id.as_str().to_string())
+                .collect(),
+            Err(e) => {
+                println!("  {} Failed to list Streamline groups: {}", "!".yellow(), e);
+                vec![]
+            }
+        };
 
         // Validate that all Kafka groups exist in Streamline
         let mut groups_checked = 0usize;
         for group_id in &kafka_groups {
             groups_checked += 1;
             if streamline_groups.contains(group_id) {
-                println!("  {} Group '{}' exists on both sides", "✓".green(), group_id);
+                println!(
+                    "  {} Group '{}' exists on both sides",
+                    "✓".green(),
+                    group_id
+                );
                 add_check(
                     &mut result,
-                    &format!("Consumer group '{}'", group_id),
+                    &format!("Consumer group '{group_id}'"),
                     "groups",
                     CheckStatus::Pass,
                     None,
@@ -590,7 +589,7 @@ pub fn run_validation(config: &ValidatorConfig) -> crate::Result<ValidationResul
                 );
                 add_check(
                     &mut result,
-                    &format!("Consumer group '{}'", group_id),
+                    &format!("Consumer group '{group_id}'"),
                     "groups",
                     CheckStatus::Warn("Missing in Streamline".to_string()),
                     None,
@@ -752,8 +751,8 @@ fn generate_report(result: &ValidationResult, format: &str) -> String {
             for check in &result.checks {
                 let status = match &check.status {
                     CheckStatus::Pass => "✓ Pass",
-                    CheckStatus::Warn(msg) => &format!("⚠ Warn: {}", msg),
-                    CheckStatus::Fail(msg) => &format!("✗ Fail: {}", msg),
+                    CheckStatus::Warn(msg) => &format!("⚠ Warn: {msg}"),
+                    CheckStatus::Fail(msg) => &format!("✗ Fail: {msg}"),
                 };
                 report.push_str(&format!(
                     "| {} | {} | {} | {} |\n",
@@ -783,7 +782,7 @@ fn print_banner() {
 fn print_step(num: u32, message: &str) {
     println!(
         "  {} {}",
-        format!("[{}/5]", num).cyan().bold(),
+        format!("[{num}/5]").cyan().bold(),
         message.bold()
     );
 }

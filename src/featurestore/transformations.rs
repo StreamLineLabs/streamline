@@ -8,11 +8,16 @@
 
 use crate::featurestore::feature::FeatureValue;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
 /// Transformation engine for applying feature transformations
 pub struct TransformationEngine {
     // Registered UDFs could go here in a full implementation
+}
+
+impl Default for TransformationEngine {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl TransformationEngine {
@@ -22,11 +27,7 @@ impl TransformationEngine {
     }
 
     /// Apply a windowed aggregation over a set of values
-    pub fn aggregate(
-        &self,
-        values: &[f64],
-        aggregation: WindowedAggregation,
-    ) -> f64 {
+    pub fn aggregate(&self, values: &[f64], aggregation: WindowedAggregation) -> f64 {
         match aggregation {
             WindowedAggregation::Sum => values.iter().sum(),
             WindowedAggregation::Avg => {
@@ -37,14 +38,8 @@ impl TransformationEngine {
                 }
             }
             WindowedAggregation::Count => values.len() as f64,
-            WindowedAggregation::Min => values
-                .iter()
-                .cloned()
-                .fold(f64::INFINITY, f64::min),
-            WindowedAggregation::Max => values
-                .iter()
-                .cloned()
-                .fold(f64::NEG_INFINITY, f64::max),
+            WindowedAggregation::Min => values.iter().cloned().fold(f64::INFINITY, f64::min),
+            WindowedAggregation::Max => values.iter().cloned().fold(f64::NEG_INFINITY, f64::max),
             WindowedAggregation::StdDev => {
                 if values.len() < 2 {
                     return 0.0;
@@ -59,8 +54,7 @@ impl TransformationEngine {
                     return 0.0;
                 }
                 let mean = values.iter().sum::<f64>() / values.len() as f64;
-                values.iter().map(|v| (v - mean).powi(2)).sum::<f64>()
-                    / (values.len() - 1) as f64
+                values.iter().map(|v| (v - mean).powi(2)).sum::<f64>() / (values.len() - 1) as f64
             }
             WindowedAggregation::First => values.first().copied().unwrap_or(0.0),
             WindowedAggregation::Last => values.last().copied().unwrap_or(0.0),
@@ -81,8 +75,16 @@ impl TransformationEngine {
             return Vec::new();
         }
 
-        let min_ts = timestamped_values.iter().map(|(ts, _)| *ts).min().unwrap_or(0);
-        let max_ts = timestamped_values.iter().map(|(ts, _)| *ts).max().unwrap_or(0);
+        let min_ts = timestamped_values
+            .iter()
+            .map(|(ts, _)| *ts)
+            .min()
+            .unwrap_or(0);
+        let max_ts = timestamped_values
+            .iter()
+            .map(|(ts, _)| *ts)
+            .max()
+            .unwrap_or(0);
 
         let mut results = Vec::new();
         let mut window_start = min_ts - (min_ts % window_size_ms);
@@ -126,8 +128,16 @@ impl TransformationEngine {
             return Vec::new();
         }
 
-        let min_ts = timestamped_values.iter().map(|(ts, _)| *ts).min().unwrap_or(0);
-        let max_ts = timestamped_values.iter().map(|(ts, _)| *ts).max().unwrap_or(0);
+        let min_ts = timestamped_values
+            .iter()
+            .map(|(ts, _)| *ts)
+            .min()
+            .unwrap_or(0);
+        let max_ts = timestamped_values
+            .iter()
+            .map(|(ts, _)| *ts)
+            .max()
+            .unwrap_or(0);
 
         let mut results = Vec::new();
         let mut window_start = min_ts - (min_ts % slide_ms);
@@ -493,16 +503,9 @@ mod tests {
     #[test]
     fn test_sliding_window() {
         let e = engine();
-        let values = vec![
-            (0, 1.0),
-            (500, 2.0),
-            (1000, 3.0),
-            (1500, 4.0),
-            (2000, 5.0),
-        ];
+        let values = vec![(0, 1.0), (500, 2.0), (1000, 3.0), (1500, 4.0), (2000, 5.0)];
 
-        let results =
-            e.sliding_window_aggregate(&values, 1000, 500, WindowedAggregation::Sum);
+        let results = e.sliding_window_aggregate(&values, 1000, 500, WindowedAggregation::Sum);
 
         // Windows: [0,1000)=[1,2], [500,1500)=[2,3], [1000,2000)=[3,4], [1500,2500)=[4,5], [2000,3000)=[5]
         assert!(results.len() >= 3);
@@ -514,16 +517,9 @@ mod tests {
     fn test_session_window() {
         let e = engine();
         // Two sessions: (100, 200, 300) and (1000, 1100)
-        let values = vec![
-            (100, 1.0),
-            (200, 2.0),
-            (300, 3.0),
-            (1000, 4.0),
-            (1100, 5.0),
-        ];
+        let values = vec![(100, 1.0), (200, 2.0), (300, 3.0), (1000, 4.0), (1100, 5.0)];
 
-        let results =
-            e.session_window_aggregate(&values, 500, WindowedAggregation::Sum);
+        let results = e.session_window_aggregate(&values, 500, WindowedAggregation::Sum);
 
         assert_eq!(results.len(), 2);
         assert_eq!(results[0].value, 6.0); // 1+2+3
@@ -605,10 +601,10 @@ mod tests {
     #[test]
     fn test_hour_of_day() {
         // 2024-01-15 14:30:00 UTC -> hour = 14
-        let ts = 1705325400000i64;
+        let ts = 1_705_329_000_000i64;
         match TransformationEngine::hour_of_day(ts) {
             FeatureValue::Int64(h) => assert_eq!(h, 14),
-            other => panic!("Expected Int64, got {:?}", other),
+            other => panic!("Expected Int64, got {other:?}"),
         }
     }
 
@@ -618,7 +614,7 @@ mod tests {
         let ts = 1705325400000i64;
         match TransformationEngine::day_of_week(ts) {
             FeatureValue::Int64(d) => assert_eq!(d, 0),
-            other => panic!("Expected Int64, got {:?}", other),
+            other => panic!("Expected Int64, got {other:?}"),
         }
     }
 

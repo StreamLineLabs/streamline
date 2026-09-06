@@ -439,7 +439,7 @@ impl ConnectorRuntime {
         Self {
             factories: Arc::new(RwLock::new(HashMap::new())),
             connectors: Arc::new(RwLock::new(HashMap::new())),
-            worker_id: format!("{}:8084", hostname),
+            worker_id: format!("{hostname}:8084"),
         }
     }
 
@@ -521,7 +521,7 @@ impl ConnectorRuntime {
         let mut connectors = self.connectors.write().await;
         let managed = connectors
             .get_mut(name)
-            .ok_or_else(|| StreamlineError::Config(format!("Connector not found: {}", name)))?;
+            .ok_or_else(|| StreamlineError::Config(format!("Connector not found: {name}")))?;
 
         if managed.state == NativeConnectorState::Running {
             managed.connector.stop().await?;
@@ -537,7 +537,7 @@ impl ConnectorRuntime {
         let mut connectors = self.connectors.write().await;
         let managed = connectors
             .get_mut(name)
-            .ok_or_else(|| StreamlineError::Config(format!("Connector not found: {}", name)))?;
+            .ok_or_else(|| StreamlineError::Config(format!("Connector not found: {name}")))?;
 
         if managed.state == NativeConnectorState::Running {
             debug!(connector = %name, "Connector already running");
@@ -566,7 +566,7 @@ impl ConnectorRuntime {
         let mut connectors = self.connectors.write().await;
         let managed = connectors
             .get_mut(name)
-            .ok_or_else(|| StreamlineError::Config(format!("Connector not found: {}", name)))?;
+            .ok_or_else(|| StreamlineError::Config(format!("Connector not found: {name}")))?;
 
         if managed.state != NativeConnectorState::Running {
             debug!(connector = %name, "Connector is not running");
@@ -614,7 +614,7 @@ impl ConnectorRuntime {
         let connectors = self.connectors.read().await;
         let managed = connectors
             .get(name)
-            .ok_or_else(|| StreamlineError::Config(format!("Connector not found: {}", name)))?;
+            .ok_or_else(|| StreamlineError::Config(format!("Connector not found: {name}")))?;
 
         let tasks: Vec<TaskStatus> = (0..managed.config.tasks_max)
             .map(|i| TaskStatus {
@@ -859,7 +859,7 @@ impl SourceConnectorTrait for HttpSourceConnector {
             topic,
             partition: None,
             key: None,
-            value: format!("polled {} (count={})", url, poll_id).into_bytes(),
+            value: format!("polled {url} (count={poll_id})").into_bytes(),
             headers: vec![("http.method".to_string(), self.method().as_bytes().to_vec())],
             timestamp: Some(
                 std::time::SystemTime::now()

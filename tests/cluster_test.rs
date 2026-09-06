@@ -20,8 +20,8 @@ use tokio::time::sleep;
 fn test_cluster_config(node_id: u64, kafka_port: u16, inter_broker_port: u16) -> ClusterConfig {
     ClusterConfig {
         node_id,
-        advertised_addr: format!("127.0.0.1:{}", kafka_port).parse().unwrap(),
-        inter_broker_addr: format!("127.0.0.1:{}", inter_broker_port).parse().unwrap(),
+        advertised_addr: format!("127.0.0.1:{kafka_port}").parse().unwrap(),
+        inter_broker_addr: format!("127.0.0.1:{inter_broker_port}").parse().unwrap(),
         seed_nodes: vec![],
         default_replication_factor: 1,
         min_insync_replicas: 1,
@@ -33,6 +33,7 @@ fn test_cluster_config(node_id: u64, kafka_port: u16, inter_broker_port: u16) ->
         inter_broker_tls: InterBrokerTlsConfig::default(),
         rack_id: None,
         rack_aware_assignment: true,
+        ..ClusterConfig::default()
     }
 }
 

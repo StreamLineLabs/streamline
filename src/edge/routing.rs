@@ -102,7 +102,7 @@ impl ConsistentHash {
         let mut ring = Vec::with_capacity(nodes.len() * virtual_nodes);
         for (idx, node) in nodes.iter().enumerate() {
             for vn in 0..virtual_nodes {
-                let key = format!("{}:{}", node, vn);
+                let key = format!("{node}:{vn}");
                 let hash = Self::hash_bytes(key.as_bytes());
                 ring.push((hash, idx));
             }
@@ -205,14 +205,13 @@ impl MeshRouteTable {
         let start = std::time::Instant::now();
         let routes = self.routes.read();
         let entries = routes.get(topic).ok_or_else(|| {
-            StreamlineError::storage_msg(format!("no routes for topic '{}'", topic))
+            StreamlineError::storage_msg(format!("no routes for topic '{topic}'"))
         })?;
 
         let healthy: Vec<MeshRoute> = entries.iter().filter(|r| r.healthy).cloned().collect();
         if healthy.is_empty() {
             return Err(StreamlineError::storage_msg(format!(
-                "no healthy routes for topic '{}'",
-                topic
+                "no healthy routes for topic '{topic}'"
             )));
         }
 
@@ -224,7 +223,9 @@ impl MeshRouteTable {
                 .iter()
                 .min_by_key(|r| r.latency_ms)
                 .cloned()
-                .ok_or_else(|| StreamlineError::storage_msg(format!("no healthy routes for topic '{}'", topic)))?,
+                .ok_or_else(|| {
+                    StreamlineError::storage_msg(format!("no healthy routes for topic '{topic}'"))
+                })?,
             RoutingPolicy::RoundRobin => {
                 // Drop the routes read-lock is not needed for counter; we already cloned healthy.
                 let mut counters = self.rr_counters.write();
@@ -233,10 +234,13 @@ impl MeshRouteTable {
                 *counter = counter.wrapping_add(1);
                 healthy[idx].clone()
             }
-            RoutingPolicy::PrimaryBackup => {
-                healthy.iter().min_by_key(|r| r.priority).cloned()
-                    .ok_or_else(|| StreamlineError::storage_msg(format!("no healthy routes for topic '{}'", topic)))?
-            }
+            RoutingPolicy::PrimaryBackup => healthy
+                .iter()
+                .min_by_key(|r| r.priority)
+                .cloned()
+                .ok_or_else(|| {
+                    StreamlineError::storage_msg(format!("no healthy routes for topic '{topic}'"))
+                })?,
             RoutingPolicy::HashBased { .. } => {
                 let node_ids: Vec<String> = healthy.iter().map(|r| r.target_node.clone()).collect();
                 let ring = ConsistentHash::new(node_ids, 100);
@@ -256,7 +260,11 @@ impl MeshRouteTable {
                         .iter()
                         .min_by_key(|r| r.latency_ms)
                         .cloned()
-                        .ok_or_else(|| StreamlineError::storage_msg(format!("no healthy routes for topic '{}'", topic)))?
+                        .ok_or_else(|| {
+                            StreamlineError::storage_msg(format!(
+                                "no healthy routes for topic '{topic}'"
+                            ))
+                        })?
                 }
             }
         };
@@ -417,7 +425,7 @@ mod tests {
             topic: topic.to_string(),
             partition: None,
             target_node: node.to_string(),
-            target_addr: format!("{}:9092", node),
+            target_addr: format!("{node}:9092"),
             priority,
             healthy: true,
             latency_ms: latency,

@@ -59,7 +59,13 @@ top = "run --bin streamline-cli -- top"
 validate = "make validate"
 
 # Security audit
-audit = "audit"
+#
+# NOTE: there is deliberately no `audit` alias here. `audit = "audit"` is a
+# self-recursive alias: cargo resolves the alias before falling back to the
+# external `cargo-audit` binary, so it fails with
+# "alias audit has unresolvable recursive definition". That made `cargo audit`
+# unusable anywhere inside this repository, including in CI. Run `cargo audit`
+# directly — cargo finds the `cargo-audit` subcommand on PATH.
 
 # Check for unused dependencies (requires cargo-machete)
 unused = "machete"
@@ -69,6 +75,7 @@ unused = "machete"
 # With heavy deps (duckdb, wasmtime, arrow), peak memory per rustc can be 2-4GB.
 # On a 64GB machine with 10 cores, 6 jobs keeps memory under ~24GB peak.
 # Adjust based on your system: more RAM = more jobs, freezing = fewer jobs.
+# Hosted workflows override this for all-feature test links on smaller runners.
 jobs = 6
 
 # Use sccache to cache compiled crates across clean builds and branch switches.
@@ -91,4 +98,3 @@ retry = 3
 color = "auto"
 # Show progress bar
 progress.when = "auto"
-

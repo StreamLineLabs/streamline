@@ -27,20 +27,27 @@ fn test_idempotent_producer_sequence_tracking() {
 
     // First batch: sequence 0
     let result = eos.validate_produce(topic, partition, producer_id, epoch, 0, 0);
-    assert_eq!(result, SequenceValidation::Valid, "First sequence must be valid");
+    assert_eq!(
+        result,
+        SequenceValidation::Valid,
+        "First sequence must be valid"
+    );
     eos.record_produce(topic, partition, producer_id, epoch, 0, 0, 100);
 
     // Next batch: sequence 1
     let result = eos.validate_produce(topic, partition, producer_id, epoch, 1, 1);
-    assert_eq!(result, SequenceValidation::Valid, "Sequential sequence must be valid");
+    assert_eq!(
+        result,
+        SequenceValidation::Valid,
+        "Sequential sequence must be valid"
+    );
     eos.record_produce(topic, partition, producer_id, epoch, 1, 1, 101);
 
     // Duplicate of sequence 0
     let result = eos.validate_produce(topic, partition, producer_id, epoch, 0, 0);
     assert!(
         matches!(result, SequenceValidation::Duplicate { .. }),
-        "Replay of sequence 0 must be detected as duplicate, got {:?}",
-        result
+        "Replay of sequence 0 must be detected as duplicate, got {result:?}"
     );
 }
 
@@ -63,13 +70,16 @@ fn test_epoch_fencing() {
     let result = eos.validate_produce(topic, partition, producer_id, 0, 1, 1);
     assert!(
         matches!(result, SequenceValidation::EpochFenced { .. }),
-        "Stale epoch must be fenced, got {:?}",
-        result
+        "Stale epoch must be fenced, got {result:?}"
     );
 
     // Write with new epoch 1 should succeed
     let result = eos.validate_produce(topic, partition, producer_id, 1, 0, 0);
-    assert_eq!(result, SequenceValidation::Valid, "Current epoch must be accepted");
+    assert_eq!(
+        result,
+        SequenceValidation::Valid,
+        "Current epoch must be accepted"
+    );
 }
 
 #[test]
@@ -87,8 +97,7 @@ fn test_out_of_order_detection() {
     let result = eos.validate_produce(topic, partition, producer_id, epoch, 5, 5);
     assert!(
         matches!(result, SequenceValidation::OutOfOrder { .. }),
-        "Sequence gap must be detected as out-of-order, got {:?}",
-        result
+        "Sequence gap must be detected as out-of-order, got {result:?}"
     );
 }
 
@@ -110,7 +119,11 @@ fn test_multiple_producers_isolated() {
 
     // Producer 1 continues with sequence 1
     let r3 = eos.validate_produce(topic, partition, 1, 0, 1, 1);
-    assert_eq!(r3, SequenceValidation::Valid, "Producers must have independent sequences");
+    assert_eq!(
+        r3,
+        SequenceValidation::Valid,
+        "Producers must have independent sequences"
+    );
 }
 
 #[test]
@@ -125,7 +138,11 @@ fn test_multiple_partitions_isolated() {
 
     // Write to partition 1 with sequence 0 (independent)
     let result = eos.validate_produce(topic, 1, producer_id, epoch, 0, 0);
-    assert_eq!(result, SequenceValidation::Valid, "Partitions must be independent");
+    assert_eq!(
+        result,
+        SequenceValidation::Valid,
+        "Partitions must be independent"
+    );
 }
 
 #[test]
@@ -134,7 +151,11 @@ fn test_disabled_eos_allows_everything() {
 
     // With EOS disabled, all validations should pass
     let result = eos.validate_produce("t", 0, 1, 0, 999, 999);
-    assert_eq!(result, SequenceValidation::Valid, "Disabled EOS must allow all");
+    assert_eq!(
+        result,
+        SequenceValidation::Valid,
+        "Disabled EOS must allow all"
+    );
 }
 
 #[test]
@@ -143,7 +164,11 @@ fn test_negative_producer_id_bypasses_eos() {
 
     // Negative producer IDs (non-idempotent) should bypass validation
     let result = eos.validate_produce("t", 0, -1, 0, 0, 0);
-    assert_eq!(result, SequenceValidation::Valid, "Negative producer_id must bypass EOS");
+    assert_eq!(
+        result,
+        SequenceValidation::Valid,
+        "Negative producer_id must bypass EOS"
+    );
 }
 
 #[test]
@@ -155,7 +180,11 @@ fn test_producer_cleanup() {
 
     eos.cleanup_expired(std::time::Duration::from_secs(0));
     // After cleanup with zero duration, producer should be removed
-    assert_eq!(eos.tracked_producer_count(), 0, "Expired producers must be cleaned up");
+    assert_eq!(
+        eos.tracked_producer_count(),
+        0,
+        "Expired producers must be cleaned up"
+    );
 }
 
 // ============================================================================
@@ -164,7 +193,7 @@ fn test_producer_cleanup() {
 
 #[test]
 fn test_eos_certification_checklist() {
-    let requirements = vec![
+    let requirements = [
         ("KIP-98: Idempotent producer", true),
         ("KIP-98: Duplicate detection", true),
         ("KIP-98: Epoch fencing", true),

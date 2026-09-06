@@ -31,6 +31,12 @@ pub struct HistoricalStore {
     data: Arc<RwLock<HashMap<String, Vec<HistoricalRecord>>>>,
 }
 
+impl Default for HistoricalStore {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl HistoricalStore {
     /// Create a new historical store
     pub fn new() -> Self {
@@ -348,10 +354,7 @@ mod tests {
         // user_2 at 1000 -> no record yet
         assert_eq!(results[2].get("amount"), Some(&FeatureValue::Null));
         // user_2 at 2000 -> t=1500 value
-        assert_eq!(
-            results[3].get("amount"),
-            Some(&FeatureValue::Float64(50.0))
-        );
+        assert_eq!(results[3].get("amount"), Some(&FeatureValue::Float64(50.0)));
     }
 
     #[tokio::test]
@@ -361,9 +364,7 @@ mod tests {
         for i in 1..=5 {
             let mut f = HashMap::new();
             f.insert("v".to_string(), FeatureValue::Int64(i));
-            store
-                .write("view", "entity", f, i as i64 * 1000)
-                .await;
+            store.write("view", "entity", f, i * 1000).await;
         }
 
         let range = store.get_range("view", Some(2000), Some(4000)).await;

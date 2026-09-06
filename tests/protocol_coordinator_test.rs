@@ -92,7 +92,7 @@ fn test_find_coordinator_request_all_versions() {
     for version in 0..=3 {
         let mut buf = BytesMut::new();
         let result = request_old.clone().encode(&mut buf, version);
-        assert!(result.is_ok(), "Failed to encode v{}", version);
+        assert!(result.is_ok(), "Failed to encode v{version}");
     }
 
     // Test versions 4-5 (use coordinator_keys field)
@@ -105,7 +105,7 @@ fn test_find_coordinator_request_all_versions() {
     for version in 4..=5 {
         let mut buf = BytesMut::new();
         let result = request_new.clone().encode(&mut buf, version);
-        assert!(result.is_ok(), "Failed to encode v{}", version);
+        assert!(result.is_ok(), "Failed to encode v{version}");
     }
 }
 
@@ -243,7 +243,7 @@ fn test_find_coordinator_response_all_versions() {
     for version in 0..=3 {
         let mut buf = BytesMut::new();
         let result = response_old.clone().encode(&mut buf, version);
-        assert!(result.is_ok(), "Failed to encode response v{}", version);
+        assert!(result.is_ok(), "Failed to encode response v{version}");
     }
 
     // Test versions 4-5 (use coordinators array)
@@ -259,7 +259,7 @@ fn test_find_coordinator_response_all_versions() {
     for version in 4..=5 {
         let mut buf = BytesMut::new();
         let result = response_new.clone().encode(&mut buf, version);
-        assert!(result.is_ok(), "Failed to encode response v{}", version);
+        assert!(result.is_ok(), "Failed to encode response v{version}");
     }
 }
 
@@ -539,7 +539,7 @@ fn test_batch_coordinator_lookup_request() {
     for i in 0..5 {
         request
             .coordinator_keys
-            .push(StrBytes::from_string(format!("group-{}", i)));
+            .push(StrBytes::from_string(format!("group-{i}")));
     }
 
     // Version 4+ supports batch
@@ -558,7 +558,7 @@ fn test_batch_coordinator_lookup_response() {
 
     for i in 0..5 {
         let mut coord = Coordinator::default();
-        coord.key = StrBytes::from_string(format!("group-{}", i));
+        coord.key = StrBytes::from_string(format!("group-{i}"));
         coord.node_id = BrokerId(i % 3); // Distribute across 3 brokers
         coord.host = StrBytes::from_string(format!("broker-{}", i % 3));
         coord.port = 9092;

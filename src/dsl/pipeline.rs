@@ -167,11 +167,11 @@ pub enum PipelineError {
 impl std::fmt::Display for PipelineError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            PipelineError::Config(msg) => write!(f, "Config error: {}", msg),
-            PipelineError::Execution(msg) => write!(f, "Execution error: {}", msg),
-            PipelineError::Source(msg) => write!(f, "Source error: {}", msg),
-            PipelineError::Sink(msg) => write!(f, "Sink error: {}", msg),
-            PipelineError::Operator(msg) => write!(f, "Operator error: {}", msg),
+            PipelineError::Config(msg) => write!(f, "Config error: {msg}"),
+            PipelineError::Execution(msg) => write!(f, "Execution error: {msg}"),
+            PipelineError::Source(msg) => write!(f, "Source error: {msg}"),
+            PipelineError::Sink(msg) => write!(f, "Sink error: {msg}"),
+            PipelineError::Operator(msg) => write!(f, "Operator error: {msg}"),
         }
     }
 }

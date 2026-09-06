@@ -89,7 +89,7 @@ impl ManifestWatcher {
     async fn reload_manifest(&self) -> Result<()> {
         let content = tokio::fs::read_to_string(&self.path)
             .await
-            .map_err(|e| StreamlineError::Config(format!("Failed to read manifest: {}", e)))?;
+            .map_err(|e| StreamlineError::Config(format!("Failed to read manifest: {e}")))?;
 
         let manifest = DevManifest::from_yaml(&content)?;
 

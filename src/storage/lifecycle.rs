@@ -419,7 +419,7 @@ impl LifecycleManager {
         current_tier: StorageTier,
         created_at: SystemTime,
     ) {
-        let key = format!("{}/{}/{}", topic, partition, segment_id);
+        let key = format!("{topic}/{partition}/{segment_id}");
         let now = Instant::now();
 
         let mut patterns = self.access_patterns.write();
@@ -631,7 +631,7 @@ impl LifecycleManager {
         segment_id: u64,
         new_tier: StorageTier,
     ) {
-        let key = format!("{}/{}/{}", topic, partition, segment_id);
+        let key = format!("{topic}/{partition}/{segment_id}");
 
         let mut patterns = self.access_patterns.write();
         if let Some(pattern) = patterns.get_mut(&key) {

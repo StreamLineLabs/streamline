@@ -216,12 +216,12 @@ impl StreamContract {
 
     /// Load a contract from a YAML string.
     pub fn from_yaml(yaml: &str) -> std::result::Result<Self, String> {
-        serde_yaml::from_str(yaml).map_err(|e| format!("Failed to parse contract YAML: {}", e))
+        serde_yaml::from_str(yaml).map_err(|e| format!("Failed to parse contract YAML: {e}"))
     }
 
     /// Serialize the contract to YAML.
     pub fn to_yaml(&self) -> std::result::Result<String, String> {
-        serde_yaml::to_string(self).map_err(|e| format!("Failed to serialize contract: {}", e))
+        serde_yaml::to_string(self).map_err(|e| format!("Failed to serialize contract: {e}"))
     }
 }
 

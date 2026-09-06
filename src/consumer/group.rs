@@ -19,7 +19,7 @@ mod offset_map_serde {
         use serde::ser::SerializeMap;
         let mut ser_map = serializer.serialize_map(Some(map.len()))?;
         for ((topic, partition), value) in map {
-            let key = format!("{}:{}", topic, partition);
+            let key = format!("{topic}:{partition}");
             ser_map.serialize_entry(&key, value)?;
         }
         ser_map.end()

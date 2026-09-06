@@ -81,8 +81,21 @@ jobs:
 
       - name: Start Streamline
         run: |
+          set -euo pipefail
           ./target/release/streamline --in-memory &
-          for i in $(seq 1 30); do curl -sf http://localhost:9094/health && break || sleep 1; done
+          echo $! > streamline.pid
+          # `... && break || sleep 1` can never fail the step; poll explicitly so
+          # a server that never starts is reported instead of cascading into
+          # confusing downstream failures.
+          for _ in $(seq 1 30); do
+            if curl -sf http://localhost:9094/health > /dev/null; then
+              echo "streamline is healthy"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::streamline did not become healthy within 30s"
+          exit 1
 
       - name: Test migrate from-kafka (dry run)
         run: |
@@ -107,13 +120,16 @@ jobs:
 
       - name: Verify topics exist in Streamline
         run: |
+          set -euo pipefail
           ./target/release/streamline-cli topics list --format json 2>&1 | tee topics.log
-          # Verify at least some topics were migrated
-          if grep -q "migrate-test" topics.log; then
-            echo "✅ Topics migrated successfully"
-          else
-            echo "⚠️ Topic verification inconclusive (auto-create may differ)"
+          # The migration executed above; if the migrated topics are absent, the
+          # migration did not work. Reporting "inconclusive" and passing hid
+          # real regressions.
+          if ! grep -q "migrate-test" topics.log; then
+            echo "::error::no migrated topics found in Streamline after migrate --execute"
+            exit 1
           fi
+          echo "Topics migrated successfully"
 
       - name: Verify consumer groups
         run: |
@@ -135,8 +151,10 @@ jobs:
       - name: Cleanup
         if: always()
         run: |
-          pkill streamline || true
-          $KAFKA_HOME/bin/kafka-server-stop.sh 2>/dev/null || true
+          if [ -f streamline.pid ]; then
+            kill "$(cat streamline.pid)" 2>/dev/null || true
+          fi
+          "$KAFKA_HOME/bin/kafka-server-stop.sh" 2>/dev/null || true
 
   migration-summary:
     name: Migration Test Summary

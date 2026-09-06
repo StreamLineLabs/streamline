@@ -286,7 +286,9 @@ impl AmqpAdapter {
         username: Option<&str>,
     ) -> Result<()> {
         if vhost != self.config.default_vhost && vhost != "/" {
-            return Err(StreamlineError::Gateway(format!("vhost '{}' not found", vhost)));
+            return Err(StreamlineError::Gateway(format!(
+                "vhost '{vhost}' not found"
+            )));
         }
 
         let session = AmqpSession {
@@ -303,18 +305,16 @@ impl AmqpAdapter {
             .insert(connection_id.to_string(), session);
 
         self.stats.connections_total.fetch_add(1, Ordering::Relaxed);
-        self.stats.connections_active.fetch_add(1, Ordering::Relaxed);
+        self.stats
+            .connections_active
+            .fetch_add(1, Ordering::Relaxed);
 
         info!(connection_id, vhost, "AMQP connection opened");
         Ok(())
     }
 
     /// Handle Channel.Open — open a channel on an existing connection.
-    pub async fn handle_channel_open(
-        &self,
-        connection_id: &str,
-        channel_id: u16,
-    ) -> Result<()> {
+    pub async fn handle_channel_open(&self, connection_id: &str, channel_id: u16) -> Result<()> {
         let mut sessions = self.sessions.write().await;
         let session = sessions
             .get_mut(connection_id)
@@ -331,7 +331,9 @@ impl AmqpAdapter {
             )));
         }
 
-        session.channels.insert(channel_id, AmqpChannel::new(channel_id));
+        session
+            .channels
+            .insert(channel_id, AmqpChannel::new(channel_id));
 
         self.stats.channels_opened.fetch_add(1, Ordering::Relaxed);
         self.stats.channels_active.fetch_add(1, Ordering::Relaxed);
@@ -343,7 +345,9 @@ impl AmqpAdapter {
     /// Handle Exchange.Declare.
     pub async fn handle_exchange_declare(&self, exchange: AmqpExchange) -> Result<()> {
         if exchange.name.starts_with("amq.") {
-            return Err(StreamlineError::Gateway("Cannot redeclare reserved exchange".into()));
+            return Err(StreamlineError::Gateway(
+                "Cannot redeclare reserved exchange".into(),
+            ));
         }
 
         let existing = self.exchanges.read().await;
@@ -364,17 +368,16 @@ impl AmqpAdapter {
             .await
             .insert(exchange.name.clone(), exchange);
 
-        self.stats.exchanges_declared.fetch_add(1, Ordering::Relaxed);
+        self.stats
+            .exchanges_declared
+            .fetch_add(1, Ordering::Relaxed);
         Ok(())
     }
 
     /// Handle Queue.Declare.
     pub async fn handle_queue_declare(&self, queue: AmqpQueue) -> Result<()> {
         debug!(name = queue.name, "AMQP queue declared");
-        self.queues
-            .write()
-            .await
-            .insert(queue.name.clone(), queue);
+        self.queues.write().await.insert(queue.name.clone(), queue);
 
         self.stats.queues_declared.fetch_add(1, Ordering::Relaxed);
         Ok(())
@@ -385,12 +388,18 @@ impl AmqpAdapter {
         // Hold both read locks during validation to prevent TOCTOU race
         let exchanges = self.exchanges.read().await;
         if !exchanges.contains_key(&binding.exchange) && !binding.exchange.starts_with("amq.") {
-            return Err(StreamlineError::Gateway(format!("Exchange '{}' not found", binding.exchange)));
+            return Err(StreamlineError::Gateway(format!(
+                "Exchange '{}' not found",
+                binding.exchange
+            )));
         }
 
         let queues = self.queues.read().await;
         if !queues.contains_key(&binding.queue) {
-            return Err(StreamlineError::Gateway(format!("Queue '{}' not found", binding.queue)));
+            return Err(StreamlineError::Gateway(format!(
+                "Queue '{}' not found",
+                binding.queue
+            )));
         }
         // Drop read locks before acquiring write lock
         drop(queues);
@@ -408,10 +417,7 @@ impl AmqpAdapter {
     }
 
     /// Handle Basic.Publish — returns the Streamline topic to produce to.
-    pub async fn handle_publish(
-        &self,
-        publish: &AmqpPublishData,
-    ) -> Result<String> {
+    pub async fn handle_publish(&self, publish: &AmqpPublishData) -> Result<String> {
         if publish.body.len() > self.config.max_frame_size {
             return Err(StreamlineError::Gateway(format!(
                 "Message size {} exceeds frame size {}",
@@ -422,7 +428,9 @@ impl AmqpAdapter {
 
         let topic = self.map_exchange(&publish.exchange);
 
-        self.stats.messages_published.fetch_add(1, Ordering::Relaxed);
+        self.stats
+            .messages_published
+            .fetch_add(1, Ordering::Relaxed);
         self.stats
             .bytes_in
             .fetch_add(publish.body.len() as u64, Ordering::Relaxed);
@@ -442,7 +450,9 @@ impl AmqpAdapter {
         let mut sessions = self.sessions.write().await;
         if let Some(session) = sessions.remove(connection_id) {
             let channel_count = session.channels.len() as u64;
-            self.stats.connections_active.fetch_sub(1, Ordering::Relaxed);
+            self.stats
+                .connections_active
+                .fetch_sub(1, Ordering::Relaxed);
             self.stats
                 .channels_active
                 .fetch_sub(channel_count, Ordering::Relaxed);
@@ -465,7 +475,7 @@ impl AmqpAdapter {
 
     /// Map an AMQP queue to a consumer group ID.
     pub fn map_queue_to_group(&self, queue: &str) -> String {
-        format!("amqp-{}", queue)
+        format!("amqp-{queue}")
     }
 
     /// Get handler statistics.
@@ -528,7 +538,10 @@ mod tests {
     #[tokio::test]
     async fn test_connect_disconnect() {
         let adapter = AmqpAdapter::new(AmqpConfig::default());
-        adapter.handle_connect("conn-1", "/", Some("admin")).await.unwrap();
+        adapter
+            .handle_connect("conn-1", "/", Some("admin"))
+            .await
+            .unwrap();
         assert_eq!(adapter.active_connections().await, 1);
 
         adapter.handle_disconnect("conn-1").await;

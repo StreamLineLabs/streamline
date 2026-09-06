@@ -13,7 +13,6 @@
 //!
 //! ```no_run
 //! use streamline::embedded::{EmbeddedStreamline, EmbeddedConfig};
-//! use bytes::Bytes;
 //!
 //! #[tokio::main]
 //! async fn main() -> streamline::Result<()> {
@@ -24,7 +23,7 @@
 //!     streamline.create_topic("events", 3)?;
 //!
 //!     // Produce messages
-//!     let offset = streamline.produce("events", 0, None, Bytes::from("hello world"))?;
+//!     let offset = streamline.produce("events", 0, None, "hello world".into())?;
 //!     println!("Produced at offset: {}", offset);
 //!
 //!     // Consume messages
@@ -358,9 +357,9 @@ impl EmbeddedStreamline {
 
         for partition in 0..num_partitions {
             let start_offset = self.get_committed_offset(group_id, topic, partition);
-            let records =
-                self.topic_manager
-                    .read(topic, partition, start_offset, per_partition)?;
+            let records = self
+                .topic_manager
+                .read(topic, partition, start_offset, per_partition)?;
 
             if auto_commit {
                 if let Some(last) = records.last() {
@@ -386,10 +385,7 @@ impl EmbeddedStreamline {
             .group_offsets
             .write()
             .map_err(|e| StreamlineError::Internal(format!("lock poisoned: {e}")))?;
-        offsets.insert(
-            (group_id.to_string(), topic.to_string(), partition),
-            offset,
-        );
+        offsets.insert((group_id.to_string(), topic.to_string(), partition), offset);
         Ok(())
     }
 
@@ -1154,10 +1150,7 @@ mod tests {
     #[test]
     fn test_get_committed_offset_default() {
         let streamline = EmbeddedStreamline::in_memory().unwrap();
-        assert_eq!(
-            streamline.get_committed_offset("group", "topic", 0),
-            0
-        );
+        assert_eq!(streamline.get_committed_offset("group", "topic", 0), 0);
     }
 
     // ── Compression Tests ──
@@ -1230,22 +1223,14 @@ mod tests {
 
         // Valid message
         let value = serde_json::json!({"name": "Alice", "age": 30});
-        let result = streamline.produce_validated(
-            "validated",
-            0,
-            None,
-            Bytes::from(value.to_string()),
-        );
+        let result =
+            streamline.produce_validated("validated", 0, None, Bytes::from(value.to_string()));
         assert!(result.is_ok());
 
         // Missing required field
         let bad_value = serde_json::json!({"name": "Bob"});
-        let result = streamline.produce_validated(
-            "validated",
-            0,
-            None,
-            Bytes::from(bad_value.to_string()),
-        );
+        let result =
+            streamline.produce_validated("validated", 0, None, Bytes::from(bad_value.to_string()));
         assert!(result.is_err());
     }
 
@@ -1263,22 +1248,12 @@ mod tests {
 
         // Wrong type: string instead of integer
         let bad = serde_json::json!({"count": "not-a-number"});
-        let result = streamline.produce_validated(
-            "typed",
-            0,
-            None,
-            Bytes::from(bad.to_string()),
-        );
+        let result = streamline.produce_validated("typed", 0, None, Bytes::from(bad.to_string()));
         assert!(result.is_err());
 
         // Correct type
         let good = serde_json::json!({"count": 42});
-        let result = streamline.produce_validated(
-            "typed",
-            0,
-            None,
-            Bytes::from(good.to_string()),
-        );
+        let result = streamline.produce_validated("typed", 0, None, Bytes::from(good.to_string()));
         assert!(result.is_ok());
     }
 
@@ -1288,12 +1263,8 @@ mod tests {
         streamline.create_topic("no-schema", 1).unwrap();
 
         // No schema registered — should pass anything through
-        let result = streamline.produce_validated(
-            "no-schema",
-            0,
-            None,
-            Bytes::from("not even json"),
-        );
+        let result =
+            streamline.produce_validated("no-schema", 0, None, Bytes::from("not even json"));
         assert!(result.is_ok());
     }
 

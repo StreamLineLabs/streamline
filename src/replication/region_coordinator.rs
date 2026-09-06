@@ -406,8 +406,7 @@ impl RegionCoordinator {
                     ),
                     fencing_token: token,
                 });
-            } else if health.replication_lag_ms > max_lag
-                && health.status != RegionStatus::Degraded
+            } else if health.replication_lag_ms > max_lag && health.status != RegionStatus::Degraded
             {
                 // Transition to degraded if lag exceeds threshold.
                 health.status = RegionStatus::Degraded;
@@ -437,9 +436,9 @@ impl RegionCoordinator {
     /// holding a token lower than this value must stop accepting writes.
     pub async fn fence_region(&self, region_id: &str) -> Result<u64> {
         let mut regions = self.regions.write().await;
-        let health = regions.get_mut(region_id).ok_or_else(|| {
-            StreamlineError::Replication(format!("Unknown region: {}", region_id))
-        })?;
+        let health = regions
+            .get_mut(region_id)
+            .ok_or_else(|| StreamlineError::Replication(format!("Unknown region: {region_id}")))?;
 
         let token = self.next_fencing_token.fetch_add(1, Ordering::SeqCst);
         health.status = RegionStatus::Fenced;
@@ -459,9 +458,9 @@ impl RegionCoordinator {
     /// The region transitions to `Healthy` and its heartbeat timer is reset.
     pub async fn unfence_region(&self, region_id: &str) -> Result<()> {
         let mut regions = self.regions.write().await;
-        let health = regions.get_mut(region_id).ok_or_else(|| {
-            StreamlineError::Replication(format!("Unknown region: {}", region_id))
-        })?;
+        let health = regions
+            .get_mut(region_id)
+            .ok_or_else(|| StreamlineError::Replication(format!("Unknown region: {region_id}")))?;
 
         if health.status != RegionStatus::Fenced {
             return Err(StreamlineError::Replication(format!(

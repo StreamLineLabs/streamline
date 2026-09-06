@@ -88,7 +88,7 @@ async fn apply_spec(
             (
                 StatusCode::BAD_REQUEST,
                 Json(ErrorResponse {
-                    error: format!("Failed to apply connector: {}", e),
+                    error: format!("Failed to apply connector: {e}"),
                 }),
             )
         })?;
@@ -130,7 +130,7 @@ async fn remove_connector(
         )
     })?;
     Ok(Json(DeleteResponse {
-        message: format!("Connector '{}' removed", name),
+        message: format!("Connector '{name}' removed"),
     }))
 }
 

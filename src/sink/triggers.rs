@@ -501,7 +501,7 @@ impl TriggerManager {
             if mappings.contains_key(&name) {
                 return Err(StreamlineError::config(
                     "trigger",
-                    format!("Mapping '{}' already exists", name),
+                    format!("Mapping '{name}' already exists"),
                 ));
             }
         }
@@ -543,7 +543,7 @@ impl TriggerManager {
         let mut mappings = self.mappings.write().await;
 
         let mapping = mappings.get_mut(name).ok_or_else(|| {
-            StreamlineError::config("trigger", format!("Mapping '{}' not found", name))
+            StreamlineError::config("trigger", format!("Mapping '{name}' not found"))
         })?;
 
         if let Some(enabled) = enabled {
@@ -562,7 +562,7 @@ impl TriggerManager {
         let mut mappings = self.mappings.write().await;
 
         let mapping = mappings.remove(name).ok_or_else(|| {
-            StreamlineError::config("trigger", format!("Mapping '{}' not found", name))
+            StreamlineError::config("trigger", format!("Mapping '{name}' not found"))
         })?;
 
         mapping.shutdown();

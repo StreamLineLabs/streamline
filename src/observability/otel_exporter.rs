@@ -300,7 +300,9 @@ impl OtelExporter {
         }
 
         let count = metrics.len() as u64;
-        self.stats.metrics_exported.fetch_add(count * delivered, Ordering::Relaxed);
+        self.stats
+            .metrics_exported
+            .fetch_add(count * delivered, Ordering::Relaxed);
         self.stats.total_exports.fetch_add(count, Ordering::Relaxed);
         self.stats.batches_sent.fetch_add(1, Ordering::Relaxed);
 
@@ -361,7 +363,9 @@ impl OtelExporter {
                 title: "Produce Latency p99".into(),
                 metric: "streamline_produce_latency_seconds".into(),
                 visualization: "timeseries".into(),
-                query: "histogram_quantile(0.99, rate(streamline_produce_latency_seconds_bucket[5m]))".into(),
+                query:
+                    "histogram_quantile(0.99, rate(streamline_produce_latency_seconds_bucket[5m]))"
+                        .into(),
             },
             PanelConfig {
                 title: "Active Connections".into(),
@@ -391,12 +395,15 @@ impl OtelExporter {
             DashboardTemplate {
                 name: "Streamline Overview — Datadog".into(),
                 backend: BackendType::Datadog,
-                panels: streamline_panels.iter().map(|p| PanelConfig {
-                    title: p.title.clone(),
-                    metric: p.metric.clone(),
-                    visualization: p.visualization.clone(),
-                    query: format!("avg:{}{{}}", p.metric),
-                }).collect(),
+                panels: streamline_panels
+                    .iter()
+                    .map(|p| PanelConfig {
+                        title: p.title.clone(),
+                        metric: p.metric.clone(),
+                        visualization: p.visualization.clone(),
+                        query: format!("avg:{}{{}}", p.metric),
+                    })
+                    .collect(),
             },
             DashboardTemplate {
                 name: "Streamline Overview — OTLP".into(),

@@ -42,13 +42,13 @@ impl TimeExpression {
                 let dt = DateTime::from_timestamp_millis(*ts)
                     .map(|dt| dt.with_timezone(&Local))
                     .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
-                    .unwrap_or_else(|| format!("{}ms", ts));
-                format!("at {}", dt)
+                    .unwrap_or_else(|| format!("{ts}ms"));
+                format!("at {dt}")
             }
             TimeExpression::Relative(duration) => {
                 let secs = duration.num_seconds();
                 if secs < 60 {
-                    format!("{} second(s) ago", secs)
+                    format!("{secs} second(s) ago")
                 } else if secs < 3600 {
                     format!("{} minute(s) ago", secs / 60)
                 } else if secs < 86400 {
@@ -127,12 +127,11 @@ pub fn parse_time_expression(input: &str) -> Result<TimeExpression, String> {
     }
 
     Err(format!(
-        "Invalid time expression: '{}'. \n\
+        "Invalid time expression: '{input}'. \n\
         Examples:\n\
           - Relative: 5m, 2h, 1d, 30s, 1w\n\
           - Absolute: 2024-01-15, 2024-01-15 14:30:00\n\
-          - Keywords: now, today, yesterday, earliest",
-        input
+          - Keywords: now, today, yesterday, earliest"
     ))
 }
 
@@ -220,7 +219,7 @@ pub fn format_timestamp(ts_ms: i64) -> String {
     DateTime::from_timestamp_millis(ts_ms)
         .map(|dt| dt.with_timezone(&Local))
         .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
-        .unwrap_or_else(|| format!("{}ms", ts_ms))
+        .unwrap_or_else(|| format!("{ts_ms}ms"))
 }
 
 /// Calculate the timestamp for "last N" queries

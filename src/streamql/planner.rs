@@ -100,9 +100,9 @@ impl LogicalPlan {
             LogicalPlan::Scan { source, alias, .. } => {
                 let alias_str = alias
                     .as_ref()
-                    .map(|a| format!(" AS {}", a))
+                    .map(|a| format!(" AS {a}"))
                     .unwrap_or_default();
-                format!("{}Scan: {}{}\n", prefix, source, alias_str)
+                format!("{prefix}Scan: {source}{alias_str}\n")
             }
             LogicalPlan::Filter { input, predicate } => {
                 format!(
@@ -130,10 +130,10 @@ impl LogicalPlan {
                 aggregates,
                 ..
             } => {
-                let groups: Vec<String> = group_by.iter().map(|e| format!("{:?}", e)).collect();
+                let groups: Vec<String> = group_by.iter().map(|e| format!("{e:?}")).collect();
                 let aggs: Vec<String> = aggregates
                     .iter()
-                    .map(|(f, _, _, a)| format!("{}({})", f, a))
+                    .map(|(f, _, _, a)| format!("{f}({a})"))
                     .collect();
                 format!(
                     "{}Aggregate: group=[{}], aggs=[{}]\n{}",
@@ -417,15 +417,14 @@ impl QueryPlanner {
                 }
 
                 Err(StreamlineError::Query(format!(
-                    "Unknown table function: {}",
-                    name
+                    "Unknown table function: {name}"
                 )))
             }
             TableRef::Subquery { query, alias } => {
                 let subplan = self.plan_select(query)?;
                 // Wrap in a scan with the subquery alias
                 Ok(LogicalPlan::Scan {
-                    source: format!("(subquery:{})", alias),
+                    source: format!("(subquery:{alias})"),
                     schema: subplan.schema().clone(),
                     alias: Some(alias.clone()),
                 })
@@ -472,7 +471,7 @@ impl QueryPlanner {
                         .unwrap_or(Expression::Literal(Literal::Null));
                     let col_alias = alias
                         .map(String::from)
-                        .unwrap_or_else(|| format!("agg_{}", index));
+                        .unwrap_or_else(|| format!("agg_{index}"));
                     aggregates.push((name.clone(), arg, *distinct, col_alias));
                 } else {
                     for arg in args {
@@ -513,8 +512,7 @@ impl QueryPlanner {
                 }
                 SelectItem::QualifiedWildcard(table) => {
                     return Err(StreamlineError::Query(format!(
-                        "Qualified wildcard '{}' is not supported yet",
-                        table
+                        "Qualified wildcard '{table}' is not supported yet"
                     )));
                 }
                 SelectItem::Expression { expr, alias } => {
@@ -605,13 +603,11 @@ impl QueryPlanner {
             });
         }
 
-        Ok(conditions
-            .into_iter()
-            .reduce(|a, b| Expression::BinaryOp {
-                left: Box::new(a),
-                op: BinaryOperator::And,
-                right: Box::new(b),
-            }))
+        Ok(conditions.into_iter().reduce(|a, b| Expression::BinaryOp {
+            left: Box::new(a),
+            op: BinaryOperator::And,
+            right: Box::new(b),
+        }))
     }
 
     fn build_natural_condition(&self, left: &Schema, right: &Schema) -> Result<Option<Expression>> {
@@ -631,7 +627,7 @@ impl QueryPlanner {
         match expr {
             Expression::Column(col_ref) => col_ref.column.clone(),
             Expression::Function { name, .. } => name.to_lowercase(),
-            _ => format!("expr_{}", index),
+            _ => format!("expr_{index}"),
         }
     }
 

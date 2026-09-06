@@ -120,7 +120,7 @@ proptest! {
                 i as i64,
                 1000 + i as i64,
                 None,
-                Bytes::from(format!("value-{}", i)),
+                Bytes::from(format!("value-{i}")),
             );
             segment.append_record(record).unwrap();
         }
@@ -287,7 +287,7 @@ proptest! {
                 i as i64,
                 1000 + i as i64,
                 None,
-                Bytes::from(format!("value-{}", i)),
+                Bytes::from(format!("value-{i}")),
             );
             segment.append_record(record).unwrap();
         }
@@ -533,7 +533,7 @@ mod error_properties {
             msg in "[a-zA-Z0-9]{1,50}"
         ) {
             let error = StreamlineError::Storage(msg.clone());
-            let display = format!("{}", error);
+            let display = format!("{error}");
             prop_assert!(
                 display.contains(&msg) || display.to_lowercase().contains("storage"),
                 "Display '{}' should reference the error type or message",
@@ -548,14 +548,14 @@ mod error_properties {
             detail in "[a-zA-Z0-9 ]{0,50}"
         ) {
             let storage_err = StreamlineError::storage(&operation, &detail);
-            let display = format!("{}", storage_err);
+            let display = format!("{storage_err}");
             prop_assert!(
                 display.contains(&operation) || display.contains(&detail) || display.to_lowercase().contains("storage"),
                 "Storage error should contain operation or detail"
             );
 
             let protocol_err = StreamlineError::protocol(&operation, &detail);
-            let display = format!("{}", protocol_err);
+            let display = format!("{protocol_err}");
             prop_assert!(
                 display.contains(&operation) || display.contains(&detail) || display.to_lowercase().contains("protocol"),
                 "Protocol error should contain operation or detail"
@@ -571,7 +571,7 @@ mod error_properties {
             detail in "[a-zA-Z0-9 ]{0,30}"
         ) {
             let error = StreamlineError::storage_partition(&topic, partition, &operation, &detail);
-            let display = format!("{}", error);
+            let display = format!("{error}");
 
             // The error should include the topic or partition context
             prop_assert!(

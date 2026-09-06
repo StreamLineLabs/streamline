@@ -49,7 +49,7 @@ impl IpPrefix {
     /// Parse from string like "192.168.1.0/24"
     pub fn parse(s: &str) -> Option<Self> {
         let parts: Vec<&str> = s.split('/').collect();
-        let addr: IpAddr = parts.get(0)?.parse().ok()?;
+        let addr: IpAddr = parts.first()?.parse().ok()?;
         let prefix_len: u8 = parts
             .get(1)
             .and_then(|p| p.parse().ok())
@@ -61,7 +61,7 @@ impl IpPrefix {
     pub fn matches(&self, ip: &IpAddr) -> bool {
         match (self.addr, ip) {
             (IpAddr::V4(prefix), IpAddr::V4(addr)) => {
-                let prefix_bits = u32::from(*prefix);
+                let prefix_bits = u32::from(prefix);
                 let addr_bits = u32::from(*addr);
                 let mask = if self.prefix_len >= 32 {
                     u32::MAX
@@ -71,7 +71,7 @@ impl IpPrefix {
                 (prefix_bits & mask) == (addr_bits & mask)
             }
             (IpAddr::V6(prefix), IpAddr::V6(addr)) => {
-                let prefix_bits = u128::from(*prefix);
+                let prefix_bits = u128::from(prefix);
                 let addr_bits = u128::from(*addr);
                 let mask = if self.prefix_len >= 128 {
                     u128::MAX
@@ -264,25 +264,21 @@ impl XdpFilter {
         drop(allowed);
 
         // Check SYN flood protection
-        if self.config.syn_flood_protection && meta.is_syn() {
-            if self.check_syn_flood(&meta.src_ip) {
-                self.stats.syn_blocked.fetch_add(1, Ordering::Relaxed);
-                return FilterDecision {
-                    action: XdpAction::Drop,
-                    reason: FilterReason::SynFlood,
-                };
-            }
+        if self.config.syn_flood_protection && meta.is_syn() && self.check_syn_flood(&meta.src_ip) {
+            self.stats.syn_blocked.fetch_add(1, Ordering::Relaxed);
+            return FilterDecision {
+                action: XdpAction::Drop,
+                reason: FilterReason::SynFlood,
+            };
         }
 
         // Check rate limiting
-        if self.config.rate_limit_enabled {
-            if self.check_rate_limit(&meta.src_ip) {
-                self.stats.rate_limited.fetch_add(1, Ordering::Relaxed);
-                return FilterDecision {
-                    action: XdpAction::Drop,
-                    reason: FilterReason::RateLimited,
-                };
-            }
+        if self.config.rate_limit_enabled && self.check_rate_limit(&meta.src_ip) {
+            self.stats.rate_limited.fetch_add(1, Ordering::Relaxed);
+            return FilterDecision {
+                action: XdpAction::Drop,
+                reason: FilterReason::RateLimited,
+            };
         }
 
         // Packet should be redirected to AF_XDP

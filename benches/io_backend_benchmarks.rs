@@ -259,7 +259,7 @@ fn bench_concurrent_writes(c: &mut Criterion) {
     for num_files in [1, 4, 8].iter() {
         let dir = tempdir().unwrap();
         let files: Vec<_> = (0..*num_files)
-            .map(|i| dir.path().join(format!("file_{}.dat", i)))
+            .map(|i| dir.path().join(format!("file_{i}.dat")))
             .collect();
 
         group.throughput(Throughput::Elements(*num_files as u64));
@@ -325,7 +325,7 @@ fn bench_async_segment(c: &mut Criterion) {
                                 i,
                                 1000 + i,
                                 None,
-                                bytes::Bytes::from(format!("value-{}", i)),
+                                bytes::Bytes::from(format!("value-{i}")),
                             ));
                             segment.append_batch(&batch).await.unwrap();
                         }
@@ -368,7 +368,7 @@ fn bench_async_wal(c: &mut Criterion) {
                                 "test-topic",
                                 0,
                                 None,
-                                &bytes::Bytes::from(format!("value-{}", i)),
+                                &bytes::Bytes::from(format!("value-{i}")),
                             )
                             .await
                             .unwrap();

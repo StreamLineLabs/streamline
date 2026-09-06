@@ -67,10 +67,9 @@ fn generate_encryption_key(
         "hex" => {
             let hex_key = generate_key_hex();
             if let Some(output_path) = output {
-                std::fs::write(&output_path, format!("{}\n", hex_key)).map_err(|e| {
+                std::fs::write(&output_path, format!("{hex_key}\n")).map_err(|e| {
                     streamline::error::StreamlineError::storage_msg(format!(
-                        "Failed to write key file: {}",
-                        e
+                        "Failed to write key file: {e}"
                     ))
                 })?;
 
@@ -106,7 +105,7 @@ fn generate_encryption_key(
                         );
                     }
                     _ => {
-                        println!("{}", hex_key);
+                        println!("{hex_key}");
                     }
                 }
             }
@@ -115,8 +114,7 @@ fn generate_encryption_key(
             if let Some(output_path) = output {
                 std::fs::write(&output_path, key.key()).map_err(|e| {
                     streamline::error::StreamlineError::storage_msg(format!(
-                        "Failed to write key file: {}",
-                        e
+                        "Failed to write key file: {e}"
                     ))
                 })?;
 
@@ -149,8 +147,7 @@ fn generate_encryption_key(
         }
         _ => {
             return Err(streamline::error::StreamlineError::Config(format!(
-                "Invalid format '{}'. Use 'hex' or 'raw'",
-                key_format
+                "Invalid format '{key_format}'. Use 'hex' or 'raw'"
             )));
         }
     }
@@ -221,7 +218,7 @@ pub(super) fn handle_config_command(cmd: ConfigCommands, ctx: &CliContext) -> Re
 
                         for key in table.keys() {
                             if !known_sections.contains(&key.as_str()) {
-                                warnings.push(format!("Unknown section: [{}]", key));
+                                warnings.push(format!("Unknown section: [{key}]"));
                             }
                         }
 
@@ -229,8 +226,7 @@ pub(super) fn handle_config_command(cmd: ConfigCommands, ctx: &CliContext) -> Re
                         if let Some(server) = table.get("server").and_then(|v| v.as_table()) {
                             if let Some(port) = server.get("port").and_then(|v| v.as_integer()) {
                                 if !(1..=65535).contains(&port) {
-                                    errors
-                                        .push(format!("server.port must be 1-65535, got {}", port));
+                                    errors.push(format!("server.port must be 1-65535, got {port}"));
                                 }
                             }
                         }
@@ -242,8 +238,7 @@ pub(super) fn handle_config_command(cmd: ConfigCommands, ctx: &CliContext) -> Re
                             {
                                 if retention < -1 {
                                     errors.push(format!(
-                                        "storage.retention_ms must be >= -1, got {}",
-                                        retention
+                                        "storage.retention_ms must be >= -1, got {retention}"
                                     ));
                                 }
                             }
@@ -251,7 +246,7 @@ pub(super) fn handle_config_command(cmd: ConfigCommands, ctx: &CliContext) -> Re
                                 storage.get("segment_bytes").and_then(|v| v.as_integer())
                             {
                                 if segment_bytes < 1024 {
-                                    warnings.push(format!("storage.segment_bytes is very small ({}), recommended >= 1MB", segment_bytes));
+                                    warnings.push(format!("storage.segment_bytes is very small ({segment_bytes}), recommended >= 1MB"));
                                 }
                             }
                         }
@@ -349,18 +344,17 @@ pub(super) fn handle_config_command(cmd: ConfigCommands, ctx: &CliContext) -> Re
             };
 
             match format.as_str() {
-                "toml" => println!("{}", config_content),
+                "toml" => println!("{config_content}"),
                 "json" => {
                     if let Ok(parsed) = toml::from_str::<toml::Value>(&config_content) {
                         println!("{}", serde_json::to_string_pretty(&parsed)?);
                     } else {
-                        println!("{}", config_content);
+                        println!("{config_content}");
                     }
                 }
                 _ => {
                     return Err(streamline::StreamlineError::Config(format!(
-                        "Unknown format '{}'. Use 'toml' or 'json'",
-                        format
+                        "Unknown format '{format}'. Use 'toml' or 'json'"
                     )));
                 }
             }
@@ -377,7 +371,7 @@ pub(super) fn handle_config_command(cmd: ConfigCommands, ctx: &CliContext) -> Re
                 std::fs::write(&path, &config)?;
                 ctx.success(&format!("Generated configuration file: {}", path.display()));
             } else {
-                println!("{}", config);
+                println!("{config}");
             }
         }
 
@@ -512,24 +506,24 @@ pub(super) fn handle_profile_command(cmd: ProfileCommands, ctx: &CliContext) -> 
                             "○".dimmed()
                         };
                         let name_display = if is_default {
-                            format!("{} (default)", name).yellow().bold().to_string()
+                            format!("{name} (default)").yellow().bold().to_string()
                         } else {
                             name.cyan().to_string()
                         };
 
-                        println!("  {} {}", marker, name_display);
+                        println!("  {marker} {name_display}");
 
                         if let Some(desc) = &profile.description {
                             println!("    {}", desc.dimmed());
                         }
                         if let Some(data_dir) = &profile.data_dir {
-                            println!("    Data dir:    {}", data_dir);
+                            println!("    Data dir:    {data_dir}");
                         }
                         if let Some(server) = &profile.server_addr {
-                            println!("    Server:      {}", server);
+                            println!("    Server:      {server}");
                         }
                         if let Some(http) = &profile.http_addr {
-                            println!("    HTTP:        {}", http);
+                            println!("    HTTP:        {http}");
                         }
                         println!();
                     }
@@ -542,7 +536,7 @@ pub(super) fn handle_profile_command(cmd: ProfileCommands, ctx: &CliContext) -> 
             let default_profile = get_default_profile();
 
             let profile = profiles.get(&name).ok_or_else(|| {
-                streamline::StreamlineError::Config(format!("Profile '{}' not found", name))
+                streamline::StreamlineError::Config(format!("Profile '{name}' not found"))
             })?;
 
             match ctx.format {
@@ -562,23 +556,23 @@ pub(super) fn handle_profile_command(cmd: ProfileCommands, ctx: &CliContext) -> 
                 _ => {
                     let is_default = default_profile.as_ref() == Some(&name);
 
-                    println!("{}", format!("Profile: {}", name).bold().cyan());
+                    println!("{}", format!("Profile: {name}").bold().cyan());
                     if is_default {
                         println!("  {}", "(default profile)".yellow());
                     }
                     println!();
 
                     if let Some(desc) = &profile.description {
-                        println!("  Description:   {}", desc);
+                        println!("  Description:   {desc}");
                     }
                     if let Some(data_dir) = &profile.data_dir {
-                        println!("  Data dir:      {}", data_dir);
+                        println!("  Data dir:      {data_dir}");
                     }
                     if let Some(server) = &profile.server_addr {
-                        println!("  Server addr:   {}", server);
+                        println!("  Server addr:   {server}");
                     }
                     if let Some(http) = &profile.http_addr {
-                        println!("  HTTP addr:     {}", http);
+                        println!("  HTTP addr:     {http}");
                     }
                     println!();
 
@@ -615,9 +609,9 @@ pub(super) fn handle_profile_command(cmd: ProfileCommands, ctx: &CliContext) -> 
             save_profiles(&profiles)?;
 
             if is_update {
-                ctx.success(&format!("Updated profile '{}'", name));
+                ctx.success(&format!("Updated profile '{name}'"));
             } else {
-                ctx.success(&format!("Created profile '{}'", name));
+                ctx.success(&format!("Created profile '{name}'"));
             }
 
             if set_default || get_default_profile().is_none() {
@@ -656,9 +650,9 @@ pub(super) fn handle_profile_command(cmd: ProfileCommands, ctx: &CliContext) -> 
             save_profiles(&profiles)?;
 
             if is_update {
-                ctx.success(&format!("Updated profile '{}'", name));
+                ctx.success(&format!("Updated profile '{name}'"));
             } else {
-                ctx.success(&format!("Created profile '{}'", name));
+                ctx.success(&format!("Created profile '{name}'"));
 
                 // Set as default if it's the first profile
                 if profiles.len() == 1 {
@@ -681,8 +675,7 @@ pub(super) fn handle_profile_command(cmd: ProfileCommands, ctx: &CliContext) -> 
 
             if !profiles.contains_key(&name) {
                 return Err(streamline::StreamlineError::Config(format!(
-                    "Profile '{}' not found",
-                    name
+                    "Profile '{name}' not found"
                 )));
             }
 
@@ -697,7 +690,7 @@ pub(super) fn handle_profile_command(cmd: ProfileCommands, ctx: &CliContext) -> 
                 let _ = std::fs::remove_file(&default_path);
             }
 
-            ctx.success(&format!("Removed profile '{}'", name));
+            ctx.success(&format!("Removed profile '{name}'"));
         }
 
         ProfileCommands::Default { name } => {
@@ -705,13 +698,12 @@ pub(super) fn handle_profile_command(cmd: ProfileCommands, ctx: &CliContext) -> 
 
             if !profiles.contains_key(&name) {
                 return Err(streamline::StreamlineError::Config(format!(
-                    "Profile '{}' not found",
-                    name
+                    "Profile '{name}' not found"
                 )));
             }
 
             set_default_profile(&name)?;
-            ctx.success(&format!("Set '{}' as default profile", name));
+            ctx.success(&format!("Set '{name}' as default profile"));
         }
     }
 

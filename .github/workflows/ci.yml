@@ -6,55 +6,109 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  # Test binaries for the all-feature graph are large enough that debug symbols
+  # can exhaust the memory available on GitHub-hosted runners while linking.
+  CARGO_PROFILE_TEST_DEBUG: '0'
+  # Single source of truth for the MSRV in CI. Must match `rust-version` in
+  # Cargo.toml and in every workspace member crate; enforced by
+  # tests/packaging_metadata_test.rs.
+  MSRV: '1.88'
+
+permissions:
+  contents: read
 
 jobs:
-  ci:
+  # Pin formatting and Clippy so a new Rust release cannot create hundreds of
+  # unrelated formatting/lint changes overnight. Stable compatibility is
+  # exercised by ci-full.yml; this workflow enforces the declared 1.88 baseline.
+  fmt:
+    name: Format
     runs-on: ubuntu-latest
+    env:
+      RUSTUP_TOOLCHAIN: '1.88'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: '1.88'
+          components: rustfmt
+      - run: cargo fmt --all -- --check
+
+  openapi:
+    name: OpenAPI
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify generated specification
+        run: python3 scripts/generate_openapi.py --check
+      - name: Lint OpenAPI specification
+        run: >-
+          npx --yes @stoplight/spectral-cli@6.15.0 lint
+          --ruleset .spectral.yaml
+          --fail-severity error
+          openapi/streamline-api-v1.yaml
+
+  test:
+    name: Lint & Test (Rust 1.88)
+    runs-on: ubuntu-latest
+    env:
+      RUSTUP_TOOLCHAIN: '1.88'
     steps:
       - uses: actions/checkout@v4
 
       - uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: "1.80"
-          components: rustfmt, clippy
+          toolchain: '1.88'
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
 
-      - run: cargo fmt --all -- --check
-      - run: cargo clippy --all-targets -- -D warnings
-      - run: cargo test
-      - run: cargo clippy --all-targets --all-features -- -D warnings
-      - run: cargo test --all-features
+      - run: cargo clippy --all-targets --locked -- -D warnings
+      - run: cargo test --locked
+      - run: cargo clippy --all-targets --all-features --locked -- -D warnings
+      - name: Test all features within the hosted-runner memory budget
+        run: cargo test --all-features --locked
+        env:
+          # .cargo/config.toml permits six local jobs, but the 7 GB hosted
+          # runner cannot link this dependency graph at that concurrency.
+          CARGO_BUILD_JOBS: '1'
 
   msrv:
-    name: MSRV (1.80)
+    name: MSRV
     runs-on: ubuntu-latest
+    env:
+      # rust-toolchain.toml pins an exact channel, and cargo honours that file
+      # over whichever toolchain the action makes default. RUSTUP_TOOLCHAIN
+      # takes precedence over rust-toolchain.toml, so this is what actually
+      # makes the job build with the MSRV. Before the pin was corrected this
+      # file said `channel = "stable"` and the job silently re-tested stable,
+      # leaving the MSRV claim unverified.
+      RUSTUP_TOOLCHAIN: '1.88'
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@master
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: "1.80"
+          toolchain: ${{ env.MSRV }}
       - uses: Swatinem/rust-cache@v2
         with:
           prefix-key: msrv
-      - run: cargo check --all-targets
 
-  audit:
-    name: cargo-audit
-    runs-on: ubuntu-latest
-    permissions:
-      issues: write
-      checks: write
-    steps:
-      - uses: actions/checkout@v4
-      - uses: rustsec/audit-check@v2.0.0
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Confirm the MSRV toolchain is actually in use
+        run: |
+          set -euo pipefail
+          ACTUAL=$(rustc --version | awk '{print $2}')
+          echo "rustc in use: $ACTUAL (expected ${MSRV}.x)"
+          case "$ACTUAL" in
+            "$MSRV"|"$MSRV".*) ;;
+            *)
+              echo "::error::MSRV job is running rustc $ACTUAL, not $MSRV"
+              exit 1
+              ;;
+          esac
 
-  deny:
-    name: cargo-deny
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: EmbarkStudios/cargo-deny-action@v2
-        with:
-          command: check advisories bans licenses sources
+      - run: cargo check --all-targets --locked
 
+  # Security scanning (cargo-audit / cargo-deny / security lints) lives in one
+  # fail-closed workflow: .github/workflows/security-scan.yml

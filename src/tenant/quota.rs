@@ -90,7 +90,10 @@ pub enum QuotaCheckResult {
 impl QuotaCheckResult {
     /// Returns true if the operation should be allowed
     pub fn is_allowed(&self) -> bool {
-        matches!(self, QuotaCheckResult::Allowed | QuotaCheckResult::Warning { .. })
+        matches!(
+            self,
+            QuotaCheckResult::Allowed | QuotaCheckResult::Warning { .. }
+        )
     }
 }
 

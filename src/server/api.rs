@@ -261,8 +261,7 @@ impl ErrorResponse {
             StreamlineError::TopicNotFound(name) => (
                 "TOPIC_NOT_FOUND",
                 Some(format!(
-                    "Available topics can be listed at GET /api/v1/topics. Create with POST /api/v1/topics {{\"name\": \"{}\", \"partitions\": 1}}",
-                    name
+                    "Available topics can be listed at GET /api/v1/topics. Create with POST /api/v1/topics {{\"name\": \"{name}\", \"partitions\": 1}}"
                 )),
                 Some("https://docs.streamline.dev/api/topics"),
             ),
@@ -287,16 +286,14 @@ impl ErrorResponse {
             StreamlineError::MessageTooLarge(size, max) => (
                 "MESSAGE_TOO_LARGE",
                 Some(format!(
-                    "Message size {} exceeds limit {}. Split into smaller messages.",
-                    size, max
+                    "Message size {size} exceeds limit {max}. Split into smaller messages."
                 )),
                 None,
             ),
             StreamlineError::InvalidTopicName(name) => (
                 "INVALID_TOPIC_NAME",
                 Some(format!(
-                    "Topic name '{}' is invalid. Names must be 1-255 characters, alphanumeric with . _ - allowed",
-                    name
+                    "Topic name '{name}' is invalid. Names must be 1-255 characters, alphanumeric with . _ - allowed"
                 )),
                 None,
             ),
@@ -759,7 +756,7 @@ async fn compare_topics(
             Err(StreamlineError::TopicNotFound(_)) => {
                 let error = ErrorResponse::new(
                     "TOPIC_NOT_FOUND",
-                    format!("Topic '{}' does not exist", topic_name),
+                    format!("Topic '{topic_name}' does not exist"),
                 );
                 return (StatusCode::NOT_FOUND, Json(error)).into_response();
             }

@@ -185,12 +185,11 @@ impl NamespaceManager {
 
     /// Create a namespace
     pub fn create_namespace(&mut self, tenant_id: &str, name: &str) -> Result<(), TenantError> {
-        let full_name = format!("{}/{}", tenant_id, name);
+        let full_name = format!("{tenant_id}/{name}");
 
         if self.namespaces.contains_key(&full_name) {
             return Err(TenantError::NamespaceError(format!(
-                "Namespace {} already exists",
-                full_name
+                "Namespace {full_name} already exists"
             )));
         }
 
@@ -212,7 +211,7 @@ impl NamespaceManager {
 
     /// Get a namespace
     pub fn get_namespace(&self, tenant_id: &str, name: &str) -> Option<&TenantNamespace> {
-        let full_name = format!("{}/{}", tenant_id, name);
+        let full_name = format!("{tenant_id}/{name}");
         self.namespaces.get(&full_name)
     }
 
@@ -222,7 +221,7 @@ impl NamespaceManager {
         tenant_id: &str,
         name: &str,
     ) -> Option<&mut TenantNamespace> {
-        let full_name = format!("{}/{}", tenant_id, name);
+        let full_name = format!("{tenant_id}/{name}");
         self.namespaces.get_mut(&full_name)
     }
 
@@ -234,7 +233,7 @@ impl NamespaceManager {
                 names
                     .iter()
                     .filter_map(|name| {
-                        let full_name = format!("{}/{}", tenant_id, name);
+                        let full_name = format!("{tenant_id}/{name}");
                         self.namespaces.get(&full_name)
                     })
                     .collect()
@@ -244,12 +243,11 @@ impl NamespaceManager {
 
     /// Delete a namespace
     pub fn delete_namespace(&mut self, tenant_id: &str, name: &str) -> Result<(), TenantError> {
-        let full_name = format!("{}/{}", tenant_id, name);
+        let full_name = format!("{tenant_id}/{name}");
 
         if !self.namespaces.contains_key(&full_name) {
             return Err(TenantError::NamespaceError(format!(
-                "Namespace {} not found",
-                full_name
+                "Namespace {full_name} not found"
             )));
         }
 
@@ -265,7 +263,7 @@ impl NamespaceManager {
     pub fn delete_tenant_namespaces(&mut self, tenant_id: &str) {
         if let Some(names) = self.tenant_namespaces.remove(tenant_id) {
             for name in names {
-                let full_name = format!("{}/{}", tenant_id, name);
+                let full_name = format!("{tenant_id}/{name}");
                 self.namespaces.remove(&full_name);
             }
         }
@@ -285,7 +283,7 @@ impl NamespaceManager {
     /// Check if a tenant can access a resource in a namespace
     pub fn can_access(&self, tenant_id: &str, namespace: &str, resource: &str) -> bool {
         // Check if namespace exists and belongs to tenant
-        let full_name = format!("{}/{}", tenant_id, namespace);
+        let full_name = format!("{tenant_id}/{namespace}");
 
         if let Some(ns) = self.namespaces.get(&full_name) {
             // If resource is empty, just checking namespace access
@@ -313,10 +311,10 @@ impl NamespaceManager {
         namespace: &str,
         resource: &str,
     ) -> Result<(), TenantError> {
-        let full_name = format!("{}/{}", tenant_id, namespace);
+        let full_name = format!("{tenant_id}/{namespace}");
 
         let ns = self.namespaces.get_mut(&full_name).ok_or_else(|| {
-            TenantError::NamespaceError(format!("Namespace {} not found", full_name))
+            TenantError::NamespaceError(format!("Namespace {full_name} not found"))
         })?;
 
         ns.add_resource(resource);
@@ -330,10 +328,10 @@ impl NamespaceManager {
         namespace: &str,
         resource: &str,
     ) -> Result<(), TenantError> {
-        let full_name = format!("{}/{}", tenant_id, namespace);
+        let full_name = format!("{tenant_id}/{namespace}");
 
         let ns = self.namespaces.get_mut(&full_name).ok_or_else(|| {
-            TenantError::NamespaceError(format!("Namespace {} not found", full_name))
+            TenantError::NamespaceError(format!("Namespace {full_name} not found"))
         })?;
 
         ns.remove_resource(resource);

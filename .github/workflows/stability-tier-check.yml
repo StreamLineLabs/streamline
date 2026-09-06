@@ -6,8 +6,13 @@ on:
       - 'src/**'
       - 'docs/API_STABILITY.md'
       - 'scripts/check_stability_tiers.sh'
+      - 'scripts/stability-tier-baseline.txt'
   push:
     branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   stability-tier-check:
@@ -15,6 +20,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # The script fails closed: an unparseable docs/API_STABILITY.md, a new
+      # violation, or a stale baseline entry all exit non-zero. It previously
+      # depended on a gawk-only construct and silently exited 0 on Ubuntu
+      # runners without performing any checks.
       - name: Run stability-tier lint
         run: |
           chmod +x scripts/check_stability_tiers.sh

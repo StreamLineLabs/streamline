@@ -364,12 +364,12 @@ impl std::fmt::Display for Value {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Value::Null => write!(f, "NULL"),
-            Value::Bool(b) => write!(f, "{}", b),
-            Value::Int(i) => write!(f, "{}", i),
-            Value::Float(fl) => write!(f, "{}", fl),
-            Value::String(s) => write!(f, "{}", s),
-            Value::Bytes(b) => write!(f, "{:?}", b),
-            Value::Timestamp(t) => write!(f, "{}", t),
+            Value::Bool(b) => write!(f, "{b}"),
+            Value::Int(i) => write!(f, "{i}"),
+            Value::Float(fl) => write!(f, "{fl}"),
+            Value::String(s) => write!(f, "{s}"),
+            Value::Bytes(b) => write!(f, "{b:?}"),
+            Value::Timestamp(t) => write!(f, "{t}"),
         }
     }
 }

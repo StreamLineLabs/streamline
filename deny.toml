@@ -19,13 +19,20 @@ targets = [
 db-path = "~/.cargo/advisory-db"
 db-urls = ["https://github.com/rustsec/advisory-db"]
 
-# How to handle advisories
-vulnerability = "deny"
-unmaintained = "warn"
-yanked = "warn"
-notice = "warn"
+# NOTE ON SCHEMA: cargo-deny 0.14+ removed the `vulnerability`, `notice` and
+# `unsound` keys — every security advisory is denied unconditionally and can
+# only be waived through `ignore` below. Keeping the removed keys made
+# cargo-deny fail with "unexpected-value" *before running any check*, so the CI
+# dependency-policy job could not have been enforcing anything.
 
-# Ignore specific advisories (use sparingly, document why)
+# `unmaintained` accepts: all | workspace | transitive | none.
+# "workspace" flags unmaintained crates this workspace depends on directly.
+unmaintained = "workspace"
+
+# `yanked` accepts: deny | warn | allow.
+yanked = "warn"
+
+# Ignore specific advisories (use sparingly, document why and add an expiry).
 ignore = []
 
 # ============================================================================
@@ -49,14 +56,24 @@ allow = [
     "BSL-1.0",
     "MPL-2.0",
     "Unicode-DFS-2016",
+    # Successor to Unicode-DFS-2016 (used by unicode-ident and friends).
+    "Unicode-3.0",
+    # MIT No Attribution — OSI-approved and strictly more permissive than MIT
+    # (it drops the attribution requirement). Pulled in by `borrow-or-share`
+    # via jsonschema -> referencing -> fluent-uri, which is licensed MIT-0 only
+    # and therefore has no allowed alternative in a dual-licence expression.
+    "MIT-0",
+    # Community Data License Agreement – Permissive 2.0. Permissive, no
+    # copyleft and no attribution obligation. This is the licence of the
+    # Mozilla CA root store data shipped by `webpki-roots` (0.26 and 1.0, the
+    # latter via hyper-rustls/reqwest), which is also single-licensed.
+    "CDLA-Permissive-2.0",
 ]
 
-# Deny copyleft licenses that would require source disclosure
-deny = [
-    "GPL-2.0",
-    "GPL-3.0",
-    "AGPL-3.0",
-]
+# NOTE ON SCHEMA: cargo-deny removed `[licenses] deny`. The allow-list above is
+# now exhaustive — anything not listed (including GPL-2.0, GPL-3.0 and AGPL-3.0)
+# is rejected. Keeping the removed key made cargo-deny refuse to load this file
+# at all, which meant the licence policy was not being enforced.
 
 # Clarifications for crates with unclear licensing
 [[licenses.clarify]]
@@ -79,13 +96,37 @@ multiple-versions = "warn"
 # How to handle wildcard dependencies
 wildcards = "allow"
 
-# Allow build/dev dependencies to have multiple versions
-allow-build-scripts = ["*"]
+# NOTE: `allow-build-scripts` is an *allow-list*: setting it turns on a check
+# that rejects every crate with a build script that is not named in the list.
+# This config previously set it to `["*"]` under the comment "Allow build/dev
+# dependencies to have multiple versions", which is not what the key does — it
+# rejected ~40 ordinary crates (libc, proc-macro2, ...). Because the rest of the
+# file failed to parse, cargo-deny never got far enough to report it. Build
+# scripts are not restricted; the key is intentionally absent.
 
 # Highlight specific crates when they appear as duplicates
 highlight = "all"
 
 # Crates to deny entirely (security concerns, deprecated, etc.)
+#
+# RESOLVED (openssl): this ban previously fired under `--all-features` via
+#
+#   openssl <- native-tls <- hyper-tls <- reqwest <- delta_kernel 0.4.1
+#            <- deltalake-core <- deltalake <- streamline (feature `delta-lake`)
+#
+# `delta_kernel` 0.4.1 depended on `reqwest` with default features
+# (`default-tls` -> native-tls -> openssl) and exposed no rustls knob, so Cargo
+# feature unification pulled openssl in regardless of this crate's own
+# `default-features = false, features = [..., "rustls-tls"]` declaration.
+#
+# The `deltalake` dependency has since been removed outright (see the
+# `delta-lake` notes in Cargo.toml and `src/sink/unavailable.rs`): no released
+# version compatible with MSRV 1.88 avoids both native-tls and quick-xml < 0.41.
+# `cargo deny --all-features check bans` is now clean, and
+# `tests/dependency_security_test.rs` fails the build if native-tls, hyper-tls
+# or openssl re-enter the lockfile.
+#
+# Do NOT add openssl to `[bans] allow` or `skip`.
 deny = [
     # Known problematic crates
     { name = "openssl", wrappers = ["openssl-sys"] },  # Prefer rustls

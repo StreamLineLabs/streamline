@@ -93,26 +93,15 @@ impl LoadTestStats {
 
         format!(
             "Load Test Summary:\n\
-             Duration: {:.2}s\n\
-             Messages Produced: {} ({:.0} msg/s)\n\
-             Messages Consumed: {} ({:.0} msg/s)\n\
-             Produce Throughput: {:.2} MB/s\n\
-             Consume Throughput: {:.2} MB/s\n\
-             Produce Errors: {}\n\
-             Consume Errors: {}\n\
-             Max Produce Latency: {}us\n\
-             Max Consume Latency: {}us",
-            elapsed_secs,
-            msgs_produced,
-            produce_rate,
-            msgs_consumed,
-            consume_rate,
-            produce_throughput_mb,
-            consume_throughput_mb,
-            produce_errors,
-            consume_errors,
-            max_produce_latency,
-            max_consume_latency
+             Duration: {elapsed_secs:.2}s\n\
+             Messages Produced: {msgs_produced} ({produce_rate:.0} msg/s)\n\
+             Messages Consumed: {msgs_consumed} ({consume_rate:.0} msg/s)\n\
+             Produce Throughput: {produce_throughput_mb:.2} MB/s\n\
+             Consume Throughput: {consume_throughput_mb:.2} MB/s\n\
+             Produce Errors: {produce_errors}\n\
+             Consume Errors: {consume_errors}\n\
+             Max Produce Latency: {max_produce_latency}us\n\
+             Max Consume Latency: {max_consume_latency}us"
         )
     }
 }
@@ -207,8 +196,7 @@ async fn test_high_throughput_produce() {
     let throughput = msgs_produced as f64 / elapsed.as_secs_f64();
     assert!(
         throughput > 1000.0,
-        "Throughput should be > 1000 msg/s, got {:.0}",
-        throughput
+        "Throughput should be > 1000 msg/s, got {throughput:.0}"
     );
 }
 
@@ -330,7 +318,7 @@ async fn test_large_messages() {
         "All messages should be readable"
     );
     for (i, record) in records.iter().enumerate() {
-        assert_eq!(record.value.len(), sizes[i], "Message {} size mismatch", i);
+        assert_eq!(record.value.len(), sizes[i], "Message {i} size mismatch");
     }
 }
 
@@ -417,7 +405,7 @@ async fn test_multi_topic_load() {
 
     // Create multiple topics
     for i in 0..num_topics {
-        let topic_name = format!("multi-topic-{}", i);
+        let topic_name = format!("multi-topic-{i}");
         topic_manager.create_topic(&topic_name, 2).unwrap();
         topics.push(topic_name);
     }
@@ -464,9 +452,7 @@ async fn test_multi_topic_load() {
         }
         assert!(
             total_records >= 1900,
-            "Topic {} should have most records, got {}",
-            topic_name,
-            total_records
+            "Topic {topic_name} should have most records, got {total_records}"
         );
     }
 }
@@ -632,7 +618,7 @@ async fn test_partition_distribution() {
         partition_counts.push(records.len());
     }
 
-    println!("Partition distribution: {:?}", partition_counts);
+    println!("Partition distribution: {partition_counts:?}");
 
     // Verify even distribution (each partition should have ~1000 messages)
     let expected_per_partition = total_messages / num_partitions as usize;
@@ -640,10 +626,7 @@ async fn test_partition_distribution() {
         let diff = (*count as i64 - expected_per_partition as i64).abs();
         assert!(
             diff < 100,
-            "Partition {} has uneven distribution: {} vs expected {}",
-            i,
-            count,
-            expected_per_partition
+            "Partition {i} has uneven distribution: {count} vs expected {expected_per_partition}"
         );
     }
 }

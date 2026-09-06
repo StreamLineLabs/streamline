@@ -77,7 +77,9 @@ pub struct BootstrapResult {
 /// tokens are signed JWTs or HMAC-based one-time codes).
 fn validate_token(token: &str) -> Result<(), BootstrapError> {
     if token.is_empty() {
-        return Err(BootstrapError::InvalidToken("token must not be empty".into()));
+        return Err(BootstrapError::InvalidToken(
+            "token must not be empty".into(),
+        ));
     }
     if token.len() < 16 {
         return Err(BootstrapError::InvalidToken(
@@ -90,7 +92,9 @@ fn validate_token(token: &str) -> Result<(), BootstrapError> {
 /// Validates the cluster URL format.
 fn validate_cluster_url(url: &str) -> Result<(), BootstrapError> {
     if url.is_empty() {
-        return Err(BootstrapError::InvalidConfig("cluster_url must not be empty".into()));
+        return Err(BootstrapError::InvalidConfig(
+            "cluster_url must not be empty".into(),
+        ));
     }
     if !url.starts_with("http://") && !url.starts_with("https://") {
         return Err(BootstrapError::InvalidConfig(
@@ -130,7 +134,10 @@ pub fn bootstrap(config: &BootstrapConfig) -> Result<BootstrapResult, BootstrapE
         node_id,
         connected_at,
         topics_syncing: config.sync_topics.clone(),
-        cluster_id: format!("cluster-{}", &config.cluster_url[config.cluster_url.len().saturating_sub(8)..]),
+        cluster_id: format!(
+            "cluster-{}",
+            &config.cluster_url[config.cluster_url.len().saturating_sub(8)..]
+        ),
     })
 }
 

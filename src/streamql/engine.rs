@@ -221,7 +221,7 @@ impl AggregateState {
 pub struct Projection {
     /// Column name, function call, or expression text
     pub expression: String,
-    /// Optional alias (AS <alias>)
+    /// Optional alias (`AS alias`)
     pub alias: Option<String>,
 }
 
@@ -862,8 +862,7 @@ fn parse_window_spec(text: &str) -> Result<WindowSpec> {
         (EngineWindowType::Sliding, "SLIDING".len())
     } else {
         return Err(StreamlineError::Parse(format!(
-            "Unknown window type: {}",
-            text
+            "Unknown window type: {text}"
         )));
     };
 
@@ -918,7 +917,7 @@ fn parse_window_spec(text: &str) -> Result<WindowSpec> {
 /// Parse a millisecond value (plain integer)
 fn parse_ms_value(s: &str) -> Result<u64> {
     s.parse::<u64>()
-        .map_err(|_| StreamlineError::Parse(format!("Invalid millisecond value: {}", s)))
+        .map_err(|_| StreamlineError::Parse(format!("Invalid millisecond value: {s}")))
 }
 
 /// Attempt to compile a simple `field op value` filter expression
@@ -1068,7 +1067,7 @@ impl ContinuousQueryEngine {
             let mut counter = self.next_id.write().await;
             let id = *counter;
             *counter += 1;
-            format!("q-{}", id)
+            format!("q-{id}")
         };
 
         let now_ms = std::time::SystemTime::now()
@@ -1152,11 +1151,9 @@ impl ContinuousQueryEngine {
         for topic in &query.source_topics {
             steps.push(PlanStep {
                 step_type: PlanStepType::Scan,
-                description: format!("Scan topic '{}'", topic),
+                description: format!("Scan topic '{topic}'"),
                 estimated_rows: None,
-                details: HashMap::from([
-                    ("topic".to_string(), topic.clone()),
-                ]),
+                details: HashMap::from([("topic".to_string(), topic.clone())]),
             });
         }
 
@@ -1166,9 +1163,7 @@ impl ContinuousQueryEngine {
                 step_type: PlanStepType::Filter,
                 description: "Apply WHERE clause filter".to_string(),
                 estimated_rows: None,
-                details: HashMap::from([
-                    ("pushdown".to_string(), "true".to_string()),
-                ]),
+                details: HashMap::from([("pushdown".to_string(), "true".to_string())]),
             });
         }
 
@@ -1178,7 +1173,8 @@ impl ContinuousQueryEngine {
                 step_type: PlanStepType::Window,
                 description: format!(
                     "{:?} window (size: {}ms, advance: {}ms)",
-                    window.window_type, window.size_ms,
+                    window.window_type,
+                    window.size_ms,
                     window.advance_ms.unwrap_or(window.size_ms)
                 ),
                 estimated_rows: None,
@@ -1194,10 +1190,7 @@ impl ContinuousQueryEngine {
             for join in &query.joins {
                 steps.push(PlanStep {
                     step_type: PlanStepType::Join,
-                    description: format!(
-                        "{:?} JOIN with '{}'",
-                        join.join_type, join.right_topic
-                    ),
+                    description: format!("{:?} JOIN with '{}'", join.join_type, join.right_topic),
                     estimated_rows: None,
                     details: HashMap::from([
                         ("right_topic".to_string(), join.right_topic.clone()),
@@ -1213,19 +1206,14 @@ impl ContinuousQueryEngine {
                 step_type: PlanStepType::Aggregate,
                 description: format!("GROUP BY [{}]", query.group_by.join(", ")),
                 estimated_rows: None,
-                details: HashMap::from([
-                    ("keys".to_string(), query.group_by.join(", ")),
-                ]),
+                details: HashMap::from([("keys".to_string(), query.group_by.join(", "))]),
             });
         }
 
         // Step 6: Projection
         steps.push(PlanStep {
             step_type: PlanStepType::Project,
-            description: format!(
-                "Project {} columns",
-                query.projections.len()
-            ),
+            description: format!("Project {} columns", query.projections.len()),
             estimated_rows: None,
             details: HashMap::new(),
         });
@@ -1234,11 +1222,9 @@ impl ContinuousQueryEngine {
         if let Some(ref sink) = query.sink_topic {
             steps.push(PlanStep {
                 step_type: PlanStepType::Sink,
-                description: format!("Write to topic '{}'", sink),
+                description: format!("Write to topic '{sink}'"),
                 estimated_rows: None,
-                details: HashMap::from([
-                    ("topic".to_string(), sink.clone()),
-                ]),
+                details: HashMap::from([("topic".to_string(), sink.clone())]),
             });
         }
 
@@ -1257,7 +1243,7 @@ impl ContinuousQueryEngine {
         let mut queries = self.queries.write().await;
         let entry = queries
             .remove(query_id)
-            .ok_or_else(|| StreamlineError::Query(format!("Query not found: {}", query_id)))?;
+            .ok_or_else(|| StreamlineError::Query(format!("Query not found: {query_id}")))?;
 
         Ok(QueryInfo {
             handle: QueryHandle {
@@ -1301,7 +1287,7 @@ impl ExplainPlan {
                 step.description
             ));
             for (k, v) in &step.details {
-                out.push_str(&format!("{}  {} = {}\n", indent, k, v));
+                out.push_str(&format!("{indent}  {k} = {v}\n"));
             }
         }
         out.push_str(&format!(
@@ -1767,10 +1753,7 @@ mod tests {
     #[tokio::test]
     async fn test_cancel_and_cleanup() {
         let engine = ContinuousQueryEngine::new();
-        let handle = engine
-            .submit_query("SELECT * FROM events")
-            .await
-            .unwrap();
+        let handle = engine.submit_query("SELECT * FROM events").await.unwrap();
         let info = engine.cancel_and_cleanup(&handle.id).await.unwrap();
         assert_eq!(info.handle.status, QueryStatus::Cancelled);
 

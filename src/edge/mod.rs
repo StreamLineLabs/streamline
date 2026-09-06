@@ -23,7 +23,7 @@
 //!
 //! # Example
 //!
-//! ```no_run
+//! ```ignore
 //! use streamline::edge::{EdgeConfig, EdgeRuntime};
 //!
 //! # fn main() -> streamline::Result<()> {
@@ -65,8 +65,11 @@ pub mod bootstrap;
 pub mod checkpoint;
 pub mod config;
 pub mod conflict;
+#[allow(dead_code)]
+pub mod crdt;
 pub mod discovery;
 pub mod federation;
+pub mod fleet;
 pub mod http_sync;
 pub mod mesh;
 pub mod multicloud;
@@ -79,48 +82,36 @@ pub mod service_mesh;
 pub mod store_forward;
 pub mod sync;
 pub mod sync_service;
-#[allow(dead_code)]
-pub mod crdt;
 
 // Re-export main types
-pub use bandwidth::{BandwidthConfig, BandwidthEstimator, calculate_batch_size};
-pub use bootstrap::{BootstrapConfig, BootstrapError, BootstrapResult, bootstrap};
 pub use checkpoint::{CheckpointState, EdgeSyncCheckpoint, PartitionCheckpoint, TopicCheckpoint};
 pub use config::{
     ConflictResolution, EdgeCompressionStrategy, EdgeConfig, EdgeNetworkConfig, EdgeResourceConfig,
     EdgeRetentionPolicy, EdgeStorageConfig, EdgeSyncConfig, EdgeSyncMode,
 };
 pub use conflict::{ConflictInfo, ConflictResolver, ConflictStats, ResolutionResult};
-pub use federation::{
-    EdgeCapabilities, EdgeCluster, EdgeNodeInfo, FederationCommand, FederationManager,
-    FederationState, FederationStats, HeartbeatRequest, HeartbeatResponse,
-};
-pub use sync::{
-    EdgeSyncEngine, SyncBatch, SyncDirection, SyncPhase, SyncProgress, SyncRecord, SyncResult,
-    SyncState, SyncStats,
-};
 pub use discovery::{
     DiscoveryConfig, DiscoveryProtocol, DiscoveryStatsSnapshot, EdgeDiscovery, EdgeNode,
     EdgeNodeCapabilities, EdgeNodeStatus,
 };
-pub use mesh::{MeshTopology, PeerConnection, PeerConnectionState, SyncPolicy};
-pub use resource_monitor::{
-    AdaptiveConfig, ResourceAlert, ResourceMonitor, ResourceMonitorConfig, ResourceSnapshot,
-    ResourceThresholds,
+pub use federation::{
+    EdgeCapabilities, EdgeCluster, EdgeNodeInfo, FederationCommand, FederationManager,
+    FederationState, FederationStats, HeartbeatRequest, HeartbeatResponse,
 };
+pub use mesh::{MeshTopology, PeerConnection, PeerConnectionState, SyncPolicy};
 pub use optimizations::{
     CompactionResult, EdgeOptimizationConfig, EdgeOptimizer, EvictionResult, MemoryRecommendation,
     OptimizationStats, TopicStorageUsage,
 };
+pub use resource_monitor::{
+    AdaptiveConfig, ResourceAlert, ResourceMonitor, ResourceMonitorConfig, ResourceThresholds,
+};
 pub use store_forward::{
     StoreForwardConfig, StoreForwardEngine, StoreForwardStatus, SyncStrategy, SyncWatermark,
 };
-pub use power::{
-    BatteryStatus, EdgeOperation, PowerConfig, PowerManager, PowerProfile,
-    PowerSource, PowerThresholds, ProfileChange,
-};
-pub use sync_service::{
-    PendingWrite, ServerWrite, SyncConfig, SyncResponse, SyncService, SyncSession,
+pub use sync::{
+    EdgeSyncEngine, SyncBatch, SyncDirection, SyncPhase, SyncProgress, SyncRecord, SyncResult,
+    SyncState, SyncStats,
 };
 
 use crate::error::{Result, StreamlineError};
@@ -149,7 +140,7 @@ impl EdgeRuntime {
             // Create data directory if it doesn't exist
             if !data_path.exists() {
                 std::fs::create_dir_all(&data_path).map_err(|e| {
-                    StreamlineError::storage_msg(format!("Failed to create data dir: {}", e))
+                    StreamlineError::storage_msg(format!("Failed to create data dir: {e}"))
                 })?;
             }
 

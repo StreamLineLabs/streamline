@@ -26,14 +26,12 @@ use super::CdcCommands;
 use super::EdgeCommands;
 #[cfg(feature = "lakehouse")]
 use super::LakehouseCommands;
-#[cfg(feature = "iceberg")]
 use super::SinkCommands;
 use super::{
     AlertingCommands, CloudCommands, ConnectorCommands, ContractCommands, DebugCommands,
     GeoReplicationCommands, GitOpsCommands, GovernorCommands, LineageCommands,
 };
 
-#[cfg(feature = "iceberg")]
 pub(super) fn handle_sink_command(cmd: SinkCommands, ctx: &CliContext) -> Result<()> {
     use streamline::cli_utils::{
         handle_sink_create, handle_sink_delete, handle_sink_list, handle_sink_start,
@@ -381,7 +379,7 @@ pub(super) fn handle_gitops_command(cmd: GitOpsCommands, ctx: &CliContext) -> Re
                     } else {
                         println!("  {} Validation errors:", "❌".red());
                         for err in &validation.errors {
-                            println!("    - {}", err);
+                            println!("    - {err}");
                         }
                         return Err(streamline::StreamlineError::Config(
                             "GitOps manifest validation failed".into(),
@@ -391,8 +389,7 @@ pub(super) fn handle_gitops_command(cmd: GitOpsCommands, ctx: &CliContext) -> Re
                 Err(e) => {
                     println!("  {} Parse error: {}", "❌".red(), e);
                     return Err(streamline::StreamlineError::Config(format!(
-                        "GitOps manifest parse error: {}",
-                        e
+                        "GitOps manifest parse error: {e}"
                     )));
                 }
             }
@@ -449,7 +446,7 @@ pub(super) fn handle_gitops_command(cmd: GitOpsCommands, ctx: &CliContext) -> Re
                     println!("  {} Exported to {}", "✅".green(), path.bold());
                 }
                 None => {
-                    println!("{}", content);
+                    println!("{content}");
                 }
             }
         }
@@ -627,10 +624,10 @@ pub(super) fn handle_contract_command(cmd: ContractCommands, ctx: &CliContext) -
             println!("{}", "📋 Running stream contract tests...".bold().cyan());
 
             let content = std::fs::read_to_string(&file).map_err(|e| {
-                streamline::StreamlineError::Config(format!("Failed to read {}: {}", file, e))
+                streamline::StreamlineError::Config(format!("Failed to read {file}: {e}"))
             })?;
             let contract: StreamContract = serde_yaml::from_str(&content).map_err(|e| {
-                streamline::StreamlineError::Config(format!("Failed to parse contract: {}", e))
+                streamline::StreamlineError::Config(format!("Failed to parse contract: {e}"))
             })?;
 
             let runner = ContractRunner::new(ContractRunnerConfig::default());
@@ -647,14 +644,14 @@ pub(super) fn handle_contract_command(cmd: ContractCommands, ctx: &CliContext) -
 
             if let Some(path) = output_file {
                 std::fs::write(&path, &output_text).map_err(streamline::StreamlineError::Io)?;
-                println!("Results written to {}", path);
+                println!("Results written to {path}");
             } else {
-                println!("{}", output_text);
+                println!("{output_text}");
             }
         }
         ContractCommands::Validate { file } => {
             let content = std::fs::read_to_string(&file).map_err(|e| {
-                streamline::StreamlineError::Config(format!("Failed to read {}: {}", file, e))
+                streamline::StreamlineError::Config(format!("Failed to read {file}: {e}"))
             })?;
             match StreamContract::from_yaml(&content) {
                 Ok(contract) => {
@@ -674,8 +671,7 @@ pub(super) fn handle_contract_command(cmd: ContractCommands, ctx: &CliContext) -
             output,
         } => {
             println!(
-                "Generating contract from topic '{}' (sampling {} messages)...",
-                topic, sample_size
+                "Generating contract from topic '{topic}' (sampling {sample_size} messages)..."
             );
             let topic_manager = TopicManager::new(&ctx.data_dir)?;
             let records = topic_manager.read(&topic, 0, 0, sample_size)?;
@@ -711,7 +707,7 @@ pub(super) fn handle_contract_command(cmd: ContractCommands, ctx: &CliContext) -
             }
 
             let contract = streamline::contracts::definition::StreamContract {
-                name: format!("{}-contract", topic),
+                name: format!("{topic}-contract"),
                 topic: topic.clone(),
                 spec: streamline::contracts::definition::ContractSpec {
                     fields,
@@ -720,7 +716,7 @@ pub(super) fn handle_contract_command(cmd: ContractCommands, ctx: &CliContext) -
                     max_message_size: None,
                     required_headers: Vec::new(),
                 },
-                description: format!("Auto-generated contract for topic '{}'", topic),
+                description: format!("Auto-generated contract for topic '{topic}'"),
                 version: "1.0.0".to_string(),
             };
 
@@ -729,7 +725,7 @@ pub(super) fn handle_contract_command(cmd: ContractCommands, ctx: &CliContext) -
                 std::fs::write(&path, &yaml).map_err(streamline::StreamlineError::Io)?;
                 println!("{} Contract written to {}", "✓".green(), path);
             } else {
-                println!("{}", yaml);
+                println!("{yaml}");
             }
         }
     }
@@ -797,16 +793,13 @@ pub(super) fn handle_debug_command(cmd: DebugCommands, ctx: &CliContext) -> Resu
             let result = inspector.inspect()?;
             println!(
                 "{}",
-                format!(
-                    "🔎 Searching for '{}' in {}:{} (max {})",
-                    pattern, topic, partition, max_scan
-                )
-                .bold()
-                .cyan()
+                format!("🔎 Searching for '{pattern}' in {topic}:{partition} (max {max_scan})")
+                    .bold()
+                    .cyan()
             );
 
             let matches = result.breakpoint_matches.len();
-            println!("Found {} matches", matches);
+            println!("Found {matches} matches");
             for m in &result.breakpoint_matches {
                 println!(
                     "  offset {}: {}",
@@ -822,10 +815,10 @@ pub(super) fn handle_debug_command(cmd: DebugCommands, ctx: &CliContext) -> Resu
         DebugCommands::GroupDiff { group } => {
             println!(
                 "{}",
-                format!("📊 Consumer group diff: {}", group).bold().cyan()
+                format!("📊 Consumer group diff: {group}").bold().cyan()
             );
             println!("  (Connect to a running server to capture group state snapshots)");
-            println!("  Use: GET /api/v1/debug/groups/{}/diff", group);
+            println!("  Use: GET /api/v1/debug/groups/{group}/diff");
         }
     }
     Ok(())
@@ -892,7 +885,7 @@ pub(super) fn handle_connector_command(cmd: ConnectorCommands, _ctx: &CliContext
                     Cell::new(&entry.metadata.version),
                 ]);
             }
-            println!("{}", table);
+            println!("{table}");
         }
         ConnectorCommands::List => {
             println!("{}", "📦 Available Connectors".bold().cyan());
@@ -905,7 +898,7 @@ pub(super) fn handle_connector_command(cmd: ConnectorCommands, _ctx: &CliContext
             ] {
                 let entries = catalog.by_category(category);
                 if !entries.is_empty() {
-                    println!("  {} ({}):", format!("{}", category).bold(), entries.len());
+                    println!("  {} ({}):", format!("{category}").bold(), entries.len());
                     for entry in entries {
                         println!(
                             "    {} - {}",
@@ -956,10 +949,7 @@ pub(super) fn handle_connector_command(cmd: ConnectorCommands, _ctx: &CliContext
                     "✓".green(),
                     name
                 );
-                println!(
-                    "  Configure with: streamline-cli connector configure {}",
-                    name
-                );
+                println!("  Configure with: streamline-cli connector configure {name}");
             } else {
                 println!(
                     "{} Connector '{}' not found in marketplace",
@@ -970,7 +960,7 @@ pub(super) fn handle_connector_command(cmd: ConnectorCommands, _ctx: &CliContext
         }
         ConnectorCommands::Uninstall { name, yes } => {
             if !yes {
-                println!("Uninstall connector '{}'?", name);
+                println!("Uninstall connector '{name}'?");
             }
             println!("{} Connector '{}' uninstalled", "✓".green(), name);
         }
@@ -986,7 +976,7 @@ pub(super) fn handle_connector_command(cmd: ConnectorCommands, _ctx: &CliContext
             // Validate the YAML
             let spec: streamline::marketplace::declarative::ConnectorSpec =
                 serde_yaml::from_str(&yaml).map_err(|e| {
-                    streamline::StreamlineError::Config(format!("Invalid connector YAML: {}", e))
+                    streamline::StreamlineError::Config(format!("Invalid connector YAML: {e}"))
                 })?;
 
             println!(
@@ -1005,7 +995,7 @@ pub(super) fn handle_connector_command(cmd: ConnectorCommands, _ctx: &CliContext
                 );
             } else {
                 let rt = tokio::runtime::Runtime::new().map_err(|e| {
-                    streamline::StreamlineError::Internal(format!("Failed to create runtime: {}", e))
+                    streamline::StreamlineError::Internal(format!("Failed to create runtime: {e}"))
                 })?;
                 let manager = streamline::marketplace::declarative::ConnectorManager::new();
                 let connector = rt.block_on(manager.apply(spec))?;
@@ -1020,7 +1010,7 @@ pub(super) fn handle_connector_command(cmd: ConnectorCommands, _ctx: &CliContext
         }
         ConnectorCommands::Status { name } => {
             let rt = tokio::runtime::Runtime::new().map_err(|e| {
-                streamline::StreamlineError::Internal(format!("Failed to create runtime: {}", e))
+                streamline::StreamlineError::Internal(format!("Failed to create runtime: {e}"))
             })?;
             let manager = streamline::marketplace::declarative::ConnectorManager::new();
 
@@ -1032,7 +1022,7 @@ pub(super) fn handle_connector_command(cmd: ConnectorCommands, _ctx: &CliContext
                         println!("  Restarts:      {}", conn.restart_count);
                         println!("  Created:       {}", conn.created_at);
                         if let Some(started) = conn.started_at {
-                            println!("  Started:       {}", started);
+                            println!("  Started:       {started}");
                         }
                         if let Some(err) = &conn.last_error {
                             println!("  Last Error:    {}", err.red());
@@ -1063,7 +1053,7 @@ pub(super) fn handle_connector_command(cmd: ConnectorCommands, _ctx: &CliContext
                             Cell::new(conn.created_at.format("%Y-%m-%d %H:%M").to_string()),
                         ]);
                     }
-                    println!("{}", table);
+                    println!("{table}");
                 }
             }
         }
@@ -1071,7 +1061,7 @@ pub(super) fn handle_connector_command(cmd: ConnectorCommands, _ctx: &CliContext
             let example = streamline::marketplace::declarative::ConnectorManager::example_yaml(
                 "postgres-cdc",
             );
-            println!("{}", example);
+            println!("{example}");
         }
     }
     Ok(())
@@ -1083,7 +1073,7 @@ pub(super) fn handle_lineage_command(cmd: LineageCommands, _ctx: &CliContext) ->
             println!("{}", "🔗 Data Lineage Graph".bold().cyan());
             println!();
             println!("Lineage tracking is available when connected to a running server.");
-            println!("Access via: GET /api/v1/lineage?format={}", format);
+            println!("Access via: GET /api/v1/lineage?format={format}");
             println!();
             println!("{}", "Supported formats:".bold());
             println!("  text - Human-readable ASCII graph");
@@ -1093,26 +1083,18 @@ pub(super) fn handle_lineage_command(cmd: LineageCommands, _ctx: &CliContext) ->
         LineageCommands::Upstream { topic } => {
             println!(
                 "{}",
-                format!("⬆ Upstream producers for '{}'", topic)
-                    .bold()
-                    .cyan()
+                format!("⬆ Upstream producers for '{topic}'").bold().cyan()
             );
-            println!(
-                "  Access via: GET /api/v1/lineage/topics/{}/upstream",
-                topic
-            );
+            println!("  Access via: GET /api/v1/lineage/topics/{topic}/upstream");
         }
         LineageCommands::Downstream { topic } => {
             println!(
                 "{}",
-                format!("⬇ Downstream consumers for '{}'", topic)
+                format!("⬇ Downstream consumers for '{topic}'")
                     .bold()
                     .cyan()
             );
-            println!(
-                "  Access via: GET /api/v1/lineage/topics/{}/downstream",
-                topic
-            );
+            println!("  Access via: GET /api/v1/lineage/topics/{topic}/downstream");
         }
     }
     Ok(())
@@ -1120,7 +1102,7 @@ pub(super) fn handle_lineage_command(cmd: LineageCommands, _ctx: &CliContext) ->
 
 pub(super) fn handle_cloud_command(cmd: CloudCommands, _ctx: &CliContext) -> Result<()> {
     let rt = tokio::runtime::Runtime::new().map_err(|e| {
-        streamline::StreamlineError::Internal(format!("Failed to create runtime: {}", e))
+        streamline::StreamlineError::Internal(format!("Failed to create runtime: {e}"))
     })?;
     let console = streamline::cloud::console::ConsoleManager::new();
 
@@ -1128,7 +1110,7 @@ pub(super) fn handle_cloud_command(cmd: CloudCommands, _ctx: &CliContext) -> Res
         CloudCommands::ApiKeys { tenant_id } => {
             let keys = rt.block_on(console.list_api_keys(&tenant_id));
             if keys.is_empty() {
-                println!("No API keys for tenant '{}'.", tenant_id);
+                println!("No API keys for tenant '{tenant_id}'.");
             } else {
                 let mut table = Table::new();
                 table.load_preset(UTF8_FULL_CONDENSED);
@@ -1149,7 +1131,7 @@ pub(super) fn handle_cloud_command(cmd: CloudCommands, _ctx: &CliContext) -> Res
                     ]);
                 }
                 println!("{}", "🔑 API Keys".bold().cyan());
-                println!("{}", table);
+                println!("{table}");
             }
         }
         CloudCommands::Onboard {
@@ -1235,8 +1217,8 @@ pub(super) fn handle_alerting_command(cmd: AlertingCommands, _ctx: &CliContext) 
                 name.bold(),
                 topic
             );
-            println!("  Condition: {} > {}", condition, threshold);
-            println!("  Channel:   {}", channel);
+            println!("  Condition: {condition} > {threshold}");
+            println!("  Channel:   {channel}");
             println!();
             println!(
                 "{}",
@@ -1255,8 +1237,8 @@ pub(super) fn handle_alerting_command(cmd: AlertingCommands, _ctx: &CliContext) 
             indicator,
         } => {
             println!("{} Creating SLO '{}'", "📐".cyan(), name.bold());
-            println!("  Target:    {}%", target);
-            println!("  Indicator: {}", indicator);
+            println!("  Target:    {target}%");
+            println!("  Indicator: {indicator}");
             println!();
             println!("{}", "SLO created.".green());
         }
@@ -1316,7 +1298,7 @@ pub(super) fn handle_governor_command(cmd: GovernorCommands, _ctx: &CliContext) 
             } else {
                 println!("{}", "📜 Governor Actions History".bold().cyan());
                 for action in &actions {
-                    println!("  {}", action);
+                    println!("  {action}");
                 }
             }
         }
@@ -1332,6 +1314,6 @@ fn format_bytes(bytes: u64) -> String {
     } else if bytes >= 1024 {
         format!("{:.1} KB", bytes as f64 / 1024.0)
     } else {
-        format!("{} B", bytes)
+        format!("{bytes} B")
     }
 }

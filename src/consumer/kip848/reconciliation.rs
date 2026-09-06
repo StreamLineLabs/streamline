@@ -142,7 +142,7 @@ impl ReconciliationEngine {
         let mut member = super::member::ConsumerMember::new(
             member_id.clone(),
             request.instance_id.clone(),
-            format!("client-{}", member_id),
+            format!("client-{member_id}"),
             "unknown".to_string(),
             self.config.session_timeout_ms,
             request.rebalance_timeout_ms,

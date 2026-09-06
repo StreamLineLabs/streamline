@@ -200,7 +200,7 @@ pub async fn wait_for_port(port: u16, timeout: Duration) -> Result<Duration, &'s
     let deadline = start + timeout;
 
     while Instant::now() < deadline {
-        match tokio::net::TcpStream::connect(format!("127.0.0.1:{}", port)).await {
+        match tokio::net::TcpStream::connect(format!("127.0.0.1:{port}")).await {
             Ok(_) => return Ok(start.elapsed()),
             Err(_) => tokio::time::sleep(Duration::from_millis(10)).await,
         }

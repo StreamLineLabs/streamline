@@ -36,7 +36,7 @@ use crate::ai::summarization::{StreamSummarizer, SummarizationConfig};
 use axum::{
     extract::{Path, State},
     http::StatusCode,
-    routing::{delete, get, post},
+    routing::{get, post},
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
@@ -53,6 +53,10 @@ pub struct AiApiState {
 }
 
 impl Default for AiApiState {
+    // `AiApiState::new()` is the fallible constructor and is what the HTTP
+    // bootstrap uses (see `server::http`). `Default` exists for tests and
+    // standalone wiring, and has no error channel of its own.
+    #[allow(clippy::expect_used)]
     fn default() -> Self {
         Self::new().expect("default AiApiState configuration should be valid")
     }
@@ -306,7 +310,7 @@ async fn create_pipeline(
                 return Err((
                     StatusCode::BAD_REQUEST,
                     Json(AiErrorResponse {
-                        error: format!("Unknown stage type: '{}'. Valid: embed, classify, detect_anomaly, summarize, extract_entities", other),
+                        error: format!("Unknown stage type: '{other}'. Valid: embed, classify, detect_anomaly, summarize, extract_entities"),
                     }),
                 ));
             }
@@ -347,7 +351,7 @@ async fn get_pipeline(
             (
                 StatusCode::NOT_FOUND,
                 Json(AiErrorResponse {
-                    error: format!("Pipeline '{}' not found", name),
+                    error: format!("Pipeline '{name}' not found"),
                 }),
             )
         })
@@ -442,13 +446,14 @@ async fn semantic_search(
 }
 
 /// POST /api/v1/ai/classify - Classify text using LLM
-async fn classify_text(
-    Json(req): Json<ClassifyRequest>,
-) -> Json<ClassifyResponse> {
+async fn classify_text(Json(req): Json<ClassifyRequest>) -> Json<ClassifyResponse> {
     // Generate stub classification scores based on text hashing
     // Real implementation would delegate to LLMClient::classify
     let mut scores = HashMap::new();
-    let text_hash = req.text.bytes().fold(0u32, |acc, b| acc.wrapping_add(b as u32));
+    let text_hash = req
+        .text
+        .bytes()
+        .fold(0u32, |acc, b| acc.wrapping_add(b as u32));
 
     let mut best_category = String::new();
     let mut best_score: f32 = 0.0;
@@ -479,9 +484,7 @@ async fn classify_text(
 }
 
 /// POST /api/v1/ai/enrich - Enrich records with AI metadata
-async fn enrich_text(
-    Json(req): Json<EnrichRequest>,
-) -> Json<EnrichResponse> {
+async fn enrich_text(Json(req): Json<EnrichRequest>) -> Json<EnrichResponse> {
     // Stub enrichment — extract basic metadata from text
     // Real implementation would delegate to LLMClient::enrich
     let mut metadata = HashMap::new();
@@ -932,13 +935,12 @@ async fn vector_stats() -> Json<serde_json::Value> {
 ///
 /// Automatically generates vector embeddings for all messages on a topic.
 /// New messages are indexed in real-time as they arrive.
-async fn configure_auto_embed(
-    Json(req): Json<AutoEmbedRequest>,
-) -> Json<serde_json::Value> {
+async fn configure_auto_embed(Json(req): Json<AutoEmbedRequest>) -> Json<serde_json::Value> {
     Json(serde_json::json!({
         "topic": req.topic,
         "model": req.model.unwrap_or_else(|| "simple-hash".to_string()),
         "dimensions": req.dimensions.unwrap_or(384),
+        "batch_size": req.batch_size.unwrap_or(32),
         "status": "enabled",
         "message": format!("Auto-embedding enabled for topic '{}'. New messages will be indexed automatically.", req.topic)
     }))
@@ -1030,9 +1032,7 @@ mod tests {
             .oneshot(
                 Request::post("/api/v1/ai/classify")
                     .header("content-type", "application/json")
-                    .body(Body::from(
-                        r#"{"text": "test", "categories": ["spam"]}"#,
-                    ))
+                    .body(Body::from(r#"{"text": "test", "categories": ["spam"]}"#))
                     .unwrap(),
             )
             .await
@@ -1154,7 +1154,11 @@ mod tests {
         assert_eq!(parsed.embeddings.len(), 1);
         assert_eq!(parsed.dimensions, 384);
         // Embeddings should be normalized (magnitude ~1.0)
-        let norm: f32 = parsed.embeddings[0].iter().map(|x| x * x).sum::<f32>().sqrt();
+        let norm: f32 = parsed.embeddings[0]
+            .iter()
+            .map(|x| x * x)
+            .sum::<f32>()
+            .sqrt();
         assert!((norm - 1.0).abs() < 0.01);
     }
 
@@ -1404,9 +1408,7 @@ mod tests {
             .oneshot(
                 Request::post("/api/v1/ai/search")
                     .header("content-type", "application/json")
-                    .body(Body::from(
-                        r#"{"query": "machine learning", "limit": 5}"#,
-                    ))
+                    .body(Body::from(r#"{"query": "machine learning", "limit": 5}"#))
                     .unwrap(),
             )
             .await
@@ -1518,9 +1520,7 @@ mod tests {
     fn test_enrich_response_serde() {
         let resp = EnrichResponse {
             text: "hello".to_string(),
-            metadata: HashMap::from([
-                ("word_count".to_string(), serde_json::json!(1)),
-            ]),
+            metadata: HashMap::from([("word_count".to_string(), serde_json::json!(1))]),
             summary: None,
             entities: vec!["test".to_string()],
         };

@@ -111,8 +111,7 @@ impl LLMClient {
 
         let fields_str = self.config.enrichment_fields.join(", ");
         let prompt = format!(
-            "Extract the following information from the text: {}.\n\nText: {}\n\nOutput as JSON:",
-            fields_str, text
+            "Extract the following information from the text: {fields_str}.\n\nText: {text}\n\nOutput as JSON:"
         );
 
         let response = self.provider.complete(&prompt, &self.config).await?;
@@ -138,8 +137,7 @@ impl LLMClient {
         self.check_rate_limit().await?;
 
         let prompt = format!(
-            "Summarize the following text in {} words or less:\n\n{}\n\nSummary:",
-            max_length, text
+            "Summarize the following text in {max_length} words or less:\n\n{text}\n\nSummary:"
         );
 
         self.provider.complete(&prompt, &self.config).await
@@ -157,8 +155,7 @@ impl LLMClient {
             "Translate the following natural language query into StreamQL (a SQL-like streaming query language). \
              StreamQL supports: SELECT, FROM <topic>, WHERE, GROUP BY, WINDOW (TUMBLING, HOPPING, SESSION), \
              JOIN, aggregates (COUNT, SUM, AVG, MIN, MAX), and EMIT CHANGES.\n\n\
-             Natural language: {}\n\nStreamQL:",
-            natural_language
+             Natural language: {natural_language}\n\nStreamQL:"
         );
 
         self.provider.complete(&prompt, &self.config).await
@@ -173,8 +170,7 @@ impl LLMClient {
         self.check_rate_limit().await?;
 
         let prompt = format!(
-            "Extract named entities (person, organization, location, date, etc.) from this text as JSON array:\n\n{}\n\nEntities:",
-            text
+            "Extract named entities (person, organization, location, date, etc.) from this text as JSON array:\n\n{text}\n\nEntities:"
         );
 
         let response = self.provider.complete(&prompt, &self.config).await?;
@@ -194,8 +190,7 @@ impl LLMClient {
         self.check_rate_limit().await?;
 
         let prompt = format!(
-            "Analyze the sentiment of this text. Output as JSON with 'sentiment' (positive/negative/neutral) and 'score' (-1.0 to 1.0):\n\n{}\n\nAnalysis:",
-            text
+            "Analyze the sentiment of this text. Output as JSON with 'sentiment' (positive/negative/neutral) and 'score' (-1.0 to 1.0):\n\n{text}\n\nAnalysis:"
         );
 
         let response = self.provider.complete(&prompt, &self.config).await?;

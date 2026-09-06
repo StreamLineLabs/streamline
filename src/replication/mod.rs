@@ -47,12 +47,12 @@ pub mod acks;
 #[cfg(feature = "geo-replication")]
 pub mod active_active;
 pub mod failover;
-#[cfg(feature = "geo-replication")]
-pub mod region_coordinator;
 pub mod fetcher;
 pub mod geo;
 pub mod isr;
 pub mod multi_dc;
+#[cfg(feature = "geo-replication")]
+pub mod region_coordinator;
 pub mod sender;
 pub mod throttle;
 pub mod wan_batch;

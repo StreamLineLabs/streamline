@@ -100,7 +100,7 @@ impl Partition {
         let path = base_path
             .join("topics")
             .join(topic)
-            .join(format!("partition-{}", id));
+            .join(format!("partition-{id}"));
         fs::create_dir_all(&path)?;
 
         let mut partition = Self {
@@ -945,7 +945,7 @@ mod tests {
         // Append 5 records
         for i in 0..5 {
             partition
-                .append(None, Bytes::from(format!("value{}", i)))
+                .append(None, Bytes::from(format!("value{i}")))
                 .unwrap();
         }
 
@@ -996,7 +996,7 @@ mod tests {
         // Append 10 records
         for i in 0..10 {
             partition
-                .append(None, Bytes::from(format!("value{}", i)))
+                .append(None, Bytes::from(format!("value{i}")))
                 .unwrap();
         }
 
@@ -1031,7 +1031,7 @@ mod tests {
 
         for i in 0..10 {
             partition
-                .append(None, Bytes::from(format!("value{}", i)))
+                .append(None, Bytes::from(format!("value{i}")))
                 .unwrap();
         }
 
@@ -1094,7 +1094,7 @@ mod tests {
         // Append 10 records
         for i in 0..10 {
             partition
-                .append(None, Bytes::from(format!("value{}", i)))
+                .append(None, Bytes::from(format!("value{i}")))
                 .unwrap();
         }
 
@@ -1118,7 +1118,7 @@ mod tests {
             let mut partition = Partition::open("test-topic", 0, dir.path()).unwrap();
             for i in 0..5 {
                 partition
-                    .append(None, Bytes::from(format!("value{}", i)))
+                    .append(None, Bytes::from(format!("value{i}")))
                     .unwrap();
             }
         }
@@ -1234,8 +1234,7 @@ mod tests {
 
         assert!(
             initial_segments >= 3,
-            "Expected at least 3 segments, got {}",
-            initial_segments
+            "Expected at least 3 segments, got {initial_segments}"
         );
 
         // Enforce size retention - keep only 2KB
@@ -1290,7 +1289,7 @@ mod tests {
         // Append 10 records
         for i in 0..10 {
             partition
-                .append(None, Bytes::from(format!("value{}", i)))
+                .append(None, Bytes::from(format!("value{i}")))
                 .unwrap();
         }
 
@@ -1381,7 +1380,7 @@ mod tests {
         // Append 10 records
         for i in 0..10 {
             partition
-                .append(None, Bytes::from(format!("value{}", i)))
+                .append(None, Bytes::from(format!("value{i}")))
                 .unwrap();
         }
 
@@ -1403,7 +1402,7 @@ mod tests {
         // Append 10 records
         for i in 0..10 {
             partition
-                .append(None, Bytes::from(format!("value{}", i)))
+                .append(None, Bytes::from(format!("value{i}")))
                 .unwrap();
         }
 
@@ -1448,10 +1447,10 @@ mod tests {
         // Append same records to both
         for i in 0..5 {
             in_mem
-                .append(None, Bytes::from(format!("value{}", i)))
+                .append(None, Bytes::from(format!("value{i}")))
                 .unwrap();
             on_disk
-                .append(None, Bytes::from(format!("value{}", i)))
+                .append(None, Bytes::from(format!("value{i}")))
                 .unwrap();
         }
 
@@ -1545,7 +1544,7 @@ mod tests {
         // Simulate the optimized flow for multiple records
         for i in 0..5 {
             let (offset, timestamp) = partition.reserve_offset();
-            let record = Record::new(offset, timestamp, None, Bytes::from(format!("value{}", i)));
+            let record = Record::new(offset, timestamp, None, Bytes::from(format!("value{i}")));
             partition.append_with_offset(record).unwrap();
         }
 
@@ -1555,7 +1554,7 @@ mod tests {
         assert_eq!(records.len(), 5);
         for (i, record) in records.iter().enumerate().take(5) {
             assert_eq!(record.offset, i as i64);
-            assert_eq!(record.value, Bytes::from(format!("value{}", i)));
+            assert_eq!(record.value, Bytes::from(format!("value{i}")));
         }
     }
 
@@ -1587,7 +1586,7 @@ mod tests {
                 i,
                 base_ts + (i * 100), // timestamps: 1000, 1100, 1200, 1300, 1400
                 None,
-                Bytes::from(format!("value{}", i)),
+                Bytes::from(format!("value{i}")),
             );
             partition.append_with_offset(record).unwrap();
         }
@@ -1639,7 +1638,7 @@ mod tests {
                 offset,
                 base_ts + (i * 200), // timestamps: 2000, 2200, 2400
                 None,
-                Bytes::from(format!("disk-value{}", i)),
+                Bytes::from(format!("disk-value{i}")),
             );
             partition.append_with_offset(record).unwrap();
         }

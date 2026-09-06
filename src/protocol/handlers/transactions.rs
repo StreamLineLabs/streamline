@@ -25,7 +25,7 @@ pub(crate) async fn dispatch(
         ApiKey::InitProducerId => {
             let request = InitProducerIdRequest::decode(&mut buf, header.request_api_version)
                 .map_err(|e| {
-                    StreamlineError::protocol("decode", format!("Failed to decode request: {}", e))
+                    StreamlineError::protocol("decode", format!("Failed to decode request: {e}"))
                 })?;
 
             handler
@@ -50,7 +50,7 @@ pub(crate) async fn dispatch(
         ApiKey::AddPartitionsToTxn => {
             let request = AddPartitionsToTxnRequest::decode(&mut buf, header.request_api_version)
                 .map_err(|e| {
-                StreamlineError::protocol("decode", format!("Failed to decode request: {}", e))
+                StreamlineError::protocol("decode", format!("Failed to decode request: {e}"))
             })?;
 
             handler
@@ -75,7 +75,7 @@ pub(crate) async fn dispatch(
         ApiKey::AddOffsetsToTxn => {
             let request = AddOffsetsToTxnRequest::decode(&mut buf, header.request_api_version)
                 .map_err(|e| {
-                    StreamlineError::protocol("decode", format!("Failed to decode request: {}", e))
+                    StreamlineError::protocol("decode", format!("Failed to decode request: {e}"))
                 })?;
 
             handler
@@ -100,7 +100,7 @@ pub(crate) async fn dispatch(
         ApiKey::EndTxn => {
             let request =
                 EndTxnRequest::decode(&mut buf, header.request_api_version).map_err(|e| {
-                    StreamlineError::protocol("decode", format!("Failed to decode request: {}", e))
+                    StreamlineError::protocol("decode", format!("Failed to decode request: {e}"))
                 })?;
 
             handler
@@ -125,7 +125,7 @@ pub(crate) async fn dispatch(
         ApiKey::TxnOffsetCommit => {
             let request = TxnOffsetCommitRequest::decode(&mut buf, header.request_api_version)
                 .map_err(|e| {
-                    StreamlineError::protocol("decode", format!("Failed to decode request: {}", e))
+                    StreamlineError::protocol("decode", format!("Failed to decode request: {e}"))
                 })?;
 
             handler
@@ -150,7 +150,7 @@ pub(crate) async fn dispatch(
         ApiKey::WriteTxnMarkers => {
             let request = WriteTxnMarkersRequest::decode(&mut buf, header.request_api_version)
                 .map_err(|e| {
-                    StreamlineError::protocol("decode", format!("Failed to decode request: {}", e))
+                    StreamlineError::protocol("decode", format!("Failed to decode request: {e}"))
                 })?;
 
             let response = handler.handle_write_txn_markers(request)?;
@@ -165,7 +165,7 @@ pub(crate) async fn dispatch(
         ApiKey::DescribeProducers => {
             let request = DescribeProducersRequest::decode(&mut buf, header.request_api_version)
                 .map_err(|e| {
-                    StreamlineError::protocol("decode", format!("Failed to decode request: {}", e))
+                    StreamlineError::protocol("decode", format!("Failed to decode request: {e}"))
                 })?;
 
             let response = handler.handle_describe_producers(request)?;
@@ -180,7 +180,7 @@ pub(crate) async fn dispatch(
         ApiKey::DescribeTransactions => {
             let request = DescribeTransactionsRequest::decode(&mut buf, header.request_api_version)
                 .map_err(|e| {
-                    StreamlineError::protocol("decode", format!("Failed to decode request: {}", e))
+                    StreamlineError::protocol("decode", format!("Failed to decode request: {e}"))
                 })?;
 
             let response = handler.handle_describe_transactions(request)?;
@@ -195,7 +195,7 @@ pub(crate) async fn dispatch(
         ApiKey::ListTransactions => {
             let request = ListTransactionsRequest::decode(&mut buf, header.request_api_version)
                 .map_err(|e| {
-                    StreamlineError::protocol("decode", format!("Failed to decode request: {}", e))
+                    StreamlineError::protocol("decode", format!("Failed to decode request: {e}"))
                 })?;
 
             let response = handler.handle_list_transactions(request)?;
@@ -209,7 +209,7 @@ pub(crate) async fn dispatch(
         }
         _ => Err(StreamlineError::protocol(
             "unsupported API key",
-            format!("{:?}", api_key),
+            format!("{api_key:?}"),
         )),
     }
 }

@@ -24,7 +24,7 @@ pub(crate) async fn dispatch(
         ApiKey::DescribeConfigs => {
             let request = DescribeConfigsRequest::decode(&mut buf, header.request_api_version)
                 .map_err(|e| {
-                    StreamlineError::protocol("decode", format!("Failed to decode request: {}", e))
+                    StreamlineError::protocol("decode", format!("Failed to decode request: {e}"))
                 })?;
 
             let response = handler
@@ -41,7 +41,7 @@ pub(crate) async fn dispatch(
         ApiKey::AlterConfigs => {
             let request = AlterConfigsRequest::decode(&mut buf, header.request_api_version)
                 .map_err(|e| {
-                    StreamlineError::protocol("decode", format!("Failed to decode request: {}", e))
+                    StreamlineError::protocol("decode", format!("Failed to decode request: {e}"))
                 })?;
 
             let response = handler
@@ -61,7 +61,7 @@ pub(crate) async fn dispatch(
                     .map_err(|e| {
                         StreamlineError::protocol(
                             "decode",
-                            format!("Failed to decode request: {}", e),
+                            format!("Failed to decode request: {e}"),
                         )
                     })?;
 
@@ -86,7 +86,7 @@ pub(crate) async fn dispatch(
         }
         _ => Err(StreamlineError::protocol(
             "unsupported API key",
-            format!("{:?}", api_key),
+            format!("{api_key:?}"),
         )),
     }
 }

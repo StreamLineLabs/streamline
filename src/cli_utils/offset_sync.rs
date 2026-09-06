@@ -109,10 +109,10 @@ impl OffsetKafkaClient {
         let mut buf = BytesMut::new();
         header
             .encode(&mut buf, api_version)
-            .map_err(|e| crate::StreamlineError::protocol_msg(format!("encode header: {}", e)))?;
+            .map_err(|e| crate::StreamlineError::protocol_msg(format!("encode header: {e}")))?;
         request
             .encode(&mut buf, api_version)
-            .map_err(|e| crate::StreamlineError::protocol_msg(format!("encode request: {}", e)))?;
+            .map_err(|e| crate::StreamlineError::protocol_msg(format!("encode request: {e}")))?;
 
         let len = buf.len() as i32;
         let mut msg = BytesMut::with_capacity(4 + buf.len());
@@ -131,9 +131,9 @@ impl OffsetKafkaClient {
 
         let mut cursor = &resp_buf[..];
         let _resp_header = ResponseHeader::decode(&mut cursor, api_version)
-            .map_err(|e| crate::StreamlineError::protocol_msg(format!("decode header: {}", e)))?;
+            .map_err(|e| crate::StreamlineError::protocol_msg(format!("decode header: {e}")))?;
         let response = Resp::decode(&mut cursor, api_version)
-            .map_err(|e| crate::StreamlineError::protocol_msg(format!("decode response: {}", e)))?;
+            .map_err(|e| crate::StreamlineError::protocol_msg(format!("decode response: {e}")))?;
 
         Ok(response)
     }
@@ -221,7 +221,7 @@ pub fn run_offset_sync(config: &OffsetSyncConfig) -> crate::Result<OffsetSyncRes
             println!("  {} Failed to connect to Kafka: {}", "✗".red(), e);
             result
                 .errors
-                .push(format!("Failed to connect to Kafka: {}", e));
+                .push(format!("Failed to connect to Kafka: {e}"));
             return Ok(result);
         }
     };
@@ -251,7 +251,7 @@ pub fn run_offset_sync(config: &OffsetSyncConfig) -> crate::Result<OffsetSyncRes
             }
             Err(e) => {
                 println!("  {} Failed to list groups: {}", "✗".red(), e);
-                result.errors.push(format!("Failed to list groups: {}", e));
+                result.errors.push(format!("Failed to list groups: {e}"));
                 return Ok(result);
             }
         }
@@ -309,7 +309,7 @@ pub fn run_offset_sync(config: &OffsetSyncConfig) -> crate::Result<OffsetSyncRes
                     group_id,
                     e
                 );
-                result.errors.push(format!("Group '{}': {}", group_id, e));
+                result.errors.push(format!("Group '{group_id}': {e}"));
             }
         }
     }
@@ -356,7 +356,7 @@ pub fn run_offset_sync(config: &OffsetSyncConfig) -> crate::Result<OffsetSyncRes
         }
 
         for (group_id, offsets) in &by_group {
-            println!("  {}", format!("Group: {}", group_id).cyan().bold());
+            println!("  {}", format!("Group: {group_id}").cyan().bold());
             for info in offsets {
                 println!(
                     "    {} {}:{} → {} (Kafka) → {} (Streamline)",
@@ -424,9 +424,7 @@ pub fn run_offset_sync(config: &OffsetSyncConfig) -> crate::Result<OffsetSyncRes
                         .collect();
 
                     let request = OffsetCommitRequest::default()
-                        .with_group_id(GroupId(StrBytes::from_string(
-                            group_id.clone(),
-                        )))
+                        .with_group_id(GroupId(StrBytes::from_string(group_id.clone())))
                         .with_topics(topics);
 
                     match streamline_client.send_request::<
@@ -438,7 +436,7 @@ pub fn run_offset_sync(config: &OffsetSyncConfig) -> crate::Result<OffsetSyncRes
                         Err(e) => {
                             result
                                 .errors
-                                .push(format!("OffsetCommit failed for group {}: {}", group_id, e));
+                                .push(format!("OffsetCommit failed for group {group_id}: {e}"));
                         }
                     }
                 }
@@ -454,7 +452,7 @@ pub fn run_offset_sync(config: &OffsetSyncConfig) -> crate::Result<OffsetSyncRes
                 println!("  {} Failed to connect to Streamline: {}", "✗".red(), e);
                 result
                     .errors
-                    .push(format!("Streamline connection failed: {}", e));
+                    .push(format!("Streamline connection failed: {e}"));
             }
         }
     }
@@ -530,7 +528,7 @@ fn print_banner() {
 fn print_step(num: u32, message: &str) {
     println!(
         "  {} {}",
-        format!("[{}/5]", num).cyan().bold(),
+        format!("[{num}/5]").cyan().bold(),
         message.bold()
     );
 }

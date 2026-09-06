@@ -9,8 +9,6 @@
 //! - **Priority-Based Replication**: Assigns priorities to topics for bandwidth
 //!   allocation during congestion.
 
-use crate::error::{Result, StreamlineError};
-use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicI64, AtomicU64, Ordering};
@@ -204,10 +202,15 @@ impl BandwidthThrottler {
             return;
         }
 
-        let refill = (self.config.max_bytes_per_sec as u128 * elapsed_ns as u128
-            / 1_000_000_000u128) as i64;
+        let refill =
+            (self.config.max_bytes_per_sec as u128 * elapsed_ns as u128 / 1_000_000_000u128) as i64;
 
-        if refill > 0 && self.last_refill_ns.compare_exchange(last, now, Ordering::Relaxed, Ordering::Relaxed).is_ok() {
+        if refill > 0
+            && self
+                .last_refill_ns
+                .compare_exchange(last, now, Ordering::Relaxed, Ordering::Relaxed)
+                .is_ok()
+        {
             let new_tokens = self.tokens.fetch_add(refill, Ordering::Relaxed) + refill;
             // Cap at burst size
             let burst = self.config.burst_bytes as i64;
@@ -300,7 +303,7 @@ impl RegionRouter {
     /// Route a fetch request to the best region/broker.
     pub async fn route_fetch(
         &self,
-        topic: &str,
+        _topic: &str,
         partition: i32,
         consumer_region: &str,
     ) -> FetchRoutingDecision {
@@ -360,7 +363,7 @@ impl RegionRouter {
             reason: if is_local {
                 "Local region".to_string()
             } else {
-                format!("Lowest latency region ({}ms)", best_latency)
+                format!("Lowest latency region ({best_latency}ms)")
             },
         }
     }
@@ -443,9 +446,7 @@ mod tests {
     #[tokio::test]
     async fn test_region_router_cross_region() {
         let config = RegionRoutingConfig {
-            regions: HashMap::from([
-                ("us-east".to_string(), vec!["broker1:9092".to_string()]),
-            ]),
+            regions: HashMap::from([("us-east".to_string(), vec!["broker1:9092".to_string()])]),
             local_region: "us-east".to_string(),
             prefer_local: true,
             ..Default::default()
@@ -460,9 +461,7 @@ mod tests {
     #[tokio::test]
     async fn test_region_router_stats() {
         let config = RegionRoutingConfig {
-            regions: HashMap::from([
-                ("us-east".to_string(), vec!["broker1:9092".to_string()]),
-            ]),
+            regions: HashMap::from([("us-east".to_string(), vec!["broker1:9092".to_string()])]),
             local_region: "us-east".to_string(),
             prefer_local: true,
             ..Default::default()

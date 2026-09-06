@@ -363,7 +363,7 @@ impl GitOpsPlanner {
             match current.config.get(key) {
                 Some(cur_val) if cur_val != desired_val => {
                     diffs.push(FieldDiff {
-                        field_name: format!("config.{}", key),
+                        field_name: format!("config.{key}"),
                         current_value: Some(cur_val.clone()),
                         desired_value: Some(desired_val.clone()),
                     });
@@ -373,7 +373,7 @@ impl GitOpsPlanner {
                 }
                 None => {
                     diffs.push(FieldDiff {
-                        field_name: format!("config.{}", key),
+                        field_name: format!("config.{key}"),
                         current_value: None,
                         desired_value: Some(desired_val.clone()),
                     });
@@ -404,7 +404,7 @@ impl GitOpsPlanner {
 
         for (key, val) in &desired.config {
             details.push(FieldDiff {
-                field_name: format!("config.{}", key),
+                field_name: format!("config.{key}"),
                 current_value: None,
                 desired_value: Some(val.clone()),
             });
@@ -442,7 +442,7 @@ impl GitOpsPlanner {
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()
             .as_nanos();
-        format!("plan-{:016x}", nanos)
+        format!("plan-{nanos:016x}")
     }
 }
 
@@ -532,7 +532,7 @@ impl PlanFormatter {
         out.push_str(&Self::format_summary(plan));
 
         for warning in &plan.warnings {
-            out.push_str(&format!("\u{26a0} WARNING: {}\n", warning));
+            out.push_str(&format!("\u{26a0} WARNING: {warning}\n"));
         }
 
         out

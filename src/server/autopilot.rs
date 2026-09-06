@@ -55,13 +55,34 @@ pub struct AutoPilotAction {
 /// The kind of action the auto-pilot performed.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ActionType {
-    TopicCreated { partitions: u32, retention_ms: u64 },
-    PartitionsAdded { from: u32, to: u32 },
-    Compacted { freed_bytes: u64 },
-    ScaledUp { from: i32, to: i32 },
-    ScaledDown { from: i32, to: i32 },
-    Healed { issue: String, remedy: String },
-    ConfigTuned { key: String, old: String, new: String },
+    TopicCreated {
+        partitions: u32,
+        retention_ms: u64,
+    },
+    PartitionsAdded {
+        from: u32,
+        to: u32,
+    },
+    Compacted {
+        freed_bytes: u64,
+    },
+    ScaledUp {
+        from: i32,
+        to: i32,
+    },
+    ScaledDown {
+        from: i32,
+        to: i32,
+    },
+    Healed {
+        issue: String,
+        remedy: String,
+    },
+    ConfigTuned {
+        key: String,
+        old: String,
+        new: String,
+    },
 }
 
 /// Status of an auto-pilot action.
@@ -255,11 +276,7 @@ impl AutoPilot {
     }
 
     /// Evaluate cluster health and suggest remediation.
-    pub fn evaluate_health(
-        &self,
-        error_count: u64,
-        timeout_count: u64,
-    ) -> Option<ActionType> {
+    pub fn evaluate_health(&self, error_count: u64, timeout_count: u64) -> Option<ActionType> {
         if !self.config.enabled || !self.config.auto_heal {
             return None;
         }
@@ -279,7 +296,12 @@ impl AutoPilot {
     }
 
     /// Execute (record) an auto-pilot action.
-    pub async fn execute_action(&self, action_type: ActionType, target: &str, reason: &str) -> Result<String, String> {
+    pub async fn execute_action(
+        &self,
+        action_type: ActionType,
+        target: &str,
+        reason: &str,
+    ) -> Result<String, String> {
         let now = timestamp_now();
         let action = AutoPilotAction {
             id: Uuid::new_v4().to_string(),
@@ -302,7 +324,9 @@ impl AutoPilot {
         // Update category counters
         match action_type {
             ActionType::TopicCreated { .. } => {
-                self.stats.topics_auto_created.fetch_add(1, Ordering::Relaxed);
+                self.stats
+                    .topics_auto_created
+                    .fetch_add(1, Ordering::Relaxed);
             }
             ActionType::PartitionsAdded { .. } => {
                 self.stats.partitions_added.fetch_add(1, Ordering::Relaxed);
@@ -400,7 +424,10 @@ mod tests {
 
     #[test]
     fn test_should_create_topic_disabled() {
-        let cfg = AutoPilotConfig { auto_create_topics: false, ..Default::default() };
+        let cfg = AutoPilotConfig {
+            auto_create_topics: false,
+            ..Default::default()
+        };
         let ap = AutoPilot::new(cfg);
         assert!(!ap.should_create_topic("orders"));
     }
@@ -416,7 +443,10 @@ mod tests {
     fn test_auto_create_topic() {
         let ap = default_autopilot();
         match ap.auto_create_topic("events") {
-            ActionType::TopicCreated { partitions, retention_ms } => {
+            ActionType::TopicCreated {
+                partitions,
+                retention_ms,
+            } => {
                 assert!(partitions >= 1);
                 assert!(retention_ms > 0);
             }
@@ -444,7 +474,10 @@ mod tests {
 
     #[test]
     fn test_evaluate_partitions_disabled() {
-        let cfg = AutoPilotConfig { auto_tune_partitions: false, ..Default::default() };
+        let cfg = AutoPilotConfig {
+            auto_tune_partitions: false,
+            ..Default::default()
+        };
         let ap = AutoPilot::new(cfg);
         assert!(ap.evaluate_partitions("t", 100_000_000.0, 1).is_none());
     }
@@ -514,8 +547,14 @@ mod tests {
     #[tokio::test]
     async fn test_execute_action() {
         let ap = default_autopilot();
-        let action = ActionType::TopicCreated { partitions: 3, retention_ms: 86400000 };
-        let id = ap.execute_action(action, "orders", "first produce").await.unwrap();
+        let action = ActionType::TopicCreated {
+            partitions: 3,
+            retention_ms: 86400000,
+        };
+        let id = ap
+            .execute_action(action, "orders", "first produce")
+            .await
+            .unwrap();
         assert!(!id.is_empty());
         assert_eq!(ap.snapshot().total_actions, 1);
         assert_eq!(ap.snapshot().topics_auto_created, 1);
@@ -525,7 +564,9 @@ mod tests {
     async fn test_execute_compaction_action() {
         let ap = default_autopilot();
         let action = ActionType::Compacted { freed_bytes: 1024 };
-        ap.execute_action(action, "logs", "high compactable %").await.unwrap();
+        ap.execute_action(action, "logs", "high compactable %")
+            .await
+            .unwrap();
         assert_eq!(ap.snapshot().compactions, 1);
     }
 
@@ -533,14 +574,19 @@ mod tests {
     async fn test_execute_scale_action() {
         let ap = default_autopilot();
         let action = ActionType::ScaledUp { from: 1, to: 2 };
-        ap.execute_action(action, "cluster", "cpu high").await.unwrap();
+        ap.execute_action(action, "cluster", "cpu high")
+            .await
+            .unwrap();
         assert_eq!(ap.snapshot().scale_events, 1);
     }
 
     #[tokio::test]
     async fn test_revert_action() {
         let ap = default_autopilot();
-        let action = ActionType::TopicCreated { partitions: 1, retention_ms: 1000 };
+        let action = ActionType::TopicCreated {
+            partitions: 1,
+            retention_ms: 1000,
+        };
         let id = ap.execute_action(action, "t", "test").await.unwrap();
         ap.revert_action(&id).await.unwrap();
         assert_eq!(ap.snapshot().reverted, 1);
@@ -564,7 +610,10 @@ mod tests {
     #[tokio::test]
     async fn test_get_actions() {
         let ap = default_autopilot();
-        let a1 = ActionType::TopicCreated { partitions: 1, retention_ms: 1000 };
+        let a1 = ActionType::TopicCreated {
+            partitions: 1,
+            retention_ms: 1000,
+        };
         let a2 = ActionType::Compacted { freed_bytes: 100 };
         ap.execute_action(a1, "t1", "r1").await.unwrap();
         ap.execute_action(a2, "t2", "r2").await.unwrap();
@@ -576,9 +625,29 @@ mod tests {
     #[tokio::test]
     async fn test_snapshot_after_multiple_actions() {
         let ap = default_autopilot();
-        ap.execute_action(ActionType::TopicCreated { partitions: 1, retention_ms: 1000 }, "a", "r").await.unwrap();
-        ap.execute_action(ActionType::Healed { issue: "x".into(), remedy: "y".into() }, "b", "r").await.unwrap();
-        ap.execute_action(ActionType::ScaledUp { from: 1, to: 3 }, "c", "r").await.unwrap();
+        ap.execute_action(
+            ActionType::TopicCreated {
+                partitions: 1,
+                retention_ms: 1000,
+            },
+            "a",
+            "r",
+        )
+        .await
+        .unwrap();
+        ap.execute_action(
+            ActionType::Healed {
+                issue: "x".into(),
+                remedy: "y".into(),
+            },
+            "b",
+            "r",
+        )
+        .await
+        .unwrap();
+        ap.execute_action(ActionType::ScaledUp { from: 1, to: 3 }, "c", "r")
+            .await
+            .unwrap();
 
         let snap = ap.snapshot();
         assert_eq!(snap.total_actions, 3);
@@ -590,7 +659,10 @@ mod tests {
 
     #[test]
     fn test_evaluate_partitions_respects_max() {
-        let cfg = AutoPilotConfig { max_partitions: 4, ..Default::default() };
+        let cfg = AutoPilotConfig {
+            max_partitions: 4,
+            ..Default::default()
+        };
         let ap = AutoPilot::new(cfg);
         let result = ap.evaluate_partitions("t", 500_000_000.0, 2);
         if let Some(ActionType::PartitionsAdded { to, .. }) = result {
@@ -600,7 +672,10 @@ mod tests {
 
     #[test]
     fn test_disabled_autopilot() {
-        let cfg = AutoPilotConfig { enabled: false, ..Default::default() };
+        let cfg = AutoPilotConfig {
+            enabled: false,
+            ..Default::default()
+        };
         let ap = AutoPilot::new(cfg);
         assert!(!ap.should_create_topic("x"));
         assert!(ap.evaluate_partitions("t", 100_000_000.0, 1).is_none());

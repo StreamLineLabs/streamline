@@ -36,9 +36,9 @@
 pub mod assertion;
 pub mod definition;
 pub mod mock_producer;
+pub mod produce_guard;
 pub mod runner;
 pub mod validation;
-pub mod produce_guard;
 
 pub use assertion::{Assertion, AssertionEngine, AssertionResult, AssertionType, FieldAssertion};
 pub use definition::{
@@ -50,6 +50,6 @@ pub use runner::{
     ContractRunner, ContractRunnerConfig, TestOutcome, TestReport, TestResult, TestSuite,
 };
 pub use validation::{
-    ContractChange, ContractSummary, ContractValidator, EnforcementMode,
-    ValidationResult, ValidationStatsSnapshot, Violation, ViolationType, diff_contracts,
+    diff_contracts, ContractChange, ContractSummary, ContractValidator, EnforcementMode,
+    ValidationResult, ValidationStatsSnapshot, Violation, ViolationType,
 };

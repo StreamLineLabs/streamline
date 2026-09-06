@@ -149,8 +149,7 @@ impl MaterializedViewManager {
         let mut views = self.views.write().await;
         if views.contains_key(name) {
             return Err(StreamlineError::Query(format!(
-                "Materialized view '{}' already exists",
-                name
+                "Materialized view '{name}' already exists"
             )));
         }
 
@@ -201,8 +200,7 @@ impl MaterializedViewManager {
         let mut views = self.views.write().await;
         if views.remove(name).is_none() {
             return Err(StreamlineError::Query(format!(
-                "Materialized view '{}' not found",
-                name
+                "Materialized view '{name}' not found"
             )));
         }
         info!(view = name, "Materialized view dropped");
@@ -237,7 +235,7 @@ impl MaterializedViewManager {
         let mut views = self.views.write().await;
         let view = views
             .get_mut(name)
-            .ok_or_else(|| StreamlineError::Query(format!("View '{}' not found", name)))?;
+            .ok_or_else(|| StreamlineError::Query(format!("View '{name}' not found")))?;
         view.state = ViewState::Paused;
         view.definition.active = false;
         Ok(())
@@ -248,7 +246,7 @@ impl MaterializedViewManager {
         let mut views = self.views.write().await;
         let view = views
             .get_mut(name)
-            .ok_or_else(|| StreamlineError::Query(format!("View '{}' not found", name)))?;
+            .ok_or_else(|| StreamlineError::Query(format!("View '{name}' not found")))?;
         view.state = ViewState::Active;
         view.definition.active = true;
         Ok(())
@@ -303,7 +301,7 @@ impl MaterializedViewManager {
         let views = self.views.read().await;
         let view = views
             .get(view_name)
-            .ok_or_else(|| StreamlineError::Query(format!("View '{}' not found", view_name)))?;
+            .ok_or_else(|| StreamlineError::Query(format!("View '{view_name}' not found")))?;
         Ok(view.store.get(key).cloned())
     }
 
@@ -312,7 +310,7 @@ impl MaterializedViewManager {
         let views = self.views.read().await;
         let view = views
             .get(view_name)
-            .ok_or_else(|| StreamlineError::Query(format!("View '{}' not found", view_name)))?;
+            .ok_or_else(|| StreamlineError::Query(format!("View '{view_name}' not found")))?;
 
         let rows: Vec<ViewRow> = if let Some(limit) = limit {
             view.store.values().take(limit).cloned().collect()
@@ -328,7 +326,7 @@ impl MaterializedViewManager {
         let mut views = self.views.write().await;
         let view = views
             .get_mut(name)
-            .ok_or_else(|| StreamlineError::Query(format!("View '{}' not found", name)))?;
+            .ok_or_else(|| StreamlineError::Query(format!("View '{name}' not found")))?;
 
         let now_ms = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -485,7 +483,7 @@ mod tests {
             manager
                 .process_record(
                     "events",
-                    Some(&format!("key-{}", i)),
+                    Some(&format!("key-{i}")),
                     &serde_json::json!({"id": i}),
                 )
                 .await

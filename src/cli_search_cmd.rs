@@ -3,8 +3,6 @@
 //!
 //! Stability: Experimental. Only compiled with `semantic-topics`.
 
-#![cfg(feature = "semantic-topics")]
-
 use clap::Args;
 use serde::{Deserialize, Serialize};
 use streamline::Result;
@@ -57,10 +55,7 @@ pub(crate) fn handle(cmd: SearchCli) -> Result<()> {
         println!("(no hits) — took {}ms", resp.took_ms);
         return Ok(());
     }
-    println!(
-        "{:<8} {:<10} {:>10}  {}",
-        "PART", "OFFSET", "SCORE", "VALUE"
-    );
+    println!("{:<8} {:<10} {:>10}  VALUE", "PART", "OFFSET", "SCORE");
     for h in &resp.hits {
         println!(
             "{:<8} {:<10} {:>10.4}  {}",

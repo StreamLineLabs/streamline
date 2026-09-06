@@ -94,9 +94,9 @@ impl DevServer {
     pub fn load_manifest(&mut self) -> Result<()> {
         if self.config.manifest_path.exists() {
             let content = std::fs::read_to_string(&self.config.manifest_path)
-                .map_err(|e| StreamlineError::Config(format!("Failed to read manifest: {}", e)))?;
+                .map_err(|e| StreamlineError::Config(format!("Failed to read manifest: {e}")))?;
             let manifest: DevManifest = serde_yaml::from_str(&content)
-                .map_err(|e| StreamlineError::Config(format!("Invalid manifest YAML: {}", e)))?;
+                .map_err(|e| StreamlineError::Config(format!("Invalid manifest YAML: {e}")))?;
             manifest.validate()?;
             self.manifest = Some(manifest);
         } else if self.config.playground {
@@ -225,9 +225,9 @@ impl DevServer {
         println!("  ║          The Redis of Streaming — zero config            ║");
         println!("  ╚══════════════════════════════════════════════════════════╝");
         println!();
-        println!("  Kafka protocol:  {}", kafka_addr);
-        println!("  HTTP API:        http://{}", http_addr);
-        println!("  Dashboard:       http://{}/api/v1/dashboard", http_addr);
+        println!("  Kafka protocol:  {kafka_addr}");
+        println!("  HTTP API:        http://{http_addr}");
+        println!("  Dashboard:       http://{http_addr}/api/v1/dashboard");
         if self.config.playground {
             println!("  Mode:            🎮 Playground (sample data loaded)");
         } else {
@@ -268,11 +268,7 @@ impl DevServer {
             in_memory: self.config.in_memory,
             hot_reload: self.config.hot_reload,
             manifest_loaded: self.manifest.is_some(),
-            topic_count: self
-                .manifest
-                .as_ref()
-                .map(|m| m.topics.len())
-                .unwrap_or(0),
+            topic_count: self.manifest.as_ref().map(|m| m.topics.len()).unwrap_or(0),
         }
     }
 }

@@ -128,7 +128,7 @@ impl FaasManager {
     pub async fn update_function(&self, function_id: &str, spec: FunctionSpec) -> Result<Function> {
         let mut functions = self.functions.write().await;
         let function = functions.get_mut(function_id).ok_or_else(|| {
-            WasmError::Configuration(format!("Function not found: {}", function_id))
+            WasmError::Configuration(format!("Function not found: {function_id}"))
         })?;
 
         function.code = spec.code;
@@ -164,8 +164,7 @@ impl FaasManager {
         let mut functions = self.functions.write().await;
         if functions.remove(function_id).is_none() {
             return Err(WasmError::Configuration(format!(
-                "Function not found: {}",
-                function_id
+                "Function not found: {function_id}"
             )));
         }
 
@@ -223,7 +222,7 @@ impl FaasManager {
         // Get function
         let functions = self.functions.read().await;
         let function = functions.get(function_id).ok_or_else(|| {
-            WasmError::Configuration(format!("Function not found: {}", function_id))
+            WasmError::Configuration(format!("Function not found: {function_id}"))
         })?;
 
         if function.state != FunctionState::Deployed {
@@ -384,8 +383,7 @@ impl FaasManager {
         let functions = self.functions.read().await;
         if !functions.contains_key(function_id) {
             return Err(WasmError::Configuration(format!(
-                "Function not found: {}",
-                function_id
+                "Function not found: {function_id}"
             )));
         }
         drop(functions);
@@ -414,7 +412,7 @@ impl FaasManager {
     pub async fn remove_trigger(&self, function_id: &str, trigger_id: &str) -> Result<()> {
         let mut triggers = self.triggers.write().await;
         let function_triggers = triggers.get_mut(function_id).ok_or_else(|| {
-            WasmError::Configuration(format!("No triggers for function: {}", function_id))
+            WasmError::Configuration(format!("No triggers for function: {function_id}"))
         })?;
 
         let len_before = function_triggers.len();
@@ -422,8 +420,7 @@ impl FaasManager {
 
         if function_triggers.len() == len_before {
             return Err(WasmError::Configuration(format!(
-                "Trigger not found: {}",
-                trigger_id
+                "Trigger not found: {trigger_id}"
             )));
         }
 
@@ -509,7 +506,7 @@ impl FaasManager {
     pub async fn scale_function(&self, function_id: &str, target_instances: usize) -> Result<()> {
         let functions = self.functions.read().await;
         let function = functions.get(function_id).ok_or_else(|| {
-            WasmError::Configuration(format!("Function not found: {}", function_id))
+            WasmError::Configuration(format!("Function not found: {function_id}"))
         })?;
         let function = function.clone();
         drop(functions);

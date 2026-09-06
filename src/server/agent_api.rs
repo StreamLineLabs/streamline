@@ -214,10 +214,7 @@ pub fn create_agent_api_router(state: AgentApiState) -> Router {
             "/api/v1/agents/:id/approve/:action_id",
             post(approve_action),
         )
-        .route(
-            "/api/v1/agents/:id/reject/:action_id",
-            post(reject_action),
-        )
+        .route("/api/v1/agents/:id/reject/:action_id", post(reject_action))
         .with_state(state)
 }
 
@@ -249,15 +246,16 @@ async fn create_agent(
     let mut agents = state.agents.write().await;
     agents.insert(id.clone(), agent.clone());
 
-    (
-        StatusCode::CREATED,
-        Json(serde_json::to_value(&agent).unwrap()),
-    )
+    match serde_json::to_value(&agent) {
+        Ok(body) => (StatusCode::CREATED, Json(body)),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "error": e.to_string() })),
+        ),
+    }
 }
 
-async fn list_agents(
-    State(state): State<AgentApiState>,
-) -> Json<Vec<AgentSummary>> {
+async fn list_agents(State(state): State<AgentApiState>) -> Json<Vec<AgentSummary>> {
     let agents = state.agents.read().await;
     let summaries: Vec<AgentSummary> = agents
         .values()
@@ -458,9 +456,7 @@ async fn reject_action(
     Ok(Json(action.clone()))
 }
 
-async fn get_stats(
-    State(state): State<AgentApiState>,
-) -> Json<AgentStats> {
+async fn get_stats(State(state): State<AgentApiState>) -> Json<AgentStats> {
     let agents = state.agents.read().await;
 
     let mut agents_by_type: HashMap<String, usize> = HashMap::new();
@@ -637,8 +633,13 @@ mod tests {
         let agent = create_agent_via_api(&router).await;
         let id = agent["id"].as_str().unwrap();
 
-        let (status, _) =
-            do_request(&router, Method::DELETE, &format!("/api/v1/agents/{id}"), None).await;
+        let (status, _) = do_request(
+            &router,
+            Method::DELETE,
+            &format!("/api/v1/agents/{id}"),
+            None,
+        )
+        .await;
         assert_eq!(status, StatusCode::NO_CONTENT);
 
         let (status, _) =
@@ -871,8 +872,7 @@ mod tests {
     #[tokio::test]
     async fn test_get_stats_empty() {
         let (_, router) = test_router();
-        let (status, json) =
-            do_request(&router, Method::GET, "/api/v1/agents/stats", None).await;
+        let (status, json) = do_request(&router, Method::GET, "/api/v1/agents/stats", None).await;
         assert_eq!(status, StatusCode::OK);
         let stats: AgentStats = serde_json::from_value(json).unwrap();
         assert_eq!(stats.total_agents, 0);
@@ -884,8 +884,7 @@ mod tests {
         create_agent_via_api(&router).await;
         create_agent_via_api(&router).await;
 
-        let (_, json) =
-            do_request(&router, Method::GET, "/api/v1/agents/stats", None).await;
+        let (_, json) = do_request(&router, Method::GET, "/api/v1/agents/stats", None).await;
         let stats: AgentStats = serde_json::from_value(json).unwrap();
         assert_eq!(stats.total_agents, 2);
     }
@@ -900,13 +899,7 @@ mod tests {
         })
         .to_string();
 
-        let (status, _) = do_request(
-            &router,
-            Method::POST,
-            "/api/v1/agents",
-            Some(body),
-        )
-        .await;
+        let (status, _) = do_request(&router, Method::POST, "/api/v1/agents", Some(body)).await;
         assert_eq!(status, StatusCode::CREATED);
     }
 

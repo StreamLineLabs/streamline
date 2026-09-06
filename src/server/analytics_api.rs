@@ -172,6 +172,18 @@ pub fn create_analytics_api_router(state: AnalyticsApiState) -> Router {
     Router::new()
         .route("/api/v1/query", post(execute_query_handler))
         .route("/api/v1/query/explain", post(explain_query_handler))
+        .merge(analytics_management_router())
+        .with_state(state)
+}
+
+/// Create the analytics cache and materialized-view routes without claiming
+/// the ADR-008 unified query endpoints.
+pub fn create_analytics_management_router(state: AnalyticsApiState) -> Router {
+    analytics_management_router().with_state(state)
+}
+
+fn analytics_management_router() -> Router<AnalyticsApiState> {
+    Router::new()
         .route("/api/v1/query/cache/stats", get(cache_stats_handler))
         .route("/api/v1/query/cache", delete(clear_cache_handler))
         .route("/api/v1/views", post(create_view_handler))
@@ -180,7 +192,6 @@ pub fn create_analytics_api_router(state: AnalyticsApiState) -> Router {
         .route("/api/v1/views/:name", delete(delete_view_handler))
         .route("/api/v1/views/:name/refresh", post(refresh_view_handler))
         .route("/api/v1/views/:name/query", get(query_view_handler))
-        .with_state(state)
 }
 
 // ─── Handlers (analytics enabled) ────────────────────────────────────────────
@@ -195,7 +206,7 @@ async fn execute_query_handler(
 
     // Decode cursor to an offset if provided
     let offset = if let Some(ref cursor) = request.cursor {
-        decode_cursor(cursor).map_err(|e| ApiError::Analytics(e))?
+        decode_cursor(cursor).map_err(ApiError::Analytics)?
     } else {
         request.offset.unwrap_or(0)
     };
@@ -212,7 +223,7 @@ async fn execute_query_handler(
         .engine
         .execute_query(&request.sql, options)
         .await
-        .map_err(|e| ApiError::from_analytics_error(e))?;
+        .map_err(ApiError::from_analytics_error)?;
 
     info!(
         rows = result.row_count,
@@ -231,7 +242,7 @@ async fn execute_query_handler(
     };
 
     let result_value = serde_json::to_value(&result)
-        .map_err(|e| ApiError::Analytics(format!("Failed to serialize result: {}", e)))?;
+        .map_err(|e| ApiError::Analytics(format!("Failed to serialize result: {e}")))?;
 
     Ok(Json(PaginatedQueryResponse {
         result: result_value,
@@ -299,7 +310,7 @@ async fn explain_query_handler(
         .engine
         .explain_query(&request.sql)
         .await
-        .map_err(|e| ApiError::from_analytics_error(e))?;
+        .map_err(ApiError::from_analytics_error)?;
 
     Ok(Json(result))
 }
@@ -329,7 +340,7 @@ async fn create_view_handler(
             &request.query,
             request.refresh_interval_seconds,
         )
-        .map_err(|e| ApiError::from_analytics_error(e))?;
+        .map_err(ApiError::from_analytics_error)?;
 
     Ok(StatusCode::CREATED)
 }
@@ -374,7 +385,7 @@ async fn refresh_view_handler(
         .engine
         .refresh_materialized_view(&name)
         .await
-        .map_err(|e| ApiError::from_analytics_error(e))?;
+        .map_err(ApiError::from_analytics_error)?;
 
     Ok(StatusCode::NO_CONTENT)
 }
@@ -407,7 +418,7 @@ async fn get_view_handler(
                 "last_refreshed": v.last_refreshed,
             }))
         })
-        .ok_or_else(|| ApiError::NotFound(format!("View '{}' not found", name)))
+        .ok_or_else(|| ApiError::NotFound(format!("View '{name}' not found")))
 }
 
 #[cfg(not(feature = "analytics"))]
@@ -430,7 +441,7 @@ async fn delete_view_handler(
         .engine
         .drop_materialized_view(&name)
         .await
-        .map_err(|e| ApiError::from_analytics_error(e))?;
+        .map_err(ApiError::from_analytics_error)?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -454,13 +465,13 @@ async fn query_view_handler(
     let view = views
         .into_iter()
         .find(|v| v.name == name)
-        .ok_or_else(|| ApiError::NotFound(format!("View '{}' not found", name)))?;
+        .ok_or_else(|| ApiError::NotFound(format!("View '{name}' not found")))?;
 
     let result = state
         .engine
         .execute_query(&view.query, QueryOptions::default())
         .await
-        .map_err(|e| ApiError::from_analytics_error(e))?;
+        .map_err(ApiError::from_analytics_error)?;
 
     Ok(Json(result))
 }
@@ -500,9 +511,9 @@ impl ApiError {
         use streamline_analytics::error::AnalyticsError as AE;
         match e {
             AE::InvalidSql(msg) => ApiError::InvalidSql(msg),
-            AE::TopicNotFound(topic) => ApiError::NotFound(format!("Topic '{}' not found", topic)),
+            AE::TopicNotFound(topic) => ApiError::NotFound(format!("Topic '{topic}' not found")),
             AE::QueryTimeout { timeout_ms } => {
-                ApiError::QueryTimeout(format!("Query timed out after {}ms", timeout_ms))
+                ApiError::QueryTimeout(format!("Query timed out after {timeout_ms}ms"))
             }
             other => ApiError::Analytics(other.to_string()),
         }
@@ -513,7 +524,9 @@ impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
         let (status, code, message) = match self {
             ApiError::Analytics(msg) => (StatusCode::INTERNAL_SERVER_ERROR, "ANALYTICS_ERROR", msg),
-            ApiError::FeatureNotEnabled(msg) => (StatusCode::NOT_IMPLEMENTED, "FEATURE_DISABLED", msg),
+            ApiError::FeatureNotEnabled(msg) => {
+                (StatusCode::NOT_IMPLEMENTED, "FEATURE_DISABLED", msg)
+            }
             ApiError::NotFound(msg) => (StatusCode::NOT_FOUND, "NOT_FOUND", msg),
             ApiError::InvalidSql(msg) => (StatusCode::BAD_REQUEST, "INVALID_SQL", msg),
             ApiError::QueryTimeout(msg) => (StatusCode::GATEWAY_TIMEOUT, "QUERY_TIMEOUT", msg),
@@ -531,18 +544,20 @@ impl IntoResponse for ApiError {
 // ─── Cursor helpers ──────────────────────────────────────────────────────────
 
 /// Encode a pagination offset into an opaque Base64 cursor string.
+#[cfg(feature = "analytics")]
 fn encode_cursor(offset: usize) -> String {
     use base64::Engine as _;
     base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(offset.to_string())
 }
 
 /// Decode an opaque cursor string back into a pagination offset.
+#[cfg(feature = "analytics")]
 fn decode_cursor(cursor: &str) -> std::result::Result<usize, String> {
     use base64::Engine as _;
     let bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD
         .decode(cursor)
-        .map_err(|e| format!("Invalid cursor: {}", e))?;
-    let s = String::from_utf8(bytes).map_err(|e| format!("Invalid cursor encoding: {}", e))?;
+        .map_err(|e| format!("Invalid cursor: {e}"))?;
+    let s = String::from_utf8(bytes).map_err(|e| format!("Invalid cursor encoding: {e}"))?;
     s.parse::<usize>()
-        .map_err(|e| format!("Invalid cursor value: {}", e))
+        .map_err(|e| format!("Invalid cursor value: {e}"))
 }

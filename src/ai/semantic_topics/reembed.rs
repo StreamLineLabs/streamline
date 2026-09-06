@@ -104,8 +104,16 @@ mod tests {
     use crate::ai::semantic_topics::registry;
     use crate::ai::semantic_topics::SemanticIndex;
 
+    /// The semantic index registry is process-global, so these tests must not
+    /// run concurrently: one test's `reset_for_tests()` would otherwise wipe
+    /// another test's seeded index.
+    fn registry_guard() -> std::sync::MutexGuard<'static, ()> {
+        registry::test_lock()
+    }
+
     #[test]
     fn reembed_empty_topic_is_noop() {
+        let _guard = registry_guard();
         registry::reset_for_tests();
         let embedder = HashEmbedder::default();
         let config = ReembedConfig::new("nonexistent", "bge-small");
@@ -117,14 +125,15 @@ mod tests {
 
     #[test]
     fn reembed_swaps_index() {
+        let _guard = registry_guard();
         let topic = format!("reembed-swap-{}", std::process::id());
         let embedder = HashEmbedder::new(32);
 
         // Seed the old index with some records.
         let old = registry::get_or_create(&topic);
-        old.insert(0, 1, &vec![1.0; 32]);
-        old.insert(0, 2, &vec![0.5; 32]);
-        old.insert(1, 3, &vec![0.0; 32]);
+        old.insert(0, 1, &[1.0; 32]);
+        old.insert(0, 2, &[0.5; 32]);
+        old.insert(1, 3, &[0.0; 32]);
         assert_eq!(old.len(), 3);
 
         let config = ReembedConfig::new(&topic, "hash-v2");
@@ -142,12 +151,13 @@ mod tests {
 
     #[test]
     fn reembed_respects_batch_size() {
+        let _guard = registry_guard();
         registry::reset_for_tests();
         let embedder = HashEmbedder::new(16);
 
         let idx = registry::get_or_create("test-batch");
         for i in 0..5 {
-            idx.insert(0, i, &vec![1.0; 16]);
+            idx.insert(0, i, &[1.0; 16]);
         }
 
         let mut config = ReembedConfig::new("test-batch", "hash-v2");
@@ -160,6 +170,7 @@ mod tests {
 
     #[test]
     fn progress_tracks_elapsed_time() {
+        let _guard = registry_guard();
         registry::reset_for_tests();
         let embedder = HashEmbedder::default();
         let config = ReembedConfig::new("elapsed-test", "model");

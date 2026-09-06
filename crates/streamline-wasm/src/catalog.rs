@@ -35,8 +35,7 @@ impl TransformVersion {
         let parts: Vec<&str> = s.split('.').collect();
         if parts.len() != 3 {
             return Err(WasmError::Validation(format!(
-                "Invalid version format: {}",
-                s
+                "Invalid version format: {s}"
             )));
         }
         Ok(Self {
@@ -191,7 +190,7 @@ impl std::fmt::Display for ChainErrorHandling {
         match self {
             Self::StopOnError => write!(f, "stop-on-error"),
             Self::SkipOnError => write!(f, "skip-on-error"),
-            Self::DeadLetterQueue { topic } => write!(f, "dlq({})", topic),
+            Self::DeadLetterQueue { topic } => write!(f, "dlq({topic})"),
         }
     }
 }
@@ -227,7 +226,7 @@ impl TransformCatalog {
         target_topics: Vec<String>,
     ) -> Result<CatalogEntry> {
         let entry = CatalogEntry {
-            id: format!("{}:{}", name, version),
+            id: format!("{name}:{version}"),
             name: name.to_string(),
             description: description.to_string(),
             version: version.clone(),
@@ -257,7 +256,7 @@ impl TransformCatalog {
         let mut entries = self.entries.write().await;
         let versions = entries
             .get_mut(name)
-            .ok_or_else(|| WasmError::Internal(format!("Transform not found: {}", name)))?;
+            .ok_or_else(|| WasmError::Internal(format!("Transform not found: {name}")))?;
 
         // Deprecate currently active version
         for entry in versions.iter_mut() {
@@ -271,7 +270,7 @@ impl TransformCatalog {
             .iter_mut()
             .find(|e| &e.version == version)
             .ok_or_else(|| {
-                WasmError::Internal(format!("Version {} not found for {}", version, name))
+                WasmError::Internal(format!("Version {version} not found for {name}"))
             })?;
 
         entry.status = TransformStatus::Active;
@@ -290,7 +289,7 @@ impl TransformCatalog {
         let mut entries = self.entries.write().await;
         let versions = entries
             .get_mut(name)
-            .ok_or_else(|| WasmError::Internal(format!("Transform not found: {}", name)))?;
+            .ok_or_else(|| WasmError::Internal(format!("Transform not found: {name}")))?;
 
         // Set canary on the active version
         for entry in versions.iter_mut() {
@@ -307,8 +306,7 @@ impl TransformCatalog {
             .find(|e| &e.version == canary_version)
             .ok_or_else(|| {
                 WasmError::Internal(format!(
-                    "Canary version {} not found for {}",
-                    canary_version, name
+                    "Canary version {canary_version} not found for {name}"
                 ))
             })?;
         canary_entry.status = TransformStatus::Canary;
@@ -325,7 +323,7 @@ impl TransformCatalog {
         let mut entries = self.entries.write().await;
         let versions = entries
             .get_mut(name)
-            .ok_or_else(|| WasmError::Internal(format!("Transform not found: {}", name)))?;
+            .ok_or_else(|| WasmError::Internal(format!("Transform not found: {name}")))?;
 
         for entry in versions.iter_mut() {
             match entry.status {
@@ -399,7 +397,7 @@ impl TransformCatalog {
             .write()
             .await
             .remove(chain_id)
-            .ok_or_else(|| WasmError::Internal(format!("Chain not found: {}", chain_id)))
+            .ok_or_else(|| WasmError::Internal(format!("Chain not found: {chain_id}")))
             .map(|_| ())
     }
 
@@ -416,7 +414,7 @@ impl TransformCatalog {
         if let Some(ref canary_version) = active.deployment.canary_version {
             let canary_pct = active.deployment.canary_traffic_percentage as u64;
             if message_hash % 100 < canary_pct {
-                return Some(format!("{}:{}", transform_name, canary_version));
+                return Some(format!("{transform_name}:{canary_version}"));
             }
         }
 

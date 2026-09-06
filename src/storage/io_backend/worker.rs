@@ -28,12 +28,13 @@
 
 use super::buffer_pool::IoBufferPool;
 use super::types::FileId;
-use super::UringFile;
 use crate::error::{Result, StreamlineError};
 use bytes::Bytes;
 use std::collections::HashMap;
+use std::os::fd::AsRawFd;
 use std::path::PathBuf;
 use tokio::sync::{mpsc, oneshot};
+use tokio_uring::fs::{File, OpenOptions};
 use tracing::{debug, error, info};
 
 /// I/O worker configuration
@@ -104,16 +105,66 @@ pub enum IoRequest {
         file_id: FileId,
         response: oneshot::Sender<Result<u64>>,
     },
+    /// Pre-allocate file space
+    Allocate {
+        file_id: FileId,
+        len: u64,
+        response: oneshot::Sender<Result<()>>,
+    },
     /// Open a file
     OpenFile {
         path: PathBuf,
         mode: OpenMode,
-        response: oneshot::Sender<Result<FileId>>,
+        response: oneshot::Sender<Result<OpenFileLease>>,
     },
-    /// Close a file
-    CloseFile { file_id: FileId },
     /// Shutdown the worker
     Shutdown,
+}
+
+enum ControlRequest {
+    Close {
+        file_id: FileId,
+        response: Option<oneshot::Sender<()>>,
+    },
+}
+
+/// A delivered open result that closes the worker-owned file unless claimed.
+pub struct OpenFileLease {
+    file_id: FileId,
+    raw_fd: i32,
+    control_tx: mpsc::UnboundedSender<ControlRequest>,
+    claimed: bool,
+}
+
+impl OpenFileLease {
+    fn new(
+        file_id: FileId,
+        raw_fd: i32,
+        control_tx: mpsc::UnboundedSender<ControlRequest>,
+    ) -> Self {
+        Self {
+            file_id,
+            raw_fd,
+            control_tx,
+            claimed: false,
+        }
+    }
+
+    fn claim(mut self) -> (FileId, i32) {
+        self.claimed = true;
+        (self.file_id, self.raw_fd)
+    }
+}
+
+impl Drop for OpenFileLease {
+    fn drop(&mut self) {
+        if !self.claimed {
+            let _ = self.control_tx.send(ControlRequest::Close {
+                file_id: self.file_id,
+                response: None,
+            });
+        }
+    }
 }
 
 /// File open mode for worker
@@ -128,6 +179,7 @@ pub enum OpenMode {
 /// I/O worker handle
 pub struct IoWorker {
     tx: mpsc::Sender<IoRequest>,
+    control_tx: mpsc::UnboundedSender<ControlRequest>,
     handle: Option<std::thread::JoinHandle<()>>,
 }
 
@@ -135,36 +187,103 @@ impl IoWorker {
     /// Start a new I/O worker thread
     pub fn start(config: IoWorkerConfig) -> Result<Self> {
         let (tx, rx) = mpsc::channel(config.queue_depth);
+        let (control_tx, control_rx) = mpsc::unbounded_channel();
+        let worker_control_tx = control_tx.clone();
 
         let handle = std::thread::Builder::new()
             .name("streamline-io".to_string())
             .spawn(move || {
                 // Create tokio-uring runtime in the worker thread
-                tokio_uring::start(async move {
-                    if let Err(e) = Self::run_loop(rx, config).await {
+                let mut builder = tokio_uring::builder();
+                builder.entries(config.sq_depth);
+                builder.start(async move {
+                    if let Err(e) = Self::run_loop(rx, control_rx, worker_control_tx, config).await
+                    {
                         error!("I/O worker error: {}", e);
                     }
                 });
             })
-            .map_err(|e| StreamlineError::Internal(format!("Failed to spawn I/O worker thread: {}", e)))?;
+            .map_err(|e| {
+                StreamlineError::Internal(format!("Failed to spawn I/O worker thread: {e}"))
+            })?;
 
         info!("I/O worker thread started");
 
         Ok(Self {
             tx,
+            control_tx,
             handle: Some(handle),
         })
     }
 
+    fn apply_control<T>(files: &mut HashMap<FileId, T>, control: ControlRequest) {
+        match control {
+            ControlRequest::Close { file_id, response } => {
+                files.remove(&file_id);
+                if let Some(response) = response {
+                    let _ = response.send(());
+                }
+            }
+        }
+    }
+
+    fn drain_controls<T>(
+        files: &mut HashMap<FileId, T>,
+        control_rx: &mut mpsc::UnboundedReceiver<ControlRequest>,
+    ) {
+        while let Ok(control) = control_rx.try_recv() {
+            Self::apply_control(files, control);
+        }
+    }
+
+    fn finish_open<T>(
+        files: &mut HashMap<FileId, T>,
+        file_id: FileId,
+        raw_fd: i32,
+        control_tx: &mpsc::UnboundedSender<ControlRequest>,
+        response: oneshot::Sender<Result<OpenFileLease>>,
+    ) {
+        let lease = OpenFileLease::new(file_id, raw_fd, control_tx.clone());
+        if let Err(Ok(mut undelivered)) = response.send(Ok(lease)) {
+            undelivered.claimed = true;
+            files.remove(&file_id);
+        }
+    }
+
     /// Main worker loop
-    async fn run_loop(mut rx: mpsc::Receiver<IoRequest>, config: IoWorkerConfig) -> Result<()> {
-        let mut files: HashMap<FileId, UringFile> = HashMap::new();
+    async fn run_loop(
+        mut rx: mpsc::Receiver<IoRequest>,
+        mut control_rx: mpsc::UnboundedReceiver<ControlRequest>,
+        control_tx: mpsc::UnboundedSender<ControlRequest>,
+        config: IoWorkerConfig,
+    ) -> Result<()> {
+        let mut files: HashMap<FileId, File> = HashMap::new();
         let mut next_id = 0u64;
-        let buffer_pool = IoBufferPool::default_pool();
+        let buffer_pool = IoBufferPool::new(
+            vec![4 * 1024, 16 * 1024, 64 * 1024, 256 * 1024, 1024 * 1024],
+            config.buffer_pool_size,
+        );
 
         debug!("I/O worker loop started");
 
-        while let Some(request) = rx.recv().await {
+        loop {
+            let request = tokio::select! {
+                biased;
+                control = control_rx.recv() => {
+                    if let Some(control) = control {
+                        Self::apply_control(&mut files, control);
+                        Self::drain_controls(&mut files, &mut control_rx);
+                        continue;
+                    }
+                    rx.recv().await
+                }
+                request = rx.recv() => request,
+            };
+            let Some(request) = request else {
+                Self::drain_controls(&mut files, &mut control_rx);
+                break;
+            };
+
             match request {
                 IoRequest::Read {
                     file_id,
@@ -175,18 +294,14 @@ impl IoWorker {
                     if let Some(file) = files.get(&file_id) {
                         let buf = buffer_pool.acquire(len);
                         let (result, buf) = file.read_at(buf, offset).await;
-                        let bytes =
-                            result
-                                .map(|n| Bytes::copy_from_slice(&buf[..n]))
-                                .map_err(|e| {
-                                    StreamlineError::storage_msg(format!("Read failed: {}", e))
-                                });
+                        let bytes = result
+                            .map(|n| Bytes::copy_from_slice(&buf[..n]))
+                            .map_err(|e| StreamlineError::storage_msg(format!("Read failed: {e}")));
                         buffer_pool.release(buf);
                         let _ = response.send(bytes);
                     } else {
                         let _ = response.send(Err(StreamlineError::storage_msg(format!(
-                            "File not found: {:?}",
-                            file_id
+                            "File not found: {file_id:?}"
                         ))));
                     }
                 }
@@ -198,12 +313,11 @@ impl IoWorker {
                     response,
                 } => {
                     if let Some(file) = files.get(&file_id) {
-                        let (result, _) = file.write_at(data.to_vec(), offset).await;
-                        let _ = response.send(result);
+                        let (result, _) = file.write_at(data.to_vec(), offset).submit().await;
+                        let _ = response.send(result.map_err(StreamlineError::from));
                     } else {
                         let _ = response.send(Err(StreamlineError::storage_msg(format!(
-                            "File not found: {:?}",
-                            file_id
+                            "File not found: {file_id:?}"
                         ))));
                     }
                 }
@@ -214,48 +328,73 @@ impl IoWorker {
                     response,
                 } => {
                     if let Some(file) = files.get(&file_id) {
-                        let (result, _) = file.append(data.to_vec()).await;
+                        let result = match file.statx().await {
+                            Ok(stat) => {
+                                let (result, _) =
+                                    file.write_at(data.to_vec(), stat.stx_size).submit().await;
+                                result.map_err(StreamlineError::from)
+                            }
+                            Err(error) => Err(StreamlineError::from(error)),
+                        };
                         let _ = response.send(result);
                     } else {
                         let _ = response.send(Err(StreamlineError::storage_msg(format!(
-                            "File not found: {:?}",
-                            file_id
+                            "File not found: {file_id:?}"
                         ))));
                     }
                 }
 
                 IoRequest::SyncData { file_id, response } => {
                     if let Some(file) = files.get(&file_id) {
-                        let result = file.sync_data().await;
+                        let result = file.sync_data().await.map_err(StreamlineError::from);
                         let _ = response.send(result);
                     } else {
                         let _ = response.send(Err(StreamlineError::storage_msg(format!(
-                            "File not found: {:?}",
-                            file_id
+                            "File not found: {file_id:?}"
                         ))));
                     }
                 }
 
                 IoRequest::SyncAll { file_id, response } => {
                     if let Some(file) = files.get(&file_id) {
-                        let result = file.sync_all().await;
+                        let result = file.sync_all().await.map_err(StreamlineError::from);
                         let _ = response.send(result);
                     } else {
                         let _ = response.send(Err(StreamlineError::storage_msg(format!(
-                            "File not found: {:?}",
-                            file_id
+                            "File not found: {file_id:?}"
                         ))));
                     }
                 }
 
                 IoRequest::Size { file_id, response } => {
                     if let Some(file) = files.get(&file_id) {
-                        let result = file.size().await;
+                        let result = file
+                            .statx()
+                            .await
+                            .map(|stat| stat.stx_size)
+                            .map_err(StreamlineError::from);
                         let _ = response.send(result);
                     } else {
                         let _ = response.send(Err(StreamlineError::storage_msg(format!(
-                            "File not found: {:?}",
-                            file_id
+                            "File not found: {file_id:?}"
+                        ))));
+                    }
+                }
+
+                IoRequest::Allocate {
+                    file_id,
+                    len,
+                    response,
+                } => {
+                    if let Some(file) = files.get(&file_id) {
+                        let result = file
+                            .fallocate(0, len, 0)
+                            .await
+                            .map_err(StreamlineError::from);
+                        let _ = response.send(result);
+                    } else {
+                        let _ = response.send(Err(StreamlineError::storage_msg(format!(
+                            "File not found: {file_id:?}"
                         ))));
                     }
                 }
@@ -265,8 +404,6 @@ impl IoWorker {
                     mode,
                     response,
                 } => {
-                    use tokio_uring::fs::{File, OpenOptions};
-
                     let file_result = match mode {
                         OpenMode::Read => File::open(&path).await,
                         OpenMode::ReadWrite => {
@@ -296,23 +433,20 @@ impl IoWorker {
                         Ok(file) => {
                             let file_id = FileId::new(next_id);
                             next_id += 1;
-                            files.insert(file_id, UringFile::new(file, path));
-                            let _ = response.send(Ok(file_id));
+                            let raw_fd = file.as_raw_fd();
+                            files.insert(file_id, file);
+                            Self::finish_open(&mut files, file_id, raw_fd, &control_tx, response);
                         }
                         Err(e) => {
                             let _ = response.send(Err(StreamlineError::storage_msg(format!(
-                                "Open failed: {}",
-                                e
+                                "Open failed: {e}"
                             ))));
                         }
                     }
                 }
 
-                IoRequest::CloseFile { file_id } => {
-                    files.remove(&file_id);
-                }
-
                 IoRequest::Shutdown => {
+                    Self::drain_controls(&mut files, &mut control_rx);
                     info!("I/O worker shutting down");
                     break;
                 }
@@ -335,10 +469,10 @@ impl IoWorker {
             })
             .await
             .map_err(|e| {
-                StreamlineError::storage_msg(format!("Failed to send read request: {}", e))
+                StreamlineError::storage_msg(format!("Failed to send read request: {e}"))
             })?;
         rx.await.map_err(|e| {
-            StreamlineError::storage_msg(format!("Failed to receive read response: {}", e))
+            StreamlineError::storage_msg(format!("Failed to receive read response: {e}"))
         })?
     }
 
@@ -354,10 +488,10 @@ impl IoWorker {
             })
             .await
             .map_err(|e| {
-                StreamlineError::storage_msg(format!("Failed to send write request: {}", e))
+                StreamlineError::storage_msg(format!("Failed to send write request: {e}"))
             })?;
         rx.await.map_err(|e| {
-            StreamlineError::storage_msg(format!("Failed to receive write response: {}", e))
+            StreamlineError::storage_msg(format!("Failed to receive write response: {e}"))
         })?
     }
 
@@ -372,10 +506,10 @@ impl IoWorker {
             })
             .await
             .map_err(|e| {
-                StreamlineError::storage_msg(format!("Failed to send append request: {}", e))
+                StreamlineError::storage_msg(format!("Failed to send append request: {e}"))
             })?;
         rx.await.map_err(|e| {
-            StreamlineError::storage_msg(format!("Failed to receive append response: {}", e))
+            StreamlineError::storage_msg(format!("Failed to receive append response: {e}"))
         })?
     }
 
@@ -389,10 +523,10 @@ impl IoWorker {
             })
             .await
             .map_err(|e| {
-                StreamlineError::storage_msg(format!("Failed to send sync request: {}", e))
+                StreamlineError::storage_msg(format!("Failed to send sync request: {e}"))
             })?;
         rx.await.map_err(|e| {
-            StreamlineError::storage_msg(format!("Failed to receive sync response: {}", e))
+            StreamlineError::storage_msg(format!("Failed to receive sync response: {e}"))
         })?
     }
 
@@ -406,15 +540,61 @@ impl IoWorker {
             })
             .await
             .map_err(|e| {
-                StreamlineError::storage_msg(format!("Failed to send sync request: {}", e))
+                StreamlineError::storage_msg(format!("Failed to send sync request: {e}"))
             })?;
         rx.await.map_err(|e| {
-            StreamlineError::storage_msg(format!("Failed to receive sync response: {}", e))
+            StreamlineError::storage_msg(format!("Failed to receive sync response: {e}"))
+        })?
+    }
+
+    /// Get the current file size.
+    pub async fn size(&self, file_id: FileId) -> Result<u64> {
+        let (tx, rx) = oneshot::channel();
+        self.tx
+            .send(IoRequest::Size {
+                file_id,
+                response: tx,
+            })
+            .await
+            .map_err(|error| {
+                StreamlineError::storage_msg(format!("Failed to send size request: {error}"))
+            })?;
+        rx.await.map_err(|error| {
+            StreamlineError::storage_msg(format!("Failed to receive size response: {error}"))
+        })?
+    }
+
+    /// Pre-allocate file space.
+    pub async fn allocate(&self, file_id: FileId, len: u64) -> Result<()> {
+        let (tx, rx) = oneshot::channel();
+        self.tx
+            .send(IoRequest::Allocate {
+                file_id,
+                len,
+                response: tx,
+            })
+            .await
+            .map_err(|error| {
+                StreamlineError::storage_msg(format!("Failed to send allocate request: {error}"))
+            })?;
+        rx.await.map_err(|error| {
+            StreamlineError::storage_msg(format!("Failed to receive allocate response: {error}"))
         })?
     }
 
     /// Open a file
     pub async fn open_file(&self, path: PathBuf, mode: OpenMode) -> Result<FileId> {
+        self.open_file_with_fd(path, mode)
+            .await
+            .map(|(file_id, _)| file_id)
+    }
+
+    /// Open a file and return both its worker ID and raw descriptor.
+    pub(crate) async fn open_file_with_fd(
+        &self,
+        path: PathBuf,
+        mode: OpenMode,
+    ) -> Result<(FileId, i32)> {
         let (tx, rx) = oneshot::channel();
         self.tx
             .send(IoRequest::OpenFile {
@@ -424,21 +604,33 @@ impl IoWorker {
             })
             .await
             .map_err(|e| {
-                StreamlineError::storage_msg(format!("Failed to send open request: {}", e))
+                StreamlineError::storage_msg(format!("Failed to send open request: {e}"))
             })?;
-        rx.await.map_err(|e| {
-            StreamlineError::storage_msg(format!("Failed to receive open response: {}", e))
-        })?
+        let lease = rx.await.map_err(|e| {
+            StreamlineError::storage_msg(format!("Failed to receive open response: {e}"))
+        })??;
+        Ok(lease.claim())
+    }
+
+    /// Queue a close independently of the bounded data-operation queue.
+    pub(crate) fn try_close_file(&self, file_id: FileId) {
+        let _ = self.control_tx.send(ControlRequest::Close {
+            file_id,
+            response: None,
+        });
     }
 
     /// Close a file
     pub async fn close_file(&self, file_id: FileId) -> Result<()> {
-        self.tx
-            .send(IoRequest::CloseFile { file_id })
-            .await
-            .map_err(|e| {
-                StreamlineError::storage_msg(format!("Failed to send close request: {}", e))
+        let (tx, rx) = oneshot::channel();
+        self.control_tx
+            .send(ControlRequest::Close {
+                file_id,
+                response: Some(tx),
             })
+            .map_err(|_| StreamlineError::storage_msg("I/O worker has stopped".to_string()))?;
+        rx.await
+            .map_err(|_| StreamlineError::storage_msg("I/O worker close was cancelled".to_string()))
     }
 
     /// Shutdown the worker
@@ -454,5 +646,138 @@ impl IoWorker {
 
         info!("I/O worker shutdown complete");
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    };
+
+    struct TrackedFile(Arc<AtomicUsize>);
+
+    impl Drop for TrackedFile {
+        fn drop(&mut self) {
+            self.0.fetch_add(1, Ordering::SeqCst);
+        }
+    }
+
+    #[test]
+    fn dropped_files_close_when_the_request_queue_is_saturated() {
+        struct DropFile {
+            worker: Arc<IoWorker>,
+            file_id: FileId,
+        }
+
+        impl Drop for DropFile {
+            fn drop(&mut self) {
+                self.worker.try_close_file(self.file_id);
+            }
+        }
+
+        let (tx, _rx) = mpsc::channel(1);
+        assert!(tx.try_send(IoRequest::Shutdown).is_ok());
+        let (control_tx, mut control_rx) = mpsc::unbounded_channel();
+        let worker = Arc::new(IoWorker {
+            tx,
+            control_tx,
+            handle: None,
+        });
+
+        let mut files: HashMap<FileId, ()> = (0..1024).map(|id| (FileId::new(id), ())).collect();
+        for id in 0..1024 {
+            drop(DropFile {
+                worker: Arc::clone(&worker),
+                file_id: FileId::new(id),
+            });
+        }
+
+        IoWorker::drain_controls(&mut files, &mut control_rx);
+        assert!(
+            files.is_empty(),
+            "the unbounded close path must eventually release every file ID"
+        );
+    }
+
+    #[test]
+    fn cancelled_open_before_delivery_drops_the_new_file_immediately() {
+        let dropped = Arc::new(AtomicUsize::new(0));
+        let file_id = FileId::new(7);
+        let mut files = HashMap::from([(file_id, TrackedFile(Arc::clone(&dropped)))]);
+        let (control_tx, mut control_rx) = mpsc::unbounded_channel();
+        let (response, receiver) = oneshot::channel();
+        drop(receiver);
+
+        IoWorker::finish_open(&mut files, file_id, 42, &control_tx, response);
+
+        assert!(files.is_empty());
+        assert_eq!(dropped.load(Ordering::SeqCst), 1);
+        assert!(control_rx.try_recv().is_err());
+    }
+
+    #[test]
+    fn cancelled_open_after_delivery_closes_the_unclaimed_file() {
+        let dropped = Arc::new(AtomicUsize::new(0));
+        let file_id = FileId::new(8);
+        let mut files = HashMap::from([(file_id, TrackedFile(Arc::clone(&dropped)))]);
+        let (control_tx, mut control_rx) = mpsc::unbounded_channel();
+        let (response, receiver) = oneshot::channel();
+
+        IoWorker::finish_open(&mut files, file_id, 43, &control_tx, response);
+        assert!(files.contains_key(&file_id));
+
+        drop(receiver);
+        IoWorker::drain_controls(&mut files, &mut control_rx);
+
+        assert!(files.is_empty());
+        assert_eq!(dropped.load(Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn repeated_unclaimed_opens_close_every_file() {
+        let dropped = Arc::new(AtomicUsize::new(0));
+        let mut files = HashMap::new();
+        let (control_tx, mut control_rx) = mpsc::unbounded_channel();
+        let mut receivers = Vec::new();
+
+        for raw_id in 0..128 {
+            let file_id = FileId::new(raw_id);
+            files.insert(file_id, TrackedFile(Arc::clone(&dropped)));
+            let (response, receiver) = oneshot::channel();
+            IoWorker::finish_open(&mut files, file_id, raw_id as i32, &control_tx, response);
+            receivers.push(receiver);
+        }
+
+        drop(receivers);
+        IoWorker::drain_controls(&mut files, &mut control_rx);
+
+        assert!(files.is_empty());
+        assert_eq!(dropped.load(Ordering::SeqCst), 128);
+    }
+
+    #[test]
+    fn claimed_open_remains_owned_until_explicitly_closed() {
+        let dropped = Arc::new(AtomicUsize::new(0));
+        let file_id = FileId::new(9);
+        let mut files = HashMap::from([(file_id, TrackedFile(Arc::clone(&dropped)))]);
+        let (control_tx, mut control_rx) = mpsc::unbounded_channel();
+        let (response, mut receiver) = oneshot::channel();
+
+        IoWorker::finish_open(&mut files, file_id, 44, &control_tx, response);
+        let lease = receiver
+            .try_recv()
+            .expect("the worker must deliver the open result")
+            .expect("the open result must be successful");
+        assert_eq!(lease.claim(), (file_id, 44));
+
+        IoWorker::drain_controls(&mut files, &mut control_rx);
+        assert!(files.contains_key(&file_id));
+        assert_eq!(dropped.load(Ordering::SeqCst), 0);
+
+        files.remove(&file_id);
+        assert_eq!(dropped.load(Ordering::SeqCst), 1);
     }
 }

@@ -2,16 +2,23 @@
 
 ## Supported Versions
 
+Security fixes are provided for the current minor release and the one before
+it. See `docs/API_STABILITY.md` for the full version lifecycle.
+
 | Version | Supported          |
 | ------- | ------------------ |
-| 0.2.x   | :white_check_mark: |
-| 0.1.x   | :white_check_mark: |
+| 0.4.x   | :white_check_mark: |
+| 0.3.x   | :white_check_mark: |
+| <= 0.2.x | :x:               |
+
+> Streamline is pre-1.0. Backwards-incompatible changes can land in minor
+> releases outside the Stable tier; see `docs/API_STABILITY.md`.
 
 ## Reporting a Vulnerability
 
 **Please do NOT create public GitHub issues for security vulnerabilities.**
 
-To report a security vulnerability, please email **security@streamline.dev** with:
+To report a security vulnerability, please email **security@streamlinelabs.dev** with:
 
 - Description of the vulnerability
 - Steps to reproduce
@@ -106,18 +113,75 @@ Streamline includes the following security features:
 
 ## Dependency Security
 
-We use automated security scanning:
+Automated, fail-closed security scanning runs in CI
+(`.github/workflows/security-scan.yml`):
 
-- **cargo-audit** runs in CI to check for known vulnerabilities in dependencies
-- Dependencies are regularly updated
-- Security advisories are monitored via GitHub Dependabot
+- **cargo-audit** (`cargo audit`) — known vulnerability advisories in the
+  committed lockfile. Any vulnerability or tool failure fails the build;
+  warning-class findings remain visible.
+- **cargo-deny** (`--all-features check advisories bans licenses sources`) —
+  enabled-feature advisory policy, licenses, banned crates and source
+  restrictions, per `deny.toml`. Any denial fails the build.
+- **clippy** with `-D warnings` across all features.
+- An `unsafe`-without-`// SAFETY:` budget that fails the build when exceeded.
+
+The same audit and dependency policy checks gate every release through
+`.github/workflows/release-gate.yml`, which `release.yml` requires before it
+publishes anything.
+
+Dependency updates are proposed automatically by GitHub Dependabot
+(`.github/dependabot.yml`).
+
+### Known state of the dependency audit
+
+These checks are fail-closed, which means they report the real state of the
+tree rather than a green tick. The release-preparation dependency update
+cleared the AWS-LC, bytes, crossbeam, h2, LZ4, PostgreSQL, Quinn, rustls,
+tar/time, and Wasmtime vulnerability findings.
+
+At the time of writing, `cargo audit` reports six remaining vulnerability
+findings: four `quick-xml` advisories reached through the experimental
+Iceberg/Delta dependency stacks, plus two `rkyv 0.7` findings that are recorded
+in the lockfile but have no enabled dependency path. The all-feature
+`cargo-deny` gate also reports the reachable `quick-xml` findings and the
+directly used but unmaintained `bincode` and `rustls-pemfile` crates.
+
+**A release cannot pass the release gate until these are remediated.** Remediate
+with `cargo update -p <crate>` (or a minor-version bump in `Cargo.toml` where
+the fix is behind a semver bump), then re-run `cargo audit` and
+`cargo deny check`. Advisories that genuinely do not apply may be waived, one at
+a time and with a written justification, via `[advisories] ignore` in
+`deny.toml` — never by weakening the CI invocation. No such waiver is present
+for the remaining release blockers.
+
+Note: this project is pure Rust. A previous CodeQL workflow targeted `cpp` and
+reported on a language this repository does not contain. CodeQL now analyzes
+the Rust source and GitHub Actions workflows in `.github/workflows/codeql.yml`;
+the Rust-native tooling above remains the fail-closed dependency and lint layer.
 
 ## Secure Development
 
 - All code changes require review
-- CI pipeline includes security audit checks
-- No use of `unsafe` Rust without justification and review
+- CI pipeline includes fail-closed security audit checks (see above)
+- No use of `unsafe` Rust without a `// SAFETY:` justification and review; the
+  count of undocumented `unsafe` blocks is capped in CI
 - Input validation at protocol boundaries
+
+### Release integrity
+
+Releases produced by `.github/workflows/release.yml`:
+
+- are built only after the full release gate passes (stability, fail-closed
+  security audit, Kafka compatibility, tests, documentation);
+- ship a `checksums.txt` covering every published artifact, signed with
+  keyless Sigstore `cosign`, alongside per-artifact signatures;
+- ship a CycloneDX SBOM (`sbom.cdx.json`) generated with `cargo-cyclonedx`,
+  which is validated to be non-empty — the release fails if it is not produced;
+- carry GitHub-native build-provenance and SBOM attestations, which are
+  required steps, not best-effort ones;
+- carry SLSA Level 3 provenance for stable (non pre-release) tags.
+
+No SPDX SBOM is published; only CycloneDX.
 
 ## Disclosure Policy
 
@@ -146,12 +210,17 @@ When a security vulnerability is reported:
 | Low | 0.1-3.9 | Next release | Minor info leak, non-default config |
 
 ### Reporting
-- **Email:** security@streamline.dev
-- **PGP Key:** Available at https://streamline.dev/.well-known/security.txt
+- **Email:** security@streamlinelabs.dev
+- **PGP Key:** Not currently published. Reports may be sent in plain text to
+  the address above, or filed privately through GitHub's private vulnerability
+  reporting on this repository. (This line previously pointed at
+  `https://streamline.dev/.well-known/security.txt`, which does not serve a key
+  for this project; a security policy must not promise a channel that does not
+  exist.)
 - **Bug Bounty:** Not currently offered
 
 ### Process
-1. Reporter submits vulnerability to security@streamline.dev
+1. Reporter submits vulnerability to security@streamlinelabs.dev
 2. Team acknowledges within 48 hours with tracking ID
 3. Team assesses severity and impact within 5 business days
 4. Team develops and tests fix per SLA
@@ -162,7 +231,7 @@ When a security vulnerability is reported:
 
 ## Contact
 
-For security-related inquiries, please email **security@streamline.dev**.
+For security-related inquiries, please email **security@streamlinelabs.dev**.
 
 ## Security Audit
 

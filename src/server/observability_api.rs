@@ -29,8 +29,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 // Re-import original infrastructure for backward-compatible router
 use crate::observability::dashboard::{
-    default_alert_rules, ActiveAlert as DashboardActiveAlert, AlertEvaluator,
-    DashboardConfig, DashboardSnapshot, MetricsAggregator,
+    default_alert_rules, ActiveAlert as DashboardActiveAlert, AlertEvaluator, DashboardConfig,
+    DashboardSnapshot, MetricsAggregator,
 };
 use crate::observability::{ObservabilityConfig, ObservabilityManager, SystemMetrics};
 
@@ -52,9 +52,19 @@ pub enum AlertCondition {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum MetricValue {
-    Gauge { value: f64 },
-    Counter { value: u64 },
-    Histogram { count: u64, sum: f64, p50: f64, p95: f64, p99: f64 },
+    Gauge {
+        value: f64,
+    },
+    Counter {
+        value: u64,
+    },
+    Histogram {
+        count: u64,
+        sum: f64,
+        p50: f64,
+        p95: f64,
+        p99: f64,
+    },
 }
 
 /// Configuration for an alert rule
@@ -258,7 +268,10 @@ fn build_router(state: ObservabilityApiState) -> Router {
             delete(delete_alert_rule),
         )
         // Active alerts
-        .route("/api/v1/observability/alerts/active", get(list_active_alerts))
+        .route(
+            "/api/v1/observability/alerts/active",
+            get(list_active_alerts),
+        )
         .route(
             "/api/v1/observability/alerts/:id/acknowledge",
             post(acknowledge_alert),
@@ -268,14 +281,26 @@ fn build_router(state: ObservabilityApiState) -> Router {
         .route("/api/v1/observability/consumer-lag", get(consumer_lag))
         // ---- Backward-compatible legacy endpoints ----
         .route("/api/v1/observability/overview", get(legacy_overview))
-        .route("/api/v1/observability/metrics/:name", get(legacy_get_metric))
+        .route(
+            "/api/v1/observability/metrics/:name",
+            get(legacy_get_metric),
+        )
         .route("/api/v1/observability/system", get(legacy_system_metrics))
         .route("/api/v1/observability/alerts", get(legacy_active_alerts))
         .route("/api/v1/observability/connections", get(legacy_connections))
-        .route("/api/v1/observability/trace/{trace_id}", get(legacy_get_message_trace))
+        .route(
+            "/api/v1/observability/trace/:trace_id",
+            get(legacy_get_message_trace),
+        )
         .route("/api/v1/observability/topology", get(legacy_get_topology))
-        .route("/api/v1/observability/lag/summary", get(legacy_get_lag_summary))
-        .route("/api/v1/observability/hotspots", get(legacy_get_partition_hotspots))
+        .route(
+            "/api/v1/observability/lag/summary",
+            get(legacy_get_lag_summary),
+        )
+        .route(
+            "/api/v1/observability/hotspots",
+            get(legacy_get_partition_hotspots),
+        )
         .with_state(state)
 }
 
@@ -283,6 +308,9 @@ fn build_router(state: ObservabilityApiState) -> Router {
 // New unified endpoint handlers
 // ---------------------------------------------------------------------------
 
+/// Only the tests below build synthetic alert timestamps; the handlers take
+/// their timestamps from the incoming payloads.
+#[cfg(test)]
 fn now_iso() -> String {
     let secs = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -292,8 +320,14 @@ fn now_iso() -> String {
 }
 
 fn build_health(state: &ObservabilityApiState) -> HealthSummary {
-    let metrics = state.metric_snapshots.read().unwrap();
-    let active = state.active_alerts.read().unwrap();
+    let metrics = state
+        .metric_snapshots
+        .read()
+        .unwrap_or_else(|e| e.into_inner());
+    let active = state
+        .active_alerts
+        .read()
+        .unwrap_or_else(|e| e.into_inner());
 
     let status = if active.iter().any(|a| a.severity == "critical") {
         "critical"
@@ -339,9 +373,21 @@ fn build_health(state: &ObservabilityApiState) -> HealthSummary {
 
 /// GET /api/v1/observability/dashboard
 async fn dashboard(State(state): State<ObservabilityApiState>) -> Json<DashboardResponse> {
-    let metrics = state.metric_snapshots.read().unwrap().clone();
-    let rules = state.alert_rules.read().unwrap().clone();
-    let alerts = state.active_alerts.read().unwrap().clone();
+    let metrics = state
+        .metric_snapshots
+        .read()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone();
+    let rules = state
+        .alert_rules
+        .read()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone();
+    let alerts = state
+        .active_alerts
+        .read()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone();
     let health = build_health(&state);
 
     Json(DashboardResponse {
@@ -357,9 +403,15 @@ async fn metrics(
     State(state): State<ObservabilityApiState>,
     Query(query): Query<MetricsQuery>,
 ) -> Json<serde_json::Value> {
-    let all = state.metric_snapshots.read().unwrap();
+    let all = state
+        .metric_snapshots
+        .read()
+        .unwrap_or_else(|e| e.into_inner());
     let filtered: HashMap<&String, &MetricValue> = match &query.prefix {
-        Some(prefix) => all.iter().filter(|(k, _)| k.starts_with(prefix.as_str())).collect(),
+        Some(prefix) => all
+            .iter()
+            .filter(|(k, _)| k.starts_with(prefix.as_str()))
+            .collect(),
         None => all.iter().collect(),
     };
     Json(serde_json::json!({
@@ -378,7 +430,7 @@ async fn create_alert_rule(
     State(state): State<ObservabilityApiState>,
     Json(rule): Json<AlertRuleConfig>,
 ) -> Result<(StatusCode, Json<AlertRuleConfig>), (StatusCode, Json<ObsErrorResponse>)> {
-    let mut rules = state.alert_rules.write().unwrap();
+    let mut rules = state.alert_rules.write().unwrap_or_else(|e| e.into_inner());
     if rules.iter().any(|r| r.id == rule.id) {
         return Err((
             StatusCode::CONFLICT,
@@ -394,7 +446,7 @@ async fn create_alert_rule(
 
 /// GET /api/v1/observability/alerts/rules
 async fn list_alert_rules(State(state): State<ObservabilityApiState>) -> Json<serde_json::Value> {
-    let rules = state.alert_rules.read().unwrap();
+    let rules = state.alert_rules.read().unwrap_or_else(|e| e.into_inner());
     Json(serde_json::json!({
         "rules": *rules,
         "total": rules.len(),
@@ -406,25 +458,28 @@ async fn delete_alert_rule(
     State(state): State<ObservabilityApiState>,
     Path(id): Path<String>,
 ) -> Result<Json<ObsDeleteResponse>, (StatusCode, Json<ObsErrorResponse>)> {
-    let mut rules = state.alert_rules.write().unwrap();
+    let mut rules = state.alert_rules.write().unwrap_or_else(|e| e.into_inner());
     let before = rules.len();
     rules.retain(|r| r.id != id);
     if rules.len() == before {
         return Err((
             StatusCode::NOT_FOUND,
             Json(ObsErrorResponse {
-                error: format!("Alert rule '{}' not found", id),
+                error: format!("Alert rule '{id}' not found"),
             }),
         ));
     }
     Ok(Json(ObsDeleteResponse {
-        message: format!("Alert rule '{}' deleted", id),
+        message: format!("Alert rule '{id}' deleted"),
     }))
 }
 
 /// GET /api/v1/observability/alerts/active
 async fn list_active_alerts(State(state): State<ObservabilityApiState>) -> Json<serde_json::Value> {
-    let alerts = state.active_alerts.read().unwrap();
+    let alerts = state
+        .active_alerts
+        .read()
+        .unwrap_or_else(|e| e.into_inner());
     Json(serde_json::json!({
         "alerts": *alerts,
         "total": alerts.len(),
@@ -437,12 +492,17 @@ async fn acknowledge_alert(
     Path(id): Path<String>,
     Json(body): Json<AcknowledgeRequest>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<ObsErrorResponse>)> {
-    let mut alerts = state.active_alerts.write().unwrap();
+    let mut alerts = state
+        .active_alerts
+        .write()
+        .unwrap_or_else(|e| e.into_inner());
     let alert = alerts.iter_mut().find(|a| a.rule_id == id);
     match alert {
         Some(a) => {
             a.acknowledged = true;
-            a.acknowledged_by = body.acknowledged_by.or_else(|| Some("anonymous".to_string()));
+            a.acknowledged_by = body
+                .acknowledged_by
+                .or_else(|| Some("anonymous".to_string()));
             Ok(Json(serde_json::json!({
                 "message": format!("Alert '{}' acknowledged", id),
                 "acknowledged_by": a.acknowledged_by,
@@ -451,7 +511,7 @@ async fn acknowledge_alert(
         None => Err((
             StatusCode::NOT_FOUND,
             Json(ObsErrorResponse {
-                error: format!("Active alert '{}' not found", id),
+                error: format!("Active alert '{id}' not found"),
             }),
         )),
     }
@@ -466,7 +526,12 @@ async fn topics_heatmap(
     let entries: Vec<PartitionHeatmapEntry> = dashboard
         .topic_metrics
         .iter()
-        .filter(|t| query.topic.as_ref().map_or(true, |q| t.topic_name.contains(q.as_str())))
+        .filter(|t| {
+            query
+                .topic
+                .as_ref()
+                .is_none_or(|q| t.topic_name.contains(q.as_str()))
+        })
         .flat_map(|t| {
             (0..t.partition_count).map(move |p| PartitionHeatmapEntry {
                 topic: t.topic_name.clone(),
@@ -492,21 +557,29 @@ async fn consumer_lag(
     let entries: Vec<ConsumerLagEntry> = dashboard
         .consumer_group_metrics
         .iter()
-        .filter(|g| query.group.as_ref().map_or(true, |q| g.group_id.contains(q.as_str())))
         .filter(|g| {
-            query.topic.as_ref().map_or(true, |q| {
-                g.subscribed_topics.iter().any(|t| t.contains(q.as_str()))
-            })
+            query
+                .group
+                .as_ref()
+                .is_none_or(|q| g.group_id.contains(q.as_str()))
+        })
+        .filter(|g| {
+            query
+                .topic
+                .as_ref()
+                .is_none_or(|q| g.subscribed_topics.iter().any(|t| t.contains(q.as_str())))
         })
         .flat_map(|g| {
-            g.subscribed_topics.iter().map(move |topic| ConsumerLagEntry {
-                group: g.group_id.clone(),
-                topic: topic.clone(),
-                partition: 0,
-                current_offset: 0,
-                end_offset: g.total_lag as i64,
-                lag: g.total_lag as i64,
-            })
+            g.subscribed_topics
+                .iter()
+                .map(move |topic| ConsumerLagEntry {
+                    group: g.group_id.clone(),
+                    topic: topic.clone(),
+                    partition: 0,
+                    current_offset: 0,
+                    end_offset: g.total_lag as i64,
+                    lag: g.total_lag as i64,
+                })
         })
         .collect();
     let total_lag: i64 = entries.iter().map(|e| e.lag).sum();
@@ -563,7 +636,7 @@ async fn legacy_get_metric(
             (
                 StatusCode::NOT_FOUND,
                 Json(ObsErrorResponse {
-                    error: format!("Metric '{}' not found", name),
+                    error: format!("Metric '{name}' not found"),
                 }),
             )
         })
@@ -892,7 +965,9 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
-        let body = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let v: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert!(v.get("metrics").is_some());
         assert!(v.get("health").is_some());
@@ -912,7 +987,9 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
-        let body = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let v: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert!(v["total"].as_u64().unwrap() >= 3);
     }
@@ -930,7 +1007,9 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
-        let body = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let v: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(v["total"].as_u64().unwrap(), 1);
     }
@@ -948,7 +1027,9 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
-        let body = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let v: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(v["status"].as_str().unwrap(), "healthy");
     }
@@ -981,7 +1062,9 @@ mod tests {
             )
             .await
             .unwrap();
-        let body = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let v: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(v["total"].as_u64().unwrap(), 1);
     }
@@ -1072,7 +1155,9 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
-        let body = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let v: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(v["total"].as_u64().unwrap(), 0);
     }
@@ -1100,7 +1185,9 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
-        let body = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let v: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(v["acknowledged_by"].as_str().unwrap(), "ops-team");
     }
@@ -1138,7 +1225,9 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
-        let body = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let v: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert!(v.get("heatmap").is_some());
     }
@@ -1156,7 +1245,9 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
-        let body = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let v: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert!(v.get("entries").is_some());
         assert!(v.get("total_lag").is_some());

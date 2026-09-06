@@ -13,7 +13,7 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
-use tracing::{debug, info, warn};
+use tracing::{debug, info};
 
 // ---------------------------------------------------------------------------
 // Resource Limits
@@ -289,21 +289,19 @@ impl WasmSandbox {
         if self.config.enable_fuel_metering {
             wt_config.consume_fuel(true);
         }
-        let engine = Engine::new(&wt_config).map_err(|e| {
-            StreamlineError::Config(format!("Failed to create WASM engine: {e}"))
-        })?;
+        let engine = Engine::new(&wt_config)
+            .map_err(|e| StreamlineError::Config(format!("Failed to create WASM engine: {e}")))?;
 
         // Compile the module.
-        let module = Module::new(&engine, wasm_bytes).map_err(|e| {
-            StreamlineError::Config(format!("Failed to compile WASM module: {e}"))
-        })?;
+        let module = Module::new(&engine, wasm_bytes)
+            .map_err(|e| StreamlineError::Config(format!("Failed to compile WASM module: {e}")))?;
 
         // Create store with resource limits.
         let mut store = Store::new(&engine, ());
         if let Some(fuel) = limits.max_fuel {
-            store.set_fuel(fuel).map_err(|e| {
-                StreamlineError::Config(format!("Failed to set fuel: {e}"))
-            })?;
+            store
+                .set_fuel(fuel)
+                .map_err(|e| StreamlineError::Config(format!("Failed to set fuel: {e}")))?;
         }
 
         let linker = Linker::new(&engine);
@@ -320,9 +318,9 @@ impl WasmSandbox {
             .get_typed_func::<(i32,), i32>(&mut store, "alloc")
             .map_err(|e| StreamlineError::Config(format!("Missing 'alloc' export: {e}")))?;
 
-        let ptr = alloc.call(&mut store, (input.len() as i32,)).map_err(|e| {
-            StreamlineError::ResourceExhausted(format!("alloc trapped: {e}"))
-        })?;
+        let ptr = alloc
+            .call(&mut store, (input.len() as i32,))
+            .map_err(|e| StreamlineError::ResourceExhausted(format!("alloc trapped: {e}")))?;
 
         memory.data_mut(&mut store)[ptr as usize..ptr as usize + input.len()]
             .copy_from_slice(input);

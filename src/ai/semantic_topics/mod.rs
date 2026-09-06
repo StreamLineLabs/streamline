@@ -28,7 +28,7 @@ pub mod worker;
 
 pub use embedder::{HashEmbedder, DEFAULT_DIM};
 pub use index::InMemoryIndex;
-pub use worker::{EmbedJob, EmbedWorker, Embedder, EmbedderHandle, EmbedError};
+pub use worker::{EmbedError, EmbedJob, EmbedWorker, Embedder, EmbedderHandle};
 
 /// A single search hit returned by `consumer.search()`.
 #[derive(Debug, Clone)]

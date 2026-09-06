@@ -101,11 +101,7 @@ pub struct EdgeNode {
 
 impl EdgeNode {
     /// Create a new edge node with required fields
-    pub fn new(
-        id: impl Into<String>,
-        name: impl Into<String>,
-        address: impl Into<String>,
-    ) -> Self {
+    pub fn new(id: impl Into<String>, name: impl Into<String>, address: impl Into<String>) -> Self {
         Self {
             id: id.into(),
             name: name.into(),
@@ -298,8 +294,7 @@ impl EdgeDiscovery {
             debug!(node_id = %node_id, "Processed heartbeat");
         } else {
             return Err(StreamlineError::storage_msg(format!(
-                "Unknown node: {}",
-                node_id
+                "Unknown node: {node_id}"
             )));
         }
         Ok(())
@@ -382,8 +377,8 @@ mod tests {
         let disc = default_discovery();
         disc.start().await.unwrap();
 
-        let peer = EdgeNode::new("peer-1", "Peer One", "10.0.0.2:9095")
-            .with_location(37.77, -122.42);
+        let peer =
+            EdgeNode::new("peer-1", "Peer One", "10.0.0.2:9095").with_location(37.77, -122.42);
         disc.register_node(peer).await.unwrap();
 
         let peers = disc.discover_peers().await;

@@ -1,0 +1,79 @@
+name: Security Scan
+
+# Streamline is a pure-Rust codebase.
+#
+# This workflow replaces a previous CodeQL workflow that declared
+# `languages: cpp` and a `/language:cpp` analysis category. Streamline has no
+# C or C++ first-party sources (only vendored C in transitive build scripts,
+# which CodeQL would not have attributed to this project), so that analysis
+# reported on a language this repository does not contain and produced a
+# security signal that could not be acted on.
+#
+# Rust and workflow SAST is handled by codeql.yml. This workflow complements it
+# with RustSec, dependency-policy, and unsafe-code regression gates.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '0 6 * * 1' # Weekly on Monday
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  advisories:
+    name: RustSec advisories (cargo-audit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: security-audit
+
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked
+
+      # `--deny unsound` promotes RustSec soundness advisories to hard failures
+      # in addition to ordinary vulnerabilities. Unmaintained/yanked findings
+      # remain governed by deny.toml and the cargo-deny job below.
+      - name: cargo audit
+        run: cargo audit --deny unsound
+
+  supply-chain:
+    name: Supply chain policy (cargo-deny)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # cargo-deny-action exits non-zero on any denied advisory, ban, license or
+      # source, so this job is fail-closed by construction.
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check advisories bans licenses sources
+          arguments: --all-features
+
+  unsafe-budget:
+    name: Unsafe code budget
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Static analysis of the Rust itself is `cargo clippy -D warnings`, which
+      # already runs in ci.yml on every push and pull request; it is not
+      # duplicated here. What this job adds is the security-specific constraint
+      # that unreviewed `unsafe` cannot accumulate.
+      - name: Reject unsafe code without a SAFETY justification
+        run: python3 scripts/check_unsafe_budget.py
+        env:
+          # Baseline measured from this tree. This remains a source-level
+          # ratchet, not a proof of soundness: it counts unsafe source lines
+          # without an adjacent `SAFETY:` comment and ignores commented-out code.
+          # It may only be lowered, never raised.
+          UNSAFE_BUDGET: '120'

@@ -208,14 +208,14 @@ impl WasmApiError {
     fn not_found(id: &str) -> Self {
         Self {
             error: "TRANSFORMATION_NOT_FOUND".to_string(),
-            message: format!("Transformation '{}' not found", id),
+            message: format!("Transformation '{id}' not found"),
         }
     }
 
     fn already_exists(id: &str) -> Self {
         Self {
             error: "TRANSFORMATION_EXISTS".to_string(),
-            message: format!("Transformation '{}' already exists", id),
+            message: format!("Transformation '{id}' already exists"),
         }
     }
 
@@ -537,7 +537,7 @@ async fn test_transformation(
     let value_bytes = match serde_json::to_vec(&request.value) {
         Ok(v) => v,
         Err(e) => {
-            let error = WasmApiError::bad_request(format!("Invalid JSON value: {}", e));
+            let error = WasmApiError::bad_request(format!("Invalid JSON value: {e}"));
             return (StatusCode::BAD_REQUEST, Json(error)).into_response();
         }
     };

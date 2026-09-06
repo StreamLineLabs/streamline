@@ -243,7 +243,7 @@ impl ConnectorManager {
     /// Apply from YAML string
     pub async fn apply_yaml(&self, yaml: &str) -> Result<ManagedConnector> {
         let spec: ConnectorSpec = serde_yaml::from_str(yaml)
-            .map_err(|e| StreamlineError::Config(format!("Invalid connector YAML: {}", e)))?;
+            .map_err(|e| StreamlineError::Config(format!("Invalid connector YAML: {e}")))?;
         self.apply(spec).await
     }
 
@@ -252,7 +252,7 @@ impl ConnectorManager {
         let mut connectors = self.connectors.write().await;
         let conn = connectors
             .get_mut(name)
-            .ok_or_else(|| StreamlineError::Connector(format!("Connector not found: {}", name)))?;
+            .ok_or_else(|| StreamlineError::Connector(format!("Connector not found: {name}")))?;
 
         conn.state = ConnectorRuntimeState::Running;
         conn.started_at = Some(Utc::now());
@@ -265,7 +265,7 @@ impl ConnectorManager {
         let mut connectors = self.connectors.write().await;
         let conn = connectors
             .get_mut(name)
-            .ok_or_else(|| StreamlineError::Connector(format!("Connector not found: {}", name)))?;
+            .ok_or_else(|| StreamlineError::Connector(format!("Connector not found: {name}")))?;
 
         conn.state = ConnectorRuntimeState::Stopped;
         info!("Stopped connector: {}", name);
@@ -277,7 +277,7 @@ impl ConnectorManager {
         let mut connectors = self.connectors.write().await;
         let conn = connectors
             .get_mut(name)
-            .ok_or_else(|| StreamlineError::Connector(format!("Connector not found: {}", name)))?;
+            .ok_or_else(|| StreamlineError::Connector(format!("Connector not found: {name}")))?;
 
         if conn.state != ConnectorRuntimeState::Running {
             return Err(StreamlineError::Connector(format!(
@@ -295,12 +295,11 @@ impl ConnectorManager {
         let mut connectors = self.connectors.write().await;
         let conn = connectors
             .get_mut(name)
-            .ok_or_else(|| StreamlineError::Connector(format!("Connector not found: {}", name)))?;
+            .ok_or_else(|| StreamlineError::Connector(format!("Connector not found: {name}")))?;
 
         if conn.state != ConnectorRuntimeState::Paused {
             return Err(StreamlineError::Connector(format!(
-                "Connector {} is not paused",
-                name
+                "Connector {name} is not paused"
             )));
         }
 
@@ -314,7 +313,7 @@ impl ConnectorManager {
             .write()
             .await
             .remove(name)
-            .ok_or_else(|| StreamlineError::Connector(format!("Connector not found: {}", name)))
+            .ok_or_else(|| StreamlineError::Connector(format!("Connector not found: {name}")))
             .map(|_| ())
     }
 
@@ -325,7 +324,7 @@ impl ConnectorManager {
             .await
             .get(name)
             .cloned()
-            .ok_or_else(|| StreamlineError::Connector(format!("Connector not found: {}", name)))
+            .ok_or_else(|| StreamlineError::Connector(format!("Connector not found: {name}")))
     }
 
     /// List all connectors
@@ -338,7 +337,7 @@ impl ConnectorManager {
         let mut connectors = self.connectors.write().await;
         let conn = connectors
             .get_mut(name)
-            .ok_or_else(|| StreamlineError::Connector(format!("Connector not found: {}", name)))?;
+            .ok_or_else(|| StreamlineError::Connector(format!("Connector not found: {name}")))?;
 
         conn.last_error = Some(error.to_string());
         conn.metrics.errors += 1;
@@ -373,7 +372,7 @@ impl ConnectorManager {
         let mut connectors = self.connectors.write().await;
         let conn = connectors
             .get_mut(name)
-            .ok_or_else(|| StreamlineError::Connector(format!("Connector not found: {}", name)))?;
+            .ok_or_else(|| StreamlineError::Connector(format!("Connector not found: {name}")))?;
 
         conn.metrics.records_processed += records;
         conn.metrics.bytes_processed += bytes;
@@ -438,14 +437,13 @@ kind: Connector
 metadata:
   name: my-connector
 spec:
-  connector_type: {}
+  connector_type: {connector_type}
   version: "1.0"
   direction: source
   topics:
     - my-topic
   config: {{}}
-"#,
-                connector_type
+"#
             ),
         }
     }
@@ -619,4 +617,3 @@ mod tests {
         assert!(mgr.pause("test-connector").await.is_err());
     }
 }
-

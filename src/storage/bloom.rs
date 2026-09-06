@@ -449,57 +449,41 @@ impl KeyBloomFilter {
         let version = u16::from_le_bytes([header[4], header[5]]);
         if version != BLOOM_VERSION {
             return Err(StreamlineError::CorruptedData(format!(
-                "Unsupported bloom filter version: {}",
-                version
+                "Unsupported bloom filter version: {version}"
             )));
         }
 
         // Read metadata
-        let bitmap_size = u64::from_le_bytes(
-            header[8..16]
-                .try_into()
-                .map_err(|_| StreamlineError::CorruptedData("Invalid bloom filter bitmap size".to_string()))?,
-        ) as usize;
-        let num_hashes = u32::from_le_bytes(
-            header[16..20]
-                .try_into()
-                .map_err(|_| StreamlineError::CorruptedData("Invalid bloom filter hash count".to_string()))?,
-        );
-        let item_count = u32::from_le_bytes(
-            header[20..24]
-                .try_into()
-                .map_err(|_| StreamlineError::CorruptedData("Invalid bloom filter item count".to_string()))?,
-        ) as usize;
+        let bitmap_size = u64::from_le_bytes(header[8..16].try_into().map_err(|_| {
+            StreamlineError::CorruptedData("Invalid bloom filter bitmap size".to_string())
+        })?) as usize;
+        let num_hashes = u32::from_le_bytes(header[16..20].try_into().map_err(|_| {
+            StreamlineError::CorruptedData("Invalid bloom filter hash count".to_string())
+        })?);
+        let item_count = u32::from_le_bytes(header[20..24].try_into().map_err(|_| {
+            StreamlineError::CorruptedData("Invalid bloom filter item count".to_string())
+        })?) as usize;
 
         // Read sip keys
-        let sip_key0_0 = u64::from_le_bytes(
-            header[24..32]
-                .try_into()
-                .map_err(|_| StreamlineError::CorruptedData("Invalid bloom filter sip key".to_string()))?,
-        );
-        let sip_key0_1 = u64::from_le_bytes(
-            header[32..40]
-                .try_into()
-                .map_err(|_| StreamlineError::CorruptedData("Invalid bloom filter sip key".to_string()))?,
-        );
-        let sip_key1_0 = u64::from_le_bytes(
-            header[40..48]
-                .try_into()
-                .map_err(|_| StreamlineError::CorruptedData("Invalid bloom filter sip key".to_string()))?,
-        );
-        let sip_key1_1 = u64::from_le_bytes(
-            header[48..56]
-                .try_into()
-                .map_err(|_| StreamlineError::CorruptedData("Invalid bloom filter sip key".to_string()))?,
-        );
+        let sip_key0_0 = u64::from_le_bytes(header[24..32].try_into().map_err(|_| {
+            StreamlineError::CorruptedData("Invalid bloom filter sip key".to_string())
+        })?);
+        let sip_key0_1 = u64::from_le_bytes(header[32..40].try_into().map_err(|_| {
+            StreamlineError::CorruptedData("Invalid bloom filter sip key".to_string())
+        })?);
+        let sip_key1_0 = u64::from_le_bytes(header[40..48].try_into().map_err(|_| {
+            StreamlineError::CorruptedData("Invalid bloom filter sip key".to_string())
+        })?);
+        let sip_key1_1 = u64::from_le_bytes(header[48..56].try_into().map_err(|_| {
+            StreamlineError::CorruptedData("Invalid bloom filter sip key".to_string())
+        })?);
         let sip_keys = [(sip_key0_0, sip_key0_1), (sip_key1_0, sip_key1_1)];
 
         // Verify CRC
-        let stored_crc = u32::from_le_bytes(
-            header[56..60]
-                .try_into()
-                .map_err(|_| StreamlineError::CorruptedData("Invalid bloom filter CRC".to_string()))?,
-        );
+        let stored_crc =
+            u32::from_le_bytes(header[56..60].try_into().map_err(|_| {
+                StreamlineError::CorruptedData("Invalid bloom filter CRC".to_string())
+            })?);
         let computed_crc = crc32fast::hash(&header[0..56]);
         if stored_crc != computed_crc {
             return Err(StreamlineError::CorruptedData(
@@ -553,7 +537,7 @@ impl BloomFilterIndex {
 
     /// Get the bloom filter file path for a segment
     pub fn bloom_path(&self, base_offset: i64) -> PathBuf {
-        self.base_dir.join(format!("{:020}.bloom", base_offset))
+        self.base_dir.join(format!("{base_offset:020}.bloom"))
     }
 
     /// Load all bloom filters from disk
@@ -788,7 +772,7 @@ impl ConsumerBloomFilter {
 
     /// Load from a file
     pub fn load(dir: &Path, group_id: &str, topic: &str, partition: i32) -> Result<Self> {
-        let filename = format!("{}_{}_{}.consumer_bloom", group_id, topic, partition);
+        let filename = format!("{group_id}_{topic}_{partition}.consumer_bloom");
         let path = dir.join(filename);
         let filter = KeyBloomFilter::load(&path)?;
 
@@ -834,7 +818,7 @@ impl BloomFilterBuilder {
 
 /// Generate bloom filter filename from segment base offset
 pub fn bloom_filename(base_offset: i64) -> String {
-    format!("{:020}.bloom", base_offset)
+    format!("{base_offset:020}.bloom")
 }
 
 /// Get the bloom filter path for a segment path
@@ -872,7 +856,7 @@ mod tests {
         // Note: This could occasionally fail due to false positives
         let mut not_found = 0;
         for i in 0..100 {
-            if !filter.might_contain(format!("nonexistent{}", i).as_bytes()) {
+            if !filter.might_contain(format!("nonexistent{i}").as_bytes()) {
                 not_found += 1;
             }
         }
@@ -1046,14 +1030,14 @@ mod tests {
 
         // Add some items
         for i in 0..100 {
-            filter.add(format!("key{}", i).as_bytes());
+            filter.add(format!("key{i}").as_bytes());
         }
 
         // FPR should be positive and reasonable
         let fpr = filter.estimated_fpr();
-        assert!(fpr > 0.0, "FPR should be positive, got {}", fpr);
+        assert!(fpr > 0.0, "FPR should be positive, got {fpr}");
         // At 100 items with 1% target, actual FPR should be in reasonable range
-        assert!(fpr < 0.5, "FPR should be reasonable, got {}", fpr);
+        assert!(fpr < 0.5, "FPR should be reasonable, got {fpr}");
     }
 
     #[test]

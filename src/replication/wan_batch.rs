@@ -10,7 +10,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
-use tracing::{debug, info};
+use tracing::debug;
 
 /// WAN batch configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -95,6 +95,7 @@ pub struct WanBatch {
 }
 
 /// WAN batch accumulator — collects records and flushes when thresholds are reached.
+#[derive(Debug)]
 pub struct WanBatchAccumulator {
     config: WanBatchConfig,
     source_region: String,
@@ -138,7 +139,8 @@ impl WanBatchAccumulator {
         // Deduplication: if same key exists in buffer, replace it
         if self.config.dedup_keys {
             if let Some(ref key) = record.key {
-                let dedup_key = format!("{}:{}:{}", record.topic, record.partition, hex::encode(key));
+                let dedup_key =
+                    format!("{}:{}:{}", record.topic, record.partition, hex::encode(key));
                 if let Some(existing_idx) = self.dedup_index.get(&dedup_key) {
                     let old_size = self.records[*existing_idx].size_bytes();
                     self.current_bytes = self.current_bytes.saturating_sub(old_size);
@@ -254,7 +256,9 @@ impl WanBatchAccumulator {
             } else {
                 0.0
             },
-            bandwidth_saved_bytes: self.total_uncompressed.saturating_sub(self.total_compressed),
+            bandwidth_saved_bytes: self
+                .total_uncompressed
+                .saturating_sub(self.total_compressed),
         }
     }
 }
@@ -274,7 +278,7 @@ pub struct WanBatchMetrics {
 // Simple hex encoding for dedup keys (avoids dependency)
 mod hex {
     pub fn encode(data: &[u8]) -> String {
-        data.iter().map(|b| format!("{:02x}", b)).collect()
+        data.iter().map(|b| format!("{b:02x}")).collect()
     }
 }
 
@@ -282,7 +286,13 @@ mod hex {
 mod tests {
     use super::*;
 
-    fn make_record(topic: &str, partition: i32, offset: i64, key: Option<&[u8]>, value: &[u8]) -> WanRecord {
+    fn make_record(
+        topic: &str,
+        partition: i32,
+        offset: i64,
+        key: Option<&[u8]>,
+        value: &[u8],
+    ) -> WanRecord {
         WanRecord {
             topic: topic.to_string(),
             partition,
@@ -324,7 +334,7 @@ mod tests {
         };
         let mut acc = WanBatchAccumulator::new(config, "us-east", "eu-west");
 
-        let big_record = make_record("t", 0, 0, None, &vec![0u8; 120]);
+        let big_record = make_record("t", 0, 0, None, &[0u8; 120]);
         let batch = acc.add(big_record);
         assert!(batch.is_some());
     }
@@ -359,7 +369,9 @@ mod tests {
         let mut acc = WanBatchAccumulator::new(config, "a", "b");
 
         acc.add(make_record("t", 0, 0, None, &vec![0u8; 500]));
-        let batch = acc.add(make_record("t", 0, 1, None, &vec![0u8; 500])).unwrap();
+        let batch = acc
+            .add(make_record("t", 0, 1, None, &vec![0u8; 500]))
+            .unwrap();
 
         assert!(batch.compression_ratio < 1.0);
         assert!(batch.compressed_bytes < batch.uncompressed_bytes);
@@ -375,8 +387,8 @@ mod tests {
         };
         let mut acc = WanBatchAccumulator::new(config, "a", "b");
 
-        acc.add(make_record("t", 0, 0, None, &vec![0u8; 100]));
-        acc.add(make_record("t", 0, 1, None, &vec![0u8; 100]));
+        acc.add(make_record("t", 0, 0, None, &[0u8; 100]));
+        acc.add(make_record("t", 0, 1, None, &[0u8; 100]));
 
         let metrics = acc.metrics();
         assert_eq!(metrics.total_batches, 1);

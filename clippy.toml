@@ -8,3 +8,8 @@ too-many-arguments-threshold = 8
 # Allow up to 4 type complexity (default is 250).
 # Generous for deeply nested generics in async code.
 type-complexity-threshold = 300
+
+# Tests intentionally use unwrap/expect for concise fixture setup and assertions.
+# Production code still denies both through crate-level lint attributes.
+allow-unwrap-in-tests = true
+allow-expect-in-tests = true

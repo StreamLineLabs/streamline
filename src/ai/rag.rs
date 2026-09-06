@@ -346,7 +346,7 @@ impl DocumentChunker {
 
             if content.len() >= self.config.min_chunk_size {
                 chunks.push(DocumentChunk {
-                    id: format!("{}-{}", document_id, chunk_index),
+                    id: format!("{document_id}-{chunk_index}"),
                     document_id: document_id.to_string(),
                     chunk_index,
                     content,
@@ -393,7 +393,7 @@ impl DocumentChunker {
                         if current_chunk.len() >= self.config.min_chunk_size {
                             let end_offset = current_start + current_chunk.len();
                             chunks.push(DocumentChunk {
-                                id: format!("{}-{}", document_id, chunk_index),
+                                id: format!("{document_id}-{chunk_index}"),
                                 document_id: document_id.to_string(),
                                 chunk_index,
                                 content: current_chunk.clone(),
@@ -412,7 +412,7 @@ impl DocumentChunker {
                 // Save final chunk
                 if current_chunk.len() >= self.config.min_chunk_size {
                     chunks.push(DocumentChunk {
-                        id: format!("{}-{}", document_id, chunk_index),
+                        id: format!("{document_id}-{chunk_index}"),
                         document_id: document_id.to_string(),
                         chunk_index,
                         content: current_chunk,
@@ -457,7 +457,7 @@ impl DocumentChunker {
                 && current_chunk.len() >= self.config.min_chunk_size
             {
                 chunks.push(DocumentChunk {
-                    id: format!("{}-{}", document_id, chunk_index),
+                    id: format!("{document_id}-{chunk_index}"),
                     document_id: document_id.to_string(),
                     chunk_index,
                     content: current_chunk.trim().to_string(),
@@ -482,7 +482,7 @@ impl DocumentChunker {
         // Add remaining content
         if !current_chunk.trim().is_empty() && current_chunk.len() >= self.config.min_chunk_size {
             chunks.push(DocumentChunk {
-                id: format!("{}-{}", document_id, chunk_index),
+                id: format!("{document_id}-{chunk_index}"),
                 document_id: document_id.to_string(),
                 chunk_index,
                 content: current_chunk.trim().to_string(),
@@ -510,7 +510,7 @@ impl DocumentChunker {
         if text.len() <= self.config.max_chunk_size {
             if text.len() >= self.config.min_chunk_size {
                 return vec![DocumentChunk {
-                    id: format!("{}-{}", document_id, base_offset),
+                    id: format!("{document_id}-{base_offset}"),
                     document_id: document_id.to_string(),
                     chunk_index: 0,
                     content: text.to_string(),

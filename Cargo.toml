@@ -1,10 +1,10 @@
 [workspace]
-members = [".", "crates/streamline-wasm", "crates/streamline-analytics"]
+members = [".", "crates/streamline-wasm", "crates/streamline-analytics", "crates/streamline-serde-wincode"]
 resolver = "2"
 
 [package]
 name = "streamline"
-version = "0.3.0"
+version = "0.4.0"
 edition = "2021"
 authors = ["Jose David Baena"]
 description = "A developer-first, operationally simple streaming solution with Kafka protocol compatibility"
@@ -15,14 +15,32 @@ documentation = "https://docs.rs/streamline"
 readme = "README.md"
 keywords = ["streaming", "kafka", "messaging", "event-sourcing"]
 categories = ["network-programming", "asynchronous"]
-rust-version = "1.80"
+rust-version = "1.88"
 exclude = [
     ".github/",
     "example_data/",
     "data/",
+    "report.*.json",
     "*.md",
     "!README.md",
 ]
+
+[lints.rust]
+# Cargo's check-cfg support does not always predeclare `cfg(test)` when a
+# workspace member is compiled as a dependency of another target.
+#
+# `iceberg_backend` / `delta_backend` are deliberately never set by any profile
+# or feature. They fence off the upstream-crate-backed halves of
+# `src/sink/iceberg.rs`, `src/sink/iceberg_catalog.rs`, `src/sink/delta.rs` and
+# `src/lakehouse/iceberg_topics.rs`, which are preserved verbatim so the
+# connectors can be restored once `iceberg`/`deltalake` ship on
+# quick-xml >= 0.41 without native-tls. Declaring them here keeps
+# `unexpected_cfgs` meaningful instead of silencing it with an allow attribute.
+unexpected_cfgs = { level = "warn", check-cfg = [
+    'cfg(test)',
+    'cfg(iceberg_backend)',
+    'cfg(delta_backend)',
+] }
 
 [dependencies]
 # Async runtime
@@ -34,12 +52,50 @@ kafka-protocol = "0.14"
 # Serialization
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-bincode = "1.3"
-bytes = { version = "1.7", features = ["serde"] }
+# bincode is unmaintained at every version (RUSTSEC-2025-0141, `patched = []`);
+# wincode is the advisory's recommended replacement and reproduces bincode 1's
+# wire format byte-for-byte. See src/bincode_compat.rs, and
+# tests/dependency_security_test.rs which bans bincode from re-entering.
+#
+# The serde bridge is a *workspace fork* of upstream `serde-wincode` 0.1.2,
+# published as `streamline-serde-wincode` under the same Apache-2.0 licence.
+# Upstream requires `wincode = ">=0.4, <1"`, a range spanning three mutually
+# semver-incompatible 0.x lines. Cargo unifies requirements only *within* a
+# compatibility range, so the exact `wincode = "=0.4.9"` below does **not**
+# constrain that edge: a fresh resolution of a published `streamline` picks up
+# wincode 0.6 for serde-wincode *in addition to* 0.4.9 here — a different ABI
+# and a rust-version of 1.89.0, above this crate's MSRV of 1.88.
+#
+# A `Cargo.lock` pin cannot fix that (a lockfile binds this repository only) and
+# neither can `[patch.crates-io]` (patches are not propagated to consumers of a
+# published crate). The requirement has to be exact in a manifest that is itself
+# published, which is what the fork provides. The dependency keeps the
+# `serde-wincode` alias so `src/bincode_compat.rs` still writes
+# `use serde_wincode::...`.
+#
+# `fresh_consumer_resolves_one_wincode_from_the_packaged_crates` in
+# tests/dependency_security_test.rs proves this against a real lockless consumer
+# built from the packaged `.crate` files, not from this repository's lockfile.
+serde-wincode = { package = "streamline-serde-wincode", version = "0.4.0", path = "crates/streamline-serde-wincode", default-features = false, features = ["std"] }
+# `src/bincode_compat.rs` builds its `wincode` configuration from *this* direct
+# dependency and hands it to the fork's `SerdeCompat`, so a graph in which the
+# two resolved different `wincode` crates fails to compile instead of silently
+# changing the on-disk format. Both edges are now exactly `=0.4.9`, so they
+# unify onto one node.
+#
+# wincode 0.5.0+ raised its rust-version to 1.89.0 while this crate's MSRV is
+# 1.88. Raise this only together with the MSRV.
+#
+# `wincode_stays_msrv_compatible`, `root_manifest_pins_wincode_exactly` and
+# `packaged_manifests_preserve_the_exact_wincode_requirement` (all in
+# tests/dependency_security_test.rs) enforce this. Raise it only together with
+# the MSRV.
+wincode = { version = "=0.4.9", default-features = false, features = ["std"] }
+bytes = { version = "1.11.1", features = ["serde"] }
 
 # Error handling
 thiserror = "2.0"
-anyhow = "1.0"
+anyhow = "1.0.103"
 
 # Logging
 tracing = "0.1"
@@ -52,14 +108,16 @@ clap_complete = "4.5"
 # CLI enhancements
 colored = "2.1"
 indicatif = "0.17"
-comfy-table = "7.1"
+# Keep this exact to avoid an unrelated terminal-rendering change in the
+# release-readiness patch.
+comfy-table = "=7.1.4"
 dialoguer = "0.11"
 dirs = "5.0"
 regex = "1.10"
 jsonpath-rust = "0.7"
 
 # Compression (optional, included in lite and full)
-lz4_flex = { version = "0.11", optional = true }
+lz4_flex = { version = "0.11.6", optional = true }
 zstd = { version = "0.13", optional = true }
 snap = { version = "1.1", optional = true }
 flate2 = { version = "1.0", optional = true }
@@ -74,16 +132,19 @@ chrono = { version = "0.4", features = ["serde"] }
 uuid = { version = "1.11", features = ["v4", "serde"] }
 
 # TLS/SSL support
-rustls = "0.23"
-tokio-rustls = "0.26"
-rustls-pemfile = "2.2"
+rustls = { version = "0.23", default-features = false, features = ["std", "aws_lc_rs", "tls12", "logging"] }
+tokio-rustls = { version = "0.26", default-features = false, features = ["aws-lc-rs", "tls12", "logging"] }
 
-# Low-level socket options (TCP keepalive, buffer tuning)
-socket2 = "0.5"
+# Low-level socket options (TCP keepalive, buffer tuning). TCP keepalive retry
+# configuration is behind socket2's `all` feature on supported Unix targets.
+socket2 = { version = "0.5", features = ["all"] }
 
 # Metrics and monitoring (optional)
 metrics = { version = "0.24", optional = true }
-metrics-exporter-prometheus = { version = "0.16", optional = true }
+# Streamline renders metrics through `PrometheusHandle` and does not use the
+# exporter's built-in HTTP listener or push gateway. Disabling its defaults
+# avoids pulling a second rustls crypto provider through hyper-rustls.
+metrics-exporter-prometheus = { version = "0.16", default-features = false, optional = true }
 
 # HTTP server for metrics and WebSocket
 axum = { version = "0.7", features = ["ws"] }
@@ -100,7 +161,7 @@ age = { version = "0.10", optional = true }
 argon2 = { version = "0.5", features = ["std"], optional = true }
 base64 = "0.22"
 serde_yaml = "0.9"
-rand = "0.8"
+rand = "0.8.6"
 
 # SCRAM authentication (SHA256/SHA512) - optional, part of auth feature
 sha2 = { version = "0.10", optional = true }
@@ -123,7 +184,12 @@ hex = "0.4"
 apache-avro = { version = "0.17", optional = true }
 prost = { version = "0.13", optional = true }
 prost-types = { version = "0.13", optional = true }
-jsonschema = { version = "0.26", optional = true }
+# Remote schema retrieval is deliberately unsupported. jsonschema's default
+# `resolve-http` feature calls its own blocking reqwest client, which cannot use
+# Streamline's explicit AWS-LC provider and can panic when no process-wide
+# provider is installed. Local fragments still work; external references fail
+# through the explicit retriever in src/schema/json_schema.rs.
+jsonschema = { version = "0.26", optional = true, default-features = false }
 
 # Clustering and Raft consensus (optional - clustering feature)
 openraft = { version = "0.9", features = ["serde", "tracing-log", "loosen-follower-log-revert"], optional = true }
@@ -137,7 +203,7 @@ parking_lot = "0.12"
 bloomfilter = "1.0"
 
 # Memory-mapped I/O for zero-copy reads
-memmap2 = "0.9"
+memmap2 = "0.9.11"
 
 # Low-level system calls (sendfile, madvise)
 libc = "0.2"
@@ -146,7 +212,41 @@ libc = "0.2"
 # tokio-uring dependency is defined in [target.'cfg(target_os = "linux")'.dependencies]
 
 # Object storage for tiered storage (optional - cloud-storage feature)
-object_store = { version = "0.11", features = ["aws", "azure", "gcp"], optional = true }
+#
+# Pinned to >=0.14.1 because that is the first release line whose XML parsing
+# (S3/Azure list responses) uses quick-xml >= 0.41. quick-xml < 0.41 is affected
+# by RUSTSEC-2026-0194 (quadratic duplicate-attribute check) and
+# RUSTSEC-2026-0195 (unbounded namespace-declaration allocation), both remotely
+# reachable from attacker-influenced object-storage XML. object_store 0.14.x has
+# MSRV 1.85, within this crate's MSRV of 1.88.
+#
+# NOTE: object_store depends on `crc-fast = "^1.6"`, a permissive edge that
+# floats to crc-fast 1.10.0 (`rust-version = "1.89"`, above this crate's MSRV of
+# 1.88). A `Cargo.lock` pin does not travel with a published crate, so the
+# constraint is expressed as the exact optional direct dependencies below,
+# activated by the same `cloud-storage` feature that activates object_store.
+object_store = { version = "0.14.1", features = ["aws", "azure", "gcp"], optional = true }
+
+# MSRV floor for the object_store checksum path — a *published* constraint, not
+# a lockfile pin.
+#
+# These two crates are not used by Streamline's own code. They are declared so
+# that the exact requirement is part of the manifest crates.io serves, because
+# that is the only thing that constrains a fresh consumer's resolution:
+#
+#   * `crc-fast` 1.10.0 raised `rust-version` to 1.89. object_store asks for
+#     `^1.6`, which happily selects it.
+#   * `crc-fast` 1.9.0 requires `crc = "~3.3"`. Pinning `crc` exactly keeps the
+#     two consistent even if a future crc-fast widens that range;
+#     kafka-protocol asks for `^3.0.0` and is satisfied by 3.3.0 either way.
+#
+# `msrv_sensitive_pins_are_respected` (lockfile) and
+# `root_manifest_pins_msrv_sensitive_dependencies_exactly` /
+# `fresh_consumer_resolves_an_msrv_compatible_graph` (published manifests, real
+# lockless resolution) in tests/dependency_security_test.rs enforce this. Raise
+# these only together with the MSRV.
+crc-fast = { version = "=1.9.0", optional = true }
+crc = { version = "=3.3.0", optional = true }
 
 # OpenTelemetry for distributed tracing (optional - telemetry feature)
 opentelemetry = { version = "0.27", optional = true }
@@ -155,49 +255,69 @@ opentelemetry-otlp = { version = "0.27", features = ["tonic", "grpc-tonic"], opt
 tracing-opentelemetry = { version = "0.28", optional = true }
 
 # HTTP client for OAuth JWKS fetching (optional - auth feature)
-reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "blocking", "stream"], optional = true }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls-webpki-roots-no-provider", "blocking", "stream"], optional = true }
 
-# Apache Iceberg for lakehouse sink (optional - iceberg feature)
-iceberg = { version = "0.4", optional = true }
-iceberg-catalog-rest = { version = "0.4", optional = true }
-# Note: HMS and Glue catalogs disabled due to hive_metastore v0.1.0 compilation errors
-# They will be re-enabled when the upstream dependency is fixed
-# iceberg-catalog-hms = { version = "0.4", optional = true }
-# iceberg-catalog-glue = { version = "0.4", optional = true }
-# arrow/parquet v53 matches deltalake's transitive dep, eliminating duplicate compilation
+# Apache Iceberg for lakehouse sink — REMOVED, connector unavailable.
+#
+# `iceberg` 0.4 / `iceberg-catalog-rest` 0.4 pull `opendal` 0.50, which depends
+# on quick-xml 0.36 directly and on quick-xml 0.37 via `reqsign`. Both are
+# affected by RUSTSEC-2026-0194 and RUSTSEC-2026-0195 (CVSS 7.5). No released
+# `iceberg` version that is compatible with this crate's MSRV (1.88) has moved
+# off opendal/quick-xml < 0.41, and suppressing the advisories is not an option.
+# The dependency is therefore removed rather than shipped vulnerable; see
+# `src/sink/iceberg.rs` and docs/API_STABILITY.md.
+# iceberg = { version = "0.4", optional = true }
+# iceberg-catalog-rest = { version = "0.4", optional = true }
+
+# Columnar formats for the `columnar` / `lakehouse` features.
 parquet = { version = "53", optional = true }
 arrow = { version = "53", optional = true }
 
-# Delta Lake for lakehouse sink (optional - delta-lake feature)
-deltalake = { version = "0.22", optional = true }
+# Delta Lake for lakehouse sink — REMOVED, connector unavailable.
+#
+# `deltalake` 0.22 pulls `delta_kernel` 0.4, which depends on `object_store` 0.11
+# (quick-xml 0.37 — RUSTSEC-2026-0194 / RUSTSEC-2026-0195) and on `reqwest` with
+# default features, i.e. `default-tls` -> `hyper-tls` -> `native-tls` -> OpenSSL.
+# `delta_kernel` exposes no rustls switch, so Cargo feature unification forced
+# OpenSSL into every `--all-features` build. Currently released `deltalake`
+# (<= 0.31.1, MSRV 1.88) still pins object_store 0.12 / quick-xml < 0.41.
+# The dependency is therefore removed; see `src/sink/delta.rs`.
+# deltalake = { version = "0.22", optional = true }
 
 # Web UI dependencies (optional, behind feature flag)
 async-stream = { version = "0.3" }
 toml = "0.9.6"
 
 # TUI dashboard
-ratatui = "0.29"
+# Ratatui 0.29 pins lru 0.12, which is affected by RUSTSEC-2026-0002 and
+# RUSTSEC-2026-0253. 0.30.2 resolves lru >= 0.18.2 and still supports Rust 1.88.
+# Keep the existing crossterm 0.28 backend instead of pulling a second version.
+ratatui = { version = "=0.30.2", default-features = false, features = ["crossterm_0_28", "underline-color"] }
 crossterm = "0.28"
 
 # Fuzzy matching for smart suggestions
 strsim = "0.11"
 
 # Analytics engine (workspace crate, isolates heavy DuckDB C++ compilation)
-streamline-analytics = { path = "crates/streamline-analytics", optional = true }
+# `version` is required alongside `path` so `cargo package`/`cargo publish` can
+# rewrite this into a registry dependency. Keep it in lockstep with
+# crates/streamline-analytics/Cargo.toml.
+streamline-analytics = { path = "crates/streamline-analytics", version = "0.4.0", optional = true }
 
 # DuckDB for embedded analytics (optional - analytics feature)
 # Note: duckdb is now compiled inside the streamline-analytics workspace crate.
 # This dep is kept for backward compat if anything imports it directly.
-duckdb = { version = "1.1", features = ["bundled", "vtab"], optional = true }
+duckdb = { version = "1.1", features = ["bundled", "json", "vtab"], optional = true }
 
 # SQLite for lightweight embedded queries (optional - sqlite-queries feature)
 rusqlite = { version = "0.31", features = ["bundled"], optional = true }
 
 # WebAssembly transformation engine (workspace crate, isolates wasmtime compilation)
-streamline-wasm = { path = "crates/streamline-wasm" }
+# `version` is required alongside `path` for publishing (see note above).
+streamline-wasm = { path = "crates/streamline-wasm", version = "0.4.0" }
 
 # WebAssembly runtime (optional - wasm-transforms feature, enables real WASM execution)
-wasmtime = { version = "27", optional = true }
+wasmtime = { version = "36.0.14", optional = true }
 
 # PostgreSQL CDC (optional - postgres-cdc feature)
 tokio-postgres = { version = "0.7", features = ["with-chrono-0_4", "with-serde_json-1", "with-uuid-1"], optional = true }
@@ -205,12 +325,38 @@ postgres-types = { version = "0.2", features = ["derive", "with-chrono-0_4", "wi
 postgres-protocol = { version = "0.6", optional = true }
 
 # QUIC transport (optional - quic feature)
-quinn = { version = "0.11", default-features = false, features = ["runtime-tokio", "rustls", "ring"], optional = true }
+quinn = { version = "0.11", default-features = false, features = ["runtime-tokio", "rustls-aws-lc-rs"], optional = true }
 rcgen = { version = "0.13", optional = true }
 webpki-roots = { version = "0.26", optional = true }
 
 # GraphQL API (optional - graphql feature)
-async-graphql = { version = "7.0.9", features = ["chrono", "uuid"], optional = true }
+#
+# async-graphql 7.0.18 raised its `rust-version` to 1.89.0, above this crate's
+# MSRV of 1.88, and 7.2.x additionally pulls `asynk-strim` (also 1.89). The
+# requirement is therefore exact.
+#
+# Pinning `async-graphql` alone is not enough. Its own manifest asks for
+# `async-graphql-derive`, `-parser` and `-value` with caret requirements
+# (`7.0.17` == `^7.0.17`), so those three float to the newest 7.x — 7.2.1 today,
+# which is part of the 1.89 release line and pulls `darling` 0.23 / `strum` 0.27.
+# That is exactly what this repository's `Cargo.lock` had recorded, and a
+# lockfile does not travel with a published crate. The three companion crates
+# are therefore declared here as exact optional direct dependencies so the
+# constraint is part of the manifest crates.io serves.
+#
+# They are not imported by Streamline's code — `async_graphql` re-exports
+# everything the `src/graphql` module uses. They exist purely to bound the
+# resolution of a downstream consumer.
+#
+# `msrv_sensitive_pins_are_respected` (lockfile),
+# `root_manifest_pins_msrv_sensitive_dependencies_exactly` (published manifest)
+# and `fresh_consumer_resolves_an_msrv_compatible_graph` (real lockless
+# resolution of the packaged crates) in tests/dependency_security_test.rs
+# enforce this. Raise it only together with the MSRV.
+async-graphql = { version = "=7.0.17", features = ["chrono", "uuid"], optional = true }
+async-graphql-derive = { version = "=7.0.17", optional = true }
+async-graphql-parser = { version = "=7.0.17", optional = true }
+async-graphql-value = { version = "=7.0.17", optional = true }
 tokio-stream = { version = "0.1", optional = true }
 
 # Readline for REPL (optional - repl feature)
@@ -220,7 +366,7 @@ rustyline = { version = "14.0", optional = true }
 # Edition meta-features
 default = ["lite"]
 lite = ["compression", "metrics"]  # Core streaming with compression + basic Prometheus metrics
-full = ["compression", "clustering", "telemetry", "cloud-storage", "schema-registry", "metrics", "auth", "encryption", "analytics", "iceberg", "repl", "lakehouse", "ai", "cdc", "geo-replication", "kafka-connect", "graphql"]
+full = ["compression", "clustering", "telemetry", "cloud-storage", "schema-registry", "metrics", "auth", "encryption", "analytics", "repl", "lakehouse", "ai", "cdc", "geo-replication", "kafka-connect", "graphql"]
 
 # Compression codecs
 compression = ["dep:lz4_flex", "dep:zstd", "dep:snap", "dep:flate2"]
@@ -228,23 +374,36 @@ compression = ["dep:lz4_flex", "dep:zstd", "dep:snap", "dep:flate2"]
 # Individual features (can be combined)
 clustering = ["dep:openraft"]
 telemetry = ["dep:opentelemetry", "dep:opentelemetry_sdk", "dep:opentelemetry-otlp", "dep:tracing-opentelemetry"]
-cloud-storage = ["dep:object_store"]
+cloud-storage = ["dep:object_store", "dep:crc-fast", "dep:crc"]  # crc-fast/crc are MSRV floors for object_store's checksum path, not used directly
 schema-registry = ["dep:apache-avro", "dep:prost", "dep:prost-types", "dep:jsonschema"]
 metrics = ["dep:metrics", "dep:metrics-exporter-prometheus"]
-auth = ["dep:argon2", "dep:sha2", "dep:hmac", "dep:pbkdf2", "dep:zeroize", "dep:jsonwebtoken", "dep:reqwest"]
+auth = ["dep:argon2", "dep:sha2", "dep:hmac", "dep:pbkdf2", "dep:zeroize", "dep:jsonwebtoken", "dep:reqwest", "dep:webpki-roots"]
 encryption = ["dep:aes-gcm"]
 analytics = ["dep:duckdb", "dep:streamline-analytics"]
 sqlite-queries = ["dep:rusqlite"]  # Lightweight SQLite-based query interface for ad-hoc SQL on topics
 io-uring = ["dep:tokio-uring"]
-iceberg = ["dep:iceberg", "dep:iceberg-catalog-rest", "dep:parquet", "dep:arrow"]
-# Note: HMS and Glue catalog features disabled until upstream hive_metastore dependency is fixed
-# iceberg-hms = ["iceberg", "dep:iceberg-catalog-hms"]
-# iceberg-glue = ["iceberg", "dep:iceberg-catalog-glue"]
-delta-lake = ["dep:deltalake"]
-serverless = ["dep:reqwest", "dep:sha2", "dep:hmac"]  # Serverless connectors: HTTP webhooks, SaaS integrations
+
+# ── Lakehouse sink connectors: UNAVAILABLE ──────────────────────────────────
+#
+# `iceberg` and `delta-lake` are retained as *compatibility no-ops* so existing
+# build scripts and CI matrices keep resolving, but they no longer enable any
+# dependency and no longer make the connectors usable. Every released upstream
+# version that is compatible with this crate's MSRV (1.88) drags in
+# quick-xml < 0.41 (RUSTSEC-2026-0194, RUSTSEC-2026-0195 — both CVSS 7.5) and,
+# for Delta Lake, native-tls/OpenSSL. Since this project does not suppress
+# advisories, the connectors are gated off instead of shipped vulnerable.
+#
+# Enabling either feature compiles the crate but makes `SinkManager::create_sink`
+# reject `SinkType::Iceberg` / `SinkType::DeltaLake` with an explicit
+# security/upstream message. The implementations are preserved behind the
+# never-enabled `iceberg_backend` / `delta_backend` cfgs and will be restored
+# once a patched upstream release exists.
+iceberg = []
+delta-lake = []
+serverless = ["dep:reqwest", "dep:webpki-roots", "dep:sha2", "dep:hmac"]  # Serverless connectors: HTTP webhooks, SaaS integrations
 columnar = ["dep:arrow", "dep:parquet"]
 lakehouse = ["columnar"]
-ai = ["dep:reqwest"]  # AI-native streaming: embeddings, semantic search, LLM integration, anomaly detection
+ai = ["dep:reqwest", "dep:webpki-roots"]  # AI-native streaming: embeddings, semantic search, LLM integration, anomaly detection
 wasm-transforms = ["dep:wasmtime", "streamline-wasm/wasm-runtime"]
 postgres-cdc = ["dep:tokio-postgres", "dep:postgres-types", "dep:postgres-protocol"]
 mysql-cdc = []  # MySQL CDC: binlog replication with row-based format [BETA - limited testing]
@@ -253,7 +412,10 @@ sqlserver-cdc = []  # SQL Server CDC: polling-based CDC [BETA - limited testing]
 cdc = ["postgres-cdc", "mysql-cdc", "mongodb-cdc", "sqlserver-cdc"]  # All CDC sources (postgres=Stable, mysql/mongodb/sqlserver=Beta)
 edge = []  # Edge-first architecture: offline-first, sync-when-connected, conflict resolution
 quic = ["dep:quinn", "dep:rcgen", "dep:webpki-roots"]
-graphql = ["dep:async-graphql", "dep:tokio-stream"]
+# `async-graphql-derive`/`-parser`/`-value` are activated with async-graphql so
+# the exact requirements above bound the whole family for a fresh consumer;
+# async-graphql itself only asks for them with caret requirements.
+graphql = ["dep:async-graphql", "dep:async-graphql-derive", "dep:async-graphql-parser", "dep:async-graphql-value", "dep:tokio-stream"]
 repl = ["dep:rustyline"]
 kafka-connect = []  # Kafka Connect REST API compatibility layer
 
@@ -270,15 +432,15 @@ native-cdc = ["postgres-cdc", "mysql-cdc"]  # Built-in CDC from PostgreSQL/MySQL
 # Each is opt-in; none are pulled into `lite` or `full` until they reach Beta.
 # Use `moonshot` to enable all moonshot features at once for evaluation.
 kms = ["dep:ed25519-dalek", "dep:age"]                # M4/M1 — pluggable key provider with real Ed25519 + age crypto
-attestation = ["kms", "dep:sha2", "dep:reqwest"]      # M4 — DSSE-style record signing (uses kms + sha2 for payload digests)
-semantic-topics = ["ai", "dep:reqwest"]                # M2 — vector indexing on topics + /search HTTP & wire API
+attestation = ["kms", "dep:sha2", "dep:reqwest", "dep:webpki-roots"]      # M4 — DSSE-style record signing (uses kms + sha2 for payload digests)
+semantic-topics = ["ai", "dep:reqwest", "dep:webpki-roots"]                # M2 — vector indexing on topics + /search HTTP & wire API
 agent-memory = ["semantic-topics"]                     # M1 — episodic/semantic/procedural memory tiers (recall via M2)
-branches = ["dep:reqwest"]                             # M5 — copy-on-write topic branches + replay
+branches = ["dep:reqwest", "dep:webpki-roots"]                             # M5 — copy-on-write topic branches + replay
 wasm-browser = []                                      # M3 — browser-targeted WASM build profile + edge join
 moonshot = ["semantic-topics", "agent-memory", "attestation", "branches"]  # All moonshot features (experimental)
 
 # UI feature
-web-ui = ["dep:reqwest"]
+web-ui = ["dep:reqwest", "dep:webpki-roots"]
 
 # Test categories - enable specific test suites
 integration-tests = []      # End-to-end tests requiring running server
@@ -291,7 +453,6 @@ tokio-test = "0.4"
 tempfile = "3.14"
 criterion = { version = "0.5", features = ["html_reports", "async_tokio"] }
 proptest = "1.4"
-serial_test = "3.1"
 http-body-util = "0.1"
 insta = { version = "1.41", features = ["yaml", "json"] }
 
@@ -350,3 +511,4 @@ harness = false
 [[bench]]
 name = "m3_edge_perf"
 harness = false
+required-features = ["edge"]

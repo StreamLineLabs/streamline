@@ -1,13 +1,13 @@
 //! Kafka Connect REST API compatibility layer.
 //!
 //! Implements the Kafka Connect REST API v3 endpoints for connector management.
-//! See: https://docs.confluent.io/platform/current/connect/references/restapi.html
+//! See: <https://docs.confluent.io/platform/current/connect/references/restapi.html>
 
 use axum::{
     extract::{Json, Path, State},
     http::StatusCode,
     response::IntoResponse,
-    routing::{delete, get, post, put},
+    routing::{get, post, put},
     Router,
 };
 use dashmap::DashMap;
@@ -34,12 +34,12 @@ impl ConnectState {
 
     /// Save connector state to a JSON file.
     pub fn save_to_file(&self, path: &std::path::Path) -> Result<(), std::io::Error> {
-        let connectors: HashMap<String, ConnectorInfo> = self.connectors
+        let connectors: HashMap<String, ConnectorInfo> = self
+            .connectors
             .iter()
             .map(|e| (e.key().clone(), e.value().clone()))
             .collect();
-        let json = serde_json::to_string_pretty(&connectors)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+        let json = serde_json::to_string_pretty(&connectors).map_err(std::io::Error::other)?;
         std::fs::write(path, json)
     }
 
@@ -169,10 +169,7 @@ async fn update_connector_config(
 ) -> Result<Json<ConnectorInfo>, StatusCode> {
     if let Some(mut entry) = state.connectors.get_mut(&name) {
         entry.config = config.clone();
-        entry.connector_type = config
-            .get("connector.class")
-            .cloned()
-            .unwrap_or_default();
+        entry.connector_type = config.get("connector.class").cloned().unwrap_or_default();
         Ok(Json(entry.value().clone()))
     } else {
         Err(StatusCode::NOT_FOUND)
@@ -284,20 +281,20 @@ pub fn connect_router() -> Router<ConnectState> {
     Router::new()
         .route("/connectors", get(list_connectors).post(create_connector))
         .route(
-            "/connectors/{name}",
+            "/connectors/:name",
             get(get_connector).delete(delete_connector),
         )
         .route(
-            "/connectors/{name}/config",
+            "/connectors/:name/config",
             get(get_connector_config).put(update_connector_config),
         )
-        .route("/connectors/{name}/status", get(get_connector_status))
-        .route("/connectors/{name}/restart", post(restart_connector))
-        .route("/connectors/{name}/pause", put(pause_connector))
-        .route("/connectors/{name}/resume", put(resume_connector))
-        .route("/connectors/{name}/tasks", get(list_tasks))
+        .route("/connectors/:name/status", get(get_connector_status))
+        .route("/connectors/:name/restart", post(restart_connector))
+        .route("/connectors/:name/pause", put(pause_connector))
+        .route("/connectors/:name/resume", put(resume_connector))
+        .route("/connectors/:name/tasks", get(list_tasks))
         .route(
-            "/connectors/{name}/tasks/{task_id}/status",
+            "/connectors/:name/tasks/:task_id/status",
             get(get_task_status),
         )
         .route("/connector-plugins", get(list_plugins))
@@ -445,7 +442,10 @@ mod tests {
 
         let loaded = ConnectState::load_from_file(&path).unwrap();
         assert!(loaded.connectors.contains_key("test"));
-        assert_eq!(loaded.connectors.get("test").unwrap().connector_type, "TestSink");
+        assert_eq!(
+            loaded.connectors.get("test").unwrap().connector_type,
+            "TestSink"
+        );
     }
 
     #[test]

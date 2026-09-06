@@ -106,12 +106,11 @@ impl EdgeSyncCheckpoint {
 
     /// Load checkpoint from file
     fn load_from_file(path: &PathBuf) -> Result<CheckpointState> {
-        let content = std::fs::read_to_string(path).map_err(|e| {
-            StreamlineError::storage_msg(format!("Failed to read checkpoint: {}", e))
-        })?;
+        let content = std::fs::read_to_string(path)
+            .map_err(|e| StreamlineError::storage_msg(format!("Failed to read checkpoint: {e}")))?;
 
         let state: CheckpointState = serde_json::from_str(&content).map_err(|e| {
-            StreamlineError::storage_msg(format!("Failed to parse checkpoint: {}", e))
+            StreamlineError::storage_msg(format!("Failed to parse checkpoint: {e}"))
         })?;
 
         // Verify CRC
@@ -141,17 +140,17 @@ impl EdgeSyncCheckpoint {
         state.crc32 = Self::compute_crc(&state);
 
         let content = serde_json::to_string_pretty(&*state).map_err(|e| {
-            StreamlineError::storage_msg(format!("Failed to serialize checkpoint: {}", e))
+            StreamlineError::storage_msg(format!("Failed to serialize checkpoint: {e}"))
         })?;
 
         // Write to temp file first, then rename for atomicity
         let temp_path = self.path.with_extension("tmp");
         std::fs::write(&temp_path, &content).map_err(|e| {
-            StreamlineError::storage_msg(format!("Failed to write checkpoint: {}", e))
+            StreamlineError::storage_msg(format!("Failed to write checkpoint: {e}"))
         })?;
 
         std::fs::rename(&temp_path, &self.path).map_err(|e| {
-            StreamlineError::storage_msg(format!("Failed to rename checkpoint: {}", e))
+            StreamlineError::storage_msg(format!("Failed to rename checkpoint: {e}"))
         })?;
 
         self.dirty.store(false, std::sync::atomic::Ordering::SeqCst);

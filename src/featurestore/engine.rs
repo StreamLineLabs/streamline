@@ -4,9 +4,8 @@
 //! registration, online/offline retrieval, and materialization.
 
 use super::config::FeatureStoreConfig;
-use super::entity::EntityKey;
 use super::feature::FeatureValue;
-use super::feature_view::{AggregationWindow, FeatureViewDefinition};
+use super::feature_view::FeatureViewDefinition;
 use super::offline_store::HistoricalStore;
 use super::online_store::DashMapOnlineStore;
 use super::transformations::TransformationEngine;
@@ -87,8 +86,7 @@ impl FeatureStoreEngine {
         let mut views = self.views.write().await;
         if views.remove(name).is_none() {
             return Err(StreamlineError::Config(format!(
-                "Feature view not found: {}",
-                name
+                "Feature view not found: {name}"
             )));
         }
         Ok(())
@@ -122,7 +120,7 @@ impl FeatureStoreEngine {
         let mut missing = Vec::new();
 
         for name in feature_names {
-            let lookup_key = format!("{}:{}", entity_key, name);
+            let lookup_key = format!("{entity_key}:{name}");
             if let Some(entry) = self.online_store.get(&lookup_key) {
                 values.insert(name.clone(), entry.value);
                 found.push(name.clone());
@@ -184,7 +182,7 @@ impl FeatureStoreEngine {
         let view = {
             let views = self.views.read().await;
             views.get(feature_view).cloned().ok_or_else(|| {
-                StreamlineError::Config(format!("Feature view not found: {}", feature_view))
+                StreamlineError::Config(format!("Feature view not found: {feature_view}"))
             })?
         };
 
@@ -196,7 +194,7 @@ impl FeatureStoreEngine {
 
         for (entity_key, features) in &records {
             for (feature_name, value) in features {
-                let key = format!("{}:{}", entity_key, feature_name);
+                let key = format!("{entity_key}:{feature_name}");
                 self.online_store.put(
                     key,
                     value.clone(),
@@ -225,7 +223,7 @@ impl FeatureStoreEngine {
         let view = {
             let views = self.views.read().await;
             views.get(feature_view).cloned().ok_or_else(|| {
-                StreamlineError::Config(format!("Feature view not found: {}", feature_view))
+                StreamlineError::Config(format!("Feature view not found: {feature_view}"))
             })?
         };
 
@@ -233,7 +231,7 @@ impl FeatureStoreEngine {
 
         // Write to online store
         for (name, value) in &features {
-            let key = format!("{}:{}", entity_key, name);
+            let key = format!("{entity_key}:{name}");
             self.online_store
                 .put(key, value.clone(), event_timestamp, ttl_seconds);
         }
@@ -327,7 +325,7 @@ pub struct EngineStats {
 mod tests {
     use super::*;
     use crate::featurestore::feature_view::{
-        AggregationType, FeatureDefinitionView, FeatureViewDefinition, FeatureViewEntity,
+        FeatureDefinitionView, FeatureViewDefinition, FeatureViewEntity,
     };
 
     fn test_config() -> FeatureStoreConfig {

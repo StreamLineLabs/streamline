@@ -39,8 +39,7 @@ fn test_correlation_id_roundtrip() {
 
         assert_eq!(
             decoded.correlation_id, corr_id,
-            "Correlation ID {} should be preserved",
-            corr_id
+            "Correlation ID {corr_id} should be preserved"
         );
     }
 }
@@ -182,8 +181,7 @@ fn test_api_versions_v0_to_v3_transition() {
 
         assert_eq!(
             decoded.error_code, 0,
-            "Error code should decode at v{}",
-            version
+            "Error code should decode at v{version}"
         );
     }
 }
@@ -208,8 +206,7 @@ fn test_metadata_flexible_version_boundary() {
         assert_eq!(
             decoded.topics.as_ref().unwrap().len(),
             1,
-            "Should decode topics at v{}",
-            version
+            "Should decode topics at v{version}"
         );
     }
 }
@@ -228,11 +225,10 @@ fn test_produce_flexible_version_boundary() {
         let mut bytes = Bytes::from(buf);
         let decoded = ProduceRequest::decode(&mut bytes, version).unwrap();
 
-        assert_eq!(decoded.acks, 1, "Acks should decode at v{}", version);
+        assert_eq!(decoded.acks, 1, "Acks should decode at v{version}");
         assert_eq!(
             decoded.timeout_ms, 30000,
-            "Timeout should decode at v{}",
-            version
+            "Timeout should decode at v{version}"
         );
     }
 }
@@ -255,8 +251,7 @@ fn test_fetch_flexible_version_boundary() {
 
         assert_eq!(
             decoded.max_wait_ms, 500,
-            "max_wait_ms should decode at v{}",
-            version
+            "max_wait_ms should decode at v{version}"
         );
     }
 }
@@ -276,8 +271,7 @@ fn test_list_offsets_flexible_version_boundary() {
         assert_eq!(
             decoded.replica_id,
             BrokerId(-1),
-            "replica_id should decode at v{}",
-            version
+            "replica_id should decode at v{version}"
         );
     }
 }
@@ -317,8 +311,7 @@ fn test_metadata_request_all_topics() {
 
         assert!(
             decoded.topics.is_none(),
-            "Null topics should be preserved at v{}",
-            version
+            "Null topics should be preserved at v{version}"
         );
     }
 }
@@ -337,13 +330,11 @@ fn test_metadata_request_empty_topics_list() {
 
         assert!(
             decoded.topics.is_some(),
-            "Empty list should not be null at v{}",
-            version
+            "Empty list should not be null at v{version}"
         );
         assert!(
             decoded.topics.as_ref().unwrap().is_empty(),
-            "Empty list should be empty at v{}",
-            version
+            "Empty list should be empty at v{version}"
         );
     }
 }
@@ -479,7 +470,7 @@ fn test_many_topics_in_request() {
     let topics: Vec<MetadataRequestTopic> = (0..100)
         .map(|i| {
             MetadataRequestTopic::default().with_name(Some(TopicName::from(StrBytes::from_string(
-                format!("topic-{}", i),
+                format!("topic-{i}"),
             ))))
         })
         .collect();
@@ -679,7 +670,7 @@ fn test_produce_acks_values() {
         let mut bytes = Bytes::from(buf);
         let decoded = ProduceRequest::decode(&mut bytes, 9).unwrap();
 
-        assert_eq!(decoded.acks, acks, "Acks {} should be preserved", acks);
+        assert_eq!(decoded.acks, acks, "Acks {acks} should be preserved");
     }
 }
 
@@ -716,8 +707,7 @@ fn test_special_offset_values() {
 
         assert_eq!(
             decoded.topics[0].partitions[0].timestamp, ts,
-            "Timestamp {} should be preserved",
-            ts
+            "Timestamp {ts} should be preserved"
         );
     }
 }
@@ -749,8 +739,7 @@ fn test_fetch_offset_values() {
 
         assert_eq!(
             decoded.topics[0].partitions[0].fetch_offset, offset,
-            "Fetch offset {} should be preserved",
-            offset
+            "Fetch offset {offset} should be preserved"
         );
     }
 }
@@ -781,8 +770,7 @@ fn test_broker_id_values() {
         assert_eq!(
             decoded.brokers[0].node_id,
             BrokerId(id),
-            "Broker ID {} should be preserved",
-            id
+            "Broker ID {id} should be preserved"
         );
     }
 }

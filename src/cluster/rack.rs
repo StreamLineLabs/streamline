@@ -283,8 +283,8 @@ mod tests {
     fn make_broker(node_id: NodeId, rack: Option<&str>) -> BrokerInfo {
         BrokerInfo {
             node_id,
-            advertised_addr: format!("127.0.0.{}:9092", node_id).parse().unwrap(),
-            inter_broker_addr: format!("127.0.0.{}:9093", node_id).parse().unwrap(),
+            advertised_addr: format!("127.0.0.{node_id}:9092").parse().unwrap(),
+            inter_broker_addr: format!("127.0.0.{node_id}:9093").parse().unwrap(),
             rack: rack.map(|s| s.to_string()),
             datacenter: None,
             state: NodeState::Running,

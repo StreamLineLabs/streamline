@@ -421,8 +421,8 @@ fn create_idempotent_record_batch(
             offset: i as i64,
             sequence: base_sequence + i,
             timestamp: 1609459200000 + (i as i64 * 100),
-            key: Some(Bytes::from(format!("key-{}", i))),
-            value: Some(Bytes::from(format!("value-{}", i))),
+            key: Some(Bytes::from(format!("key-{i}"))),
+            value: Some(Bytes::from(format!("value-{i}"))),
             headers: Default::default(),
         })
         .collect();
@@ -702,7 +702,7 @@ fn test_init_producer_id_versions() {
 
         // Should be able to encode all supported versions
         let result = request.encode(&mut buf, version);
-        assert!(result.is_ok(), "Failed to encode version {}", version);
+        assert!(result.is_ok(), "Failed to encode version {version}");
     }
 }
 

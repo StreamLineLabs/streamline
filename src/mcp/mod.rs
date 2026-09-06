@@ -19,7 +19,7 @@ pub mod server;
 pub mod tools;
 pub mod transport;
 
-pub use backend::{McpBackend, McpError, McpErrorCode, McpResult, TopicManagerBackend};
+pub use backend::{McpBackend, McpError, McpResult, TopicManagerBackend};
 
 use crate::storage::TopicManager;
 use serde::{Deserialize, Serialize};
@@ -406,7 +406,10 @@ impl McpServer {
         Ok(serde_json::json!({ "resources": resources }))
     }
 
-    async fn handle_resources_read(&self, params: serde_json::Value) -> McpResult<serde_json::Value> {
+    async fn handle_resources_read(
+        &self,
+        params: serde_json::Value,
+    ) -> McpResult<serde_json::Value> {
         let uri = params
             .get("uri")
             .and_then(|v| v.as_str())
@@ -499,9 +502,8 @@ impl McpServer {
                     role: "user".to_string(),
                     content: PromptContent::Text {
                         text: format!(
-                            "Debug consumer group '{}'. Check for lag, stuck consumers, \
-                             rebalancing issues, and uneven partition assignment.",
-                            group_id
+                            "Debug consumer group '{group_id}'. Check for lag, stuck consumers, \
+                             rebalancing issues, and uneven partition assignment."
                         ),
                     },
                 };
@@ -512,8 +514,7 @@ impl McpServer {
                 }))
             }
             _ => Err(McpError::method_not_found(format!(
-                "Unknown prompt: {}",
-                name
+                "Unknown prompt: {name}"
             ))),
         }
     }
@@ -558,21 +559,28 @@ mod tests {
 
     #[test]
     fn test_jsonrpc_response_success() {
-        let resp = JsonRpcResponse::success(Some(serde_json::json!(1)), serde_json::json!({"status": "ok"}));
+        let resp = JsonRpcResponse::success(
+            Some(serde_json::json!(1)),
+            serde_json::json!({"status": "ok"}),
+        );
         assert!(resp.error.is_none());
         assert!(resp.result.is_some());
     }
 
     #[test]
     fn test_jsonrpc_response_error() {
-        let resp = JsonRpcResponse::error(Some(serde_json::json!(1)), -32600, "Invalid request".into());
+        let resp =
+            JsonRpcResponse::error(Some(serde_json::json!(1)), -32600, "Invalid request".into());
         assert!(resp.result.is_none());
         assert_eq!(resp.error.as_ref().unwrap().code, -32600);
     }
 
     #[test]
     fn test_server_info() {
-        let info = ServerInfo { name: "streamline-mcp".to_string(), version: env!("CARGO_PKG_VERSION").to_string() };
+        let info = ServerInfo {
+            name: "streamline-mcp".to_string(),
+            version: env!("CARGO_PKG_VERSION").to_string(),
+        };
         let json = serde_json::to_string(&info).unwrap();
         assert!(json.contains("streamline-mcp"));
     }
@@ -580,7 +588,8 @@ mod tests {
     #[test]
     fn test_tool_definition_serialize() {
         let tool = ToolDefinition {
-            name: "produce".to_string(), description: "Produce a message".to_string(),
+            name: "produce".to_string(),
+            description: "Produce a message".to_string(),
             input_schema: serde_json::json!({"type": "object", "properties": {"topic": {"type": "string"}}, "required": ["topic"]}),
         };
         let json = serde_json::to_value(&tool).unwrap();
@@ -590,7 +599,9 @@ mod tests {
 
     #[test]
     fn test_tool_result_content_text() {
-        let content = ToolResultContent::Text { text: "Hello".to_string() };
+        let content = ToolResultContent::Text {
+            text: "Hello".to_string(),
+        };
         let json = serde_json::to_value(&content).unwrap();
         assert_eq!(json["type"], "text");
         assert_eq!(json["text"], "Hello");
@@ -599,8 +610,10 @@ mod tests {
     #[test]
     fn test_resource_definition_serialize() {
         let resource = ResourceDefinition {
-            uri: "streamline://topics/events".to_string(), name: "events".to_string(),
-            description: Some("Events topic".to_string()), mime_type: Some("application/json".to_string()),
+            uri: "streamline://topics/events".to_string(),
+            name: "events".to_string(),
+            description: Some("Events topic".to_string()),
+            mime_type: Some("application/json".to_string()),
         };
         let json = serde_json::to_value(&resource).unwrap();
         assert_eq!(json["uri"], "streamline://topics/events");
@@ -608,7 +621,8 @@ mod tests {
 
     #[test]
     fn test_client_capabilities_deserialize() {
-        let caps: ClientCapabilities = serde_json::from_str(r#"{"roots":{"listChanged":true},"sampling":{}}"#).unwrap();
+        let caps: ClientCapabilities =
+            serde_json::from_str(r#"{"roots":{"listChanged":true},"sampling":{}}"#).unwrap();
         assert!(caps.roots.is_some());
         assert!(caps.sampling.is_some());
         let caps: ClientCapabilities = serde_json::from_str("{}").unwrap();
@@ -626,7 +640,8 @@ mod tests {
     async fn test_handle_initialize() {
         let server = create_test_server();
         let req = JsonRpcRequest {
-            jsonrpc: "2.0".to_string(), id: Some(serde_json::json!(1)),
+            jsonrpc: "2.0".to_string(),
+            id: Some(serde_json::json!(1)),
             method: "initialize".to_string(),
             params: serde_json::json!({"clientInfo": {"name": "test", "version": "1.0"}, "capabilities": {"roots": {"listChanged": true}}}),
         };
@@ -645,7 +660,12 @@ mod tests {
     #[tokio::test]
     async fn test_handle_tools_list() {
         let server = create_test_server();
-        let req = JsonRpcRequest { jsonrpc: "2.0".to_string(), id: Some(serde_json::json!(2)), method: "tools/list".to_string(), params: serde_json::json!({}) };
+        let req = JsonRpcRequest {
+            jsonrpc: "2.0".to_string(),
+            id: Some(serde_json::json!(2)),
+            method: "tools/list".to_string(),
+            params: serde_json::json!({}),
+        };
         let resp = server.handle_request(req).await;
         assert!(resp.error.is_none());
         let tools = resp.result.unwrap()["tools"].as_array().unwrap().clone();
@@ -659,7 +679,8 @@ mod tests {
     async fn test_handle_tools_call_success() {
         let server = create_test_server();
         let req = JsonRpcRequest {
-            jsonrpc: "2.0".to_string(), id: Some(serde_json::json!(3)),
+            jsonrpc: "2.0".to_string(),
+            id: Some(serde_json::json!(3)),
             method: "tools/call".to_string(),
             params: serde_json::json!({"name": "streamline_list_topics", "arguments": {}}),
         };
@@ -672,7 +693,12 @@ mod tests {
     #[tokio::test]
     async fn test_handle_tools_call_missing_name() {
         let server = create_test_server();
-        let req = JsonRpcRequest { jsonrpc: "2.0".to_string(), id: Some(serde_json::json!(4)), method: "tools/call".to_string(), params: serde_json::json!({}) };
+        let req = JsonRpcRequest {
+            jsonrpc: "2.0".to_string(),
+            id: Some(serde_json::json!(4)),
+            method: "tools/call".to_string(),
+            params: serde_json::json!({}),
+        };
         let resp = server.handle_request(req).await;
         assert!(resp.result.is_none());
         assert_eq!(resp.error.as_ref().unwrap().code, -32602);
@@ -681,7 +707,12 @@ mod tests {
     #[tokio::test]
     async fn test_handle_unknown_method() {
         let server = create_test_server();
-        let req = JsonRpcRequest { jsonrpc: "2.0".to_string(), id: Some(serde_json::json!(5)), method: "unknown/method".to_string(), params: serde_json::json!({}) };
+        let req = JsonRpcRequest {
+            jsonrpc: "2.0".to_string(),
+            id: Some(serde_json::json!(5)),
+            method: "unknown/method".to_string(),
+            params: serde_json::json!({}),
+        };
         let resp = server.handle_request(req).await;
         assert!(resp.result.is_none());
         assert_eq!(resp.error.as_ref().unwrap().code, -32601);
@@ -690,7 +721,12 @@ mod tests {
     #[tokio::test]
     async fn test_handle_ping() {
         let server = create_test_server();
-        let req = JsonRpcRequest { jsonrpc: "2.0".to_string(), id: Some(serde_json::json!(6)), method: "ping".to_string(), params: serde_json::json!({}) };
+        let req = JsonRpcRequest {
+            jsonrpc: "2.0".to_string(),
+            id: Some(serde_json::json!(6)),
+            method: "ping".to_string(),
+            params: serde_json::json!({}),
+        };
         let resp = server.handle_request(req).await;
         assert!(resp.error.is_none());
     }
@@ -698,17 +734,30 @@ mod tests {
     #[tokio::test]
     async fn test_handle_resources_list() {
         let server = create_test_server();
-        let req = JsonRpcRequest { jsonrpc: "2.0".to_string(), id: Some(serde_json::json!(7)), method: "resources/list".to_string(), params: serde_json::json!({}) };
+        let req = JsonRpcRequest {
+            jsonrpc: "2.0".to_string(),
+            id: Some(serde_json::json!(7)),
+            method: "resources/list".to_string(),
+            params: serde_json::json!({}),
+        };
         let resp = server.handle_request(req).await;
         assert!(resp.error.is_none());
-        let resources = resp.result.unwrap()["resources"].as_array().unwrap().clone();
+        let resources = resp.result.unwrap()["resources"]
+            .as_array()
+            .unwrap()
+            .clone();
         assert!(!resources.is_empty());
     }
 
     #[tokio::test]
     async fn test_handle_resources_read() {
         let server = create_test_server();
-        let req = JsonRpcRequest { jsonrpc: "2.0".to_string(), id: Some(serde_json::json!(8)), method: "resources/read".to_string(), params: serde_json::json!({"uri": "streamline://topics"}) };
+        let req = JsonRpcRequest {
+            jsonrpc: "2.0".to_string(),
+            id: Some(serde_json::json!(8)),
+            method: "resources/read".to_string(),
+            params: serde_json::json!({"uri": "streamline://topics"}),
+        };
         let resp = server.handle_request(req).await;
         assert!(resp.error.is_none());
     }
@@ -716,7 +765,12 @@ mod tests {
     #[tokio::test]
     async fn test_handle_resources_read_missing_uri() {
         let server = create_test_server();
-        let req = JsonRpcRequest { jsonrpc: "2.0".to_string(), id: Some(serde_json::json!(9)), method: "resources/read".to_string(), params: serde_json::json!({}) };
+        let req = JsonRpcRequest {
+            jsonrpc: "2.0".to_string(),
+            id: Some(serde_json::json!(9)),
+            method: "resources/read".to_string(),
+            params: serde_json::json!({}),
+        };
         let resp = server.handle_request(req).await;
         assert_eq!(resp.error.as_ref().unwrap().code, -32602);
     }
@@ -725,7 +779,8 @@ mod tests {
     async fn test_handle_prompts_get_stream_summary() {
         let server = create_test_server();
         let req = JsonRpcRequest {
-            jsonrpc: "2.0".to_string(), id: Some(serde_json::json!(10)),
+            jsonrpc: "2.0".to_string(),
+            id: Some(serde_json::json!(10)),
             method: "prompts/get".to_string(),
             params: serde_json::json!({"name": "stream-summary", "arguments": {"topic": "events", "count": 5}}),
         };
@@ -738,7 +793,12 @@ mod tests {
     #[tokio::test]
     async fn test_handle_prompts_get_unknown() {
         let server = create_test_server();
-        let req = JsonRpcRequest { jsonrpc: "2.0".to_string(), id: Some(serde_json::json!(11)), method: "prompts/get".to_string(), params: serde_json::json!({"name": "nonexistent"}) };
+        let req = JsonRpcRequest {
+            jsonrpc: "2.0".to_string(),
+            id: Some(serde_json::json!(11)),
+            method: "prompts/get".to_string(),
+            params: serde_json::json!({"name": "nonexistent"}),
+        };
         let resp = server.handle_request(req).await;
         assert_eq!(resp.error.as_ref().unwrap().code, -32601);
     }
@@ -748,7 +808,8 @@ mod tests {
         let mock = MockMcpBackend::new();
         let server = McpServer::with_backend(Arc::new(mock));
         let req = JsonRpcRequest {
-            jsonrpc: "2.0".to_string(), id: Some(serde_json::json!(1)),
+            jsonrpc: "2.0".to_string(),
+            id: Some(serde_json::json!(1)),
             method: "tools/call".to_string(),
             params: serde_json::json!({"name": "nonexistent_tool", "arguments": {}}),
         };

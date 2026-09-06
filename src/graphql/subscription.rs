@@ -72,10 +72,7 @@ impl SubscriptionRoot {
     ///
     /// Polls the topic list periodically and emits events when topics are
     /// created or removed.
-    async fn topic_events(
-        &self,
-        ctx: &Context<'_>,
-    ) -> Result<impl Stream<Item = TopicEvent>> {
+    async fn topic_events(&self, ctx: &Context<'_>) -> Result<impl Stream<Item = TopicEvent>> {
         let topic_manager = ctx.data::<Arc<TopicManager>>()?.clone();
 
         let stream = async_stream::stream! {
@@ -352,10 +349,7 @@ impl SubscriptionRoot {
     ///
     /// Emits events when topics are created/deleted, partitions change, or
     /// significant activity occurs. Polls the cluster state every second.
-    async fn cluster_events(
-        &self,
-        ctx: &Context<'_>,
-    ) -> Result<impl Stream<Item = ClusterEvent>> {
+    async fn cluster_events(&self, ctx: &Context<'_>) -> Result<impl Stream<Item = ClusterEvent>> {
         let topic_manager = ctx.data::<Arc<TopicManager>>()?.clone();
 
         let stream = async_stream::stream! {
@@ -388,11 +382,11 @@ impl SubscriptionRoot {
                     }
 
                     // Detect new topics
-                    for (name, _) in &current {
+                    for name in current.keys() {
                         if !known_topics.contains_key(name) {
                             yield ClusterEvent {
                                 event_type: ClusterEventType::TopicCreated,
-                                description: format!("Topic '{}' was created", name),
+                                description: format!("Topic '{name}' was created"),
                                 resource: Some(name.clone()),
                                 timestamp: chrono::Utc::now().to_rfc3339(),
                             };
@@ -400,11 +394,11 @@ impl SubscriptionRoot {
                     }
 
                     // Detect deleted topics
-                    for (name, _) in &known_topics {
+                    for name in known_topics.keys() {
                         if !current.contains_key(name) {
                             yield ClusterEvent {
                                 event_type: ClusterEventType::TopicDeleted,
-                                description: format!("Topic '{}' was deleted", name),
+                                description: format!("Topic '{name}' was deleted"),
                                 resource: Some(name.clone()),
                                 timestamp: chrono::Utc::now().to_rfc3339(),
                             };
@@ -418,8 +412,7 @@ impl SubscriptionRoot {
                                 yield ClusterEvent {
                                     event_type: ClusterEventType::PartitionsAdded,
                                     description: format!(
-                                        "Topic '{}' partitions changed from {} to {}",
-                                        name, old_parts, new_parts
+                                        "Topic '{name}' partitions changed from {old_parts} to {new_parts}"
                                     ),
                                     resource: Some(name.clone()),
                                     timestamp: chrono::Utc::now().to_rfc3339(),

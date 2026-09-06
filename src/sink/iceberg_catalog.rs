@@ -206,8 +206,7 @@ impl IcebergCatalog {
         let mut nss = self.namespaces.write().await;
         if nss.contains_key(&key) {
             return Err(StreamlineError::Sink(format!(
-                "Namespace '{}' already exists",
-                key
+                "Namespace '{key}' already exists"
             )));
         }
 
@@ -217,7 +216,9 @@ impl IcebergCatalog {
             created_at: chrono::Utc::now().to_rfc3339(),
         };
         nss.insert(key.clone(), ns.clone());
-        self.stats.namespaces_created.fetch_add(1, Ordering::Relaxed);
+        self.stats
+            .namespaces_created
+            .fetch_add(1, Ordering::Relaxed);
         info!(namespace = %key, "Namespace created");
         Ok(ns)
     }
@@ -231,7 +232,7 @@ impl IcebergCatalog {
             .await
             .get(&key)
             .cloned()
-            .ok_or_else(|| StreamlineError::Sink(format!("Namespace '{}' not found", key)))
+            .ok_or_else(|| StreamlineError::Sink(format!("Namespace '{key}' not found")))
     }
 
     /// List all namespaces.
@@ -249,15 +250,14 @@ impl IcebergCatalog {
         let has_tables = tables.values().any(|t| ns_key(&t.namespace) == key);
         if has_tables {
             return Err(StreamlineError::Sink(format!(
-                "Namespace '{}' is not empty; drop all tables first",
-                key
+                "Namespace '{key}' is not empty; drop all tables first"
             )));
         }
         drop(tables);
 
         let mut nss = self.namespaces.write().await;
         nss.remove(&key)
-            .ok_or_else(|| StreamlineError::Sink(format!("Namespace '{}' not found", key)))?;
+            .ok_or_else(|| StreamlineError::Sink(format!("Namespace '{key}' not found")))?;
         warn!(namespace = %key, "Namespace dropped");
         Ok(())
     }
@@ -277,8 +277,7 @@ impl IcebergCatalog {
             let nss = self.namespaces.read().await;
             if !nss.contains_key(&ns_k) {
                 return Err(StreamlineError::Sink(format!(
-                    "Namespace '{}' not found",
-                    ns_k
+                    "Namespace '{ns_k}' not found"
                 )));
             }
         }
@@ -291,16 +290,12 @@ impl IcebergCatalog {
         let mut tables = self.tables.write().await;
         if tables.contains_key(&tk) {
             return Err(StreamlineError::Sink(format!(
-                "Table '{}' already exists",
-                tk
+                "Table '{tk}' already exists"
             )));
         }
 
         let now = chrono::Utc::now().to_rfc3339();
-        let location = format!(
-            "{}{}/{}",
-            self.config.warehouse_location, ns_k, name
-        );
+        let location = format!("{}{}/{}", self.config.warehouse_location, ns_k, name);
 
         let table = IcebergTableMetadata {
             table_id: Uuid::new_v4().to_string(),
@@ -335,7 +330,7 @@ impl IcebergCatalog {
             .await
             .get(&tk)
             .cloned()
-            .ok_or_else(|| StreamlineError::Sink(format!("Table '{}' not found", tk)))
+            .ok_or_else(|| StreamlineError::Sink(format!("Table '{tk}' not found")))
     }
 
     /// List tables in a namespace.
@@ -357,7 +352,7 @@ impl IcebergCatalog {
         let mut tables = self.tables.write().await;
         tables
             .remove(&tk)
-            .ok_or_else(|| StreamlineError::Sink(format!("Table '{}' not found", tk)))?;
+            .ok_or_else(|| StreamlineError::Sink(format!("Table '{tk}' not found")))?;
         warn!(table = %tk, "Table dropped");
         Ok(())
     }
@@ -373,7 +368,7 @@ impl IcebergCatalog {
         let mut tables = self.tables.write().await;
         let table = tables
             .get_mut(&tk)
-            .ok_or_else(|| StreamlineError::Sink(format!("Table '{}' not found", tk)))?;
+            .ok_or_else(|| StreamlineError::Sink(format!("Table '{tk}' not found")))?;
 
         let sid = snapshot.snapshot_id;
         table.current_snapshot_id = Some(sid);
@@ -835,7 +830,7 @@ mod tests {
                 snapshot_id: i,
                 parent_snapshot_id: if i > 0 { Some(i - 1) } else { None },
                 timestamp_ms: i as u64 * 1000,
-                manifest_list: format!("s3://manifests/{}", i),
+                manifest_list: format!("s3://manifests/{i}"),
                 summary: HashMap::new(),
             };
             catalog

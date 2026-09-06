@@ -27,7 +27,7 @@ pub(crate) async fn dispatch(
         ApiKey::DescribeCluster => {
             let request = DescribeClusterRequest::decode(&mut buf, header.request_api_version)
                 .map_err(|e| {
-                    StreamlineError::protocol("decode", format!("Failed to decode request: {}", e))
+                    StreamlineError::protocol("decode", format!("Failed to decode request: {e}"))
                 })?;
 
             handler
@@ -52,7 +52,7 @@ pub(crate) async fn dispatch(
         ApiKey::OffsetForLeaderEpoch => {
             let request = OffsetForLeaderEpochRequest::decode(&mut buf, header.request_api_version)
                 .map_err(|e| {
-                    StreamlineError::protocol("decode", format!("Failed to decode request: {}", e))
+                    StreamlineError::protocol("decode", format!("Failed to decode request: {e}"))
                 })?;
 
             let response = handler.handle_offset_for_leader_epoch(request).await?;
@@ -67,7 +67,7 @@ pub(crate) async fn dispatch(
         ApiKey::DeleteRecords => {
             let request = DeleteRecordsRequest::decode(&mut buf, header.request_api_version)
                 .map_err(|e| {
-                    StreamlineError::protocol("decode", format!("Failed to decode request: {}", e))
+                    StreamlineError::protocol("decode", format!("Failed to decode request: {e}"))
                 })?;
 
             for topic in &request.topics {
@@ -94,7 +94,7 @@ pub(crate) async fn dispatch(
         ApiKey::DescribeLogDirs => {
             let request = DescribeLogDirsRequest::decode(&mut buf, header.request_api_version)
                 .map_err(|e| {
-                    StreamlineError::protocol("decode", format!("Failed to decode request: {}", e))
+                    StreamlineError::protocol("decode", format!("Failed to decode request: {e}"))
                 })?;
 
             let response = handler.handle_describe_log_dirs(request)?;
@@ -109,7 +109,7 @@ pub(crate) async fn dispatch(
         ApiKey::AlterReplicaLogDirs => {
             let request = AlterReplicaLogDirsRequest::decode(&mut buf, header.request_api_version)
                 .map_err(|e| {
-                    StreamlineError::protocol("decode", format!("Failed to decode request: {}", e))
+                    StreamlineError::protocol("decode", format!("Failed to decode request: {e}"))
                 })?;
 
             let response = handler.handle_alter_replica_log_dirs(request)?;
@@ -127,7 +127,7 @@ pub(crate) async fn dispatch(
                     .map_err(|e| {
                         StreamlineError::protocol(
                             "decode",
-                            format!("Failed to decode request: {}", e),
+                            format!("Failed to decode request: {e}"),
                         )
                     })?;
 
@@ -146,7 +146,7 @@ pub(crate) async fn dispatch(
                     .map_err(|e| {
                         StreamlineError::protocol(
                             "decode",
-                            format!("Failed to decode request: {}", e),
+                            format!("Failed to decode request: {e}"),
                         )
                     })?;
 
@@ -162,7 +162,7 @@ pub(crate) async fn dispatch(
         ApiKey::ElectLeaders => {
             let request = ElectLeadersRequest::decode(&mut buf, header.request_api_version)
                 .map_err(|e| {
-                    StreamlineError::protocol("decode", format!("Failed to decode request: {}", e))
+                    StreamlineError::protocol("decode", format!("Failed to decode request: {e}"))
                 })?;
 
             let response = handler.handle_elect_leaders(request)?;
@@ -177,7 +177,7 @@ pub(crate) async fn dispatch(
         ApiKey::DescribeClientQuotas => {
             let request = DescribeClientQuotasRequest::decode(&mut buf, header.request_api_version)
                 .map_err(|e| {
-                    StreamlineError::protocol("decode", format!("Failed to decode request: {}", e))
+                    StreamlineError::protocol("decode", format!("Failed to decode request: {e}"))
                 })?;
 
             let response = handler.handle_describe_client_quotas(request)?;
@@ -192,7 +192,7 @@ pub(crate) async fn dispatch(
         ApiKey::AlterClientQuotas => {
             let request = AlterClientQuotasRequest::decode(&mut buf, header.request_api_version)
                 .map_err(|e| {
-                    StreamlineError::protocol("decode", format!("Failed to decode request: {}", e))
+                    StreamlineError::protocol("decode", format!("Failed to decode request: {e}"))
                 })?;
 
             let response = handler.handle_alter_client_quotas(request)?;
@@ -207,7 +207,7 @@ pub(crate) async fn dispatch(
         ApiKey::UpdateFeatures => {
             let request = UpdateFeaturesRequest::decode(&mut buf, header.request_api_version)
                 .map_err(|e| {
-                    StreamlineError::protocol("decode", format!("Failed to decode request: {}", e))
+                    StreamlineError::protocol("decode", format!("Failed to decode request: {e}"))
                 })?;
 
             let response = handler.handle_update_features(request)?;
@@ -222,7 +222,7 @@ pub(crate) async fn dispatch(
         ApiKey::UnregisterBroker => {
             let request = UnregisterBrokerRequest::decode(&mut buf, header.request_api_version)
                 .map_err(|e| {
-                    StreamlineError::protocol("decode", format!("Failed to decode request: {}", e))
+                    StreamlineError::protocol("decode", format!("Failed to decode request: {e}"))
                 })?;
 
             let response = handler.handle_unregister_broker(request)?;
@@ -237,7 +237,7 @@ pub(crate) async fn dispatch(
         ApiKey::DescribeQuorum => {
             let request = DescribeQuorumRequest::decode(&mut buf, header.request_api_version)
                 .map_err(|e| {
-                    StreamlineError::protocol("decode", format!("Failed to decode request: {}", e))
+                    StreamlineError::protocol("decode", format!("Failed to decode request: {e}"))
                 })?;
 
             let response = handler.handle_describe_quorum(request)?;
@@ -251,7 +251,7 @@ pub(crate) async fn dispatch(
         }
         _ => Err(StreamlineError::protocol(
             "unsupported API key",
-            format!("{:?}", api_key),
+            format!("{api_key:?}"),
         )),
     }
 }

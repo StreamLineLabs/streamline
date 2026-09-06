@@ -93,9 +93,8 @@ impl GitOpsManager {
 
     /// Load a manifest from YAML string
     pub async fn load_yaml(&self, yaml: &str) -> Result<ConfigManifest> {
-        let manifest: ConfigManifest = serde_yaml::from_str(yaml).map_err(|e| {
-            StreamlineError::Config(format!("Failed to parse YAML manifest: {}", e))
-        })?;
+        let manifest: ConfigManifest = serde_yaml::from_str(yaml)
+            .map_err(|e| StreamlineError::Config(format!("Failed to parse YAML manifest: {e}")))?;
 
         self.register_manifest(manifest.clone()).await?;
         Ok(manifest)
@@ -103,9 +102,8 @@ impl GitOpsManager {
 
     /// Load a manifest from JSON string
     pub async fn load_json(&self, json: &str) -> Result<ConfigManifest> {
-        let manifest: ConfigManifest = serde_json::from_str(json).map_err(|e| {
-            StreamlineError::Config(format!("Failed to parse JSON manifest: {}", e))
-        })?;
+        let manifest: ConfigManifest = serde_json::from_str(json)
+            .map_err(|e| StreamlineError::Config(format!("Failed to parse JSON manifest: {e}")))?;
 
         self.register_manifest(manifest.clone()).await?;
         Ok(manifest)
@@ -117,16 +115,15 @@ impl GitOpsManager {
 
         if !path.exists() || !path.is_dir() {
             return Err(StreamlineError::Config(format!(
-                "Directory does not exist: {:?}",
-                path
+                "Directory does not exist: {path:?}"
             )));
         }
 
         for entry in std::fs::read_dir(path)
-            .map_err(|e| StreamlineError::Config(format!("Failed to read directory: {}", e)))?
+            .map_err(|e| StreamlineError::Config(format!("Failed to read directory: {e}")))?
         {
-            let entry = entry
-                .map_err(|e| StreamlineError::Config(format!("Failed to read entry: {}", e)))?;
+            let entry =
+                entry.map_err(|e| StreamlineError::Config(format!("Failed to read entry: {e}")))?;
             let file_path = entry.path();
 
             if file_path.is_file() {
@@ -134,14 +131,14 @@ impl GitOpsManager {
                 match extension {
                     Some("yaml") | Some("yml") => {
                         let content = std::fs::read_to_string(&file_path).map_err(|e| {
-                            StreamlineError::Config(format!("Failed to read file: {}", e))
+                            StreamlineError::Config(format!("Failed to read file: {e}"))
                         })?;
                         let manifest = self.load_yaml(&content).await?;
                         manifests.push(manifest);
                     }
                     Some("json") => {
                         let content = std::fs::read_to_string(&file_path).map_err(|e| {
-                            StreamlineError::Config(format!("Failed to read file: {}", e))
+                            StreamlineError::Config(format!("Failed to read file: {e}"))
                         })?;
                         let manifest = self.load_json(&content).await?;
                         manifests.push(manifest);
@@ -164,7 +161,7 @@ impl GitOpsManager {
 
     /// Get a manifest by name
     pub async fn get_manifest(&self, namespace: &str, name: &str) -> Option<ConfigManifest> {
-        let key = format!("{}/{}", namespace, name);
+        let key = format!("{namespace}/{name}");
         let manifests = self.manifests.read().await;
         manifests.get(&key).cloned()
     }
@@ -216,7 +213,7 @@ impl GitOpsManager {
     pub async fn export_yaml(&self) -> Result<String> {
         let manifests = self.list_manifests().await;
         let yaml = serde_yaml::to_string(&manifests)
-            .map_err(|e| StreamlineError::Config(format!("Failed to export to YAML: {}", e)))?;
+            .map_err(|e| StreamlineError::Config(format!("Failed to export to YAML: {e}")))?;
         Ok(yaml)
     }
 
@@ -224,7 +221,7 @@ impl GitOpsManager {
     pub async fn export_json(&self) -> Result<String> {
         let manifests = self.list_manifests().await;
         let json = serde_json::to_string_pretty(&manifests)
-            .map_err(|e| StreamlineError::Config(format!("Failed to export to JSON: {}", e)))?;
+            .map_err(|e| StreamlineError::Config(format!("Failed to export to JSON: {e}")))?;
         Ok(json)
     }
 

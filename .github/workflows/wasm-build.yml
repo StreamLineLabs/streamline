@@ -1,27 +1,39 @@
-name: WASM Build Size Gate (M3)
+name: WASM Build Size Check (planned M3)
 
+# M3 has a feature flag but no `streamline-core-wasm` binary target yet. Keep
+# this check manual until that target exists: silently skipping produced a
+# false-green "size gate", while running it on every core PR would make all CI
+# permanently red for an experimental artifact that cannot be built.
 on:
-  push:
-    branches: [main]
-    paths:
-      - "streamline/src/**"
-      - "streamline/Cargo.toml"
-      - ".github/workflows/wasm-build.yml"
-  pull_request:
-    paths:
-      - "streamline/src/**"
-      - "streamline/Cargo.toml"
+  workflow_dispatch:
 
 jobs:
   wasm-size-gate:
     name: streamline-core-wasm size budget
     runs-on: ubuntu-latest
+    env:
+      # See the toolchain step below: `rust-toolchain.toml` pins 1.88 and wins
+      # over the action's default, so cargo must select the same toolchain the
+      # wasm32 target was installed into.
+      RUSTUP_TOOLCHAIN: '1.88'
     steps:
       - uses: actions/checkout@v4
+
+      - name: Require the M3 WASM binary target
+        run: |
+          set -euo pipefail
+          if ! grep -q '^name = "streamline-core-wasm"$' Cargo.toml; then
+            echo "::error::M3 is not buildable yet: Cargo.toml does not declare the streamline-core-wasm binary target."
+            exit 1
+          fi
 
       - name: Install Rust + wasm32 target
         uses: dtolnay/rust-toolchain@stable
         with:
+          # Must match `rust-toolchain.toml` (1.88): that file takes precedence
+          # over the action's default toolchain, so installing wasm32 into
+          # `stable` left the toolchain cargo actually uses without the target.
+          toolchain: '1.88'
           targets: wasm32-unknown-unknown
           components: rustfmt
 
@@ -31,27 +43,28 @@ jobs:
           sudo apt-get install -y binaryen gzip
 
       - name: Build streamline-core for WASM
-        working-directory: streamline
         run: |
+          set -euo pipefail
           cargo build \
             --target wasm32-unknown-unknown \
             --release \
             --no-default-features \
             --features wasm-browser \
-            --bin streamline-core-wasm 2>/dev/null || \
-          echo "::warning::M3 P1 wasm-browser feature + binary not yet declared — build skipped."
+            --bin streamline-core-wasm
 
       - name: Optimize and measure
-        working-directory: streamline
         run: |
+          set -euo pipefail
           WASM=target/wasm32-unknown-unknown/release/streamline-core-wasm.wasm
           if [ ! -f "$WASM" ]; then
-            echo "::warning::wasm artifact not found — exiting size gate as no-op."
-            exit 0
+            echo "::error::expected WASM artifact was not produced: $WASM"
+            exit 1
           fi
-          wasm-opt -Oz "$WASM" -o /tmp/opt.wasm
-          gzip -9 -c /tmp/opt.wasm > /tmp/opt.wasm.gz
-          SIZE=$(stat -c%s /tmp/opt.wasm.gz)
+          OPT_WASM="${RUNNER_TEMP}/streamline-core-wasm.opt.wasm"
+          GZIP_WASM="${OPT_WASM}.gz"
+          wasm-opt -Oz "$WASM" -o "$OPT_WASM"
+          gzip -9 -c "$OPT_WASM" > "$GZIP_WASM"
+          SIZE=$(stat -c%s "$GZIP_WASM")
           echo "Compressed wasm: $SIZE bytes"
           BUDGET=819200  # 800 KB
           if [ "$SIZE" -gt "$BUDGET" ]; then

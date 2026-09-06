@@ -67,7 +67,12 @@ async fn register_device(
 
 #[cfg(not(feature = "edge"))]
 async fn register_device() -> (StatusCode, Json<FleetError>) {
-    (StatusCode::NOT_IMPLEMENTED, Json(FleetError { error: "Edge feature not enabled".into() }))
+    (
+        StatusCode::NOT_IMPLEMENTED,
+        Json(FleetError {
+            error: "Edge feature not enabled".into(),
+        }),
+    )
 }
 
 #[cfg(feature = "edge")]
@@ -77,19 +82,27 @@ async fn heartbeat(
 ) -> Result<Json<HeartbeatResponse>, (StatusCode, Json<FleetError>)> {
     match state.manager.heartbeat(hb).await {
         Some(resp) => Ok(Json(resp)),
-        None => Err((StatusCode::NOT_FOUND, Json(FleetError { error: "Device not registered".into() }))),
+        None => Err((
+            StatusCode::NOT_FOUND,
+            Json(FleetError {
+                error: "Device not registered".into(),
+            }),
+        )),
     }
 }
 
 #[cfg(not(feature = "edge"))]
 async fn heartbeat() -> (StatusCode, Json<FleetError>) {
-    (StatusCode::NOT_IMPLEMENTED, Json(FleetError { error: "Edge feature not enabled".into() }))
+    (
+        StatusCode::NOT_IMPLEMENTED,
+        Json(FleetError {
+            error: "Edge feature not enabled".into(),
+        }),
+    )
 }
 
 #[cfg(feature = "edge")]
-async fn list_devices(
-    State(state): State<FleetApiState>,
-) -> Json<serde_json::Value> {
+async fn list_devices(State(state): State<FleetApiState>) -> Json<serde_json::Value> {
     let summary = state.manager.summary().await;
     Json(serde_json::json!({
         "devices": summary.devices,
@@ -109,19 +122,27 @@ async fn get_device(
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<FleetError>)> {
     match state.manager.get_device(&id).await {
         Some(device) => Ok(Json(serde_json::to_value(device).unwrap_or_default())),
-        None => Err((StatusCode::NOT_FOUND, Json(FleetError { error: format!("Device '{}' not found", id) }))),
+        None => Err((
+            StatusCode::NOT_FOUND,
+            Json(FleetError {
+                error: format!("Device '{id}' not found"),
+            }),
+        )),
     }
 }
 
 #[cfg(not(feature = "edge"))]
 async fn get_device(Path(_id): Path<String>) -> (StatusCode, Json<FleetError>) {
-    (StatusCode::NOT_IMPLEMENTED, Json(FleetError { error: "Edge feature not enabled".into() }))
+    (
+        StatusCode::NOT_IMPLEMENTED,
+        Json(FleetError {
+            error: "Edge feature not enabled".into(),
+        }),
+    )
 }
 
 #[cfg(feature = "edge")]
-async fn fleet_summary(
-    State(state): State<FleetApiState>,
-) -> Json<serde_json::Value> {
+async fn fleet_summary(State(state): State<FleetApiState>) -> Json<serde_json::Value> {
     let summary = state.manager.summary().await;
     Json(serde_json::to_value(summary).unwrap_or_default())
 }
@@ -144,19 +165,39 @@ async fn send_command(
         "update_config" => FleetCommand::UpdateConfig {
             config_yaml: req.payload.unwrap_or_default(),
         },
-        other => return Err((StatusCode::BAD_REQUEST, Json(FleetError {
-            error: format!("Unknown command: '{}'. Use: restart, diagnostics, drain, update_config", other),
-        }))),
+        other => {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(FleetError {
+                    error: format!(
+                    "Unknown command: '{other}'. Use: restart, diagnostics, drain, update_config"
+                ),
+                }),
+            ))
+        }
     };
 
     if state.manager.send_command(&id, command).await {
         Ok(Json(serde_json::json!({"status": "queued", "device": id})))
     } else {
-        Err((StatusCode::NOT_FOUND, Json(FleetError { error: format!("Device '{}' not found", id) })))
+        Err((
+            StatusCode::NOT_FOUND,
+            Json(FleetError {
+                error: format!("Device '{id}' not found"),
+            }),
+        ))
     }
 }
 
 #[cfg(not(feature = "edge"))]
-async fn send_command(Path(_id): Path<String>, Json(_req): Json<CommandRequest>) -> (StatusCode, Json<FleetError>) {
-    (StatusCode::NOT_IMPLEMENTED, Json(FleetError { error: "Edge feature not enabled".into() }))
+async fn send_command(
+    Path(_id): Path<String>,
+    Json(_req): Json<CommandRequest>,
+) -> (StatusCode, Json<FleetError>) {
+    (
+        StatusCode::NOT_IMPLEMENTED,
+        Json(FleetError {
+            error: "Edge feature not enabled".into(),
+        }),
+    )
 }

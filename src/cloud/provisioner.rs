@@ -198,7 +198,7 @@ impl Provisioner {
         cluster_id: &str,
         request: &ProvisionRequest,
     ) -> Result<ProvisionResult> {
-        let namespace = format!("streamline-{}", cluster_id);
+        let namespace = format!("streamline-{cluster_id}");
 
         // Step 1: Create namespace
         self.update_status(job_id, ProvisionStatus::CreatingNamespace)
@@ -534,7 +534,7 @@ impl Provisioner {
 
     /// Deprovision a cluster
     pub async fn deprovision(&self, cluster_id: &str) -> Result<()> {
-        let namespace = format!("streamline-{}", cluster_id);
+        let namespace = format!("streamline-{cluster_id}");
 
         if !self.config.dry_run {
             // In real implementation: delete Kubernetes namespace (cascading delete)
@@ -579,7 +579,7 @@ impl Provisioner {
     /// Returns a JSON array of all Kubernetes resources needed.
     pub fn generate_manifests(&self, request: &ProvisionRequest) -> serde_json::Value {
         let cluster_id = format!("cl-{}", &uuid::Uuid::new_v4().to_string()[..8]);
-        let namespace = format!("streamline-{}", cluster_id);
+        let namespace = format!("streamline-{cluster_id}");
         let size = &request.size;
 
         serde_json::json!({

@@ -569,7 +569,7 @@ mod tests {
                 i,
                 1234567890 + i * 1000,
                 None,
-                Bytes::from(format!("value-{}", i)),
+                Bytes::from(format!("value-{i}")),
             );
             let msg = crate::replay::storage::RecordedMessage::from_record(&record, "events", 0);
             recording.write(&msg).unwrap();

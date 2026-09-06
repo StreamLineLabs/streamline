@@ -177,9 +177,10 @@ impl SubscriptionManager {
             self.validate_filter(f)?;
         }
 
-        let mut subs = self.subscriptions.write().map_err(|e| {
-            StreamlineError::Internal(format!("subscription lock poisoned: {e}"))
-        })?;
+        let mut subs = self
+            .subscriptions
+            .write()
+            .map_err(|e| StreamlineError::Internal(format!("subscription lock poisoned: {e}")))?;
 
         // Enforce total limit
         if subs.len() >= self.config.max_total_subscriptions {
@@ -189,10 +190,7 @@ impl SubscriptionManager {
         }
 
         // Enforce per-client limit
-        let client_count = subs
-            .values()
-            .filter(|s| s.client_id == client_id)
-            .count();
+        let client_count = subs.values().filter(|s| s.client_id == client_id).count();
         if client_count >= self.config.max_subscriptions_per_client {
             return Err(StreamlineError::ResourceExhausted(format!(
                 "client {client_id} has reached the maximum of {} subscriptions",
@@ -230,14 +228,13 @@ impl SubscriptionManager {
 
     /// Remove a subscription.
     pub fn unsubscribe(&self, subscription_id: &str) -> Result<()> {
-        let mut subs = self.subscriptions.write().map_err(|e| {
-            StreamlineError::Internal(format!("subscription lock poisoned: {e}"))
-        })?;
+        let mut subs = self
+            .subscriptions
+            .write()
+            .map_err(|e| StreamlineError::Internal(format!("subscription lock poisoned: {e}")))?;
 
         let removed = subs.remove(subscription_id).ok_or_else(|| {
-            StreamlineError::Validation(format!(
-                "subscription not found: {subscription_id}"
-            ))
+            StreamlineError::Validation(format!("subscription not found: {subscription_id}"))
         })?;
 
         match removed.status {
@@ -256,14 +253,13 @@ impl SubscriptionManager {
 
     /// Pause a subscription so it stops receiving events.
     pub fn pause(&self, subscription_id: &str) -> Result<()> {
-        let mut subs = self.subscriptions.write().map_err(|e| {
-            StreamlineError::Internal(format!("subscription lock poisoned: {e}"))
-        })?;
+        let mut subs = self
+            .subscriptions
+            .write()
+            .map_err(|e| StreamlineError::Internal(format!("subscription lock poisoned: {e}")))?;
 
         let sub = subs.get_mut(subscription_id).ok_or_else(|| {
-            StreamlineError::Validation(format!(
-                "subscription not found: {subscription_id}"
-            ))
+            StreamlineError::Validation(format!("subscription not found: {subscription_id}"))
         })?;
 
         if sub.status != SubscriptionStatus::Active {
@@ -283,14 +279,13 @@ impl SubscriptionManager {
 
     /// Resume a previously paused subscription.
     pub fn resume(&self, subscription_id: &str) -> Result<()> {
-        let mut subs = self.subscriptions.write().map_err(|e| {
-            StreamlineError::Internal(format!("subscription lock poisoned: {e}"))
-        })?;
+        let mut subs = self
+            .subscriptions
+            .write()
+            .map_err(|e| StreamlineError::Internal(format!("subscription lock poisoned: {e}")))?;
 
         let sub = subs.get_mut(subscription_id).ok_or_else(|| {
-            StreamlineError::Validation(format!(
-                "subscription not found: {subscription_id}"
-            ))
+            StreamlineError::Validation(format!("subscription not found: {subscription_id}"))
         })?;
 
         if sub.status != SubscriptionStatus::Paused {
@@ -312,7 +307,7 @@ impl SubscriptionManager {
     pub fn list_subscriptions(&self, client_id: Option<&str>) -> Vec<ActiveSubscription> {
         let subs = self.subscriptions.read().unwrap_or_else(|e| e.into_inner());
         subs.values()
-            .filter(|s| client_id.map_or(true, |cid| s.client_id == cid))
+            .filter(|s| client_id.is_none_or(|cid| s.client_id == cid))
             .cloned()
             .collect()
     }
@@ -321,9 +316,10 @@ impl SubscriptionManager {
     ///
     /// Returns the number of subscriptions the event was delivered to.
     pub fn deliver_event(&self, event: SubscriptionEvent) -> Result<usize> {
-        let mut subs = self.subscriptions.write().map_err(|e| {
-            StreamlineError::Internal(format!("subscription lock poisoned: {e}"))
-        })?;
+        let mut subs = self
+            .subscriptions
+            .write()
+            .map_err(|e| StreamlineError::Internal(format!("subscription lock poisoned: {e}")))?;
 
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -372,7 +368,9 @@ impl SubscriptionManager {
         match &filter.operator {
             FilterOp::Eq => resolved == &filter.value,
             FilterOp::Neq => resolved != &filter.value,
-            FilterOp::Gt => compare_json(resolved, &filter.value) == Some(std::cmp::Ordering::Greater),
+            FilterOp::Gt => {
+                compare_json(resolved, &filter.value) == Some(std::cmp::Ordering::Greater)
+            }
             FilterOp::Gte => matches!(
                 compare_json(resolved, &filter.value),
                 Some(std::cmp::Ordering::Greater | std::cmp::Ordering::Equal)
@@ -393,14 +391,12 @@ impl SubscriptionManager {
                 }
             },
             FilterOp::Regex => match (resolved.as_str(), filter.value.as_str()) {
-                (Some(hay), Some(pattern)) => {
-                    regex::Regex::new(pattern)
-                        .map(|re| re.is_match(hay))
-                        .unwrap_or_else(|e| {
-                            warn!(pattern, %e, "invalid regex in subscription filter");
-                            false
-                        })
-                }
+                (Some(hay), Some(pattern)) => regex::Regex::new(pattern)
+                    .map(|re| re.is_match(hay))
+                    .unwrap_or_else(|e| {
+                        warn!(pattern, %e, "invalid regex in subscription filter");
+                        false
+                    }),
                 _ => false,
             },
         }
@@ -555,8 +551,14 @@ mod tests {
     fn test_total_limit_enforced() {
         let mgr = small_manager();
         for i in 0..5 {
-            mgr.subscribe(&format!("c{i}"), "t", None, None, SubscriptionOffset::Latest)
-                .unwrap();
+            mgr.subscribe(
+                &format!("c{i}"),
+                "t",
+                None,
+                None,
+                SubscriptionOffset::Latest,
+            )
+            .unwrap();
         }
         let err = mgr
             .subscribe("c99", "t", None, None, SubscriptionOffset::Latest)
@@ -680,8 +682,14 @@ mod tests {
             operator: FilterOp::Eq,
             value: json!("active"),
         };
-        assert!(SubscriptionManager::matches_filter(&f, &json!({"status": "active"})));
-        assert!(!SubscriptionManager::matches_filter(&f, &json!({"status": "inactive"})));
+        assert!(SubscriptionManager::matches_filter(
+            &f,
+            &json!({"status": "active"})
+        ));
+        assert!(!SubscriptionManager::matches_filter(
+            &f,
+            &json!({"status": "inactive"})
+        ));
     }
 
     #[test]
@@ -691,8 +699,14 @@ mod tests {
             operator: FilterOp::Neq,
             value: json!("active"),
         };
-        assert!(!SubscriptionManager::matches_filter(&f, &json!({"status": "active"})));
-        assert!(SubscriptionManager::matches_filter(&f, &json!({"status": "inactive"})));
+        assert!(!SubscriptionManager::matches_filter(
+            &f,
+            &json!({"status": "active"})
+        ));
+        assert!(SubscriptionManager::matches_filter(
+            &f,
+            &json!({"status": "inactive"})
+        ));
     }
 
     #[test]
@@ -702,17 +716,32 @@ mod tests {
             operator: FilterOp::Gt,
             value: json!(100),
         };
-        assert!(SubscriptionManager::matches_filter(&gt, &json!({"amount": 150})));
-        assert!(!SubscriptionManager::matches_filter(&gt, &json!({"amount": 100})));
-        assert!(!SubscriptionManager::matches_filter(&gt, &json!({"amount": 50})));
+        assert!(SubscriptionManager::matches_filter(
+            &gt,
+            &json!({"amount": 150})
+        ));
+        assert!(!SubscriptionManager::matches_filter(
+            &gt,
+            &json!({"amount": 100})
+        ));
+        assert!(!SubscriptionManager::matches_filter(
+            &gt,
+            &json!({"amount": 50})
+        ));
 
         let lt = SubscriptionFilter {
             field: "$.amount".into(),
             operator: FilterOp::Lt,
             value: json!(100),
         };
-        assert!(SubscriptionManager::matches_filter(&lt, &json!({"amount": 50})));
-        assert!(!SubscriptionManager::matches_filter(&lt, &json!({"amount": 100})));
+        assert!(SubscriptionManager::matches_filter(
+            &lt,
+            &json!({"amount": 50})
+        ));
+        assert!(!SubscriptionManager::matches_filter(
+            &lt,
+            &json!({"amount": 100})
+        ));
     }
 
     #[test]
@@ -722,18 +751,36 @@ mod tests {
             operator: FilterOp::Gte,
             value: json!(100),
         };
-        assert!(SubscriptionManager::matches_filter(&gte, &json!({"amount": 100})));
-        assert!(SubscriptionManager::matches_filter(&gte, &json!({"amount": 200})));
-        assert!(!SubscriptionManager::matches_filter(&gte, &json!({"amount": 99})));
+        assert!(SubscriptionManager::matches_filter(
+            &gte,
+            &json!({"amount": 100})
+        ));
+        assert!(SubscriptionManager::matches_filter(
+            &gte,
+            &json!({"amount": 200})
+        ));
+        assert!(!SubscriptionManager::matches_filter(
+            &gte,
+            &json!({"amount": 99})
+        ));
 
         let lte = SubscriptionFilter {
             field: "$.amount".into(),
             operator: FilterOp::Lte,
             value: json!(100),
         };
-        assert!(SubscriptionManager::matches_filter(&lte, &json!({"amount": 100})));
-        assert!(SubscriptionManager::matches_filter(&lte, &json!({"amount": 50})));
-        assert!(!SubscriptionManager::matches_filter(&lte, &json!({"amount": 101})));
+        assert!(SubscriptionManager::matches_filter(
+            &lte,
+            &json!({"amount": 100})
+        ));
+        assert!(SubscriptionManager::matches_filter(
+            &lte,
+            &json!({"amount": 50})
+        ));
+        assert!(!SubscriptionManager::matches_filter(
+            &lte,
+            &json!({"amount": 101})
+        ));
     }
 
     #[test]
@@ -743,8 +790,14 @@ mod tests {
             operator: FilterOp::Contains,
             value: json!("stream"),
         };
-        assert!(SubscriptionManager::matches_filter(&f, &json!({"name": "streamline"})));
-        assert!(!SubscriptionManager::matches_filter(&f, &json!({"name": "redis"})));
+        assert!(SubscriptionManager::matches_filter(
+            &f,
+            &json!({"name": "streamline"})
+        ));
+        assert!(!SubscriptionManager::matches_filter(
+            &f,
+            &json!({"name": "redis"})
+        ));
     }
 
     #[test]
@@ -822,7 +875,13 @@ mod tests {
             value: json!(1),
         };
         let err = mgr
-            .subscribe("c1", "t", None, Some(deep_filter), SubscriptionOffset::Latest)
+            .subscribe(
+                "c1",
+                "t",
+                None,
+                Some(deep_filter),
+                SubscriptionOffset::Latest,
+            )
             .unwrap_err();
         assert!(err.to_string().contains("depth"));
     }
@@ -907,7 +966,13 @@ mod tests {
             .subscribe("c1", "t", None, None, SubscriptionOffset::Specific(42))
             .unwrap();
         let id3 = mgr
-            .subscribe("c1", "t", None, None, SubscriptionOffset::Timestamp(1234567890))
+            .subscribe(
+                "c1",
+                "t",
+                None,
+                None,
+                SubscriptionOffset::Timestamp(1234567890),
+            )
             .unwrap();
 
         let subs = mgr.list_subscriptions(Some("c1"));
@@ -915,7 +980,10 @@ mod tests {
 
         assert_eq!(find(&id1).from_offset, SubscriptionOffset::Earliest);
         assert_eq!(find(&id2).from_offset, SubscriptionOffset::Specific(42));
-        assert_eq!(find(&id3).from_offset, SubscriptionOffset::Timestamp(1234567890));
+        assert_eq!(
+            find(&id3).from_offset,
+            SubscriptionOffset::Timestamp(1234567890)
+        );
     }
 
     // -- list_subscriptions ------------------------------------------------
@@ -968,7 +1036,10 @@ mod tests {
             operator: FilterOp::Eq,
             value: json!("ok"),
         };
-        assert!(SubscriptionManager::matches_filter(&f, &json!({"status": "ok"})));
+        assert!(SubscriptionManager::matches_filter(
+            &f,
+            &json!({"status": "ok"})
+        ));
     }
 
     // -- multiple subscribers match same event -----------------------------

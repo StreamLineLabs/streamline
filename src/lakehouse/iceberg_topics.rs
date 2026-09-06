@@ -56,7 +56,7 @@
 //! ).await?;
 //! ```
 
-#![cfg(feature = "iceberg")]
+#![cfg(iceberg_backend)]
 
 use crate::error::{Result, StreamlineError};
 use serde::{Deserialize, Serialize};

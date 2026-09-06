@@ -99,8 +99,7 @@ impl StreamQLParser {
                 Ok(name)
             }
             other => Err(StreamlineError::Parse(format!(
-                "Expected identifier, found {:?}",
-                other
+                "Expected identifier, found {other:?}"
             ))),
         }
     }
@@ -116,8 +115,7 @@ impl StreamQLParser {
                 Ok(Statement::Explain(Box::new(stmt)))
             }
             other => Err(StreamlineError::Parse(format!(
-                "Unexpected token: {:?}",
-                other
+                "Unexpected token: {other:?}"
             ))),
         }
     }
@@ -554,7 +552,7 @@ impl StreamQLParser {
 
         let value: u64 = num_str
             .parse()
-            .map_err(|_| StreamlineError::Parse(format!("Invalid interval number: {}", num_str)))?;
+            .map_err(|_| StreamlineError::Parse(format!("Invalid interval number: {num_str}")))?;
 
         let unit = match unit_str {
             "ms" | "millisecond" | "milliseconds" => TimeUnit::Millisecond,
@@ -565,8 +563,7 @@ impl StreamQLParser {
             "" => TimeUnit::Second, // Default to seconds
             _ => {
                 return Err(StreamlineError::Parse(format!(
-                    "Unknown time unit: {}",
-                    unit_str
+                    "Unknown time unit: {unit_str}"
                 )))
             }
         };
@@ -583,7 +580,7 @@ impl StreamQLParser {
                     "m" | "min" | "minute" | "minutes" => TimeUnit::Minute,
                     "h" | "hour" | "hours" => TimeUnit::Hour,
                     "d" | "day" | "days" => TimeUnit::Day,
-                    _ => return Err(StreamlineError::Parse(format!("Unknown time unit: {}", s))),
+                    _ => return Err(StreamlineError::Parse(format!("Unknown time unit: {s}"))),
                 };
                 self.advance();
                 Ok(unit)
@@ -1104,12 +1101,7 @@ impl StreamQLParser {
                     "DATE" => DataType::Date,
                     "DURATION" | "INTERVAL" => DataType::Duration,
                     "JSON" | "JSONB" => DataType::Json,
-                    _ => {
-                        return Err(StreamlineError::Parse(format!(
-                            "Unknown data type: {}",
-                            name
-                        )))
-                    }
+                    _ => return Err(StreamlineError::Parse(format!("Unknown data type: {name}"))),
                 };
                 self.advance();
                 Ok(dt)

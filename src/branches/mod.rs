@@ -8,16 +8,16 @@
 //! and `0021-replay-execution.md`.
 
 pub mod diff;
+pub mod iceberg;
+pub mod lineage;
 pub mod merge;
 pub mod metadata;
 pub mod reader;
 pub mod runner;
 pub mod store;
-pub mod iceberg;
-pub mod lineage;
 
-pub use iceberg::{IcebergBranchSnapshot, create_snapshot, list_branch_snapshots};
-pub use lineage::{BranchLineageEvent, LineageLog, record_branch_creation};
+pub use iceberg::{create_snapshot, list_branch_snapshots, IcebergBranchSnapshot};
+pub use lineage::{record_branch_creation, BranchLineageEvent, LineageLog};
 pub use metadata::{BranchId, BranchMeta, BranchState};
 pub use reader::{CowReader, RecordRef};
 pub use store::{BranchRecord, BranchStore, BranchStoreError};

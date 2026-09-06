@@ -4,9 +4,34 @@
 //! checking using the `jsonschema` crate.
 
 use super::{CompatibilityLevel, SchemaError};
-use jsonschema::Validator;
+use jsonschema::{Retrieve, Uri, Validator};
 use serde_json::Value;
 use std::collections::HashSet;
+use std::io;
+
+/// Reject every non-local JSON Schema reference without performing I/O.
+///
+/// Streamline does not support fetching user-controlled schemas from the
+/// network or filesystem. In particular, jsonschema's default HTTP retriever
+/// constructs its own blocking reqwest client, bypassing Streamline's explicit
+/// AWS-LC TLS configuration and panicking when no process-wide provider is
+/// installed. Local `#/...` references are resolved internally and never reach
+/// this retriever.
+#[derive(Debug, Clone, Copy)]
+struct RejectExternalReferences;
+
+impl Retrieve for RejectExternalReferences {
+    fn retrieve(&self, uri: &Uri<&str>) -> Result<Value, Box<dyn std::error::Error + Send + Sync>> {
+        Err(io::Error::new(
+            io::ErrorKind::Unsupported,
+            format!(
+                "external JSON Schema references are unsupported; bundle the referenced schema locally: {}",
+                uri.as_str()
+            ),
+        )
+        .into())
+    }
+}
 
 /// JSON Schema validator
 #[derive(Debug, Default)]
@@ -21,7 +46,14 @@ impl JsonSchemaValidator {
     /// Parse and compile a JSON Schema
     pub fn parse(&self, schema_str: &str) -> Result<Value, SchemaError> {
         serde_json::from_str(schema_str)
-            .map_err(|e| SchemaError::InvalidSchema(format!("Invalid JSON: {}", e)))
+            .map_err(|e| SchemaError::InvalidSchema(format!("Invalid JSON: {e}")))
+    }
+
+    fn compile(&self, schema: &Value) -> Result<Validator, SchemaError> {
+        jsonschema::options()
+            .with_retriever(RejectExternalReferences)
+            .build(schema)
+            .map_err(|e| SchemaError::InvalidSchema(format!("Invalid JSON Schema: {e}")))
     }
 
     /// Validate that a schema string is valid JSON Schema
@@ -29,8 +61,7 @@ impl JsonSchemaValidator {
         let schema_value = self.parse(schema_str)?;
 
         // Try to compile the schema
-        Validator::new(&schema_value)
-            .map_err(|e| SchemaError::InvalidSchema(format!("Invalid JSON Schema: {}", e)))?;
+        self.compile(&schema_value)?;
 
         Ok(())
     }
@@ -38,17 +69,15 @@ impl JsonSchemaValidator {
     /// Validate data against a schema
     pub fn validate_data(&self, schema_str: &str, data: &[u8]) -> Result<(), SchemaError> {
         let schema_value = self.parse(schema_str)?;
-        let compiled = Validator::new(&schema_value)
-            .map_err(|e| SchemaError::InvalidSchema(format!("Invalid JSON Schema: {}", e)))?;
+        let compiled = self.compile(&schema_value)?;
 
         let data_value: Value = serde_json::from_slice(data)
-            .map_err(|e| SchemaError::InvalidSchema(format!("Invalid JSON data: {}", e)))?;
+            .map_err(|e| SchemaError::InvalidSchema(format!("Invalid JSON data: {e}")))?;
 
         let result = compiled.validate(&data_value);
         if let Err(error) = result {
             return Err(SchemaError::InvalidSchema(format!(
-                "Data validation failed: {}",
-                error
+                "Data validation failed: {error}"
             )));
         }
 
@@ -96,8 +125,7 @@ impl JsonSchemaValidator {
 
         if !self.types_compatible(&new_type, &existing_type) {
             messages.push(format!(
-                "Type changed from {:?} to {:?}",
-                existing_type, new_type
+                "Type changed from {existing_type:?} to {new_type:?}"
             ));
         }
 
@@ -135,8 +163,7 @@ impl JsonSchemaValidator {
 
         if !self.types_compatible(&existing_type, &new_type) {
             messages.push(format!(
-                "Type changed from {:?} to {:?} (not forward compatible)",
-                existing_type, new_type
+                "Type changed from {existing_type:?} to {new_type:?} (not forward compatible)"
             ));
         }
 
@@ -180,7 +207,7 @@ impl JsonSchemaValidator {
         // Check for removed properties that were in existing schema
         for (prop_name, _) in &existing_properties {
             if !new_properties.contains_key(prop_name) {
-                messages.push(format!("Property '{}' was removed", prop_name));
+                messages.push(format!("Property '{prop_name}' was removed"));
             }
         }
 
@@ -188,8 +215,7 @@ impl JsonSchemaValidator {
         for req in &new_required {
             if !existing_properties.contains_key(req) {
                 messages.push(format!(
-                    "New required property '{}' added without default",
-                    req
+                    "New required property '{req}' added without default"
                 ));
             }
         }
@@ -202,8 +228,7 @@ impl JsonSchemaValidator {
 
                 if !self.types_compatible(&new_type, &existing_type) {
                     messages.push(format!(
-                        "Property '{}' type changed from {:?} to {:?}",
-                        prop_name, existing_type, new_type
+                        "Property '{prop_name}' type changed from {existing_type:?} to {new_type:?}"
                     ));
                 }
             }
@@ -245,8 +270,7 @@ impl JsonSchemaValidator {
         for req in &existing_required {
             if !new_properties.contains_key(req) {
                 messages.push(format!(
-                    "Required property '{}' was removed (not forward compatible)",
-                    req
+                    "Required property '{req}' was removed (not forward compatible)"
                 ));
             }
         }
@@ -261,8 +285,7 @@ impl JsonSchemaValidator {
             for prop_name in new_properties.keys() {
                 if !existing_properties.contains_key(prop_name) {
                     messages.push(format!(
-                        "New property '{}' added but additionalProperties is false",
-                        prop_name
+                        "New property '{prop_name}' added but additionalProperties is false"
                     ));
                 }
             }
@@ -286,8 +309,7 @@ impl JsonSchemaValidator {
 
             if !self.types_compatible(&new_type, &existing_type) {
                 messages.push(format!(
-                    "Array items type changed from {:?} to {:?}",
-                    existing_type, new_type
+                    "Array items type changed from {existing_type:?} to {new_type:?}"
                 ));
             }
         }
@@ -299,8 +321,7 @@ impl JsonSchemaValidator {
         if let (Some(new_min), Some(existing_min)) = (new_min, existing_min) {
             if new_min > existing_min {
                 messages.push(format!(
-                    "minItems increased from {} to {} (not backward compatible)",
-                    existing_min, new_min
+                    "minItems increased from {existing_min} to {new_min} (not backward compatible)"
                 ));
             }
         }
@@ -311,8 +332,7 @@ impl JsonSchemaValidator {
         if let (Some(new_max), Some(existing_max)) = (new_max, existing_max) {
             if new_max < existing_max {
                 messages.push(format!(
-                    "maxItems decreased from {} to {} (not backward compatible)",
-                    existing_max, new_max
+                    "maxItems decreased from {existing_max} to {new_max} (not backward compatible)"
                 ));
             }
         }
@@ -339,7 +359,7 @@ impl JsonSchemaValidator {
         // Check for removed enum values
         for value in &existing_values {
             if !new_values.contains(value) {
-                messages.push(format!("Enum value {} was removed", value));
+                messages.push(format!("Enum value {value} was removed"));
             }
         }
     }
@@ -470,6 +490,41 @@ mod tests {
         // Invalid data (wrong type)
         let invalid_data = br#"{"name": 123}"#;
         assert!(validator.validate_data(schema, invalid_data).is_err());
+    }
+
+    fn assert_external_reference_error(error: SchemaError) {
+        match error {
+            SchemaError::InvalidSchema(message) => assert!(
+                message.contains("external JSON Schema references are unsupported"),
+                "remote references must fail explicitly, got: {message}"
+            ),
+            other => panic!("expected an explicit invalid-schema error, got: {other}"),
+        }
+    }
+
+    #[test]
+    fn test_remote_ref_validation_is_rejected_without_panicking() {
+        let validator = JsonSchemaValidator::new();
+        let schema = r#"{"$ref":"https://schemas.example.invalid/user.json"}"#;
+
+        let result = std::panic::catch_unwind(|| validator.validate(schema));
+        let validation = result.expect("a user-provided remote $ref must never panic");
+        assert_external_reference_error(
+            validation.expect_err("remote JSON Schema references must be rejected"),
+        );
+    }
+
+    #[test]
+    fn test_remote_ref_data_validation_is_rejected_without_panicking() {
+        let validator = JsonSchemaValidator::new();
+        let schema = r#"{"$ref":"http://schemas.example.invalid/user.json"}"#;
+
+        let result =
+            std::panic::catch_unwind(|| validator.validate_data(schema, br#"{"name":"Ada"}"#));
+        let validation = result.expect("a user-provided remote $ref must never panic");
+        assert_external_reference_error(
+            validation.expect_err("remote JSON Schema references must be rejected"),
+        );
     }
 
     #[test]

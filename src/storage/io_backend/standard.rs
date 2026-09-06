@@ -66,8 +66,7 @@ impl AsyncFile for StandardFile {
             Ok((Err(e), buf)) => (Err(StreamlineError::from(e)), buf),
             Err(e) => (
                 Err(StreamlineError::storage_msg(format!(
-                    "Task join error: {}",
-                    e
+                    "Task join error: {e}"
                 ))),
                 vec![], // Can't recover buffer in join error case
             ),
@@ -107,8 +106,7 @@ impl AsyncFile for StandardFile {
             Ok((Err(e), buf)) => (Err(StreamlineError::from(e)), buf),
             Err(e) => (
                 Err(StreamlineError::storage_msg(format!(
-                    "Task join error: {}",
-                    e
+                    "Task join error: {e}"
                 ))),
                 vec![],
             ),
@@ -132,8 +130,7 @@ impl AsyncFile for StandardFile {
             Ok((Err(e), buf)) => (Err(StreamlineError::from(e)), buf),
             Err(e) => (
                 Err(StreamlineError::storage_msg(format!(
-                    "Task join error: {}",
-                    e
+                    "Task join error: {e}"
                 ))),
                 vec![],
             ),
@@ -144,7 +141,7 @@ impl AsyncFile for StandardFile {
         let file = self.file.clone();
         tokio::task::spawn_blocking(move || file.blocking_lock().sync_data())
             .await
-            .map_err(|e| StreamlineError::storage_msg(format!("Task join error: {}", e)))?
+            .map_err(|e| StreamlineError::storage_msg(format!("Task join error: {e}")))?
             .map_err(StreamlineError::from)
     }
 
@@ -152,7 +149,7 @@ impl AsyncFile for StandardFile {
         let file = self.file.clone();
         tokio::task::spawn_blocking(move || file.blocking_lock().sync_all())
             .await
-            .map_err(|e| StreamlineError::storage_msg(format!("Task join error: {}", e)))?
+            .map_err(|e| StreamlineError::storage_msg(format!("Task join error: {e}")))?
             .map_err(StreamlineError::from)
     }
 
@@ -163,7 +160,7 @@ impl AsyncFile for StandardFile {
             file.metadata().map(|m| m.len())
         })
         .await
-        .map_err(|e| StreamlineError::storage_msg(format!("Task join error: {}", e)))?
+        .map_err(|e| StreamlineError::storage_msg(format!("Task join error: {e}")))?
         .map_err(StreamlineError::from)
     }
 
@@ -185,7 +182,7 @@ impl AsyncFile for StandardFile {
                 Ok(())
             })
             .await
-            .map_err(|e| StreamlineError::storage_msg(format!("Task join error: {}", e)))?
+            .map_err(|e| StreamlineError::storage_msg(format!("Task join error: {e}")))?
             .map_err(StreamlineError::from)
         }
 
@@ -197,7 +194,7 @@ impl AsyncFile for StandardFile {
                 file.set_len(len)
             })
             .await
-            .map_err(|e| StreamlineError::storage_msg(format!("Task join error: {}", e)))?
+            .map_err(|e| StreamlineError::storage_msg(format!("Task join error: {e}")))?
             .map_err(StreamlineError::from)
         }
     }
@@ -233,13 +230,12 @@ impl AsyncFileSystem for StandardFileSystem {
                 .open(&path_clone)
                 .map_err(|e| {
                     StreamlineError::storage_msg(format!(
-                        "Failed to open file {:?} for reading: {}",
-                        path_clone, e
+                        "Failed to open file {path_clone:?} for reading: {e}"
                     ))
                 })
         })
         .await
-        .map_err(|e| StreamlineError::storage_msg(format!("Task join error: {}", e)))??;
+        .map_err(|e| StreamlineError::storage_msg(format!("Task join error: {e}")))??;
 
         Ok(StandardFile::new(file, path_buf))
     }
@@ -255,13 +251,12 @@ impl AsyncFileSystem for StandardFileSystem {
                 .open(&path_clone)
                 .map_err(|e| {
                     StreamlineError::storage_msg(format!(
-                        "Failed to open file {:?} for read-write: {}",
-                        path_clone, e
+                        "Failed to open file {path_clone:?} for read-write: {e}"
                     ))
                 })
         })
         .await
-        .map_err(|e| StreamlineError::storage_msg(format!("Task join error: {}", e)))??;
+        .map_err(|e| StreamlineError::storage_msg(format!("Task join error: {e}")))??;
 
         Ok(StandardFile::new(file, path_buf))
     }
@@ -279,13 +274,12 @@ impl AsyncFileSystem for StandardFileSystem {
                 .open(&path_clone)
                 .map_err(|e| {
                     StreamlineError::storage_msg(format!(
-                        "Failed to create file {:?}: {}",
-                        path_clone, e
+                        "Failed to create file {path_clone:?}: {e}"
                     ))
                 })
         })
         .await
-        .map_err(|e| StreamlineError::storage_msg(format!("Task join error: {}", e)))??;
+        .map_err(|e| StreamlineError::storage_msg(format!("Task join error: {e}")))??;
 
         Ok(StandardFile::new(file, path_buf))
     }
@@ -302,13 +296,12 @@ impl AsyncFileSystem for StandardFileSystem {
                 .open(&path_clone)
                 .map_err(|e| {
                     StreamlineError::storage_msg(format!(
-                        "Failed to open file {:?} for append: {}",
-                        path_clone, e
+                        "Failed to open file {path_clone:?} for append: {e}"
                     ))
                 })
         })
         .await
-        .map_err(|e| StreamlineError::storage_msg(format!("Task join error: {}", e)))??;
+        .map_err(|e| StreamlineError::storage_msg(format!("Task join error: {e}")))??;
 
         Ok(StandardFile::new(file, path_buf))
     }
@@ -393,4 +386,3 @@ mod tests {
         assert_eq!(size, 4);
     }
 }
-

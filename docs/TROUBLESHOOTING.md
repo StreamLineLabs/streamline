@@ -190,7 +190,7 @@ openssl s_client -connect localhost:9092
 - **GitHub Issues**: https://github.com/streamlinelabs/streamline/issues
 - **Discussions**: https://github.com/streamlinelabs/streamline/discussions
 - **Discord**: https://discord.gg/streamlinelabs
-- **Security**: security@streamline.dev (see [SECURITY.md](../SECURITY.md))
+- **Security**: security@streamlinelabs.dev (see [SECURITY.md](../SECURITY.md))
 
 ## Diagnostic Commands
 

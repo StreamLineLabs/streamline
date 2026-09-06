@@ -10,7 +10,7 @@
 | **Python** | Python 3.9+ | 0.2.0 | 17 files | ✅ | ✅ |
 | **Go** | Go 1.22+ | module | 8 files | ✅ | ✅ |
 | **Node.js** | TypeScript | 0.2.0 | 6 files | ✅ | ✅ |
-| **Rust** | Rust 1.80+ | 0.2.0 | 6 files | ✅ | ✅ |
+| **Rust** | Rust 1.88+ | 0.2.0 | 6 files | ✅ | ✅ |
 | **.NET** | C# .NET 8+ | ? | 1 files | ✅ | ✅ |
 | **WASM** | Rust/JS | 0.2.0 | 1 files | ✅ | ✅ |
 

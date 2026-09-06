@@ -94,7 +94,12 @@ impl<E: Embedder + 'static> EmbedWorker<E> {
                     }
                 }
             })
-            .expect("spawn embed worker");
+            .map(|_handle| ())
+            .unwrap_or_else(|e| {
+                // The OS refused a thread. Embedding then silently stops rather
+                // than taking the whole server down with a panic.
+                tracing::error!(error = %e, "failed to spawn embed worker thread");
+            });
         EmbedderHandle { sender: tx }
     }
 }

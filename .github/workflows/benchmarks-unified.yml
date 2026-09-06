@@ -101,7 +101,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     permissions:
-      contents: ${{ needs.resolve.outputs.mode == 'publish' && 'write' || 'read' }}
+      # Read-only on purpose. This job builds and runs code from the checked-out
+      # ref (`cargo build`, `cargo bench`, and the produced binaries), so it must
+      # never hold a token that can write to the repository. Publishing to the
+      # gh-pages dashboard is done by the separate `publish-dashboard` job below,
+      # which holds `contents: write` but executes no repository code.
+      contents: read
     concurrency:
       group: benchmarks-${{ needs.resolve.outputs.mode }}
       cancel-in-progress: ${{ needs.resolve.outputs.mode != 'publish' }}
@@ -118,28 +123,36 @@ jobs:
       - name: Microbenchmarks
         if: needs.resolve.outputs.mode != 'publish' || github.event_name == 'schedule'
         run: |
+          set -euo pipefail
           mkdir -p benchmark-results
           cargo bench --bench storage_benchmarks  -- --output-format bencher | tee benchmark-results/storage.txt
           cargo bench --bench protocol_benchmarks -- --output-format bencher | tee benchmark-results/protocol.txt
           cargo bench --bench latency_benchmarks  -- --output-format bencher | tee benchmark-results/latency.txt
-          cargo bench --bench zerocopy_benchmarks -- --output-format bencher | tee benchmark-results/zerocopy.txt || true
+          cargo bench --bench zerocopy_benchmarks -- --output-format bencher | tee benchmark-results/zerocopy.txt
 
       - name: CLI benchmarks (release/publish)
         if: needs.resolve.outputs.mode == 'release' || needs.resolve.outputs.mode == 'publish'
         run: |
+          set -euo pipefail
+          mkdir -p benchmark-results
           ./target/release/streamline --in-memory --log-level warn &
           SERVER_PID=$!
+          trap 'kill "$SERVER_PID" 2>/dev/null' EXIT
           sleep 2
-          ./target/release/streamline-cli benchmark --profile quick      --format json > benchmark-results/quick.json      || true
-          ./target/release/streamline-cli benchmark --profile throughput --format json > benchmark-results/throughput.json || true
-          ./target/release/streamline-cli benchmark --profile latency    --format json > benchmark-results/latency.json    || true
-          kill $SERVER_PID 2>/dev/null || true
+          ./target/release/streamline-cli benchmark --profile quick      --format json > benchmark-results/quick.json
+          ./target/release/streamline-cli benchmark --profile throughput --format json > benchmark-results/throughput.json
+          ./target/release/streamline-cli benchmark --profile latency    --format json > benchmark-results/latency.json
+          kill "$SERVER_PID"
+          trap - EXIT
 
       - name: Binary size & startup snapshot
         run: |
+          set -euo pipefail
+          binary_bytes="$(stat -c%s target/release/streamline 2>/dev/null || stat -f%z target/release/streamline)"
+          binary_human="$(du -sh target/release/streamline | cut -f1)"
           {
-            echo "binary_bytes=$(stat -c%s target/release/streamline 2>/dev/null || stat -f%z target/release/streamline)"
-            echo "binary_human=$(du -sh target/release/streamline | cut -f1)"
+            printf 'binary_bytes=%s\n' "$binary_bytes"
+            printf 'binary_human=%s\n' "$binary_human"
           } | tee benchmark-results/binary-size.txt
 
       - name: Upload artifact
@@ -148,8 +161,34 @@ jobs:
           name: benchmarks-${{ needs.resolve.outputs.mode }}-${{ github.sha }}
           path: benchmark-results/
 
+  # ---------------------------------------------------------------------------
+  # PUBLISH: move the collected results onto the gh-pages dashboard branch.
+  #
+  # Deliberately a separate job from `bench`: this is the only job in the
+  # workflow with `contents: write`, and it runs no repository code — it only
+  # downloads the artifact produced by `bench` and commits it to gh-pages.
+  # ---------------------------------------------------------------------------
+  publish-dashboard:
+    name: Publish dashboard
+    needs: [resolve, bench]
+    if: needs.resolve.outputs.mode == 'publish'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    concurrency:
+      group: benchmarks-publish
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download benchmark results
+        uses: actions/download-artifact@v4
+        with:
+          name: benchmarks-${{ needs.resolve.outputs.mode }}-${{ github.sha }}
+          path: benchmark-results
+
       - name: Publish to dashboard branch
-        if: needs.resolve.outputs.mode == 'publish'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -168,6 +207,12 @@ jobs:
 
   # ---------------------------------------------------------------------------
   # COMPARE: PR vs main with critcmp diff comment.
+  #
+  # The PR benchmark is always mandatory. The historical base ref is comparison
+  # input only: if old main no longer builds on the hosted Linux image, preserve
+  # the successful PR result and emit an explicit neutral/skipped report. Once
+  # the PR is merged, the push-to-main smoke mode still builds and runs the same
+  # storage/protocol benchmarks as mandatory steps.
   # ---------------------------------------------------------------------------
   compare:
     name: PR vs main
@@ -176,7 +221,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:
-      pull-requests: write
+      contents: read
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0 }
@@ -187,21 +232,78 @@ jobs:
       - run: cargo install --locked critcmp
       - name: Bench PR
         run: cargo bench --bench storage_benchmarks --bench protocol_benchmarks -- --save-baseline pr
-      - name: Bench main
+      - name: Bench historical main baseline
+        id: baseline
+        env:
+          BASE_REF: ${{ github.base_ref || 'main' }}
         run: |
-          git checkout ${{ github.base_ref }}
-          cargo bench --bench storage_benchmarks --bench protocol_benchmarks -- --save-baseline main
-      - name: Diff
-        id: diff
+          set -euo pipefail
+          baseline_ref="origin/${BASE_REF}"
+          if git checkout --detach "$baseline_ref" &&
+             cargo bench --bench storage_benchmarks --bench protocol_benchmarks -- --save-baseline main; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+            echo "exit_code=0" >> "$GITHUB_OUTPUT"
+          else
+            status=$?
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "exit_code=$status" >> "$GITHUB_OUTPUT"
+            echo "::warning::Historical baseline ${baseline_ref} could not be built or run (exit ${status}); the mandatory PR benchmark passed, so comparison will be reported as skipped."
+          fi
+      - name: Build comparison report
+        env:
+          BASE_REF: ${{ github.base_ref || 'main' }}
+          BASELINE_AVAILABLE: ${{ steps.baseline.outputs.available }}
+          BASELINE_EXIT_CODE: ${{ steps.baseline.outputs.exit_code }}
         run: |
-          {
-            echo '## Benchmark Comparison: PR vs `${{ github.base_ref }}`'
-            echo
-            echo '```'
-            critcmp main pr || true
-            echo '```'
-          } > diff.md
+          set -euo pipefail
+          if [ "$BASELINE_AVAILABLE" = "true" ]; then
+            comparison="$(critcmp main pr)"
+            {
+              echo "## Benchmark Comparison: PR vs \`origin/${BASE_REF}\`"
+              echo
+              echo '```'
+              printf '%s\n' "$comparison"
+              echo '```'
+            } > diff.md
+          else
+            {
+              echo "## Benchmark Comparison: PR vs \`origin/${BASE_REF}\`"
+              echo
+              echo "> [!NOTE]"
+              echo "> Comparison skipped: the historical baseline could not be built or run (exit code \`${BASELINE_EXIT_CODE}\`)."
+              echo
+              echo "The pull request benchmark build and run completed successfully. This is a neutral result for the comparison only."
+            } > diff.md
+          fi
           cat diff.md
+          cat diff.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload comparison
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-comparison-${{ github.sha }}
+          path: diff.md
+
+  # Commenting needs a writable pull-request token, so it is isolated from the
+  # job that compiles and executes the pull request's code.
+  comment-comparison:
+    name: Comment benchmark comparison
+    needs: [resolve, compare]
+    if: >-
+      needs.resolve.outputs.mode == 'compare' &&
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Download comparison
+        uses: actions/download-artifact@v4
+        with:
+          name: benchmark-comparison-${{ github.sha }}
+          path: comparison
+
       - uses: actions/github-script@v7
         with:
           script: |
@@ -209,7 +311,7 @@ jobs:
             await github.rest.issues.createComment({
               owner: context.repo.owner, repo: context.repo.repo,
               issue_number: context.payload.pull_request.number,
-              body: fs.readFileSync('diff.md', 'utf8'),
+              body: fs.readFileSync('comparison/diff.md', 'utf8'),
             });
 
   # ---------------------------------------------------------------------------

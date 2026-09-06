@@ -77,7 +77,11 @@ pub fn populate_sample_data(topic_manager: &TopicManager) -> Result<()> {
                 }
             }
         }
-        tracing::info!(topic, messages = loaded, "Populated demo topic with sample data");
+        tracing::info!(
+            topic,
+            messages = loaded,
+            "Populated demo topic with sample data"
+        );
     }
     Ok(())
 }
@@ -90,10 +94,10 @@ pub fn print_playground_banner(kafka_port: u16, http_port: u16) {
     println!("  ║          The Redis of Streaming                     ║");
     println!("  ╚══════════════════════════════════════════════════════╝");
     println!();
-    println!("  🌐 Dashboard:  http://localhost:{}/playground", http_port);
-    println!("  📡 Kafka API:  localhost:{}", kafka_port);
-    println!("  🔗 HTTP API:   http://localhost:{}/api/v1", http_port);
-    println!("  ❤️  Health:     http://localhost:{}/health", http_port);
+    println!("  🌐 Dashboard:  http://localhost:{http_port}/playground");
+    println!("  📡 Kafka API:  localhost:{kafka_port}");
+    println!("  🔗 HTTP API:   http://localhost:{http_port}/api/v1");
+    println!("  ❤️  Health:     http://localhost:{http_port}/health");
     println!();
     println!("  📋 Demo Topics:");
     for (name, partitions) in DEMO_TOPICS {
@@ -108,19 +112,12 @@ pub fn print_playground_banner(kafka_port: u16, http_port: u16) {
     println!("  🚀 Quick Start:");
     println!("     # Produce a message");
     println!(
-        "     echo '{{\"hello\":\"world\"}}' | kcat -b localhost:{} -t demo-events -P",
-        kafka_port
+        "     echo '{{\"hello\":\"world\"}}' | kcat -b localhost:{kafka_port} -t demo-events -P"
     );
     println!("     # Consume messages");
-    println!(
-        "     kcat -b localhost:{} -t demo-events -C -e",
-        kafka_port
-    );
+    println!("     kcat -b localhost:{kafka_port} -t demo-events -C -e");
     println!("     # Browse via HTTP");
-    println!(
-        "     curl http://localhost:{}/api/v1/topics",
-        http_port
-    );
+    println!("     curl http://localhost:{http_port}/api/v1/topics");
     println!();
     println!("  ⚠️  In-memory mode — data will not persist after restart.");
     println!();

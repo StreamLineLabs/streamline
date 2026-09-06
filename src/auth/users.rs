@@ -126,21 +126,21 @@ impl ScramCredentials {
     pub fn salt_bytes(&self) -> Result<Vec<u8>> {
         BASE64
             .decode(&self.salt)
-            .map_err(|e| StreamlineError::AuthenticationFailed(format!("Invalid salt: {}", e)))
+            .map_err(|e| StreamlineError::AuthenticationFailed(format!("Invalid salt: {e}")))
     }
 
     /// Get the stored key as raw bytes
     pub fn stored_key_bytes(&self) -> Result<Vec<u8>> {
-        BASE64.decode(&self.stored_key).map_err(|e| {
-            StreamlineError::AuthenticationFailed(format!("Invalid stored key: {}", e))
-        })
+        BASE64
+            .decode(&self.stored_key)
+            .map_err(|e| StreamlineError::AuthenticationFailed(format!("Invalid stored key: {e}")))
     }
 
     /// Get the server key as raw bytes
     pub fn server_key_bytes(&self) -> Result<Vec<u8>> {
-        BASE64.decode(&self.server_key).map_err(|e| {
-            StreamlineError::AuthenticationFailed(format!("Invalid server key: {}", e))
-        })
+        BASE64
+            .decode(&self.server_key)
+            .map_err(|e| StreamlineError::AuthenticationFailed(format!("Invalid server key: {e}")))
     }
 }
 
@@ -237,7 +237,7 @@ impl User {
         // Time cost: 3 iterations (increased from 2 for stronger security)
         // Parallelism: 1 thread
         let params = Params::new(19456, 3, 1, None).map_err(|e| {
-            StreamlineError::AuthenticationFailed(format!("Failed to create Argon2 params: {}", e))
+            StreamlineError::AuthenticationFailed(format!("Failed to create Argon2 params: {e}"))
         })?;
 
         let argon2 = Argon2::new(argon2::Algorithm::Argon2id, argon2::Version::V0x13, params);
@@ -245,7 +245,7 @@ impl User {
         let password_hash = argon2
             .hash_password(password.as_bytes(), &salt)
             .map_err(|e| {
-                StreamlineError::AuthenticationFailed(format!("Failed to hash password: {}", e))
+                StreamlineError::AuthenticationFailed(format!("Failed to hash password: {e}"))
             })?;
         Ok(password_hash.to_string())
     }
@@ -253,7 +253,7 @@ impl User {
     /// Verify a password against the stored hash
     pub fn verify_password(&self, password: &str) -> Result<bool> {
         let parsed_hash = PasswordHash::new(&self.password_hash).map_err(|e| {
-            StreamlineError::AuthenticationFailed(format!("Invalid password hash: {}", e))
+            StreamlineError::AuthenticationFailed(format!("Invalid password hash: {e}"))
         })?;
 
         let argon2 = Argon2::default();
@@ -318,10 +318,10 @@ impl UserStore {
     /// Load users from a YAML file
     pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self> {
         let content = fs::read_to_string(path.as_ref())
-            .map_err(|e| StreamlineError::Config(format!("Failed to read users file: {}", e)))?;
+            .map_err(|e| StreamlineError::Config(format!("Failed to read users file: {e}")))?;
 
         let users_file: UsersFile = serde_yaml::from_str(&content)
-            .map_err(|e| StreamlineError::Config(format!("Failed to parse users file: {}", e)))?;
+            .map_err(|e| StreamlineError::Config(format!("Failed to parse users file: {e}")))?;
 
         let mut users = HashMap::new();
         for user in users_file.users {
@@ -338,10 +338,10 @@ impl UserStore {
         };
 
         let content = serde_yaml::to_string(&users_file)
-            .map_err(|e| StreamlineError::Config(format!("Failed to serialize users: {}", e)))?;
+            .map_err(|e| StreamlineError::Config(format!("Failed to serialize users: {e}")))?;
 
         fs::write(path.as_ref(), content)
-            .map_err(|e| StreamlineError::Config(format!("Failed to write users file: {}", e)))?;
+            .map_err(|e| StreamlineError::Config(format!("Failed to write users file: {e}")))?;
 
         Ok(())
     }

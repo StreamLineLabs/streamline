@@ -273,12 +273,9 @@ pub fn handle_edge_config(show: bool, set: Option<Vec<String>>, ctx: &CliContext
     if let Some(settings) = set {
         for setting in settings {
             if let Some((key, value)) = setting.split_once('=') {
-                ctx.success(&format!("Set {} = {}", key, value));
+                ctx.success(&format!("Set {key} = {value}"));
             } else {
-                ctx.warn(&format!(
-                    "Invalid setting format: {}. Use key=value",
-                    setting
-                ));
+                ctx.warn(&format!("Invalid setting format: {setting}. Use key=value"));
             }
         }
     }

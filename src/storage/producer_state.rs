@@ -285,7 +285,7 @@ impl ProducerStateManager {
         > = part_states
             .iter()
             .map(|((topic, partition), producers)| {
-                (format!("{}:{}", topic, partition), producers.clone())
+                (format!("{topic}:{partition}"), producers.clone())
             })
             .collect();
 
@@ -599,8 +599,7 @@ impl ProducerStateManager {
             // Verify this is the correct transactional producer
             if meta.transactional_id.as_deref() != Some(transactional_id) {
                 return Err(StreamlineError::protocol_msg(format!(
-                    "Producer {} does not match transactional_id {}",
-                    producer_id, transactional_id
+                    "Producer {producer_id} does not match transactional_id {transactional_id}"
                 )));
             }
 
@@ -618,8 +617,7 @@ impl ProducerStateManager {
             Ok(new_epoch)
         } else {
             Err(StreamlineError::protocol_msg(format!(
-                "Producer {} not found",
-                producer_id
+                "Producer {producer_id} not found"
             )))
         }
     }
@@ -924,8 +922,7 @@ mod tests {
                 .unwrap();
             assert!(
                 matches!(result, SequenceValidationResult::Valid),
-                "Expected Valid for sequence 5 after restart, got {:?}",
-                result
+                "Expected Valid for sequence 5 after restart, got {result:?}"
             );
 
             // Sequence 0 for partition 0 should be duplicate
@@ -934,8 +931,7 @@ mod tests {
                 .unwrap();
             assert!(
                 matches!(result, SequenceValidationResult::Duplicate(_)),
-                "Expected Duplicate for sequence 0 after restart, got {:?}",
-                result
+                "Expected Duplicate for sequence 0 after restart, got {result:?}"
             );
         }
     }

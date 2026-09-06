@@ -1,15 +1,14 @@
 //! XDP data plane - high-level API combining XDP components
 
 use super::{
-    AfXdpSocket, AfXdpSocketConfig, AfXdpSocketStatsSnapshot, FilterStatsSnapshot, PacketMeta,
-    ReceivedPacket, Umem, UmemConfig, UmemFrame, XdpCapabilities, XdpConfig, XdpConfigMode,
-    XdpError, XdpFilter, XdpMode, XdpProgram, XdpProgramStatsSnapshot, XdpResult,
+    AfXdpSocket, AfXdpSocketStatsSnapshot, FilterStatsSnapshot, ReceivedPacket, Umem, UmemFrame,
+    XdpCapabilities, XdpConfig, XdpConfigMode, XdpError, XdpFilter, XdpMode, XdpProgram,
+    XdpProgramStatsSnapshot, XdpResult,
 };
 use parking_lot::RwLock;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
-use tokio::sync::mpsc;
-use tracing::{debug, error, info, warn};
+use tracing::{info, warn};
 
 /// XDP data plane for kernel-bypass packet processing
 ///
@@ -183,7 +182,7 @@ impl XdpDataPlane {
         let sockets = self.sockets.read();
         let socket = sockets
             .get(queue_id as usize)
-            .ok_or_else(|| XdpError::Socket(format!("Queue {} not found", queue_id)))?;
+            .ok_or_else(|| XdpError::Socket(format!("Queue {queue_id} not found")))?;
 
         let packets = socket.recv(max_packets)?;
 
@@ -202,7 +201,7 @@ impl XdpDataPlane {
         let sockets = self.sockets.read();
         let socket = sockets
             .get(queue_id as usize)
-            .ok_or_else(|| XdpError::Socket(format!("Queue {} not found", queue_id)))?;
+            .ok_or_else(|| XdpError::Socket(format!("Queue {queue_id} not found")))?;
 
         let sent = socket.send(frames)?;
 
@@ -556,7 +555,7 @@ mod tests {
     fn test_xdp_mode_serialization() {
         // Test that XdpMode can be serialized
         let mode = XdpMode::Native;
-        assert_eq!(format!("{}", mode), "native");
+        assert_eq!(format!("{mode}"), "native");
     }
 
     #[test]

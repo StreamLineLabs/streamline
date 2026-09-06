@@ -292,7 +292,7 @@ async fn test_topic_manager_append_via_sharded_runtime() {
     for partition in 0..4i32 {
         let tm = topic_manager.clone();
         let topic = "sharded-test".to_string();
-        let value = Bytes::from(format!("message-{}", partition));
+        let value = Bytes::from(format!("message-{partition}"));
 
         let rx = runtime
             .submit_for_partition_with_result(partition as u32, move || {
@@ -305,7 +305,7 @@ async fn test_topic_manager_append_via_sharded_runtime() {
     // Verify all appends succeeded with offset 0
     for (partition, rx) in receivers {
         let result = rx.await.unwrap();
-        assert!(result.is_ok(), "Append to partition {} failed", partition);
+        assert!(result.is_ok(), "Append to partition {partition} failed");
         assert_eq!(result.unwrap(), 0, "First message should have offset 0");
     }
 
@@ -317,7 +317,7 @@ async fn test_topic_manager_append_via_sharded_runtime() {
         assert_eq!(records.len(), 1);
         assert_eq!(
             records[0].value,
-            Bytes::from(format!("message-{}", partition))
+            Bytes::from(format!("message-{partition}"))
         );
     }
 
@@ -346,7 +346,7 @@ async fn test_topic_manager_read_via_sharded_runtime() {
                     "read-test",
                     partition,
                     None,
-                    Bytes::from(format!("p{}-msg{}", partition, i)),
+                    Bytes::from(format!("p{partition}-msg{i}")),
                 )
                 .unwrap();
         }
@@ -369,13 +369,12 @@ async fn test_topic_manager_read_via_sharded_runtime() {
     // Verify all reads succeeded
     for (partition, rx) in receivers {
         let result = rx.await.unwrap();
-        assert!(result.is_ok(), "Read from partition {} failed", partition);
+        assert!(result.is_ok(), "Read from partition {partition} failed");
         let records = result.unwrap();
         assert_eq!(
             records.len(),
             5,
-            "Should have 5 records in partition {}",
-            partition
+            "Should have 5 records in partition {partition}"
         );
     }
 
@@ -566,8 +565,7 @@ async fn test_partition_affinity_under_load() {
         let count = counter.load(Ordering::SeqCst);
         assert_eq!(
             count, 100,
-            "Shard {} should have processed 100 tasks, got {}",
-            shard_id, count
+            "Shard {shard_id} should have processed 100 tasks, got {count}"
         );
     }
 

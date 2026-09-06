@@ -598,7 +598,7 @@ impl ObservabilityManager {
         let pid = std::process::id();
 
         // Read /proc/self/stat
-        if let Ok(stat) = fs::read_to_string(format!("/proc/{}/stat", pid)) {
+        if let Ok(stat) = fs::read_to_string(format!("/proc/{pid}/stat")) {
             let parts: Vec<&str> = stat.split_whitespace().collect();
             if parts.len() >= 24 {
                 metrics.thread_count = parts[19].parse().unwrap_or(0);
@@ -606,7 +606,7 @@ impl ObservabilityManager {
         }
 
         // Read /proc/self/status
-        if let Ok(status) = fs::read_to_string(format!("/proc/{}/status", pid)) {
+        if let Ok(status) = fs::read_to_string(format!("/proc/{pid}/status")) {
             for line in status.lines() {
                 let parts: Vec<&str> = line.split_whitespace().collect();
                 if parts.len() >= 2 {
@@ -625,7 +625,7 @@ impl ObservabilityManager {
         }
 
         // Count file descriptors
-        if let Ok(fds) = fs::read_dir(format!("/proc/{}/fd", pid)) {
+        if let Ok(fds) = fs::read_dir(format!("/proc/{pid}/fd")) {
             metrics.open_fds = fds.count() as u64;
         }
 

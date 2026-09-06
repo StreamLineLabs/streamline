@@ -5,6 +5,8 @@
 //! predictable latencies and cache efficiency.
 
 use super::RuntimeError;
+#[cfg(target_os = "linux")]
+use tracing::debug;
 use tracing::warn;
 
 /// Get number of available CPUs
@@ -99,8 +101,8 @@ impl CpuTopology {
             let name = entry.file_name();
             let name = name.to_string_lossy();
 
-            if name.starts_with("node") {
-                if let Ok(node_id) = name[4..].parse::<usize>() {
+            if let Some(node_suffix) = name.strip_prefix("node") {
+                if let Ok(node_id) = node_suffix.parse::<usize>() {
                     numa_nodes = numa_nodes.max(node_id + 1);
 
                     // Read CPUs for this node
@@ -164,7 +166,7 @@ impl CpuTopology {
         let mut core_id_to_cpus: HashMap<usize, Vec<usize>> = HashMap::new();
 
         for cpu in 0..cpu_count {
-            let core_id_path = format!("/sys/devices/system/cpu/cpu{}/topology/core_id", cpu);
+            let core_id_path = format!("/sys/devices/system/cpu/cpu{cpu}/topology/core_id");
             if let Ok(core_id_str) = fs::read_to_string(&core_id_path) {
                 if let Ok(core_id) = core_id_str.trim().parse::<usize>() {
                     core_id_to_cpus.entry(core_id).or_default().push(cpu);

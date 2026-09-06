@@ -51,7 +51,7 @@ impl OffsetStore {
 
         let content = fs::read_to_string(&path)?;
         let data: OffsetData = serde_json::from_str(&content)
-            .map_err(|e| StreamlineError::storage_msg(format!("Failed to parse offsets: {}", e)))?;
+            .map_err(|e| StreamlineError::storage_msg(format!("Failed to parse offsets: {e}")))?;
 
         let mut offsets = HashMap::new();
         for entry in data.offsets {
@@ -112,7 +112,7 @@ impl OffsetStore {
 
         let content = fs::read_to_string(&path)?;
         let mut group: ConsumerGroup = serde_json::from_str(&content)
-            .map_err(|e| StreamlineError::storage_msg(format!("Failed to parse group: {}", e)))?;
+            .map_err(|e| StreamlineError::storage_msg(format!("Failed to parse group: {e}")))?;
 
         // Load offsets
         group.offsets = self.load_offsets(group_id)?;

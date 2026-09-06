@@ -477,7 +477,7 @@ impl PolicyEngine {
         let mut violations = Vec::new();
 
         let resource_json = serde_json::to_value(resource)
-            .map_err(|e| StreamlineError::Config(format!("Failed to serialize resource: {}", e)))?;
+            .map_err(|e| StreamlineError::Config(format!("Failed to serialize resource: {e}")))?;
 
         let resource_kind = resource_json
             .get("kind")
@@ -554,8 +554,7 @@ impl PolicyEngine {
                         policy_id: policy.id.clone(),
                         policy_name: policy.name.clone(),
                         message: format!(
-                            "Topic '{}' has replication factor {}, must be >= 2 in production",
-                            name, replication
+                            "Topic '{name}' has replication factor {replication}, must be >= 2 in production"
                         ),
                         severity: policy.severity,
                         resource_path: "spec.replicationFactor".to_string(),
@@ -572,8 +571,7 @@ impl PolicyEngine {
                         policy_id: policy.id.clone(),
                         policy_name: policy.name.clone(),
                         message: format!(
-                            "Topic '{}' has {} partitions, maximum allowed is 100",
-                            name, partitions
+                            "Topic '{name}' has {partitions} partitions, maximum allowed is 100"
                         ),
                         severity: policy.severity,
                         resource_path: "spec.partitions".to_string(),
@@ -584,12 +582,12 @@ impl PolicyEngine {
 
             "streamline.naming.convention" => {
                 let name_pattern = regex::Regex::new(r"^[a-z][a-z0-9-]*[a-z0-9]$|^[a-z]$")
-                    .map_err(|e| StreamlineError::Config(format!("Invalid regex: {}", e)))?;
+                    .map_err(|e| StreamlineError::Config(format!("Invalid regex: {e}")))?;
                 if !name_pattern.is_match(name) {
                     return Ok(Some(PolicyViolation {
                         policy_id: policy.id.clone(),
                         policy_name: policy.name.clone(),
-                        message: format!("Resource name '{}' violates naming convention", name),
+                        message: format!("Resource name '{name}' violates naming convention"),
                         severity: policy.severity,
                         resource_path: "metadata.name".to_string(),
                         suggestion: Some(
@@ -615,7 +613,7 @@ impl PolicyEngine {
                     return Ok(Some(PolicyViolation {
                         policy_id: policy.id.clone(),
                         policy_name: policy.name.clone(),
-                        message: format!("Cluster '{}' must have TLS enabled in production", name),
+                        message: format!("Cluster '{name}' must have TLS enabled in production"),
                         severity: policy.severity,
                         resource_path: "spec.tls.enabled".to_string(),
                         suggestion: Some("Set spec.tls.enabled to true".to_string()),

@@ -289,8 +289,8 @@ async fn test_kafka_python_consumer_group() {
             &server.bootstrap,
             "python-group-topic",
             i % 2,
-            &format!("key-{}", i),
-            &format!("value-{}", i),
+            &format!("key-{i}"),
+            &format!("value-{i}"),
         )
         .await;
     }
@@ -371,7 +371,7 @@ func main() {{
     config.Producer.Return.Successes = true
     config.Producer.RequiredAcks = sarama.WaitForLocal
 
-    producer, err := sarama.NewSyncProducer([]string{{{}}}, config)
+    producer, err := sarama.NewSyncProducer([]string{{{bootstrap}}}, config)
     if err != nil {{
         fmt.Fprintf(os.Stderr, "Error: %v\n", err)
         os.Exit(1)
@@ -391,8 +391,7 @@ func main() {{
 
     fmt.Printf("Sent to partition %d at offset %d\n", partition, offset)
 }}
-"#,
-        bootstrap
+"#
     );
 
     // Write Go script to temp file and run
@@ -412,7 +411,7 @@ func main() {{
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     // Note: This test might fail if Go/Sarama isn't installed - that's expected
-    println!("Sarama output: {}", stdout);
+    println!("Sarama output: {stdout}");
 
     server.shutdown().await;
 }
@@ -535,7 +534,7 @@ async fn test_franz_go_kcl_consume() {
         .expect("Failed to execute kcl");
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    println!("franz-go consume output: {}", stdout);
+    println!("franz-go consume output: {stdout}");
 
     server.shutdown().await;
 }
@@ -564,7 +563,7 @@ async fn test_franz_go_kcl_metadata() {
         .expect("Failed to execute kcl");
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    println!("franz-go metadata output: {}", stdout);
+    println!("franz-go metadata output: {stdout}");
 
     // Should show cluster metadata
     assert!(!stdout.is_empty(), "Should receive metadata response");
@@ -614,8 +613,8 @@ async fn test_kafka_cli_create_topic() {
     if let Ok(output) = output {
         let stdout = String::from_utf8_lossy(&output.stdout);
         let stderr = String::from_utf8_lossy(&output.stderr);
-        println!("kafka-topics.sh output: {}", stdout);
-        println!("kafka-topics.sh stderr: {}", stderr);
+        println!("kafka-topics.sh output: {stdout}");
+        println!("kafka-topics.sh stderr: {stderr}");
     }
 
     server.shutdown().await;
@@ -693,7 +692,7 @@ async fn test_kafka_cli_console_consumer() {
 
     if let Ok(output) = output {
         let stdout = String::from_utf8_lossy(&output.stdout);
-        println!("kafka-console-consumer output: {}", stdout);
+        println!("kafka-console-consumer output: {stdout}");
 
         if stdout.contains("cli-test-value") {
             println!("kafka-console-consumer successfully received message");
@@ -795,8 +794,8 @@ async fn test_cross_client_consumer_group() {
             &server.bootstrap,
             "cross-client-group-topic",
             i % 4,
-            &format!("key-{}", i),
-            &format!("value-{}", i),
+            &format!("key-{i}"),
+            &format!("value-{i}"),
         )
         .await;
     }
@@ -873,7 +872,7 @@ async fn produce_message_via_admin(
     if let Ok(mut child) = output {
         use std::io::Write;
         if let Some(ref mut stdin) = child.stdin {
-            let _ = writeln!(stdin, "{}", value);
+            let _ = writeln!(stdin, "{value}");
         }
         let _ = child.wait();
     }
@@ -945,8 +944,8 @@ except Exception as e:
     if let Ok(output) = output {
         let stdout = String::from_utf8_lossy(&output.stdout);
         let stderr = String::from_utf8_lossy(&output.stderr);
-        println!("Older version test output: {}", stdout);
-        println!("Older version test notes: {}", stderr);
+        println!("Older version test output: {stdout}");
+        println!("Older version test notes: {stderr}");
     }
 
     server.shutdown().await;

@@ -130,11 +130,11 @@ pub fn create_replication_api_router(state: ReplicationApiState) -> Router {
             get(list_regions).post(add_region),
         )
         .route(
-            "/api/v1/replication/regions/{id}",
+            "/api/v1/replication/regions/:id",
             get(get_region).delete(remove_region),
         )
-        .route("/api/v1/replication/regions/{id}/lag", get(get_region_lag))
-        .route("/api/v1/replication/regions/{id}/sync", post(force_sync))
+        .route("/api/v1/replication/regions/:id/lag", get(get_region_lag))
+        .route("/api/v1/replication/regions/:id/sync", post(force_sync))
         .route(
             "/api/v1/replication/topics",
             get(list_replicated_topics).post(configure_topic_replication),
@@ -194,7 +194,7 @@ async fn add_region(
         return Err((
             StatusCode::CONFLICT,
             Json(ErrorResponse {
-                error: format!("Region '{}' already exists", id),
+                error: format!("Region '{id}' already exists"),
             }),
         ));
     }
@@ -246,7 +246,7 @@ async fn get_region(
             (
                 StatusCode::NOT_FOUND,
                 Json(ErrorResponse {
-                    error: format!("Region '{}' not found", id),
+                    error: format!("Region '{id}' not found"),
                 }),
             )
         })
@@ -264,7 +264,7 @@ async fn remove_region(
         Err((
             StatusCode::NOT_FOUND,
             Json(ErrorResponse {
-                error: format!("Region '{}' not found", id),
+                error: format!("Region '{id}' not found"),
             }),
         ))
     }
@@ -290,7 +290,7 @@ async fn get_region_lag(
             (
                 StatusCode::NOT_FOUND,
                 Json(ErrorResponse {
-                    error: format!("Region '{}' not found", id),
+                    error: format!("Region '{id}' not found"),
                 }),
             )
         })
@@ -306,7 +306,7 @@ async fn force_sync(
         (
             StatusCode::NOT_FOUND,
             Json(ErrorResponse {
-                error: format!("Region '{}' not found", id),
+                error: format!("Region '{id}' not found"),
             }),
         )
     })?;
@@ -400,8 +400,12 @@ struct TopicMirrorRequest {
     preserve_timestamps: bool,
 }
 
-fn default_direction() -> String { "unidirectional".to_string() }
-fn default_true_bool() -> bool { true }
+fn default_direction() -> String {
+    "unidirectional".to_string()
+}
+fn default_true_bool() -> bool {
+    true
+}
 
 /// POST /api/v1/federation/mirror
 async fn create_topic_mirror(
@@ -463,12 +467,14 @@ async fn initiate_failover(
 }
 
 /// GET /api/v1/federation/health
-async fn federation_health(
-    State(state): State<ReplicationApiState>,
-) -> Json<serde_json::Value> {
+async fn federation_health(State(state): State<ReplicationApiState>) -> Json<serde_json::Value> {
     let regions = state.regions.read().await;
     let active = regions.values().filter(|r| r.state == "active").count();
-    let max_lag: u64 = regions.values().map(|r| r.replication_lag_ms).max().unwrap_or(0);
+    let max_lag: u64 = regions
+        .values()
+        .map(|r| r.replication_lag_ms)
+        .max()
+        .unwrap_or(0);
 
     let health = if active == 0 {
         "standalone"
@@ -510,7 +516,9 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
-        let body = axum::body::to_bytes(resp.into_body(), 50_000).await.unwrap();
+        let body = axum::body::to_bytes(resp.into_body(), 50_000)
+            .await
+            .unwrap();
         let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(json["status"], "standalone");
     }
@@ -527,7 +535,9 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
-        let body = axum::body::to_bytes(resp.into_body(), 50_000).await.unwrap();
+        let body = axum::body::to_bytes(resp.into_body(), 50_000)
+            .await
+            .unwrap();
         let json: Vec<serde_json::Value> = serde_json::from_slice(&body).unwrap();
         assert!(json.is_empty());
     }
@@ -562,7 +572,9 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
-        let body = axum::body::to_bytes(resp.into_body(), 50_000).await.unwrap();
+        let body = axum::body::to_bytes(resp.into_body(), 50_000)
+            .await
+            .unwrap();
         let json: Vec<serde_json::Value> = serde_json::from_slice(&body).unwrap();
         assert_eq!(json.len(), 1);
         assert_eq!(json[0]["id"], "us-west");
@@ -580,7 +592,9 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
-        let body = axum::body::to_bytes(resp.into_body(), 50_000).await.unwrap();
+        let body = axum::body::to_bytes(resp.into_body(), 50_000)
+            .await
+            .unwrap();
         let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(json["total_regions"], 0);
     }
@@ -600,7 +614,9 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(resp.status(), StatusCode::CREATED);
-        let body = axum::body::to_bytes(resp.into_body(), 50_000).await.unwrap();
+        let body = axum::body::to_bytes(resp.into_body(), 50_000)
+            .await
+            .unwrap();
         let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(json["source_topic"], "events");
         assert_eq!(json["target_topic"], "events"); // default mirrors source name
@@ -636,7 +652,9 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(resp.status(), StatusCode::ACCEPTED);
-        let body = axum::body::to_bytes(resp.into_body(), 50_000).await.unwrap();
+        let body = axum::body::to_bytes(resp.into_body(), 50_000)
+            .await
+            .unwrap();
         let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(json["status"], "in_progress");
     }
@@ -653,7 +671,9 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
-        let body = axum::body::to_bytes(resp.into_body(), 50_000).await.unwrap();
+        let body = axum::body::to_bytes(resp.into_body(), 50_000)
+            .await
+            .unwrap();
         let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(json["status"], "standalone");
         assert_eq!(json["federation_mode"], "standalone");

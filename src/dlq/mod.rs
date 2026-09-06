@@ -272,7 +272,7 @@ impl DlqManager {
 
         // Serialize metadata to JSON
         let metadata_json = serde_json::to_string(&metadata).map_err(|e| {
-            StreamlineError::storage_msg(format!("Failed to serialize DLQ metadata: {}", e))
+            StreamlineError::storage_msg(format!("Failed to serialize DLQ metadata: {e}"))
         })?;
 
         // Build headers with DLQ metadata plus original headers
@@ -608,10 +608,10 @@ mod tests {
             let record = Record::new(
                 i,
                 1234567890 + i,
-                Some(Bytes::from(format!("key-{}", i))),
-                Bytes::from(format!("value-{}", i)),
+                Some(Bytes::from(format!("key-{i}"))),
+                Bytes::from(format!("value-{i}")),
             );
-            let context = DlqContext::new(format!("Error {}", i));
+            let context = DlqContext::new(format!("Error {i}"));
             dlq_manager
                 .send_to_dlq(&record, "replay-test", 0, context)
                 .unwrap();

@@ -97,7 +97,7 @@ fn test_list_offsets_all_versions() {
 
         let response = handler.handle_list_offsets(request, version);
 
-        assert!(response.is_ok(), "ListOffsets v{} should succeed", version);
+        assert!(response.is_ok(), "ListOffsets v{version} should succeed");
     }
 }
 
@@ -403,8 +403,7 @@ fn test_create_acls_single() {
         result_error == NONE
             || result_error == SECURITY_DISABLED
             || result_error == UNKNOWN_SERVER_ERROR,
-        "Expected NONE, SECURITY_DISABLED, or UNKNOWN_SERVER_ERROR, got {}",
-        result_error
+        "Expected NONE, SECURITY_DISABLED, or UNKNOWN_SERVER_ERROR, got {result_error}"
     );
 }
 
@@ -641,8 +640,7 @@ fn test_create_partitions_header_versions() {
             KafkaHandler::request_header_version(ApiKey::CreatePartitions as i16, version);
         assert_eq!(
             header_version, 1,
-            "CreatePartitions v{} should use request header v1",
-            version
+            "CreatePartitions v{version} should use request header v1"
         );
     }
 
@@ -718,8 +716,7 @@ fn test_describe_cluster_header_always_flexible() {
             KafkaHandler::request_header_version(ApiKey::DescribeCluster as i16, version);
         assert_eq!(
             header_version, 2,
-            "DescribeCluster v{} should use request header v2 (always flexible)",
-            version
+            "DescribeCluster v{version} should use request header v2 (always flexible)"
         );
     }
 }
@@ -805,8 +802,7 @@ fn test_delete_records_header_versions() {
             KafkaHandler::request_header_version(ApiKey::DeleteRecords as i16, version);
         assert_eq!(
             header_version, 1,
-            "DeleteRecords v{} should use request header v1",
-            version
+            "DeleteRecords v{version} should use request header v1"
         );
     }
 
@@ -897,8 +893,7 @@ fn test_offset_for_leader_epoch_header_versions() {
             KafkaHandler::request_header_version(ApiKey::OffsetForLeaderEpoch as i16, version);
         assert_eq!(
             header_version, 1,
-            "OffsetForLeaderEpoch v{} should use request header v1",
-            version
+            "OffsetForLeaderEpoch v{version} should use request header v1"
         );
     }
 
@@ -1266,9 +1261,7 @@ fn test_varint_encoding_small() {
     let zigzag = ((small_value << 1) ^ (small_value >> 31)) as u32;
     assert!(
         zigzag < 128,
-        "Value {} zigzag encodes to {}, should fit in 1 varint byte",
-        small_value,
-        zigzag
+        "Value {small_value} zigzag encodes to {zigzag}, should fit in 1 varint byte"
     );
     assert_eq!(zigzag, 126, "63 should zigzag encode to 126");
 }

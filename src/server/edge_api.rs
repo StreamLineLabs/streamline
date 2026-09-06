@@ -362,7 +362,7 @@ async fn trigger_sync(
 
     Ok(Json(SyncTriggerResponse {
         initiated: true,
-        message: format!("Sync triggered with direction: {}", direction),
+        message: format!("Sync triggered with direction: {direction}"),
         sync_state: "completed".to_string(),
     }))
 }
@@ -459,8 +459,7 @@ mod tests {
         let body = axum::body::to_bytes(response.into_body(), usize::MAX)
             .await
             .expect("body");
-        let status: EdgeStatusResponse =
-            serde_json::from_slice(&body).expect("deserialize");
+        let status: EdgeStatusResponse = serde_json::from_slice(&body).expect("deserialize");
 
         assert!(status.edge_mode);
         assert_eq!(status.sync_state, "idle");
@@ -487,8 +486,7 @@ mod tests {
         let body = axum::body::to_bytes(response.into_body(), usize::MAX)
             .await
             .expect("body");
-        let status: EdgeStatusResponse =
-            serde_json::from_slice(&body).expect("deserialize");
+        let status: EdgeStatusResponse = serde_json::from_slice(&body).expect("deserialize");
 
         assert_eq!(status.edge_id, "edge-test-123");
         assert_eq!(
@@ -517,8 +515,7 @@ mod tests {
         let body = axum::body::to_bytes(response.into_body(), usize::MAX)
             .await
             .expect("body");
-        let sync_resp: SyncTriggerResponse =
-            serde_json::from_slice(&body).expect("deserialize");
+        let sync_resp: SyncTriggerResponse = serde_json::from_slice(&body).expect("deserialize");
 
         assert!(sync_resp.initiated);
         assert_eq!(sync_resp.sync_state, "completed");
@@ -559,8 +556,7 @@ mod tests {
         let body = axum::body::to_bytes(response.into_body(), usize::MAX)
             .await
             .expect("body");
-        let progress: SyncProgressResponse =
-            serde_json::from_slice(&body).expect("deserialize");
+        let progress: SyncProgressResponse = serde_json::from_slice(&body).expect("deserialize");
 
         assert_eq!(progress.sync_state, "idle");
         assert_eq!(progress.total_pending_records, 0);
@@ -586,8 +582,7 @@ mod tests {
         let body = axum::body::to_bytes(response.into_body(), usize::MAX)
             .await
             .expect("body");
-        let conflicts: ConflictsResponse =
-            serde_json::from_slice(&body).expect("deserialize");
+        let conflicts: ConflictsResponse = serde_json::from_slice(&body).expect("deserialize");
 
         assert_eq!(conflicts.total_conflicts, 0);
         assert_eq!(conflicts.unresolved, 0);
@@ -611,8 +606,7 @@ mod tests {
         let body = axum::body::to_bytes(response.into_body(), usize::MAX)
             .await
             .expect("body");
-        let opt: OptimizationsResponse =
-            serde_json::from_slice(&body).expect("deserialize");
+        let opt: OptimizationsResponse = serde_json::from_slice(&body).expect("deserialize");
 
         assert!(!opt.reduced_memory_active);
         assert_eq!(opt.eviction_cycles, 0);

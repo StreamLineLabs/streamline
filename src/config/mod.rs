@@ -289,11 +289,11 @@ impl ServerConfig {
     /// Create a new server configuration from command-line arguments
     pub fn from_args(args: ServerArgs) -> crate::error::Result<Self> {
         let listen_addr: SocketAddr = args.listen_addr.parse().map_err(|e| {
-            crate::error::StreamlineError::Config(format!("Invalid listen address: {}", e))
+            crate::error::StreamlineError::Config(format!("Invalid listen address: {e}"))
         })?;
 
         let http_addr: SocketAddr = args.http_addr.parse().map_err(|e| {
-            crate::error::StreamlineError::Config(format!("Invalid HTTP address: {}", e))
+            crate::error::StreamlineError::Config(format!("Invalid HTTP address: {e}"))
         })?;
 
         // Validate TLS configuration
@@ -491,8 +491,7 @@ impl ServerConfig {
                 .transpose()
                 .map_err(|e| {
                     crate::error::StreamlineError::Config(format!(
-                        "Invalid advertised address: {}",
-                        e
+                        "Invalid advertised address: {e}"
                     ))
                 })?
                 .unwrap_or(listen_addr);
@@ -504,8 +503,7 @@ impl ServerConfig {
                 .transpose()
                 .map_err(|e| {
                     crate::error::StreamlineError::Config(format!(
-                        "Invalid inter-broker address: {}",
-                        e
+                        "Invalid inter-broker address: {e}"
                     ))
                 })?
                 .unwrap_or_else(|| {
@@ -527,8 +525,7 @@ impl ServerConfig {
                         .map(|s| {
                             s.trim().parse().map_err(|e| {
                                 crate::error::StreamlineError::Config(format!(
-                                    "Invalid seed node address '{}': {}",
-                                    s, e
+                                    "Invalid seed node address '{s}': {e}"
                                 ))
                             })
                         })
@@ -561,7 +558,7 @@ impl ServerConfig {
             };
 
             cluster.validate().map_err(|e| {
-                crate::error::StreamlineError::Config(format!("Invalid cluster config: {}", e))
+                crate::error::StreamlineError::Config(format!("Invalid cluster config: {e}"))
             })?;
 
             Some(cluster)
@@ -691,8 +688,7 @@ impl ServerConfig {
             simple: {
                 let simple_addr: SocketAddr = args.simple_addr.parse().map_err(|e| {
                     crate::error::StreamlineError::Config(format!(
-                        "Invalid simple protocol address: {}",
-                        e
+                        "Invalid simple protocol address: {e}"
                     ))
                 })?;
                 SimpleProtocolConfig {
@@ -989,7 +985,8 @@ impl ServerConfig {
         }
 
         // Validate segment sync interval when using interval mode
-        if self.storage.segment_sync_mode == "interval" && self.storage.segment_sync_interval_ms == 0
+        if self.storage.segment_sync_mode == "interval"
+            && self.storage.segment_sync_interval_ms == 0
         {
             return Err(StreamlineError::Config(
                 "segment_sync_interval_ms must be greater than 0 when using interval sync mode"
@@ -1173,9 +1170,7 @@ impl ServerConfig {
             )));
         }
 
-        if self.limits.connection_idle_timeout_secs > 0
-            && self.limits.connection_idle_timeout_secs > 86400
-        {
+        if self.limits.connection_idle_timeout_secs > 86400 {
             return Err(StreamlineError::Config(format!(
                 "connection_idle_timeout_secs ({}) exceeds 24 hours — likely a misconfiguration",
                 self.limits.connection_idle_timeout_secs
@@ -2152,10 +2147,8 @@ mod tests {
             // os_default generates a warning but should still validate
             assert!(
                 config.validate().is_ok(),
-                "sync_mode '{}' should be valid",
-                sync_mode
+                "sync_mode '{sync_mode}' should be valid"
             );
         }
     }
 }
-

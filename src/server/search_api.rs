@@ -88,10 +88,7 @@ pub fn handle_search(topic: &str, req: SearchRequest) -> SearchResponse {
 }
 
 /// Axum handler: `POST /api/v1/topics/:topic/search`.
-async fn search_handler(
-    Path(topic): Path<String>,
-    Json(req): Json<SearchRequest>,
-) -> Response {
+async fn search_handler(Path(topic): Path<String>, Json(req): Json<SearchRequest>) -> Response {
     if req.query.trim().is_empty() {
         return (
             StatusCode::BAD_REQUEST,
@@ -140,9 +137,10 @@ mod tests {
 
     #[test]
     fn search_after_indexing_returns_top_match() {
-        use crate::ai::semantic_topics::{registry, HashEmbedder, SemanticIndex};
         use crate::ai::semantic_topics::worker::Embedder;
+        use crate::ai::semantic_topics::{registry, HashEmbedder, SemanticIndex};
 
+        let _guard = registry::test_lock();
         let embedder = HashEmbedder::default();
         let topic = "search-after-indexing-topic";
         let idx = registry::get_or_create(topic);

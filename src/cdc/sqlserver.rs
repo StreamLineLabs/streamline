@@ -289,9 +289,9 @@ impl SqlServerCdcSource {
             let capture_instance = CdcCaptureInstance {
                 source_schema: schema.clone(),
                 source_table: tbl.clone(),
-                capture_instance: format!("{}_{}", schema, tbl),
+                capture_instance: format!("{schema}_{tbl}"),
                 cdc_schema: "cdc".to_string(),
-                change_table: format!("{}_{}_CT", schema, tbl),
+                change_table: format!("{schema}_{tbl}_CT"),
                 columns: Vec::new(),
                 primary_key: Vec::new(),
                 start_lsn: "0x00000000000000000000".to_string(),
@@ -375,7 +375,7 @@ impl SqlServerCdcSource {
         let events = Vec::new();
 
         let current_lsn = self.current_lsn.read().clone();
-        let capture_instances = self.capture_instances.read().clone();
+        let capture_instances = self.cdc_tables.read().clone();
 
         if capture_instances.is_empty() {
             debug!("No capture instances configured, skipping poll");
@@ -393,10 +393,11 @@ impl SqlServerCdcSource {
                  SELECT __$start_lsn, __$seqval, __$operation, __$update_mask, * \
                  FROM cdc.fn_cdc_get_all_changes_{}(@from_lsn, @to_lsn, 'all update old') \
                  ORDER BY __$start_lsn, __$seqval, __$operation",
-                if current_lsn.is_empty() {
+                if current_lsn.lsn.is_empty() {
                     format!("sys.fn_cdc_get_min_lsn('{}')", capture.capture_instance)
                 } else {
-                    format!("0x{}", current_lsn)
+                    // The stored LSN may already carry the T-SQL `0x` binary literal prefix.
+                    format!("0x{}", current_lsn.lsn.trim_start_matches("0x"))
                 },
                 capture.capture_instance
             );

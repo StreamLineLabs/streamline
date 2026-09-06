@@ -309,7 +309,7 @@ impl SimilarityStreamManager {
                 .provider
                 .embed(text)
                 .await
-                .map_err(|e| StreamlineError::AI(format!("Failed to embed query: {}", e)))?,
+                .map_err(|e| StreamlineError::AI(format!("Failed to embed query: {e}")))?,
         };
 
         // Apply defaults
@@ -380,7 +380,7 @@ impl SimilarityStreamManager {
                 .provider
                 .embed(&text)
                 .await
-                .map_err(|e| StreamlineError::AI(format!("Failed to embed query: {}", e)))?,
+                .map_err(|e| StreamlineError::AI(format!("Failed to embed query: {e}")))?,
         };
 
         let indexes = self.indexes.read().await;

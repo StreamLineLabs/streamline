@@ -111,8 +111,7 @@ impl KeyProvider for LocalAgeProvider {
         let mat = self.material(key_id)?;
         let sk = Self::signing_key(&mat)?;
         let sig = sk.sign(payload);
-        let _ev = AuditEvent::now(BACKEND, KmsOp::Sign, key_id, true)
-            .with_algorithm(mat.algorithm);
+        let _ev = AuditEvent::now(BACKEND, KmsOp::Sign, key_id, true).with_algorithm(mat.algorithm);
         Ok(Signature {
             algorithm: mat.algorithm,
             bytes: sig.to_bytes().to_vec(),
@@ -122,7 +121,9 @@ impl KeyProvider for LocalAgeProvider {
     fn verify(&self, key_id: &KeyId, payload: &[u8], sig: &Signature) -> KmsResult<()> {
         let mat = self.material(key_id)?;
         if mat.algorithm != sig.algorithm {
-            return Err(KmsError::UnsupportedAlgorithm(sig.algorithm.as_str().into()));
+            return Err(KmsError::UnsupportedAlgorithm(
+                sig.algorithm.as_str().into(),
+            ));
         }
         let vk = Self::verifying_key(&mat)?;
         let bytes: &[u8; 64] = sig

@@ -7,5 +7,7 @@ max_width = 100
 # Use field init shorthand where possible: Foo { x } instead of Foo { x: x }
 use_field_init_shorthand = true
 
-# Imports formatting
-imports_granularity = "Crate"
+# Formatting is checked with the declared MSRV toolchain (1.88) in CI — see the
+# `fmt` job in .github/workflows/ci.yml. Avoid nightly-only options (such as
+# `imports_granularity`, which used to be set here) so the formatter
+# configuration is reproducible and warning-free on the pinned stable toolchain.

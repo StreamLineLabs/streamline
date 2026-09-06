@@ -44,8 +44,6 @@ mod opcodes {
     pub const IORING_REGISTER_FILES: libc::c_uint = 2;
     pub const IORING_UNREGISTER_FILES: libc::c_uint = 3;
     pub const IORING_REGISTER_FILES_UPDATE: libc::c_uint = 6;
-    pub const IORING_REGISTER_BUFFERS2: libc::c_uint = 15;
-    pub const IORING_REGISTER_BUFFERS_UPDATE: libc::c_uint = 16;
 }
 
 /// io_uring syscall number (x86_64)
@@ -141,6 +139,11 @@ pub struct RegisteredBuffer {
 
 #[cfg(target_os = "linux")]
 impl RegisteredBuffer {
+    /// Get the registered buffer's base address.
+    pub fn as_ptr(&self) -> *mut u8 {
+        self.ptr
+    }
+
     /// Get the buffer index for use in io_uring operations
     pub fn index(&self) -> u32 {
         self.index
@@ -167,6 +170,12 @@ pub struct BufferRegistration {
     /// Backing buffers (kept alive for kernel)
     buffers: Vec<Vec<u8>>,
 }
+
+// SAFETY: iovec pointers always target heap allocations owned by `buffers`.
+// Moving the registration object does not move those allocations, and mutation
+// is restricted to exclusive access or explicitly unsafe buffer operations.
+#[cfg(target_os = "linux")]
+unsafe impl Send for BufferRegistration {}
 
 #[cfg(target_os = "linux")]
 impl BufferRegistration {
@@ -200,19 +209,20 @@ impl BufferRegistration {
             .iter()
             .map(|&size| {
                 // Allocate page-aligned for DMA
-                let layout = std::alloc::Layout::from_size_align(size, 4096).or_else(|_| {
-                    std::alloc::Layout::from_size_align(size, 8)
-                }).map_err(|e| StreamlineError::storage_msg(format!(
-                    "Failed to create memory layout for size {}: {}", size, e
-                )))?;
+                let layout = std::alloc::Layout::from_size_align(size, 4096)
+                    .or_else(|_| std::alloc::Layout::from_size_align(size, 8))
+                    .map_err(|e| {
+                        StreamlineError::storage_msg(format!(
+                            "Failed to create memory layout for size {size}: {e}"
+                        ))
+                    })?;
                 // SAFETY: alloc_zeroed is safe because the layout was successfully
                 // created above with valid size and alignment. The returned pointer
                 // is checked for null before use.
                 let ptr = unsafe { std::alloc::alloc_zeroed(layout) };
                 if ptr.is_null() {
                     return Err(StreamlineError::storage_msg(format!(
-                        "Failed to allocate aligned buffer of size {}",
-                        size
+                        "Failed to allocate aligned buffer of size {size}"
                     )));
                 }
                 // SAFETY: Vec::from_raw_parts is safe because: (1) ptr was allocated
@@ -253,8 +263,7 @@ impl BufferRegistration {
             self.buffers.clear();
             self.iovecs.clear();
             return Err(StreamlineError::storage_msg(format!(
-                "IORING_REGISTER_BUFFERS failed: {}",
-                err
+                "IORING_REGISTER_BUFFERS failed: {err}"
             )));
         }
 
@@ -323,7 +332,7 @@ impl BufferRegistration {
     /// The caller must ensure the buffer index is valid and the data fits.
     pub unsafe fn write_to_buffer(&self, index: u32, offset: usize, data: &[u8]) -> Result<()> {
         let iovec = self.iovecs.get(index as usize).ok_or_else(|| {
-            StreamlineError::storage_msg(format!("Invalid buffer index: {}", index))
+            StreamlineError::storage_msg(format!("Invalid buffer index: {index}"))
         })?;
 
         if offset + data.len() > iovec.iov_len {
@@ -347,7 +356,7 @@ impl BufferRegistration {
     /// The caller must ensure the buffer index is valid.
     pub unsafe fn read_from_buffer(&self, index: u32, offset: usize, len: usize) -> Result<&[u8]> {
         let iovec = self.iovecs.get(index as usize).ok_or_else(|| {
-            StreamlineError::storage_msg(format!("Invalid buffer index: {}", index))
+            StreamlineError::storage_msg(format!("Invalid buffer index: {index}"))
         })?;
 
         if offset + len > iovec.iov_len {
@@ -430,8 +439,7 @@ impl FileRegistration {
             error!("Failed to register file table: {}", err);
             self.fds.clear();
             return Err(StreamlineError::storage_msg(format!(
-                "IORING_REGISTER_FILES failed: {}",
-                err
+                "IORING_REGISTER_FILES failed: {err}"
             )));
         }
 
@@ -512,8 +520,7 @@ impl FileRegistration {
         if ret < 0 {
             let err = std::io::Error::last_os_error();
             return Err(StreamlineError::storage_msg(format!(
-                "IORING_REGISTER_FILES_UPDATE failed: {}",
-                err
+                "IORING_REGISTER_FILES_UPDATE failed: {err}"
             )));
         }
 
@@ -530,8 +537,7 @@ impl FileRegistration {
         let slot_idx = slot as usize;
         if slot_idx >= self.fds.len() {
             return Err(StreamlineError::storage_msg(format!(
-                "Slot {} out of range",
-                slot
+                "Slot {slot} out of range"
             )));
         }
 
@@ -550,7 +556,7 @@ impl FileRegistration {
         }
 
         let update = io_uring_files_update {
-            offset: slot as u32,
+            offset: slot,
             resv: 0,
             fds: &empty as *const i32,
         };

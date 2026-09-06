@@ -6,11 +6,11 @@
 use super::{
     config::{RdmaConfig, TransportMode},
     connection::{
-        CompletionOpcode, CompletionStatus, ConnectionInfo, ConnectionManager, QueuePair,
-        QueuePairNum, RecvWorkRequest, SendOpcode, SendWorkRequest, WorkCompletion,
+        ConnectionInfo, ConnectionManager, QueuePair, QueuePairNum, RecvWorkRequest, SendOpcode,
+        SendWorkRequest, WorkCompletion,
     },
     device::{DeviceManager, Gid, RdmaDevice},
-    memory::{LocalKey, MemoryManager, MemoryRegion, RemoteKey},
+    memory::{MemoryManager, MemoryRegion, RemoteKey},
     AccessFlags, RdmaError, RdmaResult, RdmaTransport as TransportType,
 };
 use parking_lot::{Mutex, RwLock};
@@ -18,7 +18,7 @@ use std::collections::VecDeque;
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, info};
 
 /// RDMA transport for inter-broker communication
 pub struct RdmaTransportLayer {
@@ -45,9 +45,6 @@ pub struct RdmaTransportLayer {
 
     /// Pending completions
     pending_completions: Mutex<VecDeque<WorkCompletion>>,
-
-    /// Next work request ID
-    next_wr_id: AtomicU64,
 
     /// Total messages sent
     messages_sent: AtomicU64,
@@ -82,7 +79,6 @@ impl RdmaTransportLayer {
             running: AtomicBool::new(false),
             local_addr: RwLock::new(None),
             pending_completions: Mutex::new(VecDeque::new()),
-            next_wr_id: AtomicU64::new(1),
             messages_sent: AtomicU64::new(0),
             messages_received: AtomicU64::new(0),
             bytes_sent: AtomicU64::new(0),
@@ -117,8 +113,7 @@ impl RdmaTransportLayer {
         let device_name = if let Some(ref name) = self.config.device_name {
             if !devices.contains(name) {
                 return Err(RdmaError::DeviceError(format!(
-                    "Specified device {} not found",
-                    name
+                    "Specified device {name} not found"
                 )));
             }
             name.clone()
@@ -205,7 +200,7 @@ impl RdmaTransportLayer {
         Ok(RdmaConnection {
             remote_addr,
             qp,
-            memory_manager: self.memory_manager.clone(),
+            _memory_manager: self.memory_manager.clone(),
             config: self.config.clone(),
         })
     }
@@ -229,7 +224,7 @@ impl RdmaTransportLayer {
         let connection = RdmaConnection {
             remote_addr,
             qp,
-            memory_manager: self.memory_manager.clone(),
+            _memory_manager: self.memory_manager.clone(),
             config: self.config.clone(),
         };
 
@@ -244,7 +239,7 @@ impl RdmaTransportLayer {
         Some(RdmaConnection {
             remote_addr: *remote_addr,
             qp,
-            memory_manager: self.memory_manager.clone(),
+            _memory_manager: self.memory_manager.clone(),
             config: self.config.clone(),
         })
     }
@@ -345,8 +340,8 @@ pub struct RdmaConnection {
     /// Queue pair
     qp: Arc<QueuePair>,
 
-    /// Memory manager
-    memory_manager: Arc<MemoryManager>,
+    /// Keep the originating memory manager alive for the connection's lifetime.
+    _memory_manager: Arc<MemoryManager>,
 
     /// Configuration
     config: RdmaConfig,

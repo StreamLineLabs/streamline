@@ -33,15 +33,16 @@
 //! - **Fast tests** (~6s): `test_single_node_cluster`, `test_network_isolation_simulation`
 //! - **Slow tests** (~15-30s each): Multi-node cluster tests (3-5 nodes)
 //!
-//! Note: Tests use `#[serial]` to run sequentially because they create
+//! Note: Cluster tests take an async process-local mutex because they create
 //! multi-node clusters that can conflict when run in parallel.
 
 mod chaos;
 
-use serial_test::serial;
 use std::time::Duration;
 use tokio::time::sleep;
 use tracing_subscriber::EnvFilter;
+
+static CLUSTER_TEST_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
 /// Initialize test logging
 fn init_logging() {
@@ -55,8 +56,8 @@ fn init_logging() {
 
 /// Test single node cluster formation
 #[tokio::test]
-#[serial]
 async fn test_single_node_cluster() {
+    let _serial_guard = CLUSTER_TEST_LOCK.lock().await;
     init_logging();
 
     let mut cluster = chaos::ChaosCluster::new(1).await;
@@ -78,9 +79,9 @@ async fn test_single_node_cluster() {
 
 /// Test three node cluster formation and leader election
 #[tokio::test]
-#[serial]
 #[ignore = "slow test (~15s): run with --ignored"]
 async fn test_three_node_cluster_formation() {
+    let _serial_guard = CLUSTER_TEST_LOCK.lock().await;
     init_logging();
 
     let mut cluster = chaos::ChaosCluster::new(3).await;
@@ -102,9 +103,9 @@ async fn test_three_node_cluster_formation() {
 
 /// Test leader failure and re-election
 #[tokio::test]
-#[serial]
 #[ignore = "slow test (~20s): run with --ignored"]
 async fn test_leader_failure_recovery() {
+    let _serial_guard = CLUSTER_TEST_LOCK.lock().await;
     init_logging();
 
     let mut cluster = chaos::ChaosCluster::new(3).await;
@@ -147,9 +148,9 @@ async fn test_leader_failure_recovery() {
 
 /// Test node crash and rejoin
 #[tokio::test]
-#[serial]
 #[ignore = "slow test (~15s): run with --ignored"]
 async fn test_node_crash_rejoin() {
+    let _serial_guard = CLUSTER_TEST_LOCK.lock().await;
     init_logging();
 
     let mut cluster = chaos::ChaosCluster::new(3).await;
@@ -193,9 +194,9 @@ async fn test_node_crash_rejoin() {
 
 /// Test topic creation across cluster
 #[tokio::test]
-#[serial]
 #[ignore = "slow test (~15s): run with --ignored"]
 async fn test_topic_creation_cluster() {
+    let _serial_guard = CLUSTER_TEST_LOCK.lock().await;
     init_logging();
 
     let mut cluster = chaos::ChaosCluster::new(3).await;
@@ -236,9 +237,9 @@ async fn test_topic_creation_cluster() {
 
 /// Test cluster survives minority failure
 #[tokio::test]
-#[serial]
 #[ignore = "slow test (~25s): run with --ignored"]
 async fn test_minority_failure_survival() {
+    let _serial_guard = CLUSTER_TEST_LOCK.lock().await;
     init_logging();
 
     let mut cluster = chaos::ChaosCluster::new(5).await;
@@ -268,8 +269,8 @@ async fn test_minority_failure_survival() {
 
 /// Test network simulator isolation
 #[tokio::test]
-#[serial]
 async fn test_network_isolation_simulation() {
+    let _serial_guard = CLUSTER_TEST_LOCK.lock().await;
     let network = chaos::NetworkSimulator::new();
 
     // Initially all can communicate
@@ -297,9 +298,9 @@ async fn test_network_isolation_simulation() {
 
 /// Test that majority is required for progress
 #[tokio::test]
-#[serial]
 #[ignore = "slow test (~20s): run with --ignored"]
 async fn test_majority_required() {
+    let _serial_guard = CLUSTER_TEST_LOCK.lock().await;
     init_logging();
 
     let mut cluster = chaos::ChaosCluster::new(3).await;
@@ -372,11 +373,10 @@ async fn test_fault_injection_configuration() {
             injector
                 .should_inject(&chaos::FaultType::WriteFailure)
                 .await,
-            "Should trigger on iteration {}",
-            i
+            "Should trigger on iteration {i}"
         );
         injector
-            .inject(chaos::FaultType::WriteFailure, &format!("test_{}", i))
+            .inject(chaos::FaultType::WriteFailure, &format!("test_{i}"))
             .await;
     }
 

@@ -31,7 +31,7 @@ impl OutputFormat {
 pub(crate) fn parse_header(s: &str) -> std::result::Result<(String, String), String> {
     let parts: Vec<&str> = s.splitn(2, '=').collect();
     if parts.len() != 2 {
-        return Err(format!("Invalid header format '{}'. Expected key=value", s));
+        return Err(format!("Invalid header format '{s}'. Expected key=value"));
     }
     Ok((parts[0].to_string(), parts[1].to_string()))
 }

@@ -4,8 +4,6 @@
 //! and per-connection statistics. This module handles the management plane;
 //! the actual QUIC protocol handling is delegated to a separate layer.
 
-#![cfg(feature = "quic")]
-
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
@@ -197,7 +195,9 @@ impl QuicTransportManager {
         self.connections.write().await.insert(id.clone(), info);
 
         self.stats.total_connections.fetch_add(1, Ordering::Relaxed);
-        self.stats.active_connections.fetch_add(1, Ordering::Relaxed);
+        self.stats
+            .active_connections
+            .fetch_add(1, Ordering::Relaxed);
         if is_0rtt {
             self.stats
                 .zero_rtt_connections
@@ -214,7 +214,9 @@ impl QuicTransportManager {
     pub async fn remove_connection(&self, id: &str) -> Option<QuicConnectionInfo> {
         let removed = self.connections.write().await.remove(id);
         if removed.is_some() {
-            self.stats.active_connections.fetch_sub(1, Ordering::Relaxed);
+            self.stats
+                .active_connections
+                .fetch_sub(1, Ordering::Relaxed);
             debug!(connection_id = %id, "QUIC connection removed");
         } else {
             warn!(connection_id = %id, "Attempted to remove unknown QUIC connection");
@@ -239,7 +241,9 @@ impl QuicTransportManager {
     /// that global accounting remains accurate.
     pub async fn record_traffic(&self, id: &str, bytes_sent: u64, bytes_received: u64) {
         // Aggregate counters (always updated)
-        self.stats.bytes_sent.fetch_add(bytes_sent, Ordering::Relaxed);
+        self.stats
+            .bytes_sent
+            .fetch_add(bytes_sent, Ordering::Relaxed);
         self.stats
             .bytes_received
             .fetch_add(bytes_received, Ordering::Relaxed);
@@ -461,7 +465,9 @@ mod tests {
     #[tokio::test]
     async fn test_stats_handshake_failures() {
         let mgr = manager();
-        mgr.stats().handshake_failures.fetch_add(3, Ordering::Relaxed);
+        mgr.stats()
+            .handshake_failures
+            .fetch_add(3, Ordering::Relaxed);
         assert_eq!(mgr.snapshot().handshake_failures, 3);
     }
 

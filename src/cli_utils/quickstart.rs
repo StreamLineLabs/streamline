@@ -459,7 +459,7 @@ impl QuickstartBackend {
                 let response = http_request(
                     http_addr,
                     "POST",
-                    &format!("/api/v1/topics/{}/messages", topic),
+                    &format!("/api/v1/topics/{topic}/messages"),
                     Some(&serde_json::to_string(&payload)?),
                 )?;
                 if !(200..300).contains(&response.status) {
@@ -496,8 +496,7 @@ impl QuickstartBackend {
             }
             QuickstartBackend::Http { http_addr } => {
                 let path = format!(
-                    "/api/v1/topics/{}/partitions/{}/messages?offset={}&limit={}",
-                    topic, partition, offset, limit
+                    "/api/v1/topics/{topic}/partitions/{partition}/messages?offset={offset}&limit={limit}"
                 );
                 let response = http_request(http_addr, "GET", &path, None)?;
                 if !(200..300).contains(&response.status) {
@@ -539,9 +538,8 @@ fn http_request(
     path: &str,
     body: Option<&str>,
 ) -> crate::Result<HttpResponse> {
-    let mut stream = std::net::TcpStream::connect(addr).map_err(|err| {
-        StreamlineError::Network(format!("Failed to connect to {}: {}", addr, err))
-    })?;
+    let mut stream = std::net::TcpStream::connect(addr)
+        .map_err(|err| StreamlineError::Network(format!("Failed to connect to {addr}: {err}")))?;
     stream.set_read_timeout(Some(Duration::from_secs(5))).ok();
     stream.set_write_timeout(Some(Duration::from_secs(5))).ok();
 
@@ -565,10 +563,7 @@ fn http_request(
         .nth(1)
         .and_then(|code| code.parse::<u16>().ok())
         .ok_or_else(|| {
-            StreamlineError::Network(format!(
-                "Invalid HTTP response from {}: {}",
-                addr, status_line
-            ))
+            StreamlineError::Network(format!("Invalid HTTP response from {addr}: {status_line}"))
         })?;
 
     let body = response
@@ -634,7 +629,7 @@ fn print_diagnostics_hint(server_addr: &str, http_addr: &str) {
         server_addr.cyan(),
         http_addr.cyan()
     );
-    println!("    curl http://{}/health", http_addr);
+    println!("    curl http://{http_addr}/health");
     println!("    See docs/TROUBLESHOOTING.md");
 }
 
@@ -665,7 +660,7 @@ fn print_banner() {
 fn print_step(num: u32, message: &str) {
     println!(
         "  {} {}",
-        format!("[{}/4]", num).cyan().bold(),
+        format!("[{num}/4]").cyan().bold(),
         message.bold()
     );
 }
@@ -673,7 +668,7 @@ fn print_step(num: u32, message: &str) {
 fn print_example_section(title: &str, examples: &[(&str, &str)]) {
     println!("  {}", title.bold());
     for (cmd, desc) in examples {
-        println!("    {} {}", cmd.cyan(), format!("# {}", desc).dimmed());
+        println!("    {} {}", cmd.cyan(), format!("# {desc}").dimmed());
     }
     println!();
 }
@@ -695,8 +690,7 @@ fn validate_addr(label: &str, addr: &str) -> crate::Result<()> {
     match addr.to_socket_addrs().map(|mut addrs| addrs.next()) {
         Ok(Some(_)) => Ok(()),
         _ => Err(StreamlineError::Config(format!(
-            "Invalid {} address: {}",
-            label, addr
+            "Invalid {label} address: {addr}"
         ))),
     }
 }

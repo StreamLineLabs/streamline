@@ -37,12 +37,12 @@ impl std::fmt::Display for ParseError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ParseError::UnexpectedToken { expected, found } => {
-                write!(f, "Expected {}, found {}", expected, found)
+                write!(f, "Expected {expected}, found {found}")
             }
             ParseError::UnexpectedEnd => write!(f, "Unexpected end of input"),
-            ParseError::InvalidSyntax(msg) => write!(f, "Invalid syntax: {}", msg),
-            ParseError::UnknownFunction(name) => write!(f, "Unknown function: {}", name),
-            ParseError::InvalidWindow(msg) => write!(f, "Invalid window: {}", msg),
+            ParseError::InvalidSyntax(msg) => write!(f, "Invalid syntax: {msg}"),
+            ParseError::UnknownFunction(name) => write!(f, "Unknown function: {name}"),
+            ParseError::InvalidWindow(msg) => write!(f, "Invalid window: {msg}"),
         }
     }
 }
@@ -320,8 +320,7 @@ impl DslParser {
                 }
                 _ => {
                     return Err(ParseError::InvalidSyntax(format!(
-                        "Unexpected character: {}",
-                        ch
+                        "Unexpected character: {ch}"
                     )));
                 }
             }
@@ -419,7 +418,7 @@ impl DslParser {
             Ok(())
         } else {
             Err(ParseError::UnexpectedToken {
-                expected: format!("{:?}", expected),
+                expected: format!("{expected:?}"),
                 found: format!("{:?}", self.current()),
             })
         }

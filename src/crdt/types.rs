@@ -55,7 +55,7 @@ impl std::str::FromStr for CrdtType {
             "lww_register" | "lwwregister" | "LWWRegister" => Ok(CrdtType::LWWRegister),
             "or_set" | "orset" | "ORSet" => Ok(CrdtType::ORSet),
             "rga_sequence" | "rgasequence" | "RGASequence" => Ok(CrdtType::RGASequence),
-            _ => Err(StreamlineError::Config(format!("Unknown CRDT type: {}", s))),
+            _ => Err(StreamlineError::Config(format!("Unknown CRDT type: {s}"))),
         }
     }
 }

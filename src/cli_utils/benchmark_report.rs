@@ -282,7 +282,7 @@ impl BenchmarkReport {
         // Header
         out.push_str(&format!("| {:<width$} |", "Test", width = test_col_width));
         for p in &platforms {
-            out.push_str(&format!(" {:<width$} |", p, width = platform_col_width));
+            out.push_str(&format!(" {p:<platform_col_width$} |"));
         }
         out.push('\n');
 
@@ -308,13 +308,13 @@ impl BenchmarkReport {
                     .map(|m| {
                         let val = format!("{:.2} {}", m.value, m.unit);
                         if m.is_best {
-                            format!("{}*", val)
+                            format!("{val}*")
                         } else {
                             val
                         }
                     })
                     .unwrap_or_else(|| "-".to_string());
-                out.push_str(&format!(" {:<width$} |", cell, width = platform_col_width));
+                out.push_str(&format!(" {cell:<platform_col_width$} |"));
             }
             out.push('\n');
         }
@@ -362,7 +362,7 @@ impl BenchmarkReport {
                 continue;
             }
 
-            md.push_str(&format!("### {}\n\n", cat));
+            md.push_str(&format!("### {cat}\n\n"));
 
             // Build a table for this category
             let owned: Vec<BenchmarkComparison> = comparisons.into_iter().cloned().collect();
@@ -388,7 +388,7 @@ impl BenchmarkReport {
         if !self.summary.key_advantages.is_empty() {
             md.push_str("### Key Advantages\n\n");
             for adv in &self.summary.key_advantages {
-                md.push_str(&format!("- ✅ {}\n", adv));
+                md.push_str(&format!("- ✅ {adv}\n"));
             }
             md.push('\n');
         }
@@ -396,7 +396,7 @@ impl BenchmarkReport {
         if !self.summary.key_disadvantages.is_empty() {
             md.push_str("### Areas for Improvement\n\n");
             for dis in &self.summary.key_disadvantages {
-                md.push_str(&format!("- ⚠️ {}\n", dis));
+                md.push_str(&format!("- ⚠️ {dis}\n"));
             }
             md.push('\n');
         }

@@ -95,10 +95,7 @@ pub enum DiffError {
 /// write topic. `records_added` is the branch count (since branch writes
 /// are strictly additive), and `records_removed` / `records_modified` are
 /// always 0 in the current append-only model.
-pub fn diff_branches(
-    config: &DiffConfig,
-    store: &BranchStore,
-) -> Result<DiffResult, DiffError> {
+pub fn diff_branches(config: &DiffConfig, store: &BranchStore) -> Result<DiffResult, DiffError> {
     let bid = BranchId::new(&config.base_topic, &config.branch_name);
     let meta = store
         .get(&bid)
@@ -206,7 +203,10 @@ mod tests {
             metric: None,
         };
         let err = diff_branches(&cfg, &store).unwrap_err();
-        assert!(matches!(err, DiffError::Store(BranchStoreError::NotFound(_))));
+        assert!(matches!(
+            err,
+            DiffError::Store(BranchStoreError::NotFound(_))
+        ));
     }
 
     #[test]

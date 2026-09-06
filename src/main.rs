@@ -106,11 +106,11 @@ fn run() -> Result<()> {
     let config_file = if let Some(ref path) = args.config {
         match ConfigFile::load(path) {
             Ok(config) => {
-                eprintln!("Loaded configuration from {:?}", path);
+                eprintln!("Loaded configuration from {path:?}");
                 Some(config)
             }
             Err(e) => {
-                eprintln!("Error loading configuration file: {}", e);
+                eprintln!("Error loading configuration file: {e}");
                 return Err(e);
             }
         }
@@ -141,7 +141,7 @@ fn run() -> Result<()> {
     let runtime_mode_str = args.runtime_mode.clone();
     let runtime_mode = runtime_mode_str
         .parse::<RuntimeMode>()
-        .map_err(|e| StreamlineError::Config(format!("Invalid runtime mode: {}", e)))?;
+        .map_err(|e| StreamlineError::Config(format!("Invalid runtime mode: {e}")))?;
 
     // Create log buffer for real-time log viewing
     let log_buffer = LogBuffer::new_shared();
@@ -208,8 +208,7 @@ fn run_with_tokio(
         Err(e) => {
             error!(error = %e, "Failed to create Tokio runtime");
             return Err(StreamlineError::Server(format!(
-                "Failed to create Tokio runtime: {}",
-                e
+                "Failed to create Tokio runtime: {e}"
             )));
         }
     };
@@ -230,8 +229,7 @@ fn run_with_sharded_runtime(
         Err(e) => {
             error!(error = %e, "Failed to create sharded runtime");
             return Err(StreamlineError::Server(format!(
-                "Failed to create sharded runtime: {}",
-                e
+                "Failed to create sharded runtime: {e}"
             )));
         }
     };
@@ -240,8 +238,7 @@ fn run_with_sharded_runtime(
     if let Err(e) = sharded_runtime.start() {
         error!(error = %e, "Failed to start sharded runtime");
         return Err(StreamlineError::Server(format!(
-            "Failed to start sharded runtime: {}",
-            e
+            "Failed to start sharded runtime: {e}"
         )));
     }
 
@@ -261,8 +258,7 @@ fn run_with_sharded_runtime(
         Err(e) => {
             error!(error = %e, "Failed to create Tokio runtime");
             return Err(StreamlineError::Server(format!(
-                "Failed to create Tokio runtime: {}",
-                e
+                "Failed to create Tokio runtime: {e}"
             )));
         }
     };

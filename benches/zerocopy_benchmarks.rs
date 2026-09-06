@@ -128,7 +128,7 @@ fn bench_segment_read(c: &mut Criterion) {
                 batch.add_record(Record::new(
                     offset,
                     timestamp,
-                    Some(Bytes::from(format!("key-{:08}", offset))),
+                    Some(Bytes::from(format!("key-{offset:08}"))),
                     Bytes::from(format!("value-{:08}-{}", offset, "x".repeat(100))),
                 ));
             }
@@ -186,7 +186,7 @@ fn bench_record_aggregation(c: &mut Criterion) {
             Record::new(
                 i,
                 1234567890,
-                Some(Bytes::from(format!("key-{}", i))),
+                Some(Bytes::from(format!("key-{i}"))),
                 Bytes::from(format!("value-{}-{}", i, "x".repeat(1000))),
             )
         })
@@ -295,7 +295,7 @@ fn bench_response_cache(c: &mut Criterion) {
     group.bench_function("cache_put_64kb", |b| {
         let mut counter = 1000;
         b.iter(|| {
-            let key = CacheKey::new(format!("bench-{}", counter), 0, counter, 65536);
+            let key = CacheKey::new(format!("bench-{counter}"), 0, counter, 65536);
             counter += 1;
             let result = cache.put(key, &test_data).unwrap();
             black_box(result);
@@ -323,7 +323,7 @@ fn bench_zerocopy_vs_regular(c: &mut Criterion) {
                 batch.add_record(Record::new(
                     offset,
                     timestamp,
-                    Some(Bytes::from(format!("key-{:08}", offset))),
+                    Some(Bytes::from(format!("key-{offset:08}"))),
                     Bytes::from(format!("value-{:08}-{}", offset, "x".repeat(500))),
                 ));
             }
@@ -404,7 +404,7 @@ fn bench_fetch_response_building(c: &mut Criterion) {
             Record::new(
                 i,
                 1234567890,
-                Some(Bytes::from(format!("key-{:08}", i))),
+                Some(Bytes::from(format!("key-{i:08}"))),
                 Bytes::from(format!("value-{:08}-{}", i, "x".repeat(200))),
             )
         })

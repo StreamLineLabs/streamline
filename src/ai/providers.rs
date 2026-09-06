@@ -128,10 +128,11 @@ impl OpenAIProvider {
             return Err(StreamlineError::Config("OpenAI API key is required".into()));
         }
 
-        let client = reqwest::Client::builder()
+        let client = crate::http_client::builder()
+            .map_err(|e| StreamlineError::Config(format!("Failed to create HTTP client: {e}")))?
             .timeout(std::time::Duration::from_millis(config.timeout_ms))
             .build()
-            .map_err(|e| StreamlineError::Config(format!("Failed to create HTTP client: {}", e)))?;
+            .map_err(|e| StreamlineError::Config(format!("Failed to create HTTP client: {e}")))?;
 
         let cache = if config.cache_enabled {
             Some(Arc::new(RwLock::new(EmbeddingCache::new(
@@ -196,7 +197,7 @@ impl EmbeddingProvider for OpenAIProvider {
 
         let response = self
             .client
-            .post(format!("{}/embeddings", api_base))
+            .post(format!("{api_base}/embeddings"))
             .header(
                 "Authorization",
                 format!("Bearer {}", self.config.api_key.as_deref().unwrap_or("")),
@@ -207,22 +208,21 @@ impl EmbeddingProvider for OpenAIProvider {
             }))
             .send()
             .await
-            .map_err(|e| StreamlineError::Network(format!("OpenAI request failed: {}", e)))?;
+            .map_err(|e| StreamlineError::Network(format!("OpenAI request failed: {e}")))?;
 
         if !response.status().is_success() {
             self.stats.errors.fetch_add(1, Ordering::Relaxed);
             let status = response.status();
             let body = response.text().await.unwrap_or_default();
             return Err(StreamlineError::Network(format!(
-                "OpenAI API error {}: {}",
-                status, body
+                "OpenAI API error {status}: {body}"
             )));
         }
 
         let data: OpenAIEmbeddingResponse = response
             .json()
             .await
-            .map_err(|e| StreamlineError::Network(format!("Failed to parse response: {}", e)))?;
+            .map_err(|e| StreamlineError::Network(format!("Failed to parse response: {e}")))?;
 
         let embedding = data
             .data
@@ -263,7 +263,7 @@ impl EmbeddingProvider for OpenAIProvider {
 
             let response = self
                 .client
-                .post(format!("{}/embeddings", api_base))
+                .post(format!("{api_base}/embeddings"))
                 .header(
                     "Authorization",
                     format!("Bearer {}", self.config.api_key.as_deref().unwrap_or("")),
@@ -274,21 +274,21 @@ impl EmbeddingProvider for OpenAIProvider {
                 }))
                 .send()
                 .await
-                .map_err(|e| StreamlineError::Network(format!("OpenAI request failed: {}", e)))?;
+                .map_err(|e| StreamlineError::Network(format!("OpenAI request failed: {e}")))?;
 
             if !response.status().is_success() {
                 self.stats.errors.fetch_add(1, Ordering::Relaxed);
                 let status = response.status();
                 let body = response.text().await.unwrap_or_default();
                 return Err(StreamlineError::Network(format!(
-                    "OpenAI API error {}: {}",
-                    status, body
+                    "OpenAI API error {status}: {body}"
                 )));
             }
 
-            let data: OpenAIEmbeddingResponse = response.json().await.map_err(|e| {
-                StreamlineError::Network(format!("Failed to parse response: {}", e))
-            })?;
+            let data: OpenAIEmbeddingResponse = response
+                .json()
+                .await
+                .map_err(|e| StreamlineError::Network(format!("Failed to parse response: {e}")))?;
 
             // Sort by index to maintain order
             let mut embeddings: Vec<_> = data.data.into_iter().collect();
@@ -347,10 +347,11 @@ impl CohereProvider {
             return Err(StreamlineError::Config("Cohere API key is required".into()));
         }
 
-        let client = reqwest::Client::builder()
+        let client = crate::http_client::builder()
+            .map_err(|e| StreamlineError::Config(format!("Failed to create HTTP client: {e}")))?
             .timeout(std::time::Duration::from_millis(config.timeout_ms))
             .build()
-            .map_err(|e| StreamlineError::Config(format!("Failed to create HTTP client: {}", e)))?;
+            .map_err(|e| StreamlineError::Config(format!("Failed to create HTTP client: {e}")))?;
 
         let cache = if config.cache_enabled {
             Some(Arc::new(RwLock::new(EmbeddingCache::new(
@@ -441,7 +442,7 @@ impl EmbeddingProvider for CohereProvider {
 
         let response = self
             .client
-            .post(format!("{}/embed", api_base))
+            .post(format!("{api_base}/embed"))
             .header(
                 "Authorization",
                 format!("Bearer {}", self.config.api_key.as_deref().unwrap_or("")),
@@ -453,22 +454,21 @@ impl EmbeddingProvider for CohereProvider {
             }))
             .send()
             .await
-            .map_err(|e| StreamlineError::Network(format!("Cohere request failed: {}", e)))?;
+            .map_err(|e| StreamlineError::Network(format!("Cohere request failed: {e}")))?;
 
         if !response.status().is_success() {
             self.stats.errors.fetch_add(1, Ordering::Relaxed);
             let status = response.status();
             let body = response.text().await.unwrap_or_default();
             return Err(StreamlineError::Network(format!(
-                "Cohere API error {}: {}",
-                status, body
+                "Cohere API error {status}: {body}"
             )));
         }
 
         let data: CohereEmbeddingResponse = response
             .json()
             .await
-            .map_err(|e| StreamlineError::Network(format!("Failed to parse response: {}", e)))?;
+            .map_err(|e| StreamlineError::Network(format!("Failed to parse response: {e}")))?;
 
         let elapsed = start.elapsed().as_millis() as u64;
         self.stats.update_latency(elapsed);
@@ -778,11 +778,13 @@ impl LocalProvider {
 
     fn hash_embed(&self, text: &str) -> Vec<f32> {
         let mut vec = vec![0.0f32; self.dimension];
-        let hash = text.bytes().fold(0u64, |acc, b| {
-            acc.wrapping_mul(31).wrapping_add(b as u64)
-        });
+        let hash = text
+            .bytes()
+            .fold(0u64, |acc, b| acc.wrapping_mul(31).wrapping_add(b as u64));
         for (i, v) in vec.iter_mut().enumerate() {
-            let seed = hash.wrapping_add(i as u64).wrapping_mul(6364136223846793005);
+            let seed = hash
+                .wrapping_add(i as u64)
+                .wrapping_mul(6364136223846793005);
             *v = ((seed % 10000) as f32 / 10000.0) * 2.0 - 1.0;
         }
         let magnitude: f32 = vec.iter().map(|v| v * v).sum::<f32>().sqrt();
@@ -882,7 +884,11 @@ impl SemanticSearchCli {
             });
         }
 
-        scored.sort_by(|a, b| b.similarity.partial_cmp(&a.similarity).unwrap_or(std::cmp::Ordering::Equal));
+        scored.sort_by(|a, b| {
+            b.similarity
+                .partial_cmp(&a.similarity)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
         scored.truncate(limit);
 
         Ok(scored)
@@ -943,11 +949,20 @@ mod provider_tests {
         let cli = SemanticSearchCli::with_local();
         let candidates = vec![
             ("msg-1".to_string(), "payment processing failed".to_string()),
-            ("msg-2".to_string(), "user logged in successfully".to_string()),
-            ("msg-3".to_string(), "payment gateway timeout error".to_string()),
+            (
+                "msg-2".to_string(),
+                "user logged in successfully".to_string(),
+            ),
+            (
+                "msg-3".to_string(),
+                "payment gateway timeout error".to_string(),
+            ),
         ];
 
-        let results = cli.search("payment failures", &candidates, 2).await.unwrap();
+        let results = cli
+            .search("payment failures", &candidates, 2)
+            .await
+            .unwrap();
         assert_eq!(results.len(), 2);
         // Both payment-related messages should rank higher
         assert!(results[0].similarity > 0.0);

@@ -100,7 +100,7 @@ impl Shard {
         info!(shard_id = shard_id, core_id = core_id, "Starting shard");
 
         let handle = thread::Builder::new()
-            .name(format!("shard-{}", shard_id))
+            .name(format!("shard-{shard_id}"))
             .spawn(move || {
                 // Set CPU affinity
                 if let Err(e) = set_affinity(core_id) {
@@ -595,4 +595,3 @@ mod tests {
         assert!(shard.numa_allocator().is_some());
     }
 }
-

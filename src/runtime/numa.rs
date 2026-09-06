@@ -27,11 +27,15 @@
 //! - **Other platforms**: Falls back to standard allocation
 
 use super::affinity::CpuTopology;
-use std::alloc::{alloc_zeroed, dealloc, Layout};
+#[cfg(not(target_os = "linux"))]
+use std::alloc::dealloc;
+use std::alloc::{alloc_zeroed, Layout};
 use std::io;
 use std::ptr::NonNull;
 use std::sync::atomic::{AtomicU64, Ordering};
 use tracing::debug;
+#[cfg(target_os = "linux")]
+use tracing::warn;
 
 /// Default page size (4KB)
 pub const PAGE_SIZE: usize = 4096;

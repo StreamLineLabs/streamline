@@ -174,10 +174,7 @@ impl ChangeEvent {
     }
 
     /// Create the key payload (primary key as JSON object)
-    pub fn key_from_cdc_event(
-        event: &CdcEvent,
-        server_name: &str,
-    ) -> Option<serde_json::Value> {
+    pub fn key_from_cdc_event(event: &CdcEvent, server_name: &str) -> Option<serde_json::Value> {
         if event.primary_key.is_empty() {
             return None;
         }
@@ -291,4 +288,3 @@ mod tests {
         assert_eq!(Operation::Read.to_string(), "r");
     }
 }
-

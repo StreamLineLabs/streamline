@@ -156,7 +156,7 @@ impl DriftDetector {
                             resource_type: "Topic".to_string(),
                             resource_name: topic.name.clone(),
                             drift_type: DriftType::Modified,
-                            details: format!("Config '{}' differs", key),
+                            details: format!("Config '{key}' differs"),
                             expected: Some(expected_val.clone()),
                             actual: Some(actual_val.clone()),
                         });
@@ -166,7 +166,7 @@ impl DriftDetector {
                         resource_type: "Topic".to_string(),
                         resource_name: topic.name.clone(),
                         drift_type: DriftType::Modified,
-                        details: format!("Config '{}' missing", key),
+                        details: format!("Config '{key}' missing"),
                         expected: Some(expected_val.clone()),
                         actual: None,
                     });

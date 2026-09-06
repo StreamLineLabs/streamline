@@ -44,10 +44,7 @@ pub(super) fn handle_migrate_command(cmd: MigrateCommands, ctx: &CliContext) -> 
                         })
                     })
                     .collect();
-                println!(
-                    "{}",
-                    serde_json::to_string_pretty(&json_results)?
-                );
+                println!("{}", serde_json::to_string_pretty(&json_results)?);
             }
         }
         MigrateCommands::Autopilot {
@@ -73,7 +70,7 @@ pub(super) fn handle_migrate_command(cmd: MigrateCommands, ctx: &CliContext) -> 
             let mut autopilot = MigrationAutopilot::new(config);
 
             println!("{}", "🚀 Migration Autopilot".bold().cyan());
-            println!("  Strategy: {}", strategy);
+            println!("  Strategy: {strategy}");
             println!();
 
             match autopilot.run() {
@@ -134,8 +131,7 @@ pub(super) fn handle_benchmark_command(
         p.config()
     } else {
         ctx.error(&format!(
-            "Unknown profile '{}'. Use --list-profiles to see available profiles.",
-            profile
+            "Unknown profile '{profile}'. Use --list-profiles to see available profiles."
         ));
         return Ok(());
     };
@@ -168,10 +164,7 @@ pub(super) fn handle_benchmark_command(
                 "latency_p999_ms": results.latency_p999.map(|d| d.as_secs_f64() * 1000.0),
                 "errors": results.errors
             });
-            println!(
-                "{}",
-                serde_json::to_string_pretty(&json)?
-            );
+            println!("{}", serde_json::to_string_pretty(&json)?);
         }
         _ => {
             results.print();
@@ -261,7 +254,7 @@ pub(super) fn handle_shell_command(ctx: &CliContext) -> Result<()> {
                             }
                         }
                     }
-                    Err(e) => println!("{}", format!("Error: {}", e).red()),
+                    Err(e) => println!("{}", format!("Error: {e}").red()),
                 }
                 println!();
             }
@@ -288,7 +281,7 @@ pub(super) fn handle_shell_command(ctx: &CliContext) -> Result<()> {
                                 );
                             }
                         }
-                        Err(e) => println!("{}", format!("Error: {}", e).red()),
+                        Err(e) => println!("{}", format!("Error: {e}").red()),
                     }
                 }
                 println!();
@@ -312,7 +305,7 @@ pub(super) fn handle_shell_command(ctx: &CliContext) -> Result<()> {
                                 }
                             }
                         }
-                        Err(e) => println!("{}", format!("Error: {}", e).red()),
+                        Err(e) => println!("{}", format!("Error: {e}").red()),
                     }
                 }
                 println!();
@@ -329,7 +322,7 @@ pub(super) fn handle_shell_command(ctx: &CliContext) -> Result<()> {
                             }
                         }
                     }
-                    Err(e) => println!("{}", format!("Error: {}", e).red()),
+                    Err(e) => println!("{}", format!("Error: {e}").red()),
                 }
                 println!();
             }
@@ -353,7 +346,7 @@ pub(super) fn handle_shell_command(ctx: &CliContext) -> Result<()> {
                         Ok(None) => {
                             println!("{}", format!("Group '{}' not found", args[0]).yellow())
                         }
-                        Err(e) => println!("{}", format!("Error: {}", e).red()),
+                        Err(e) => println!("{}", format!("Error: {e}").red()),
                     }
                 }
                 println!();
@@ -374,7 +367,7 @@ pub(super) fn handle_shell_command(ctx: &CliContext) -> Result<()> {
                             println!("  Total messages: {}", total_messages.to_string().cyan());
                             println!("  Partitions: {}", meta.num_partitions);
                         }
-                        Err(e) => println!("{}", format!("Error: {}", e).red()),
+                        Err(e) => println!("{}", format!("Error: {e}").red()),
                     }
                 }
                 println!();
@@ -388,7 +381,7 @@ pub(super) fn handle_shell_command(ctx: &CliContext) -> Result<()> {
                 if ctx.data_dir.exists() {
                     if let Ok(entries) = std::fs::read_dir(&ctx.data_dir) {
                         let count = entries.count();
-                        println!("  Entries: {}", count);
+                        println!("  Entries: {count}");
                     }
                 } else {
                     println!("  {}", "(directory does not exist)".dimmed());
@@ -423,12 +416,12 @@ pub(super) fn handle_tune_command(
     // Parse profile
     let profile: TuneProfile = profile
         .parse()
-        .map_err(|e| streamline::StreamlineError::Config(format!("Invalid profile: {}", e)))?;
+        .map_err(|e| streamline::StreamlineError::Config(format!("Invalid profile: {e}")))?;
 
     // If --script is requested, just output the script
     if script {
         let script_content = generate_tune_script(profile);
-        println!("{}", script_content);
+        println!("{script_content}");
         return Ok(());
     }
 
@@ -500,7 +493,7 @@ pub(super) fn handle_tune_command(
     // Display results (check if colored output is enabled by checking if colors are being used)
     let use_color = colored::control::SHOULD_COLORIZE.should_colorize();
     let output = format_tune_result(&result, use_color);
-    println!("{}", output);
+    println!("{output}");
 
     // Summary
     if result.all_optimal() {

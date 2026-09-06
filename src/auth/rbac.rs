@@ -431,10 +431,10 @@ impl RbacManager {
         }
 
         let content = fs::read_to_string(path.as_ref())
-            .map_err(|e| StreamlineError::Config(format!("Failed to read RBAC file: {}", e)))?;
+            .map_err(|e| StreamlineError::Config(format!("Failed to read RBAC file: {e}")))?;
 
         let rbac_file: RbacFile = serde_yaml::from_str(&content)
-            .map_err(|e| StreamlineError::Config(format!("Failed to parse RBAC file: {}", e)))?;
+            .map_err(|e| StreamlineError::Config(format!("Failed to parse RBAC file: {e}")))?;
 
         // Add custom roles
         for role in rbac_file.roles {
@@ -465,19 +465,19 @@ impl RbacManager {
         };
 
         let content = serde_yaml::to_string(&rbac_file)
-            .map_err(|e| StreamlineError::Config(format!("Failed to serialize RBAC: {}", e)))?;
+            .map_err(|e| StreamlineError::Config(format!("Failed to serialize RBAC: {e}")))?;
 
         // Create parent directory if needed
         if let Some(parent) = path.as_ref().parent() {
             if !parent.exists() {
                 fs::create_dir_all(parent).map_err(|e| {
-                    StreamlineError::Config(format!("Failed to create RBAC directory: {}", e))
+                    StreamlineError::Config(format!("Failed to create RBAC directory: {e}"))
                 })?;
             }
         }
 
         fs::write(path.as_ref(), content)
-            .map_err(|e| StreamlineError::Config(format!("Failed to write RBAC file: {}", e)))?;
+            .map_err(|e| StreamlineError::Config(format!("Failed to write RBAC file: {e}")))?;
 
         Ok(())
     }
@@ -502,8 +502,7 @@ impl RbacManager {
         if let Some(role) = self.roles.get(name) {
             if role.builtin {
                 return Err(StreamlineError::Config(format!(
-                    "Cannot delete built-in role: {}",
-                    name
+                    "Cannot delete built-in role: {name}"
                 )));
             }
         }

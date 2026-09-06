@@ -137,7 +137,7 @@ fn test_offset_for_leader_epoch_request_all_versions() {
     for version in 0..=4 {
         let mut buf = BytesMut::new();
         let result = request.clone().encode(&mut buf, version);
-        assert!(result.is_ok(), "Failed to encode v{}", version);
+        assert!(result.is_ok(), "Failed to encode v{version}");
     }
 }
 
@@ -229,7 +229,7 @@ fn test_offset_for_leader_epoch_response_all_versions() {
     for version in 0..=4 {
         let mut buf = BytesMut::new();
         let result = response.clone().encode(&mut buf, version);
-        assert!(result.is_ok(), "Failed to encode response v{}", version);
+        assert!(result.is_ok(), "Failed to encode response v{version}");
     }
 }
 
@@ -484,7 +484,7 @@ fn test_multiple_topics_request() {
 
     for i in 0..3 {
         let mut topic = OffsetForLeaderTopic::default();
-        topic.topic = TopicName(StrBytes::from_string(format!("topic-{}", i)));
+        topic.topic = TopicName(StrBytes::from_string(format!("topic-{i}")));
 
         let mut partition = OffsetForLeaderPartition::default();
         partition.partition = 0;
@@ -509,7 +509,7 @@ fn test_multiple_topics_response() {
 
     for i in 0..3 {
         let mut topic_result = OffsetForLeaderTopicResult::default();
-        topic_result.topic = TopicName(StrBytes::from_string(format!("topic-{}", i)));
+        topic_result.topic = TopicName(StrBytes::from_string(format!("topic-{i}")));
 
         let mut partition_result = EpochEndOffset::default();
         partition_result.partition = 0;

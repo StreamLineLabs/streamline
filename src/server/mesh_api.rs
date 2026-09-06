@@ -282,9 +282,7 @@ impl MeshManager {
                 if peer.status != PeerStatus::Down {
                     peer.status = PeerStatus::Down;
                     failed.push(peer.id.clone());
-                    self.stats
-                        .failures_detected
-                        .fetch_add(1, Ordering::Relaxed);
+                    self.stats.failures_detected.fetch_add(1, Ordering::Relaxed);
                 }
             } else if elapsed > timeout && peer.status == PeerStatus::Active {
                 peer.status = PeerStatus::Suspected;
@@ -369,10 +367,7 @@ pub fn mesh_api_routes(manager: MeshManager) -> Router {
     Router::new()
         .route("/api/v1/mesh/topology", get(get_topology))
         .route("/api/v1/mesh/peers", get(list_peers).post(add_peer))
-        .route(
-            "/api/v1/mesh/peers/{id}",
-            get(get_peer).delete(remove_peer),
-        )
+        .route("/api/v1/mesh/peers/:id", get(get_peer).delete(remove_peer))
         .route("/api/v1/mesh/stats", get(get_stats))
         .with_state(manager)
 }

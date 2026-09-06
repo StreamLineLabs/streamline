@@ -247,17 +247,17 @@ impl TopicNamingStrategy {
     pub fn resolve(&self, prefix: &str, database: &str, schema: &str, table: &str) -> String {
         match self {
             TopicNamingStrategy::SchemaTable => {
-                format!("{}{}.{}", prefix, schema, table)
+                format!("{prefix}{schema}.{table}")
             }
             TopicNamingStrategy::DatabaseSchemaTable => {
-                format!("{}{}.{}.{}", prefix, database, schema, table)
+                format!("{prefix}{database}.{schema}.{table}")
             }
             TopicNamingStrategy::Custom(pattern) => {
                 let resolved = pattern
                     .replace("{database}", database)
                     .replace("{schema}", schema)
                     .replace("{table}", table);
-                format!("{}{}", prefix, resolved)
+                format!("{prefix}{resolved}")
             }
         }
     }
@@ -347,19 +347,19 @@ impl std::fmt::Display for ColumnValue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ColumnValue::Null => write!(f, "NULL"),
-            ColumnValue::Bool(v) => write!(f, "{}", v),
-            ColumnValue::Int16(v) => write!(f, "{}", v),
-            ColumnValue::Int32(v) => write!(f, "{}", v),
-            ColumnValue::Int64(v) => write!(f, "{}", v),
-            ColumnValue::Float32(v) => write!(f, "{}", v),
-            ColumnValue::Float64(v) => write!(f, "{}", v),
-            ColumnValue::String(v) => write!(f, "{}", v),
+            ColumnValue::Bool(v) => write!(f, "{v}"),
+            ColumnValue::Int16(v) => write!(f, "{v}"),
+            ColumnValue::Int32(v) => write!(f, "{v}"),
+            ColumnValue::Int64(v) => write!(f, "{v}"),
+            ColumnValue::Float32(v) => write!(f, "{v}"),
+            ColumnValue::Float64(v) => write!(f, "{v}"),
+            ColumnValue::String(v) => write!(f, "{v}"),
             ColumnValue::Bytes(v) => write!(f, "<{} bytes>", v.len()),
-            ColumnValue::Timestamp(v) => write!(f, "{}", v),
-            ColumnValue::Date(v) => write!(f, "{}", v),
-            ColumnValue::Time(v) => write!(f, "{}", v),
-            ColumnValue::Uuid(v) => write!(f, "{}", v),
-            ColumnValue::Json(v) => write!(f, "{}", v),
+            ColumnValue::Timestamp(v) => write!(f, "{v}"),
+            ColumnValue::Date(v) => write!(f, "{v}"),
+            ColumnValue::Time(v) => write!(f, "{v}"),
+            ColumnValue::Uuid(v) => write!(f, "{v}"),
+            ColumnValue::Json(v) => write!(f, "{v}"),
             ColumnValue::Array(v) => write!(f, "[{} elements]", v.len()),
         }
     }
@@ -657,7 +657,7 @@ impl std::fmt::Display for ColumnType {
             ColumnType::Uuid => write!(f, "uuid"),
             ColumnType::Json => write!(f, "json"),
             ColumnType::Array => write!(f, "array"),
-            ColumnType::Other(s) => write!(f, "{}", s),
+            ColumnType::Other(s) => write!(f, "{s}"),
         }
     }
 }
@@ -1083,12 +1083,13 @@ impl NativeCdcSource for MysqlCdcAdapter {
 
     async fn commit_offset(&mut self, offset: &CdcOffset) -> Result<()> {
         // Persist the binlog position (file + position) so CDC can resume after restart.
-        if let (Some(binlog_file), Some(binlog_pos)) =
-            (offset.values.get("binlog_file"), offset.values.get("binlog_position"))
-        {
+        if let (Some(binlog_file), Some(binlog_pos)) = (
+            offset.values.get("binlog_file"),
+            offset.values.get("binlog_position"),
+        ) {
             let state_dir = std::path::Path::new("data").join("cdc");
             std::fs::create_dir_all(&state_dir).map_err(|e| {
-                StreamlineError::Cdc(format!("Failed to create CDC state dir: {}", e))
+                StreamlineError::Cdc(format!("Failed to create CDC state dir: {e}"))
             })?;
 
             let state_file = state_dir.join(format!(
@@ -1102,7 +1103,7 @@ impl NativeCdcSource for MysqlCdcAdapter {
                 "timestamp": chrono::Utc::now().to_rfc3339(),
             });
             std::fs::write(&state_file, state_json.to_string()).map_err(|e| {
-                StreamlineError::Cdc(format!("Failed to persist binlog position: {}", e))
+                StreamlineError::Cdc(format!("Failed to persist binlog position: {e}"))
             })?;
 
             tracing::info!(
@@ -1488,7 +1489,7 @@ mod tests {
         for value in &values {
             let json = serde_json::to_string(value).expect("serialize");
             let deserialized: ColumnValue = serde_json::from_str(&json).expect("deserialize");
-            assert_eq!(value, &deserialized, "Roundtrip failed for {:?}", value);
+            assert_eq!(value, &deserialized, "Roundtrip failed for {value:?}");
         }
     }
 
@@ -1701,7 +1702,7 @@ mod tests {
                 assert_eq!(version, 2);
                 assert!(!changes.is_empty());
             }
-            other => panic!("Expected Evolved, got {:?}", other),
+            other => panic!("Expected Evolved, got {other:?}"),
         }
     }
 

@@ -140,7 +140,7 @@ impl MeteringService {
     ) -> Result<AggregatedUsage> {
         let records = self.records.read().await;
         let tenant_records = records.get(tenant_id).ok_or_else(|| {
-            StreamlineError::Config(format!("No metering data for tenant: {}", tenant_id))
+            StreamlineError::Config(format!("No metering data for tenant: {tenant_id}"))
         })?;
 
         Ok(UsageAggregator::aggregate(
@@ -162,7 +162,7 @@ impl MeteringService {
     ) -> Result<Vec<AggregatedUsage>> {
         let records = self.records.read().await;
         let tenant_records = records.get(tenant_id).ok_or_else(|| {
-            StreamlineError::Config(format!("No metering data for tenant: {}", tenant_id))
+            StreamlineError::Config(format!("No metering data for tenant: {tenant_id}"))
         })?;
 
         let duration = match window {
@@ -174,13 +174,8 @@ impl MeteringService {
         let mut cursor = from;
         while cursor < to {
             let window_end = (cursor + duration).min(to);
-            let agg = UsageAggregator::aggregate(
-                tenant_id,
-                tenant_records,
-                window,
-                cursor,
-                window_end,
-            );
+            let agg =
+                UsageAggregator::aggregate(tenant_id, tenant_records, window, cursor, window_end);
             if agg.sample_count > 0 {
                 results.push(agg);
             }
@@ -219,11 +214,19 @@ mod tests {
         let svc = MeteringService::new();
         let now = Utc::now();
 
-        svc.record_usage(make_record("t1", now, 1024)).await.unwrap();
-        svc.record_usage(make_record("t1", now, 2048)).await.unwrap();
+        svc.record_usage(make_record("t1", now, 1024))
+            .await
+            .unwrap();
+        svc.record_usage(make_record("t1", now, 2048))
+            .await
+            .unwrap();
 
         let summary = svc
-            .get_usage_summary("t1", now - chrono::Duration::hours(1), now + chrono::Duration::hours(1))
+            .get_usage_summary(
+                "t1",
+                now - chrono::Duration::hours(1),
+                now + chrono::Duration::hours(1),
+            )
             .await
             .unwrap();
 

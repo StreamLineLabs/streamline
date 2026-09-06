@@ -4,8 +4,8 @@
 //! New segments are encrypted with the new key while old segments
 //! are re-encrypted in the background.
 
-use serde::{Deserialize, Serialize};
 use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
 /// Key metadata for tracking active and retired keys.
@@ -122,10 +122,7 @@ mod tests {
 
     #[test]
     fn test_key_rotation_manager_new() {
-        let mgr = KeyRotationManager::new(
-            PathBuf::from("/tmp/keys"),
-            KeyRotationConfig::default(),
-        );
+        let mgr = KeyRotationManager::new(PathBuf::from("/tmp/keys"), KeyRotationConfig::default());
         assert!(mgr.active_key_id().is_none());
         assert!(mgr.keys().is_empty());
     }
@@ -155,4 +152,3 @@ mod tests {
         assert!(json.contains("pending"));
     }
 }
-

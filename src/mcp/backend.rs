@@ -10,7 +10,6 @@ use crate::error::StreamlineError;
 use crate::storage::TopicManager;
 use bytes::Bytes;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::sync::Arc;
 
 // ─── MCP Error Types ────────────────────────────────────────────────
@@ -118,7 +117,7 @@ impl McpError {
         let name = name.into();
         Self {
             code: McpErrorCode::TopicNotFound,
-            message: format!("Topic not found: {}", name),
+            message: format!("Topic not found: {name}"),
             data: None,
         }
     }
@@ -126,10 +125,7 @@ impl McpError {
     pub fn partition_not_found(topic: &str, partition: i32) -> Self {
         Self {
             code: McpErrorCode::PartitionNotFound,
-            message: format!(
-                "Partition {} not found in topic '{}'",
-                partition, topic
-            ),
+            message: format!("Partition {partition} not found in topic '{topic}'"),
             data: None,
         }
     }
@@ -138,7 +134,7 @@ impl McpError {
         let name = name.into();
         Self {
             code: McpErrorCode::TopicAlreadyExists,
-            message: format!("Topic already exists: {}", name),
+            message: format!("Topic already exists: {name}"),
             data: None,
         }
     }
@@ -172,7 +168,7 @@ impl From<StreamlineError> for McpError {
             }
             StreamlineError::Validation(msg) => McpError::invalid_params(msg.clone()),
             StreamlineError::InvalidTopicName(name) => {
-                McpError::invalid_params(format!("Invalid topic name: {}", name))
+                McpError::invalid_params(format!("Invalid topic name: {name}"))
             }
             StreamlineError::InvalidPartitionCount(msg) => McpError::invalid_params(msg.clone()),
             _ => McpError::internal(e.to_string()),
@@ -428,10 +424,7 @@ impl McpBackend for TopicManagerBackend {
                     .topic_manager
                     .earliest_offset(&meta.name, i)
                     .unwrap_or(0);
-                let end = self
-                    .topic_manager
-                    .latest_offset(&meta.name, i)
-                    .unwrap_or(0);
+                let end = self.topic_manager.latest_offset(&meta.name, i).unwrap_or(0);
                 total_messages += end - start;
             }
             result.push(TopicInfo {
@@ -454,15 +447,9 @@ impl McpBackend for TopicManagerBackend {
         let mut partitions = Vec::with_capacity(meta.num_partitions as usize);
         let mut total_messages: i64 = 0;
         for i in 0..meta.num_partitions {
-            let start = self
-                .topic_manager
-                .earliest_offset(name, i)
-                .unwrap_or(0);
+            let start = self.topic_manager.earliest_offset(name, i).unwrap_or(0);
             let end = self.topic_manager.latest_offset(name, i).unwrap_or(0);
-            let hw = self
-                .topic_manager
-                .high_watermark(name, i)
-                .unwrap_or(end);
+            let hw = self.topic_manager.high_watermark(name, i).unwrap_or(end);
             let count = end - start;
             total_messages += count;
             partitions.push(PartitionDetail {
@@ -543,19 +530,15 @@ impl McpBackend for TopicManagerBackend {
             .map(|r| MessageInfo {
                 offset: r.offset,
                 timestamp: r.timestamp,
-                key: r.key
+                key: r
+                    .key
                     .as_ref()
                     .map(|k| String::from_utf8_lossy(k).to_string()),
                 value: String::from_utf8_lossy(&r.value).to_string(),
                 headers: r
                     .headers
                     .iter()
-                    .map(|h| {
-                        (
-                            h.key.clone(),
-                            String::from_utf8_lossy(&h.value).to_string(),
-                        )
-                    })
+                    .map(|h| (h.key.clone(), String::from_utf8_lossy(&h.value).to_string()))
                     .collect(),
             })
             .collect())
@@ -606,8 +589,10 @@ impl McpBackend for TopicManagerBackend {
         retention_ms: Option<i64>,
     ) -> McpResult<()> {
         if let Some(retention) = retention_ms {
-            let mut config = crate::storage::TopicConfig::default();
-            config.retention_ms = retention;
+            let config = crate::storage::TopicConfig {
+                retention_ms: retention,
+                ..Default::default()
+            };
             self.topic_manager
                 .create_topic_with_config(name, partitions as i32, config)
                 .map_err(McpError::from)?;
@@ -653,7 +638,7 @@ impl McpBackend for TopicManagerBackend {
         max_results: usize,
     ) -> McpResult<Vec<MessageInfo>> {
         let re = regex::Regex::new(pattern)
-            .map_err(|e| McpError::invalid_params(format!("Invalid regex: {}", e)))?;
+            .map_err(|e| McpError::invalid_params(format!("Invalid regex: {e}")))?;
 
         let end_offset = self
             .topic_manager
@@ -683,12 +668,7 @@ impl McpBackend for TopicManagerBackend {
                     headers: record
                         .headers
                         .iter()
-                        .map(|h| {
-                            (
-                                h.key.clone(),
-                                String::from_utf8_lossy(&h.value).to_string(),
-                            )
-                        })
+                        .map(|h| (h.key.clone(), String::from_utf8_lossy(&h.value).to_string()))
                         .collect(),
                 });
             }
@@ -705,6 +685,7 @@ pub use self::mock::MockMcpBackend;
 #[cfg(test)]
 mod mock {
     use super::*;
+    use std::collections::HashMap;
     use std::sync::atomic::{AtomicI64, Ordering};
     use std::sync::Mutex;
 
@@ -770,10 +751,7 @@ mod mock {
         fn check_fail(&self, method: &str) -> McpResult<()> {
             let fail = self.fail_method.lock().unwrap();
             if fail.as_deref() == Some(method) {
-                Err(McpError::internal(format!(
-                    "Mock error: {} failed",
-                    method
-                )))
+                Err(McpError::internal(format!("Mock error: {method} failed")))
             } else {
                 Ok(())
             }
@@ -796,10 +774,7 @@ mod mock {
                 .ok_or_else(|| McpError::topic_not_found(name))?;
 
             let messages = self.messages.lock().unwrap();
-            let msg_count = messages
-                .get(name)
-                .map(|m| m.len() as i64)
-                .unwrap_or(0);
+            let msg_count = messages.get(name).map(|m| m.len() as i64).unwrap_or(0);
 
             let mut partitions = Vec::new();
             for i in 0..topic.partitions {
@@ -919,10 +894,7 @@ mod mock {
                 return Err(McpError::topic_not_found(name));
             }
             drop(topics);
-            self.deleted_topics
-                .lock()
-                .unwrap()
-                .push(name.to_string());
+            self.deleted_topics.lock().unwrap().push(name.to_string());
             Ok(())
         }
 
@@ -951,7 +923,7 @@ mod mock {
         ) -> McpResult<Vec<MessageInfo>> {
             self.check_fail("search_messages")?;
             let re = regex::Regex::new(pattern)
-                .map_err(|e| McpError::invalid_params(format!("Invalid regex: {}", e)))?;
+                .map_err(|e| McpError::invalid_params(format!("Invalid regex: {e}")))?;
 
             let messages = self.messages.lock().unwrap();
             let topic_msgs = messages
@@ -1005,7 +977,7 @@ mod tests {
     #[test]
     fn test_mcp_error_display() {
         let e = McpError::internal("something broke");
-        assert_eq!(format!("{}", e), "something broke");
+        assert_eq!(format!("{e}"), "something broke");
     }
 
     #[test]
@@ -1155,7 +1127,7 @@ mod tests {
                     offset: i,
                     timestamp: 1000 + i,
                     key: None,
-                    value: format!("msg{}", i),
+                    value: format!("msg{i}"),
                     headers: vec![],
                 })
                 .collect(),
@@ -1178,10 +1150,7 @@ mod tests {
         assert_eq!(mock.created_topics.lock().unwrap().len(), 1);
 
         // Duplicate should fail
-        let err = mock
-            .create_topic("new-topic", 1, None)
-            .await
-            .unwrap_err();
+        let err = mock.create_topic("new-topic", 1, None).await.unwrap_err();
         assert_eq!(err.code, McpErrorCode::TopicAlreadyExists);
 
         mock.delete_topic("new-topic").await.unwrap();

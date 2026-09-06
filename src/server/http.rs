@@ -11,49 +11,53 @@
 #[cfg(feature = "analytics")]
 use crate::analytics::DuckDBEngine;
 use crate::config::ServerConfig;
+#[cfg(feature = "kafka-connect")]
+use crate::connect::api::{create_connect_router, ConnectApiState, ConnectorManager};
 use crate::consumer::GroupCoordinator;
 use crate::metrics::MetricsHistory;
 #[cfg(feature = "schema-registry")]
 use crate::schema::{SchemaRegistryConfig, SchemaStore};
+#[cfg(feature = "ai")]
+use crate::server::ai_api::{create_ai_api_router, AiApiState};
 use crate::server::alerts::AlertStore;
 use crate::server::alerts_api::{create_alerts_api_router, AlertsApiState};
 #[cfg(feature = "analytics")]
-use crate::server::analytics_api::{create_analytics_api_router, AnalyticsApiState};
+use crate::server::analytics_api::{create_analytics_management_router, AnalyticsApiState};
 use crate::server::api::{create_api_router, ApiState};
 use crate::server::benchmark_api::{
     create_benchmark_api_router, BenchmarkApiState, BenchmarkStore,
 };
 use crate::server::browser_client::{create_browser_client_router, BrowserClientState};
 use crate::server::cdc_api::{create_cdc_router_with_state, CdcApiState};
+use crate::server::cloud_api::{create_cloud_api_router, CloudApiState};
 use crate::server::cluster_api::{create_cluster_api_router, ClusterApiState};
 use crate::server::connections_api::{create_connections_api_router, ConnectionsApiState};
 use crate::server::connector_mgmt_api::{create_connector_mgmt_api_router, ConnectorMgmtApiState};
 use crate::server::console_api::{create_console_api_router, ConsoleApiState};
 use crate::server::consumer_api::{create_consumer_api_router, ConsumerApiState};
 use crate::server::dashboard_api::{create_dashboard_api_router, DashboardApiState};
-use crate::server::inspector_api;
-#[cfg(feature = "graphql")]
-use crate::server::graphql_routes::{create_graphql_router, GraphQLState};
-#[cfg(feature = "kafka-connect")]
-use crate::connect::api::{create_connect_router, ConnectApiState, ConnectorManager};
-#[cfg(feature = "ai")]
-use crate::server::ai_api::{create_ai_api_router, AiApiState};
-use crate::server::cloud_api::{create_cloud_api_router, CloudApiState};
-#[cfg(feature = "featurestore")]
-use crate::server::featurestore_api::{create_featurestore_api_router, FeatureStoreApiState};
 #[cfg(feature = "clustering")]
 use crate::server::failover_api::{create_failover_api_router, FailoverApiState};
-#[cfg(feature = "clustering")]
-use crate::server::raft_cluster_api::{create_raft_cluster_api_router, RaftClusterApiState};
+#[cfg(feature = "featurestore")]
+use crate::server::featurestore_api::{create_featurestore_api_router, FeatureStoreApiState};
 use crate::server::gitops_api::{create_gitops_api_router, GitOpsApiState};
 use crate::server::governor_api::{create_governor_api_router, GovernorApiState};
+#[cfg(feature = "graphql")]
+use crate::server::graphql_routes::{create_graphql_router, GraphQLState};
+use crate::server::inspector_api;
 use crate::server::log_buffer::LogBuffer;
 use crate::server::logs_api::{create_logs_api_router, LogsApiState};
 use crate::server::metadata_cache::{MetadataCache, MetadataCacheConfig};
 use crate::server::observability_api::{create_observability_api_router, ObservabilityApiState};
 use crate::server::playground_api::{create_playground_api_router, PlaygroundApiState};
 use crate::server::plugin_api::{create_plugin_api_router, PluginApiState};
+#[cfg(feature = "clustering")]
+use crate::server::raft_cluster_api::{create_raft_cluster_api_router, RaftClusterApiState};
 use crate::server::replication_api::{create_replication_api_router, ReplicationApiState};
+use crate::server::scaling_metrics::{
+    create_scaling_metrics_router, ScalingMetricsApiState, ScalingMetricsCollector,
+    ScalingMetricsConfig,
+};
 #[cfg(feature = "schema-registry")]
 use crate::server::schema_api::{create_schema_api_router, SchemaApiState};
 #[cfg(feature = "schema-registry")]
@@ -61,20 +65,15 @@ use crate::server::schema_ui::{create_schema_ui_router, SchemaUiState};
 use crate::server::shutdown::ShutdownCoordinator;
 #[cfg(feature = "sqlite-queries")]
 use crate::server::sqlite_routes::{create_sqlite_api_router, SqliteApiState};
-#[cfg(feature = "sqlite-queries")]
-use crate::sqlite::SQLiteQueryEngine;
-use crate::server::faas_api::{create_faas_api_router, FaasApiState};
-use crate::server::scaling_metrics::{
-    create_scaling_metrics_router, ScalingMetricsApiState, ScalingMetricsCollector,
-    ScalingMetricsConfig,
-};
+use crate::server::streamql_api::{streamql_router, StreamqlApiState};
 use crate::server::tenant_api::{create_tenant_api_router, TenantApiState};
 #[cfg(feature = "cloud-storage")]
 use crate::server::tiering_api::{create_tiering_api_router, TieringApiState};
-use crate::server::streamql_api::{streamql_router, StreamqlApiState};
 use crate::server::wasm_api::{create_wasm_api_router, WasmApiState};
 use crate::server::websocket::{create_websocket_router, WebSocketState};
 use crate::server::websocket_streaming::{create_streaming_router, StreamingState};
+#[cfg(feature = "sqlite-queries")]
+use crate::sqlite::SQLiteQueryEngine;
 use crate::storage::TopicManager;
 use axum::{
     extract::State,
@@ -406,9 +405,7 @@ fn build_http_router(state: &HttpServerState, bootstrap: &HttpBootstrap) -> Rout
     {
         let memory_router = crate::server::memory_api::create_memory_api_router();
         app = app.merge(memory_router);
-        tracing::info!(
-            "Memory API enabled at POST /api/v1/memory/{{remember,recall}} + agents/*"
-        );
+        tracing::info!("Memory API enabled at POST /api/v1/memory/{{remember,recall}} + agents/*");
     }
 
     // Add lineage API (requires schema-registry feature)
@@ -417,8 +414,7 @@ fn build_http_router(state: &HttpServerState, bootstrap: &HttpBootstrap) -> Rout
         let lineage_state = crate::server::lineage_api::LineageApiState {
             catalog: std::sync::Arc::new(crate::schema::catalog::SchemaCatalog::new()),
         };
-        let lineage_router =
-            crate::server::lineage_api::create_lineage_api_router(lineage_state);
+        let lineage_router = crate::server::lineage_api::create_lineage_api_router(lineage_state);
         app = app.merge(lineage_router);
         tracing::info!("Lineage API enabled at /api/v1/lineage/*");
     }
@@ -426,13 +422,14 @@ fn build_http_router(state: &HttpServerState, bootstrap: &HttpBootstrap) -> Rout
     // Add analytics API for SQL queries (requires analytics feature)
     #[cfg(feature = "analytics")]
     {
-        // Create DuckDB engine
+        // The ADR-008 query endpoints are owned by `query_api` below. DuckDB
+        // contributes cache and materialized-view management routes only.
         match DuckDBEngine::new(state.topic_manager.clone()) {
             Ok(engine) => {
                 let analytics_state = AnalyticsApiState {
                     engine: Arc::new(engine),
                 };
-                let analytics_router = create_analytics_api_router(analytics_state);
+                let analytics_router = create_analytics_management_router(analytics_state);
                 app = app.merge(analytics_router);
             }
             Err(e) => {
@@ -481,8 +478,15 @@ fn build_http_router(state: &HttpServerState, bootstrap: &HttpBootstrap) -> Rout
             connector_manager: Arc::new(ConnectorManager::new()),
             runtime: None,
         };
-        let connect_router = create_connect_router(connect_state);
+        // The playground dashboard owns `GET /`, so the Connect worker-info root
+        // route is only registered when playground mode is off.
+        let connect_router = if state.config.playground {
+            crate::connect::api::create_connect_router_without_root(connect_state)
+        } else {
+            create_connect_router(connect_state)
+        };
         app = app.merge(connect_router);
+        tracing::info!("Kafka Connect REST API enabled at /connectors");
     }
 
     // Add Cloud API for tenant/endpoint management
@@ -515,17 +519,11 @@ fn build_http_router(state: &HttpServerState, bootstrap: &HttpBootstrap) -> Rout
     app = app.merge(streamql_api_router);
     tracing::info!("StreamQL API enabled at /sql, /api/v1/streams, /api/v1/queries");
 
-    // Unified Query API (POST /api/v1/query) — ADR-008, shares same StreamQL engine
-    let query_state = crate::server::query_api::QueryApiState::new(streamql_engine);
+    // Unified Query API (POST /api/v1/query) — ADR-008, shares the StreamQL engine.
+    let query_state = crate::server::query_api::QueryApiState::new(streamql_engine.clone());
     let unified_query_router = crate::server::query_api::query_router().with_state(query_state);
     app = app.merge(unified_query_router);
     tracing::info!("Unified Query API enabled at /api/v1/query");
-
-    // Add FaaS API for serverless WASM function management
-    let faas_state = FaasApiState::new();
-    let faas_router = create_faas_api_router(faas_state);
-    app = app.merge(faas_router);
-    tracing::info!("FaaS API enabled at /api/v1/functions");
 
     // Add WASM Transform Marketplace API (registry, install, list)
     #[cfg(feature = "kafka-connect")]
@@ -559,7 +557,9 @@ fn build_http_router(state: &HttpServerState, bootstrap: &HttpBootstrap) -> Rout
                 app = app.merge(ai_router);
             }
             Err(e) => {
-                tracing::warn!("Failed to initialize AI API subsystem: {e}. AI endpoints will be unavailable.");
+                tracing::warn!(
+                    "Failed to initialize AI API subsystem: {e}. AI endpoints will be unavailable."
+                );
             }
         }
     }
@@ -606,15 +606,10 @@ fn build_http_router(state: &HttpServerState, bootstrap: &HttpBootstrap) -> Rout
     let tenant_router = create_tenant_api_router(tenant_state);
     app = app.merge(tenant_router);
 
-    // Add Kafka Connect compatible REST API
-    #[cfg(feature = "kafka-connect")]
-    {
-        use crate::server::kafka_connect_api::{kafka_connect_router, KafkaConnectState};
-        let kc_state = KafkaConnectState::default();
-        let kc_router = kafka_connect_router().with_state(kc_state);
-        app = app.merge(kc_router);
-        tracing::info!("Kafka Connect REST API enabled at /connectors");
-    }
+    // Kafka Connect worker endpoints are served by `crate::connect::api` above;
+    // `server::kafka_connect_api` exposes the same `/connectors/*` paths, so it is
+    // kept as a standalone router builder and not merged here (axum panics on
+    // overlapping method routes).
 
     // Add Tiered Storage Policy Management API
     #[cfg(feature = "cloud-storage")]
@@ -689,9 +684,7 @@ fn build_http_router(state: &HttpServerState, bootstrap: &HttpBootstrap) -> Rout
         let mcp_server = Arc::new(crate::mcp::McpServer::new(state.topic_manager.clone()));
         let mcp_router = crate::mcp::server::create_mcp_router(mcp_server);
         app = app.merge(mcp_router);
-        tracing::info!(
-            "MCP server enabled at /mcp/v1 (JSON-RPC), /mcp/v1/sse, /mcp/v1/health"
-        );
+        tracing::info!("MCP server enabled at /mcp/v1 (JSON-RPC), /mcp/v1/sse, /mcp/v1/health");
     }
 
     app
@@ -721,7 +714,7 @@ pub async fn start_http_server(
                 port + 100
             )
         } else {
-            format!("Failed to bind HTTP server to {}: {}", addr, e)
+            format!("Failed to bind HTTP server to {addr}: {e}")
         }
     })?;
     axum::serve(listener, app).await?;
@@ -740,10 +733,7 @@ async fn version_headers_middleware(
         "X-Streamline-Version",
         axum::http::HeaderValue::from_static(env!("CARGO_PKG_VERSION")),
     );
-    headers.insert(
-        "X-API-Version",
-        axum::http::HeaderValue::from_static("v1"),
-    );
+    headers.insert("X-API-Version", axum::http::HeaderValue::from_static("v1"));
     response
 }
 
@@ -800,7 +790,7 @@ async fn readiness_handler(State(state): State<HttpServerState>) -> Response {
     let storage_ok = checks
         .iter()
         .find(|c| c.name == "storage")
-        .map_or(false, |c| c.status == "ok");
+        .is_some_and(|c| c.status == "ok");
     let all_ready = checks.iter().all(|c| c.status == "ok");
 
     // Protocol and HTTP are ready if this handler is reachable
@@ -868,11 +858,14 @@ async fn features_handler(State(_state): State<HttpServerState>) -> Response {
         }
         #[cfg(not(feature = "auth"))]
         {
-            features.insert("auth".into(), json!({
-                "enabled": false,
-                "status": "disabled",
-                "reason": "Feature not compiled (requires --features auth)"
-            }));
+            features.insert(
+                "auth".into(),
+                json!({
+                    "enabled": false,
+                    "status": "disabled",
+                    "reason": "Feature not compiled (requires --features auth)"
+                }),
+            );
         }
     }
 
@@ -882,15 +875,21 @@ async fn features_handler(State(_state): State<HttpServerState>) -> Response {
         {
             let active = _state.config.cluster.is_some();
             let status = if active { "active" } else { "disabled" };
-            features.insert("clustering".into(), json!({ "enabled": true, "status": status }));
+            features.insert(
+                "clustering".into(),
+                json!({ "enabled": true, "status": status }),
+            );
         }
         #[cfg(not(feature = "clustering"))]
         {
-            features.insert("clustering".into(), json!({
-                "enabled": false,
-                "status": "disabled",
-                "reason": "Feature not compiled (requires --features clustering)"
-            }));
+            features.insert(
+                "clustering".into(),
+                json!({
+                    "enabled": false,
+                    "status": "disabled",
+                    "reason": "Feature not compiled (requires --features clustering)"
+                }),
+            );
         }
     }
 
@@ -898,15 +897,21 @@ async fn features_handler(State(_state): State<HttpServerState>) -> Response {
     {
         #[cfg(feature = "analytics")]
         {
-            features.insert("analytics".into(), json!({ "enabled": true, "status": "active" }));
+            features.insert(
+                "analytics".into(),
+                json!({ "enabled": true, "status": "active" }),
+            );
         }
         #[cfg(not(feature = "analytics"))]
         {
-            features.insert("analytics".into(), json!({
-                "enabled": false,
-                "status": "disabled",
-                "reason": "Feature not compiled (requires --features analytics)"
-            }));
+            features.insert(
+                "analytics".into(),
+                json!({
+                    "enabled": false,
+                    "status": "disabled",
+                    "reason": "Feature not compiled (requires --features analytics)"
+                }),
+            );
         }
     }
 
@@ -914,15 +919,21 @@ async fn features_handler(State(_state): State<HttpServerState>) -> Response {
     {
         #[cfg(feature = "schema-registry")]
         {
-            features.insert("schema_registry".into(), json!({ "enabled": true, "status": "active" }));
+            features.insert(
+                "schema_registry".into(),
+                json!({ "enabled": true, "status": "active" }),
+            );
         }
         #[cfg(not(feature = "schema-registry"))]
         {
-            features.insert("schema_registry".into(), json!({
-                "enabled": false,
-                "status": "disabled",
-                "reason": "Feature not compiled (requires --features schema-registry)"
-            }));
+            features.insert(
+                "schema_registry".into(),
+                json!({
+                    "enabled": false,
+                    "status": "disabled",
+                    "reason": "Feature not compiled (requires --features schema-registry)"
+                }),
+            );
         }
     }
 
@@ -930,15 +941,21 @@ async fn features_handler(State(_state): State<HttpServerState>) -> Response {
     {
         #[cfg(feature = "encryption")]
         {
-            features.insert("encryption".into(), json!({ "enabled": true, "status": "active" }));
+            features.insert(
+                "encryption".into(),
+                json!({ "enabled": true, "status": "active" }),
+            );
         }
         #[cfg(not(feature = "encryption"))]
         {
-            features.insert("encryption".into(), json!({
-                "enabled": false,
-                "status": "disabled",
-                "reason": "Feature not compiled (requires --features encryption)"
-            }));
+            features.insert(
+                "encryption".into(),
+                json!({
+                    "enabled": false,
+                    "status": "disabled",
+                    "reason": "Feature not compiled (requires --features encryption)"
+                }),
+            );
         }
     }
 
@@ -948,15 +965,21 @@ async fn features_handler(State(_state): State<HttpServerState>) -> Response {
         {
             let active = _state.config.telemetry.enabled;
             let status = if active { "active" } else { "disabled" };
-            features.insert("telemetry".into(), json!({ "enabled": true, "status": status }));
+            features.insert(
+                "telemetry".into(),
+                json!({ "enabled": true, "status": status }),
+            );
         }
         #[cfg(not(feature = "telemetry"))]
         {
-            features.insert("telemetry".into(), json!({
-                "enabled": false,
-                "status": "disabled",
-                "reason": "Feature not compiled (requires --features telemetry)"
-            }));
+            features.insert(
+                "telemetry".into(),
+                json!({
+                    "enabled": false,
+                    "status": "disabled",
+                    "reason": "Feature not compiled (requires --features telemetry)"
+                }),
+            );
         }
     }
 
@@ -964,15 +987,21 @@ async fn features_handler(State(_state): State<HttpServerState>) -> Response {
     {
         #[cfg(feature = "web-ui")]
         {
-            features.insert("web_ui".into(), json!({ "enabled": true, "status": "active" }));
+            features.insert(
+                "web_ui".into(),
+                json!({ "enabled": true, "status": "active" }),
+            );
         }
         #[cfg(not(feature = "web-ui"))]
         {
-            features.insert("web_ui".into(), json!({
-                "enabled": false,
-                "status": "disabled",
-                "reason": "Feature not compiled (requires --features web-ui)"
-            }));
+            features.insert(
+                "web_ui".into(),
+                json!({
+                    "enabled": false,
+                    "status": "disabled",
+                    "reason": "Feature not compiled (requires --features web-ui)"
+                }),
+            );
         }
     }
 
@@ -992,7 +1021,7 @@ fn perform_health_checks(state: &HttpServerState) -> Vec<HealthCheck> {
         Err(e) => HealthCheck {
             name: "storage".to_string(),
             status: "failed".to_string(),
-            message: Some(format!("Storage error: {}", e)),
+            message: Some(format!("Storage error: {e}")),
         },
     };
     checks.push(storage_check);
@@ -1132,7 +1161,8 @@ async fn metrics_sampling_task(
 // }
 
 // Tests require metrics and auth features for full functionality
-#[cfg(all(test, feature = "metrics", feature = "auth"))]
+#[cfg(test)]
+#[cfg(all(feature = "metrics", feature = "auth"))]
 mod tests {
     use super::*;
     use crate::metrics;
@@ -1154,14 +1184,25 @@ mod tests {
             limits: crate::server::limits::LimitsConfig::default(),
             shutdown: crate::server::shutdown::ShutdownConfig::default(),
             quotas: crate::server::limits::QuotaConfig::default(),
+            // `ServerConfig::cluster` only exists under `clustering`, but this
+            // test module is gated on `metrics` + `auth`. Without this cfg the
+            // whole module fails to compile in any configuration that enables
+            // `auth` without `clustering` (for example `--features auth`, since
+            // the default `lite` edition already brings `metrics` in).
+            #[cfg(feature = "clustering")]
             cluster: None,
             simple: crate::config::SimpleProtocolConfig::default(),
             auto_create_topics: crate::config::DEFAULT_AUTO_CREATE_TOPICS,
             runtime: crate::config::RuntimeConfig::default(),
             telemetry: crate::telemetry::TelemetryConfig::default(),
             playground: false,
+            ephemeral: false,
+            ephemeral_idle_timeout_secs: 30,
+            ephemeral_auto_topics: Vec::new(),
             #[cfg(feature = "edge")]
             edge: crate::config::EdgeDeploymentConfig::default(),
+            #[cfg(feature = "semantic-topics")]
+            embed_queue_capacity: 10_000,
         };
 
         let topic_manager = Arc::new(TopicManager::new(temp_dir.path()).unwrap());
@@ -1175,6 +1216,8 @@ mod tests {
             start_time: Instant::now(),
             shutdown_coordinator: Arc::new(ShutdownCoordinator::with_config(config.shutdown)),
             log_buffer: None,
+            #[cfg(feature = "clustering")]
+            cluster_manager: None,
             #[cfg(feature = "branches")]
             branch_store: None,
             #[cfg(feature = "attestation")]

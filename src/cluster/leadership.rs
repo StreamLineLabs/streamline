@@ -196,12 +196,12 @@ impl LeadershipManager {
         let topic_assignment = metadata
             .topics
             .get(topic)
-            .ok_or_else(|| format!("Topic {} not found", topic))?;
+            .ok_or_else(|| format!("Topic {topic} not found"))?;
 
         let partition_assignment = topic_assignment
             .partitions
             .get(&partition)
-            .ok_or_else(|| format!("Partition {} not found for topic {}", partition, topic))?;
+            .ok_or_else(|| format!("Partition {partition} not found for topic {topic}"))?;
 
         // Get alive brokers from metadata
         let alive_brokers: Vec<NodeId> =
@@ -250,8 +250,7 @@ impl LeadershipManager {
         }
 
         Err(format!(
-            "No eligible leader found for topic {} partition {}",
-            topic, partition
+            "No eligible leader found for topic {topic} partition {partition}"
         ))
     }
 

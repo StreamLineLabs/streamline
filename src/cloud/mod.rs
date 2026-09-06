@@ -127,9 +127,21 @@ impl Default for CloudConfig {
             billing_enabled: true,
             free_tier: FreeTierConfig::default(),
             available_regions: vec![
-                RegionConfig { id: "us-east-1".into(), name: "US East (Virginia)".into(), available: true },
-                RegionConfig { id: "eu-west-1".into(), name: "EU West (Ireland)".into(), available: true },
-                RegionConfig { id: "ap-southeast-1".into(), name: "Asia Pacific (Singapore)".into(), available: true },
+                RegionConfig {
+                    id: "us-east-1".into(),
+                    name: "US East (Virginia)".into(),
+                    available: true,
+                },
+                RegionConfig {
+                    id: "eu-west-1".into(),
+                    name: "EU West (Ireland)".into(),
+                    available: true,
+                },
+                RegionConfig {
+                    id: "ap-southeast-1".into(),
+                    name: "Asia Pacific (Singapore)".into(),
+                    available: true,
+                },
             ],
         }
     }
@@ -160,13 +172,13 @@ impl Default for FreeTierConfig {
     fn default() -> Self {
         Self {
             enabled: true,
-            max_messages_per_day: 1_000_000,             // 1M msgs/day
-            max_storage_bytes: 1_073_741_824,             // 1 GB
+            max_messages_per_day: 1_000_000,  // 1M msgs/day
+            max_storage_bytes: 1_073_741_824, // 1 GB
             max_topics: 10,
             max_partitions_per_topic: 3,
-            max_retention_ms: 24 * 60 * 60 * 1000,       // 24 hours
-            max_producer_bytes_per_sec: 1_048_576,        // 1 MB/s
-            max_consumer_bytes_per_sec: 5_242_880,        // 5 MB/s
+            max_retention_ms: 24 * 60 * 60 * 1000, // 24 hours
+            max_producer_bytes_per_sec: 1_048_576, // 1 MB/s
+            max_consumer_bytes_per_sec: 5_242_880, // 5 MB/s
         }
     }
 }
@@ -387,7 +399,7 @@ impl StreamlineCloud {
             .tenant_manager
             .get_tenant(tenant_id)
             .await
-            .ok_or_else(|| StreamlineError::Config(format!("Tenant not found: {}", tenant_id)))?;
+            .ok_or_else(|| StreamlineError::Config(format!("Tenant not found: {tenant_id}")))?;
 
         // Check cluster limits
         let endpoints = self.endpoints.read().await;
@@ -445,9 +457,9 @@ impl StreamlineCloud {
     pub async fn delete_endpoint(&self, endpoint_id: &str) -> Result<()> {
         let mut endpoints = self.endpoints.write().await;
 
-        let endpoint = endpoints.get_mut(endpoint_id).ok_or_else(|| {
-            StreamlineError::Config(format!("Endpoint not found: {}", endpoint_id))
-        })?;
+        let endpoint = endpoints
+            .get_mut(endpoint_id)
+            .ok_or_else(|| StreamlineError::Config(format!("Endpoint not found: {endpoint_id}")))?;
 
         endpoint.status = EndpointStatus::Terminating;
         let tenant_id = endpoint.tenant_id.clone();
@@ -496,9 +508,9 @@ impl StreamlineCloud {
     ) -> Result<CloudEndpoint> {
         let mut endpoints = self.endpoints.write().await;
 
-        let endpoint = endpoints.get_mut(endpoint_id).ok_or_else(|| {
-            StreamlineError::Config(format!("Endpoint not found: {}", endpoint_id))
-        })?;
+        let endpoint = endpoints
+            .get_mut(endpoint_id)
+            .ok_or_else(|| StreamlineError::Config(format!("Endpoint not found: {endpoint_id}")))?;
 
         endpoint.status = EndpointStatus::Scaling;
         let cluster_id = endpoint.id.clone();
@@ -511,9 +523,9 @@ impl StreamlineCloud {
 
         // Update status
         let mut endpoints = self.endpoints.write().await;
-        let endpoint = endpoints.get_mut(endpoint_id).ok_or_else(|| {
-            StreamlineError::Config(format!("Endpoint not found: {}", endpoint_id))
-        })?;
+        let endpoint = endpoints
+            .get_mut(endpoint_id)
+            .ok_or_else(|| StreamlineError::Config(format!("Endpoint not found: {endpoint_id}")))?;
         endpoint.status = EndpointStatus::Running;
 
         Ok(endpoint.clone())
@@ -598,10 +610,7 @@ impl StreamlineCloud {
     ///
     /// Evaluates cluster health status against SLA targets.
     /// Default SLA target is 99.95% uptime.
-    pub async fn check_sla_compliance(
-        &self,
-        tenant_id: &str,
-    ) -> Result<SlaComplianceReport> {
+    pub async fn check_sla_compliance(&self, tenant_id: &str) -> Result<SlaComplianceReport> {
         let clusters = self.cluster_manager.list(tenant_id).await;
         let mut reports = Vec::new();
 

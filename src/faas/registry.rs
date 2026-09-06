@@ -5,7 +5,7 @@ use super::trigger::TriggerBinding;
 use crate::error::{Result, StreamlineError};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use tracing::{debug, info, warn};
+use tracing::{debug, info};
 
 /// Function registry — manages deployed functions and their bindings.
 pub struct FunctionRegistry {
@@ -15,6 +15,12 @@ pub struct FunctionRegistry {
     bindings: HashMap<String, TriggerBinding>,
     /// Function → bindings index.
     function_bindings: HashMap<String, Vec<String>>,
+}
+
+impl Default for FunctionRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl FunctionRegistry {
@@ -48,8 +54,7 @@ impl FunctionRegistry {
     pub fn undeploy(&mut self, name: &str) -> Result<()> {
         if !self.functions.contains_key(name) {
             return Err(StreamlineError::Config(format!(
-                "Function '{}' not found",
-                name
+                "Function '{name}' not found"
             )));
         }
 
@@ -103,7 +108,7 @@ impl FunctionRegistry {
         let binding = self
             .bindings
             .remove(name)
-            .ok_or_else(|| StreamlineError::Config(format!("Binding '{}' not found", name)))?;
+            .ok_or_else(|| StreamlineError::Config(format!("Binding '{name}' not found")))?;
 
         if let Some(bindings) = self.function_bindings.get_mut(&binding.function_name) {
             bindings.retain(|b| b != name);
@@ -145,12 +150,7 @@ impl FunctionRegistry {
     pub fn get_bindings_for(&self, function_name: &str) -> Vec<&TriggerBinding> {
         self.function_bindings
             .get(function_name)
-            .map(|names| {
-                names
-                    .iter()
-                    .filter_map(|n| self.bindings.get(n))
-                    .collect()
-            })
+            .map(|names| names.iter().filter_map(|n| self.bindings.get(n)).collect())
             .unwrap_or_default()
     }
 
@@ -196,7 +196,7 @@ mod tests {
     fn test_config(name: &str) -> FunctionConfig {
         FunctionConfig {
             name: name.to_string(),
-            description: format!("Test function {}", name),
+            description: format!("Test function {name}"),
             wasm_source: WasmSource::Bytes(vec![0, 97, 115, 109]),
             entry_point: "process".to_string(),
             env_vars: HashMap::new(),

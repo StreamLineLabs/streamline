@@ -5,8 +5,6 @@
 
 #[cfg(test)]
 mod cluster_failover {
-    use std::time::Duration;
-
     /// Test: Leader death triggers re-election within 30 seconds.
     #[test]
     #[ignore = "requires 3-node Docker cluster"]
@@ -17,7 +15,7 @@ mod cluster_failover {
         // 4. Wait for new leader election
         // 5. Assert: new leader elected within 30s
         // 6. Assert: produce/consume still works
-        assert!(true, "Scaffold — requires running cluster");
+        unimplemented!("Scaffold — requires running cluster");
     }
 
     /// Test: Network partition with majority maintains availability.
@@ -29,7 +27,7 @@ mod cluster_failover {
         // 3. Assert: minority side becomes read-only
         // 4. Heal partition
         // 5. Assert: all nodes rejoin and catch up
-        assert!(true, "Scaffold — requires running cluster");
+        unimplemented!("Scaffold — requires running cluster");
     }
 
     /// Test: Rolling upgrade maintains availability.
@@ -43,7 +41,7 @@ mod cluster_failover {
         // 5. Transfer leadership to upgraded node
         // 6. Upgrade node 3 (old leader) to version B
         // 7. Assert: zero message loss throughout
-        assert!(true, "Scaffold — requires running cluster");
+        unimplemented!("Scaffold — requires running cluster");
     }
 
     /// Test: Follower failure does not interrupt service.
@@ -54,7 +52,7 @@ mod cluster_failover {
         // 2. Assert: produce/consume continues
         // 3. Restart follower
         // 4. Assert: follower catches up
-        assert!(true, "Scaffold — requires running cluster");
+        unimplemented!("Scaffold — requires running cluster");
     }
 
     /// Test: Rack failure triggers cross-rack leader election.
@@ -65,7 +63,7 @@ mod cluster_failover {
         // 2. Fail all nodes in one rack
         // 3. Assert: leader elected from surviving rack
         // 4. Assert: no data loss
-        assert!(true, "Scaffold — requires rack-aware cluster");
+        unimplemented!("Scaffold — requires rack-aware cluster");
     }
 
     /// Test: Partition split and merge.
@@ -76,6 +74,6 @@ mod cluster_failover {
         // 2. Trigger partition split (4 -> 8)
         // 3. Assert: all existing data accessible
         // 4. Assert: new partitions accept writes
-        assert!(true, "Scaffold — requires running cluster");
+        unimplemented!("Scaffold — requires running cluster");
     }
 }

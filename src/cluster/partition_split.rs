@@ -794,7 +794,7 @@ impl SplitEvent {
     pub fn description(&self) -> String {
         match self {
             Self::EvaluationStarted { partition, .. } => {
-                format!("Evaluating partition {}", partition)
+                format!("Evaluating partition {partition}")
             }
             Self::SplitTriggered {
                 partition,
@@ -802,22 +802,18 @@ impl SplitEvent {
                 ..
             } => {
                 format!(
-                    "Split triggered for partition {}, expanding to {} partitions",
-                    partition, new_partition_count
+                    "Split triggered for partition {partition}, expanding to {new_partition_count} partitions"
                 )
             }
             Self::PlanCreated {
                 partition, plan_id, ..
             } => {
-                format!("Split plan {} created for partition {}", plan_id, partition)
+                format!("Split plan {plan_id} created for partition {partition}")
             }
             Self::ExecutionStarted {
                 partition, plan_id, ..
             } => {
-                format!(
-                    "Executing split plan {} for partition {}",
-                    plan_id, partition
-                )
+                format!("Executing split plan {plan_id} for partition {partition}")
             }
             Self::Progress {
                 partition,
@@ -825,10 +821,7 @@ impl SplitEvent {
                 phase,
                 ..
             } => {
-                format!(
-                    "Partition {} split progress: {}% ({})",
-                    partition, percent, phase
-                )
+                format!("Partition {partition} split progress: {percent}% ({phase})")
             }
             Self::Completed {
                 partition,
@@ -837,19 +830,18 @@ impl SplitEvent {
                 ..
             } => {
                 format!(
-                    "Partition {} split complete: new partitions {:?} in {}ms",
-                    partition, new_partition_ids, duration_ms
+                    "Partition {partition} split complete: new partitions {new_partition_ids:?} in {duration_ms}ms"
                 )
             }
             Self::Failed {
                 partition, error, ..
             } => {
-                format!("Partition {} split failed: {}", partition, error)
+                format!("Partition {partition} split failed: {error}")
             }
             Self::Cancelled {
                 partition, reason, ..
             } => {
-                format!("Partition {} split cancelled: {}", partition, reason)
+                format!("Partition {partition} split cancelled: {reason}")
             }
         }
     }

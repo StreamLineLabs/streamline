@@ -198,7 +198,7 @@ impl NetworkClient {
             let tls_stream = tls.connect(tcp_stream, &addr).await.map_err(|e| {
                 RPCError::Unreachable(Unreachable::new(&std::io::Error::new(
                     std::io::ErrorKind::ConnectionRefused,
-                    format!("TLS handshake failed: {}", e),
+                    format!("TLS handshake failed: {e}"),
                 )))
             })?;
 
@@ -505,7 +505,7 @@ impl RaftRpcHandler {
         match msg {
             RaftMessage::VoteRequest(req) => {
                 debug!(?req, "Handling Vote request");
-                let response = raft.vote(req).await.map_err(|e| format!("{:?}", e))?;
+                let response = raft.vote(req).await.map_err(|e| format!("{e:?}"))?;
                 Ok(RaftMessage::VoteResponse(response))
             }
             RaftMessage::AppendEntriesRequest(req) => {
@@ -517,7 +517,7 @@ impl RaftRpcHandler {
                 let response = raft
                     .append_entries(req)
                     .await
-                    .map_err(|e| format!("{:?}", e))?;
+                    .map_err(|e| format!("{e:?}"))?;
                 Ok(RaftMessage::AppendEntriesResponse(response))
             }
             RaftMessage::InstallSnapshotRequest(req) => {
@@ -528,7 +528,7 @@ impl RaftRpcHandler {
                 let response = raft
                     .install_snapshot(req)
                     .await
-                    .map_err(|e| format!("{:?}", e))?;
+                    .map_err(|e| format!("{e:?}"))?;
                 Ok(RaftMessage::InstallSnapshotResponse(response))
             }
             RaftMessage::JoinRequest(req) => {
@@ -596,10 +596,7 @@ impl RaftRpcHandler {
 
                 return JoinResponse {
                     success: false,
-                    error: Some(format!(
-                        "Not the leader (leader is node {})",
-                        leader_id
-                    )),
+                    error: Some(format!("Not the leader (leader is node {leader_id})")),
                     leader_id: Some(leader_id),
                     leader_addr,
                     version: Some(local_version_str),
@@ -724,7 +721,10 @@ impl RaftRpcHandler {
                         error!(node_id = req.node_id, error = ?e, "Failed to promote to voter");
                         JoinResponse {
                             success: false,
-                            error: Some(format!("Failed to promote node {} to voter: {:?}", req.node_id, e)),
+                            error: Some(format!(
+                                "Failed to promote node {} to voter: {:?}",
+                                req.node_id, e
+                            )),
                             leader_id: Some(metrics.id),
                             leader_addr: None,
                             version: Some(local_version_str),
@@ -736,7 +736,10 @@ impl RaftRpcHandler {
                 error!(node_id = req.node_id, error = ?e, "Failed to add learner");
                 JoinResponse {
                     success: false,
-                    error: Some(format!("Failed to add node {} as learner: {:?}", req.node_id, e)),
+                    error: Some(format!(
+                        "Failed to add node {} as learner: {:?}",
+                        req.node_id, e
+                    )),
                     leader_id: Some(metrics.id),
                     leader_addr: None,
                     version: Some(local_version_str),
@@ -1051,8 +1054,7 @@ impl RaftRpcHandler {
         const MAX_MESSAGE_SIZE: usize = 256 * 1024 * 1024;
         if len > MAX_MESSAGE_SIZE {
             return Err(format!(
-                "Message size {} exceeds maximum allowed {} bytes",
-                len, MAX_MESSAGE_SIZE
+                "Message size {len} exceeds maximum allowed {MAX_MESSAGE_SIZE} bytes"
             )
             .into());
         }

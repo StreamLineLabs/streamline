@@ -169,9 +169,8 @@ impl ScalingMetricsCollector {
         let last_scale_up = self.last_scale_up_at.load(Ordering::Relaxed);
 
         let idle_duration = now.saturating_sub(last_activity);
-        let is_idle = mps == 0.0
-            && connections == 0
-            && idle_duration >= self.config.idle_threshold_seconds;
+        let is_idle =
+            mps == 0.0 && connections == 0 && idle_duration >= self.config.idle_threshold_seconds;
 
         let cooldown_remaining = if last_scale_up > 0 {
             let elapsed = now.saturating_sub(last_scale_up);

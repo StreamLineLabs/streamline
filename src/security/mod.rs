@@ -17,9 +17,9 @@
 //!    (`age`, `ed25519-dalek`, `vaultrs`) behind it.
 //! 3. Add the trait to the prelude / re-exports as the API stabilizes.
 
-pub mod audit;
 #[cfg(feature = "attestation")]
 pub mod attestation;
+pub mod audit;
 #[cfg(feature = "attestation")]
 pub mod aws_kms;
 pub mod error;

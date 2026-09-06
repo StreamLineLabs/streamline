@@ -3,8 +3,8 @@
 //! Contains all authorization check methods, with both auth-enabled
 //! and auth-disabled (stub) implementations.
 
-use crate::error::Result;
 use super::{KafkaHandler, Operation, ResourceType};
+use crate::error::Result;
 
 impl KafkaHandler {
     /// Get a reference to the authorizer (requires auth feature)
@@ -12,7 +12,6 @@ impl KafkaHandler {
     pub fn authorizer(&self) -> &super::Authorizer {
         &self.authorizer
     }
-
 
     /// Check authorization for producing to topics (requires auth feature)
     #[cfg(feature = "auth")]
@@ -116,7 +115,6 @@ impl KafkaHandler {
             .check_authorization(principal, host, operation, resource_type, resource_name)
             .await
     }
-
 
     /// Check produce authorization - always allowed when auth is disabled
     #[cfg(not(feature = "auth"))]

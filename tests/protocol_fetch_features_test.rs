@@ -735,13 +735,11 @@ fn test_fetch_request_version_features() {
 
         assert_eq!(
             decoded.max_wait_ms, 500,
-            "max_wait_ms should be preserved at v{}",
-            version
+            "max_wait_ms should be preserved at v{version}"
         );
         assert_eq!(
             decoded.min_bytes, 1,
-            "min_bytes should be preserved at v{}",
-            version
+            "min_bytes should be preserved at v{version}"
         );
     }
 }
@@ -769,8 +767,7 @@ fn test_fetch_response_version_features() {
 
         assert_eq!(
             decoded.responses[0].partitions[0].high_watermark, 100,
-            "high_watermark should be preserved at v{}",
-            version
+            "high_watermark should be preserved at v{version}"
         );
     }
 }

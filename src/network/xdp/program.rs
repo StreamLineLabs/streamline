@@ -2,10 +2,9 @@
 
 use super::{XdpError, XdpMode, XdpResult};
 use std::collections::HashMap;
-use std::ffi::CString;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info};
 
 /// XDP program manager
 ///
@@ -172,7 +171,7 @@ impl XdpProgram {
 
     /// Get interface index from name
     fn get_interface_index(interface: &str) -> XdpResult<u32> {
-        let path = format!("/sys/class/net/{}/ifindex", interface);
+        let path = format!("/sys/class/net/{interface}/ifindex");
         std::fs::read_to_string(&path)
             .map_err(|_| XdpError::InterfaceNotFound(interface.to_string()))?
             .trim()
@@ -268,6 +267,7 @@ impl XdpProgram {
         debug!(
             queue_id = queue_id,
             socket_fd = socket_fd,
+            map_fd = xsk_map.fd,
             "Registering AF_XDP socket with XSK map"
         );
 
@@ -282,7 +282,12 @@ impl XdpProgram {
             .get("filter_map")
             .ok_or_else(|| XdpError::ProgramLoad("Filter map not created".to_string()))?;
 
-        debug!(port = port, allow = allow, "Updating XDP filter");
+        debug!(
+            port = port,
+            allow = allow,
+            map_fd = filter_map.fd,
+            "Updating XDP filter"
+        );
 
         // In real implementation: bpf_map_update_elem(filter_map.fd, &port, &allow, 0)
         Ok(())

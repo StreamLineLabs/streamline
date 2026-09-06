@@ -130,7 +130,7 @@ fn test_response_cache_eviction() {
 
     // Add entries that exceed cache size
     for i in 0..5 {
-        let key = CacheKey::new(format!("topic-{}", i), 0, 0, 1024);
+        let key = CacheKey::new(format!("topic-{i}"), 0, 0, 1024);
         let data = vec![0u8; 50]; // 50 bytes each
         cache.put(key, &data).unwrap();
     }
@@ -154,7 +154,7 @@ fn test_response_cache_clear() {
 
     // Add some entries
     for i in 0..3 {
-        let key = CacheKey::new(format!("topic-{}", i), 0, 0, 1024);
+        let key = CacheKey::new(format!("topic-{i}"), 0, 0, 1024);
         cache.put(key, b"test data").unwrap();
     }
 
@@ -238,8 +238,8 @@ fn test_mmap_segment_reader() {
         batch.add_record(Record::new(
             i as i64,
             timestamp,
-            Some(Bytes::from(format!("key-{}", i))),
-            Bytes::from(format!("value-{}", i)),
+            Some(Bytes::from(format!("key-{i}"))),
+            Bytes::from(format!("value-{i}")),
         ));
     }
 
@@ -448,7 +448,7 @@ fn test_tls_fallback_mmap_works() {
         batch.add_record(Record::new(
             i as i64,
             timestamp,
-            Some(Bytes::from(format!("key-{}", i))),
+            Some(Bytes::from(format!("key-{i}"))),
             Bytes::from(format!("value-{}-{}", i, "x".repeat(200))),
         ));
     }
@@ -524,8 +524,8 @@ async fn test_tls_fallback_complete_scenario() {
             batch.add_record(Record::new(
                 i as i64,
                 timestamp,
-                Some(Bytes::from(format!("key-{}", i))),
-                Bytes::from(format!("value-{}", i)),
+                Some(Bytes::from(format!("key-{i}"))),
+                Bytes::from(format!("value-{i}")),
             ));
         }
         segment.append_batch(&batch).unwrap();
@@ -764,11 +764,7 @@ fn test_sendfile_function_edge_cases() {
 
     // Verify error is a reasonable OS error
     let err = result.unwrap_err();
-    assert!(
-        err.raw_os_error().is_some(),
-        "Should be an OS error: {}",
-        err
-    );
+    assert!(err.raw_os_error().is_some(), "Should be an OS error: {err}");
 }
 
 // =============================================================================
@@ -849,7 +845,7 @@ fn test_io_backend_uring_detection() {
     #[cfg(all(target_os = "linux", feature = "io-uring"))]
     {
         // Just verify it doesn't crash - actual availability depends on kernel
-        println!("io_uring available: {}", use_uring);
+        println!("io_uring available: {use_uring}");
     }
 }
 
@@ -926,8 +922,8 @@ async fn test_async_segment_basic_operations() {
         let record = Record::new(
             i,
             chrono::Utc::now().timestamp_millis() + i,
-            Some(Bytes::from(format!("key-{}", i))),
-            Bytes::from(format!("value-{}", i)),
+            Some(Bytes::from(format!("key-{i}"))),
+            Bytes::from(format!("value-{i}")),
         );
         segment.append_record(record).await.unwrap();
     }
@@ -942,7 +938,7 @@ async fn test_async_segment_basic_operations() {
     assert_eq!(records.len(), 10);
     for (i, record) in records.iter().enumerate() {
         assert_eq!(record.offset, i as i64);
-        assert_eq!(record.value, Bytes::from(format!("value-{}", i)));
+        assert_eq!(record.value, Bytes::from(format!("value-{i}")));
     }
 }
 
@@ -966,7 +962,7 @@ async fn test_async_segment_batch_performance() {
         batch.add_record(Record::new(
             i,
             timestamp + i,
-            Some(Bytes::from(format!("key-{}", i))),
+            Some(Bytes::from(format!("key-{i}"))),
             Bytes::from(format!("value-{}-{}", i, "x".repeat(100))),
         ));
     }
@@ -1003,7 +999,7 @@ async fn test_async_segment_seal_and_reopen() {
                 100 + i,
                 chrono::Utc::now().timestamp_millis(),
                 None,
-                Bytes::from(format!("data-{}", i)),
+                Bytes::from(format!("data-{i}")),
             );
             segment.append_record(record).await.unwrap();
         }
@@ -1067,7 +1063,7 @@ async fn test_async_segment_with_compression() {
 
     // Size should be smaller than uncompressed (20 * ~1000 bytes)
     let size = segment.size().await;
-    assert!(size < 20000, "Compressed size {} should be < 20000", size);
+    assert!(size < 20000, "Compressed size {size} should be < 20000");
 }
 
 /// Test AsyncSegment open_for_append
@@ -1090,7 +1086,7 @@ async fn test_async_segment_open_for_append() {
                     i,
                     chrono::Utc::now().timestamp_millis(),
                     None,
-                    Bytes::from(format!("initial-{}", i)),
+                    Bytes::from(format!("initial-{i}")),
                 ))
                 .await
                 .unwrap();
@@ -1109,7 +1105,7 @@ async fn test_async_segment_open_for_append() {
                     i,
                     chrono::Utc::now().timestamp_millis(),
                     None,
-                    Bytes::from(format!("appended-{}", i)),
+                    Bytes::from(format!("appended-{i}")),
                 ))
                 .await
                 .unwrap();
@@ -1145,7 +1141,7 @@ async fn test_async_segment_concurrent_reads() {
             i as i64,
             timestamp,
             None,
-            Bytes::from(format!("value-{}", i)),
+            Bytes::from(format!("value-{i}")),
         ));
     }
     segment.append_batch(&batch).await.unwrap();

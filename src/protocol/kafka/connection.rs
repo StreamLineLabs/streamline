@@ -40,11 +40,7 @@ impl KafkaHandler {
             use std::os::unix::io::AsRawFd;
             let socket_fd = stream.as_raw_fd();
             debug!(peer = ?peer_addr, fd = socket_fd, "Extracted socket fd for sendfile");
-            ConnectionContext::plain_tcp_with_fd(
-                peer_addr,
-                self.zerocopy_config.clone(),
-                socket_fd,
-            )
+            ConnectionContext::plain_tcp_with_fd(peer_addr, self.zerocopy_config.clone(), socket_fd)
         };
 
         #[cfg(not(unix))]
@@ -138,8 +134,7 @@ impl KafkaHandler {
 
         // Return the first error if any
         reader_result?;
-        writer_result
-            .map_err(|e| StreamlineError::Server(format!("Writer task panicked: {}", e)))?
+        writer_result.map_err(|e| StreamlineError::Server(format!("Writer task panicked: {e}")))?
     }
 
     /// Writer task that sends responses in order
@@ -450,8 +445,7 @@ impl KafkaHandler {
                     "Message exceeds hard size limit (potential DoS attempt)"
                 );
                 return Err(StreamlineError::protocol_msg(format!(
-                    "Message size {} exceeds hard limit {}",
-                    message_size, HARD_MAX_MESSAGE_BYTES
+                    "Message size {message_size} exceeds hard limit {HARD_MAX_MESSAGE_BYTES}"
                 )));
             }
 
@@ -478,8 +472,7 @@ impl KafkaHandler {
                         e
                     );
                     return Err(StreamlineError::protocol_msg(format!(
-                        "Request rejected: {:?}",
-                        e
+                        "Request rejected: {e:?}"
                     )));
                 }
             }
@@ -495,8 +488,7 @@ impl KafkaHandler {
                     "Failed to allocate buffer for message (OOM protection)"
                 );
                 return Err(StreamlineError::protocol_msg(format!(
-                    "Failed to allocate {} bytes for message: {}",
-                    message_size, e
+                    "Failed to allocate {message_size} bytes for message: {e}"
                 )));
             }
             message_buf.resize(message_size, 0);

@@ -495,14 +495,13 @@ impl TenantManager {
         let enforcer = self.quota_enforcer.read().await;
         enforcer
             .check_quota(tenant_id, resource, amount)
-            .map_err(|e| {
+            .inspect_err(|_e| {
                 // Update stats
                 let stats = self.stats.clone();
                 tokio::spawn(async move {
                     let mut s = stats.write().await;
                     s.quota_violations += 1;
                 });
-                e
             })
     }
 
@@ -574,8 +573,7 @@ impl TenantManager {
         // Check namespace access
         if !tenant.config.namespaces.contains(&namespace.to_string()) {
             return Err(TenantError::AccessDenied(format!(
-                "Tenant {} does not have access to namespace {}",
-                tenant_id, namespace
+                "Tenant {tenant_id} does not have access to namespace {namespace}"
             )));
         }
 
@@ -583,8 +581,7 @@ impl TenantManager {
         let ns_manager = self.namespace_manager.read().await;
         if !ns_manager.can_access(tenant_id, namespace, resource) {
             return Err(TenantError::AccessDenied(format!(
-                "Access denied to resource {} in namespace {}",
-                resource, namespace
+                "Access denied to resource {resource} in namespace {namespace}"
             )));
         }
 

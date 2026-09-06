@@ -55,7 +55,7 @@ fn test_api_versions_request_all_versions() {
     for version in 0..=3 {
         let mut buf = BytesMut::new();
         let result = request.clone().encode(&mut buf, version);
-        assert!(result.is_ok(), "Failed to encode ApiVersions v{}", version);
+        assert!(result.is_ok(), "Failed to encode ApiVersions v{version}");
     }
 }
 
@@ -158,8 +158,7 @@ fn test_api_versions_response_all_versions() {
         let result = response.clone().encode(&mut buf, version);
         assert!(
             result.is_ok(),
-            "Failed to encode ApiVersionsResponse v{}",
-            version
+            "Failed to encode ApiVersionsResponse v{version}"
         );
     }
 }
@@ -560,8 +559,7 @@ fn test_backward_compatible_versions() {
         let is_compatible = client_version >= server.1 && client_version <= server.2;
         assert!(
             is_compatible,
-            "API {} v{} should be compatible",
-            api_key, client_version
+            "API {api_key} v{client_version} should be compatible"
         );
     }
 }

@@ -1,6 +1,5 @@
 //! FaaS function definition and lifecycle.
 
-use crate::error::{Result, StreamlineError};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -37,7 +36,7 @@ pub struct ResourceLimits {
 impl Default for ResourceLimits {
     fn default() -> Self {
         Self {
-            max_execution_ms: 30_000, // 30 seconds
+            max_execution_ms: 30_000,            // 30 seconds
             max_memory_bytes: 128 * 1024 * 1024, // 128 MB
             max_concurrency: 10,
         }
@@ -270,7 +269,10 @@ pub enum FaasError {
     /// Execution exceeded the time limit.
     Timeout { limit_ms: u64, actual_ms: u64 },
     /// Execution exceeded the memory limit.
-    OutOfMemory { limit_bytes: u64, requested_bytes: u64 },
+    OutOfMemory {
+        limit_bytes: u64,
+        requested_bytes: u64,
+    },
     /// A resource limit was exceeded.
     ResourceLimitExceeded(String),
     /// The requested function was not found.
@@ -288,23 +290,32 @@ pub enum FaasError {
 impl std::fmt::Display for FaasError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            FaasError::CompilationFailed(msg) => write!(f, "compilation failed: {}", msg),
-            FaasError::InstantiationFailed(msg) => write!(f, "instantiation failed: {}", msg),
-            FaasError::ExecutionFailed(msg) => write!(f, "execution failed: {}", msg),
-            FaasError::Timeout { limit_ms, actual_ms } => {
-                write!(f, "timeout: limit {}ms, actual {}ms", limit_ms, actual_ms)
+            FaasError::CompilationFailed(msg) => write!(f, "compilation failed: {msg}"),
+            FaasError::InstantiationFailed(msg) => write!(f, "instantiation failed: {msg}"),
+            FaasError::ExecutionFailed(msg) => write!(f, "execution failed: {msg}"),
+            FaasError::Timeout {
+                limit_ms,
+                actual_ms,
+            } => {
+                write!(f, "timeout: limit {limit_ms}ms, actual {actual_ms}ms")
             }
-            FaasError::OutOfMemory { limit_bytes, requested_bytes } => {
-                write!(f, "out of memory: limit {} bytes, requested {} bytes", limit_bytes, requested_bytes)
+            FaasError::OutOfMemory {
+                limit_bytes,
+                requested_bytes,
+            } => {
+                write!(
+                    f,
+                    "out of memory: limit {limit_bytes} bytes, requested {requested_bytes} bytes"
+                )
             }
-            FaasError::ResourceLimitExceeded(msg) => write!(f, "resource limit exceeded: {}", msg),
-            FaasError::FunctionNotFound(name) => write!(f, "function not found: {}", name),
+            FaasError::ResourceLimitExceeded(msg) => write!(f, "resource limit exceeded: {msg}"),
+            FaasError::FunctionNotFound(name) => write!(f, "function not found: {name}"),
             FaasError::FunctionNotActive { name, state } => {
-                write!(f, "function '{}' not active (state: {:?})", name, state)
+                write!(f, "function '{name}' not active (state: {state:?})")
             }
-            FaasError::InvalidInput(msg) => write!(f, "invalid input: {}", msg),
-            FaasError::InternalError(msg) => write!(f, "internal error: {}", msg),
-            FaasError::RuntimeNotAvailable(msg) => write!(f, "runtime not available: {}", msg),
+            FaasError::InvalidInput(msg) => write!(f, "invalid input: {msg}"),
+            FaasError::InternalError(msg) => write!(f, "internal error: {msg}"),
+            FaasError::RuntimeNotAvailable(msg) => write!(f, "runtime not available: {msg}"),
         }
     }
 }
@@ -354,8 +365,7 @@ impl Default for RetryPolicy {
 impl RetryPolicy {
     /// Calculate the backoff duration for a given attempt (0-indexed).
     pub fn backoff_for_attempt(&self, attempt: u32) -> u64 {
-        let backoff = self.initial_backoff_ms as f64
-            * self.backoff_multiplier.powi(attempt as i32);
+        let backoff = self.initial_backoff_ms as f64 * self.backoff_multiplier.powi(attempt as i32);
         (backoff as u64).min(self.max_backoff_ms)
     }
 }
@@ -658,13 +668,22 @@ mod tests {
     fn test_faas_error_display() {
         let err = FaasError::CompilationFailed("bad bytecode".into());
         assert_eq!(err.to_string(), "compilation failed: bad bytecode");
-        let err = FaasError::Timeout { limit_ms: 100, actual_ms: 250 };
+        let err = FaasError::Timeout {
+            limit_ms: 100,
+            actual_ms: 250,
+        };
         assert_eq!(err.to_string(), "timeout: limit 100ms, actual 250ms");
-        let err = FaasError::OutOfMemory { limit_bytes: 1024, requested_bytes: 2048 };
+        let err = FaasError::OutOfMemory {
+            limit_bytes: 1024,
+            requested_bytes: 2048,
+        };
         assert!(err.to_string().contains("out of memory"));
         let err = FaasError::FunctionNotFound("my-fn".into());
         assert_eq!(err.to_string(), "function not found: my-fn");
-        let err = FaasError::FunctionNotActive { name: "fn-a".into(), state: FunctionState::Inactive };
+        let err = FaasError::FunctionNotActive {
+            name: "fn-a".into(),
+            state: FunctionState::Inactive,
+        };
         assert!(err.to_string().contains("fn-a"));
     }
 
@@ -686,7 +705,9 @@ mod tests {
         let spec = FunctionSpec {
             name: "test-spec".to_string(),
             wasm_bytes: vec![0, 97, 115, 109],
-            trigger: TriggerType::Schedule { cron: "0 * * * *".to_string() },
+            trigger: TriggerType::Schedule {
+                cron: "0 * * * *".to_string(),
+            },
             config: test_config(),
             resource_limits: ResourceLimits::default(),
             env_vars: HashMap::new(),

@@ -40,6 +40,12 @@ pub struct ComplianceApiState {
     pub audit_log: Arc<RwLock<Vec<AuditEntry>>>,
 }
 
+impl Default for ComplianceApiState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ComplianceApiState {
     pub fn new() -> Self {
         Self {
@@ -254,9 +260,7 @@ fn now_iso() -> String {
     chrono::Utc::now().to_rfc3339()
 }
 
-async fn compliance_status(
-    State(state): State<ComplianceApiState>,
-) -> Json<serde_json::Value> {
+async fn compliance_status(State(state): State<ComplianceApiState>) -> Json<serde_json::Value> {
     let policies = state.policies.read();
     let scans = state.scan_results.read();
     let latest_score = scans.last().map(|s| s.score).unwrap_or(0.0);
@@ -275,9 +279,7 @@ async fn compliance_status(
     }))
 }
 
-async fn run_scan(
-    State(state): State<ComplianceApiState>,
-) -> (StatusCode, Json<ComplianceScan>) {
+async fn run_scan(State(state): State<ComplianceApiState>) -> (StatusCode, Json<ComplianceScan>) {
     let start = Instant::now();
     let policies = state.policies.read().clone();
 
@@ -330,14 +332,17 @@ async fn run_scan(
     };
 
     state.scan_results.write().push(scan.clone());
-    state.log_audit("compliance_scan", "system", "cluster", "Compliance scan completed");
+    state.log_audit(
+        "compliance_scan",
+        "system",
+        "cluster",
+        "Compliance scan completed",
+    );
     info!(scan_id = %scan.id, score = scan.score, "Compliance scan completed");
     (StatusCode::CREATED, Json(scan))
 }
 
-async fn list_policies(
-    State(state): State<ComplianceApiState>,
-) -> Json<Vec<CompliancePolicy>> {
+async fn list_policies(State(state): State<ComplianceApiState>) -> Json<Vec<CompliancePolicy>> {
     Json(state.policies.read().clone())
 }
 
@@ -380,9 +385,7 @@ async fn delete_policy(
     }
 }
 
-async fn enforce_retention(
-    State(state): State<ComplianceApiState>,
-) -> Json<serde_json::Value> {
+async fn enforce_retention(State(state): State<ComplianceApiState>) -> Json<serde_json::Value> {
     let policies = state.policies.read();
     let mut enforced = 0u32;
 
@@ -402,7 +405,7 @@ async fn enforce_retention(
         "enforce_retention",
         "system",
         "cluster",
-        &format!("Enforced {} retention rules", enforced),
+        &format!("Enforced {enforced} retention rules"),
     );
 
     Json(serde_json::json!({
@@ -412,9 +415,7 @@ async fn enforce_retention(
     }))
 }
 
-async fn pii_scan(
-    State(state): State<ComplianceApiState>,
-) -> Json<serde_json::Value> {
+async fn pii_scan(State(state): State<ComplianceApiState>) -> Json<serde_json::Value> {
     let start = Instant::now();
     let policies = state.policies.read();
     let mut patterns_checked = 0usize;
@@ -440,9 +441,7 @@ async fn pii_scan(
     }))
 }
 
-async fn get_audit_log(
-    State(state): State<ComplianceApiState>,
-) -> Json<Vec<AuditEntry>> {
+async fn get_audit_log(State(state): State<ComplianceApiState>) -> Json<Vec<AuditEntry>> {
     Json(state.audit_log.read().clone())
 }
 
@@ -470,9 +469,7 @@ async fn create_deletion_request(
     (StatusCode::CREATED, Json(request))
 }
 
-async fn generate_report(
-    State(state): State<ComplianceApiState>,
-) -> Json<ComplianceReport> {
+async fn generate_report(State(state): State<ComplianceApiState>) -> Json<ComplianceReport> {
     let scans = state.scan_results.read();
     let policies = state.policies.read();
 
@@ -484,10 +481,7 @@ async fn generate_report(
     // Group findings by category
     let mut categories: HashMap<String, Vec<&Finding>> = HashMap::new();
     for f in &total_findings {
-        categories
-            .entry(f.category.clone())
-            .or_default()
-            .push(f);
+        categories.entry(f.category.clone()).or_default().push(f);
     }
     for (cat, findings) in &categories {
         let critical = findings.iter().filter(|f| f.severity == "critical").count();
@@ -496,18 +490,19 @@ async fn generate_report(
             name: cat.clone(),
             status: status.to_string(),
             findings_count: findings.len(),
-            details: format!(
-                "{} findings ({} critical)",
-                findings.len(),
-                critical
-            ),
+            details: format!("{} findings ({} critical)", findings.len(), critical),
         });
     }
 
     // Add policy coverage section
     sections.push(ReportSection {
         name: "policy_coverage".to_string(),
-        status: if policies.is_empty() { "warning" } else { "pass" }.to_string(),
+        status: if policies.is_empty() {
+            "warning"
+        } else {
+            "pass"
+        }
+        .to_string(),
         findings_count: 0,
         details: format!("{} policies configured", policies.len()),
     });
@@ -524,7 +519,12 @@ async fn generate_report(
         total_findings.len()
     );
 
-    state.log_audit("generate_report", "system", "cluster", "Compliance report generated");
+    state.log_audit(
+        "generate_report",
+        "system",
+        "cluster",
+        "Compliance report generated",
+    );
 
     Json(ComplianceReport {
         framework,
@@ -718,7 +718,7 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .method("DELETE")
-                    .uri(&format!("/api/v1/compliance/policies/{}", pid))
+                    .uri(format!("/api/v1/compliance/policies/{pid}"))
                     .body(Body::empty())
                     .unwrap(),
             )

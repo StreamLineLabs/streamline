@@ -153,34 +153,32 @@ fn compress_lz4(data: &[u8]) -> Result<Vec<u8>> {
 /// Decompress LZ4 data
 fn decompress_lz4(data: &[u8]) -> Result<Vec<u8>> {
     lz4_flex::decompress_size_prepended(data)
-        .map_err(|e| StreamlineError::storage_msg(format!("LZ4 decompression failed: {}", e)))
+        .map_err(|e| StreamlineError::storage_msg(format!("LZ4 decompression failed: {e}")))
 }
 
 /// Compress data using Zstd with configurable level
 fn compress_zstd(data: &[u8], level: i32) -> Result<Vec<u8>> {
-    let mut encoder = zstd::Encoder::new(Vec::new(), level).map_err(|e| {
-        StreamlineError::storage_msg(format!("Zstd encoder creation failed: {}", e))
-    })?;
+    let mut encoder = zstd::Encoder::new(Vec::new(), level)
+        .map_err(|e| StreamlineError::storage_msg(format!("Zstd encoder creation failed: {e}")))?;
 
     encoder
         .write_all(data)
-        .map_err(|e| StreamlineError::storage_msg(format!("Zstd compression failed: {}", e)))?;
+        .map_err(|e| StreamlineError::storage_msg(format!("Zstd compression failed: {e}")))?;
 
     encoder
         .finish()
-        .map_err(|e| StreamlineError::storage_msg(format!("Zstd finish failed: {}", e)))
+        .map_err(|e| StreamlineError::storage_msg(format!("Zstd finish failed: {e}")))
 }
 
 /// Decompress Zstd data
 fn decompress_zstd(data: &[u8]) -> Result<Vec<u8>> {
-    let mut decoder = zstd::Decoder::new(data).map_err(|e| {
-        StreamlineError::storage_msg(format!("Zstd decoder creation failed: {}", e))
-    })?;
+    let mut decoder = zstd::Decoder::new(data)
+        .map_err(|e| StreamlineError::storage_msg(format!("Zstd decoder creation failed: {e}")))?;
 
     let mut output = Vec::new();
     decoder
         .read_to_end(&mut output)
-        .map_err(|e| StreamlineError::storage_msg(format!("Zstd decompression failed: {}", e)))?;
+        .map_err(|e| StreamlineError::storage_msg(format!("Zstd decompression failed: {e}")))?;
 
     Ok(output)
 }
@@ -190,7 +188,7 @@ fn compress_snappy(data: &[u8]) -> Result<Vec<u8>> {
     let mut encoder = snap::raw::Encoder::new();
     encoder
         .compress_vec(data)
-        .map_err(|e| StreamlineError::storage_msg(format!("Snappy compression failed: {}", e)))
+        .map_err(|e| StreamlineError::storage_msg(format!("Snappy compression failed: {e}")))
 }
 
 /// Decompress Snappy data
@@ -198,7 +196,7 @@ fn decompress_snappy(data: &[u8]) -> Result<Vec<u8>> {
     let mut decoder = snap::raw::Decoder::new();
     decoder
         .decompress_vec(data)
-        .map_err(|e| StreamlineError::storage_msg(format!("Snappy decompression failed: {}", e)))
+        .map_err(|e| StreamlineError::storage_msg(format!("Snappy decompression failed: {e}")))
 }
 
 /// Compress data using Gzip with configurable level
@@ -209,11 +207,11 @@ fn compress_gzip(data: &[u8], level: u32) -> Result<Vec<u8>> {
     let mut encoder = GzEncoder::new(Vec::new(), Compression::new(level));
     encoder
         .write_all(data)
-        .map_err(|e| StreamlineError::storage_msg(format!("Gzip compression failed: {}", e)))?;
+        .map_err(|e| StreamlineError::storage_msg(format!("Gzip compression failed: {e}")))?;
 
     encoder
         .finish()
-        .map_err(|e| StreamlineError::storage_msg(format!("Gzip finish failed: {}", e)))
+        .map_err(|e| StreamlineError::storage_msg(format!("Gzip finish failed: {e}")))
 }
 
 /// Decompress Gzip data
@@ -224,7 +222,7 @@ fn decompress_gzip(data: &[u8]) -> Result<Vec<u8>> {
     let mut output = Vec::new();
     decoder
         .read_to_end(&mut output)
-        .map_err(|e| StreamlineError::storage_msg(format!("Gzip decompression failed: {}", e)))?;
+        .map_err(|e| StreamlineError::storage_msg(format!("Gzip decompression failed: {e}")))?;
 
     Ok(output)
 }

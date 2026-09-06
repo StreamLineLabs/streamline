@@ -117,10 +117,7 @@ fn test_integration_produce_multiple_topics() {
             let partition_data = PartitionProduceData::default().with_index(0);
 
             TopicProduceData::default()
-                .with_name(TopicName(StrBytes::from_string(format!(
-                    "multi-topic-{}",
-                    i
-                ))))
+                .with_name(TopicName(StrBytes::from_string(format!("multi-topic-{i}"))))
                 .with_partition_data(vec![partition_data])
         })
         .collect();

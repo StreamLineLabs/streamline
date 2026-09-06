@@ -148,7 +148,7 @@ impl CheckpointManager {
     fn load_checkpoint(path: &Path) -> Result<Checkpoint> {
         let data = fs::read_to_string(path)?;
         let checkpoint: Checkpoint = serde_json::from_str(&data).map_err(|e| {
-            StreamlineError::CorruptedData(format!("Failed to parse checkpoint: {}", e))
+            StreamlineError::CorruptedData(format!("Failed to parse checkpoint: {e}"))
         })?;
 
         // Verify CRC32 if present (version 1+ includes CRC)
@@ -256,14 +256,12 @@ impl CheckpointManager {
         if let Some(parent) = self.checkpoint_path.parent() {
             let dir = fs::File::open(parent).map_err(|e| {
                 StreamlineError::storage_msg(format!(
-                    "Failed to open checkpoint directory for sync: {}",
-                    e
+                    "Failed to open checkpoint directory for sync: {e}"
                 ))
             })?;
             dir.sync_all().map_err(|e| {
                 StreamlineError::storage_msg(format!(
-                    "Failed to sync checkpoint directory - durability not guaranteed: {}",
-                    e
+                    "Failed to sync checkpoint directory - durability not guaranteed: {e}"
                 ))
             })?;
         }
@@ -359,7 +357,7 @@ impl CheckpointManager {
     async fn load_checkpoint_async(path: PathBuf) -> Result<Checkpoint> {
         let data = async_io::read_to_string_async(path).await?;
         let checkpoint: Checkpoint = serde_json::from_str(&data).map_err(|e| {
-            StreamlineError::CorruptedData(format!("Failed to parse checkpoint: {}", e))
+            StreamlineError::CorruptedData(format!("Failed to parse checkpoint: {e}"))
         })?;
 
         // Verify CRC32 if present (version 1+ includes CRC)

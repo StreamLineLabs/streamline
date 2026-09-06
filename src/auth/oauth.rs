@@ -249,7 +249,7 @@ impl OAuthProvider {
     pub async fn validate_token(&self, token: &str) -> Result<String> {
         // Decode header to get key ID and algorithm
         let header = decode_header(token).map_err(|e| {
-            StreamlineError::AuthenticationFailed(format!("Invalid token header: {}", e))
+            StreamlineError::AuthenticationFailed(format!("Invalid token header: {e}"))
         })?;
 
         debug!(
@@ -272,7 +272,7 @@ impl OAuthProvider {
             if issuer.ends_with('/') {
                 valid_issuers.push(issuer.trim_end_matches('/').to_string());
             } else {
-                valid_issuers.push(format!("{}/", issuer));
+                valid_issuers.push(format!("{issuer}/"));
             }
         }
         valid_issuers.extend(self.config.additional_issuers.clone());
@@ -294,7 +294,7 @@ impl OAuthProvider {
         // Decode and validate the token
         let token_data: TokenData<TokenClaims> = decode(token, &decoding_key, &validation)
             .map_err(|e| {
-                StreamlineError::AuthenticationFailed(format!("Token validation failed: {}", e))
+                StreamlineError::AuthenticationFailed(format!("Token validation failed: {e}"))
             })?;
 
         // Validate time-based claims (iat, nbf) with clock skew tolerance
@@ -347,13 +347,12 @@ impl OAuthProvider {
 
         let jwk = key.ok_or_else(|| {
             StreamlineError::AuthenticationFailed(format!(
-                "No matching key found for kid={:?}, alg={:?}",
-                kid, alg
+                "No matching key found for kid={kid:?}, alg={alg:?}"
             ))
         })?;
 
         DecodingKey::from_jwk(jwk)
-            .map_err(|e| StreamlineError::AuthenticationFailed(format!("Invalid JWK: {}", e)))
+            .map_err(|e| StreamlineError::AuthenticationFailed(format!("Invalid JWK: {e}")))
     }
 
     /// Get JWKS, fetching if necessary
@@ -420,18 +419,18 @@ impl OAuthProvider {
         debug!(url = %jwks_url, "Fetching JWKS");
 
         // Use reqwest to fetch JWKS
-        let client = reqwest::Client::builder()
+        let client = crate::http_client::builder()
+            .map_err(|e| {
+                StreamlineError::AuthenticationFailed(format!("Failed to create HTTP client: {e}"))
+            })?
             .timeout(Duration::from_secs(10))
             .build()
             .map_err(|e| {
-                StreamlineError::AuthenticationFailed(format!(
-                    "Failed to create HTTP client: {}",
-                    e
-                ))
+                StreamlineError::AuthenticationFailed(format!("Failed to create HTTP client: {e}"))
             })?;
 
         let response = client.get(&jwks_url).send().await.map_err(|e| {
-            StreamlineError::AuthenticationFailed(format!("Failed to fetch JWKS: {}", e))
+            StreamlineError::AuthenticationFailed(format!("Failed to fetch JWKS: {e}"))
         })?;
 
         if !response.status().is_success() {
@@ -442,7 +441,7 @@ impl OAuthProvider {
         }
 
         let jwks: JwkSet = response.json().await.map_err(|e| {
-            StreamlineError::AuthenticationFailed(format!("Failed to parse JWKS: {}", e))
+            StreamlineError::AuthenticationFailed(format!("Failed to parse JWKS: {e}"))
         })?;
 
         info!(
@@ -463,7 +462,7 @@ impl OAuthProvider {
         if let Some(ref issuer) = self.config.issuer_url {
             // Standard OIDC discovery path
             let base = issuer.trim_end_matches('/');
-            return Ok(format!("{}/.well-known/jwks.json", base));
+            return Ok(format!("{base}/.well-known/jwks.json"));
         }
 
         Err(StreamlineError::Config(
@@ -482,8 +481,7 @@ impl OAuthProvider {
         for required in &self.config.required_scopes {
             if !token_scopes.contains(&required.as_str()) {
                 return Err(StreamlineError::AuthorizationFailed(format!(
-                    "Missing required scope: {}",
-                    required
+                    "Missing required scope: {required}"
                 )));
             }
         }
@@ -528,8 +526,7 @@ impl OAuthProvider {
                             "Token exceeds maximum age"
                         );
                         return Err(StreamlineError::AuthenticationFailed(format!(
-                            "Token exceeds maximum age of {} seconds",
-                            max_age
+                            "Token exceeds maximum age of {max_age} seconds"
                         )));
                     }
                 }
@@ -662,6 +659,36 @@ pub struct OAuthStats {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// `fetch_jwks` builds its HTTP client on every call. reqwest is compiled
+    /// with `rustls-tls-webpki-roots-no-provider`, so a plain
+    /// `reqwest::Client::builder().build()` resolves the crypto provider from
+    /// `CryptoProvider::get_default()` and, with no process-wide default
+    /// installed, panics with "No provider set" instead of returning an error.
+    ///
+    /// This asserts the *auth* path constructs its client the way
+    /// `crate::http_client` does — with the provider supplied explicitly — and
+    /// that it does so while no ambient provider exists. Checking
+    /// `get_default()` first keeps the test from passing vacuously if some other
+    /// test in this binary ever installed one.
+    #[test]
+    fn jwks_http_client_builds_without_a_process_wide_crypto_provider() {
+        assert!(
+            rustls::crypto::CryptoProvider::get_default().is_none(),
+            "a process-wide crypto provider was installed, which would let an \
+             implicit reqwest client build and make this test vacuous"
+        );
+
+        let client = crate::http_client::builder()
+            .expect("outbound TLS configuration")
+            .timeout(Duration::from_secs(10))
+            .build();
+
+        assert!(
+            client.is_ok(),
+            "the OAuth/JWKS HTTP client must build with an explicit crypto provider"
+        );
+    }
 
     #[test]
     fn test_oauth_config_default() {

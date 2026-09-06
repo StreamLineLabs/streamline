@@ -324,8 +324,7 @@ impl PartitionManager {
             Ok(())
         } else {
             Err(StreamlineError::storage_msg(format!(
-                "Partition not found: {}",
-                key
+                "Partition not found: {key}"
             )))
         }
     }
@@ -334,7 +333,7 @@ impl PartitionManager {
     pub fn delete_partition(&mut self, key: &str) -> Result<PartitionInfo> {
         self.partitions
             .remove(key)
-            .ok_or_else(|| StreamlineError::storage_msg(format!("Partition not found: {}", key)))
+            .ok_or_else(|| StreamlineError::storage_msg(format!("Partition not found: {key}")))
     }
 
     /// Get statistics

@@ -82,8 +82,7 @@ impl AggregateState {
             }),
             "ARRAY_AGG" | "COLLECT_LIST" => Ok(AggregateState::ArrayAgg { values: Vec::new() }),
             _ => Err(StreamlineError::Parse(format!(
-                "Unknown aggregate function: {}",
-                func_name
+                "Unknown aggregate function: {func_name}"
             ))),
         }
     }
@@ -637,8 +636,7 @@ fn scalar_extract(args: &[Value]) -> Result<Value> {
                 "EPOCH" => dt.timestamp(),
                 _ => {
                     return Err(StreamlineError::Query(format!(
-                        "Unknown extract part: {}",
-                        part
+                        "Unknown extract part: {part}"
                     )))
                 }
             };
@@ -740,8 +738,7 @@ impl UdfRegistry {
         let name = udf.name.to_uppercase();
         if self.udfs.contains_key(&name) {
             return Err(StreamlineError::Query(format!(
-                "UDF '{}' already registered",
-                name
+                "UDF '{name}' already registered"
             )));
         }
         self.udfs.insert(name, udf);
@@ -888,8 +885,7 @@ impl ExtendedFunctionRegistry {
         let name = udf.name.to_uppercase();
         if self.builtin.get_scalar(&name).is_some() || self.builtin.get_aggregate(&name).is_some() {
             return Err(StreamlineError::Query(format!(
-                "Cannot register UDF '{}': conflicts with built-in function",
-                name
+                "Cannot register UDF '{name}': conflicts with built-in function"
             )));
         }
         self.udf.register(udf)
@@ -1081,7 +1077,7 @@ mod tests {
             DataType::String,
             "Custom function",
             |args| match args.first() {
-                Some(Value::String(s)) => Ok(Value::String(format!("custom: {}", s))),
+                Some(Value::String(s)) => Ok(Value::String(format!("custom: {s}"))),
                 _ => Ok(Value::Null),
             },
         );

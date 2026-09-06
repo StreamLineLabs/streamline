@@ -344,7 +344,7 @@ impl PartitionLeaseManager {
                             let _ = event_tx.send(LeaseEvent::Lost {
                                 topic: topic.clone(),
                                 partition,
-                                reason: format!("Renewal failed: {}", e),
+                                reason: format!("Renewal failed: {e}"),
                             });
                         }
                     }

@@ -85,7 +85,12 @@ pub struct ConnectorPlugin {
 
 // -- State --
 
-pub(crate) struct KafkaConnectState {
+/// Shared state for the standalone Kafka Connect worker router.
+///
+/// Public because [`kafka_connect_router`] returns `Router<KafkaConnectState>`
+/// and is deliberately *not* merged into the main HTTP app (it would overlap
+/// `crate::connect::api`), so external callers wire it up themselves.
+pub struct KafkaConnectState {
     pub connectors: Arc<RwLock<HashMap<String, ConnectorInfo>>>,
 }
 
@@ -113,28 +118,46 @@ pub fn kafka_connect_router() -> Router<KafkaConnectState> {
         .route("/", get(worker_info))
         // Connector lifecycle
         .route("/connectors", get(list_connectors).post(create_connector))
-        .route("/connectors/:name", get(get_connector).delete(delete_connector))
-        .route("/connectors/:name/config", get(get_config).put(update_config))
+        .route(
+            "/connectors/:name",
+            get(get_connector).delete(delete_connector),
+        )
+        .route(
+            "/connectors/:name/config",
+            get(get_config).put(update_config),
+        )
         .route("/connectors/:name/status", get(get_status))
         .route("/connectors/:name/restart", post(restart_connector))
         .route("/connectors/:name/pause", put(pause_connector))
         .route("/connectors/:name/resume", put(resume_connector))
         // Task management
         .route("/connectors/:name/tasks", get(get_connector_tasks))
-        .route("/connectors/:name/tasks/:task_id/status", get(get_task_status))
-        .route("/connectors/:name/tasks/:task_id/restart", post(restart_task))
+        .route(
+            "/connectors/:name/tasks/:task_id/status",
+            get(get_task_status),
+        )
+        .route(
+            "/connectors/:name/tasks/:task_id/restart",
+            post(restart_task),
+        )
         // Offsets (KIP-875)
-        .route("/connectors/:name/offsets", get(get_connector_offsets).patch(alter_connector_offsets).delete(reset_connector_offsets))
+        .route(
+            "/connectors/:name/offsets",
+            get(get_connector_offsets)
+                .patch(alter_connector_offsets)
+                .delete(reset_connector_offsets),
+        )
         // Plugin management
         .route("/connector-plugins", get(list_plugins))
-        .route("/connector-plugins/:plugin/config/validate", put(validate_plugin_config))
+        .route(
+            "/connector-plugins/:plugin/config/validate",
+            put(validate_plugin_config),
+        )
 }
 
 // -- Handlers --
 
-async fn list_connectors(
-    State(state): State<KafkaConnectState>,
-) -> Json<Vec<String>> {
+async fn list_connectors(State(state): State<KafkaConnectState>) -> Json<Vec<String>> {
     let connectors = state.connectors.read().await;
     Json(connectors.keys().cloned().collect())
 }
@@ -154,19 +177,32 @@ async fn create_connector(
     if connectors.contains_key(&payload.name) {
         return Err((
             StatusCode::CONFLICT,
-            Json(serde_json::json!({"error_code": 409, "message": format!("Connector {} already exists", payload.name)})),
+            Json(
+                serde_json::json!({"error_code": 409, "message": format!("Connector {} already exists", payload.name)}),
+            ),
         ));
     }
 
-    let connector_type = payload.config.get("connector.class")
-        .map(|c| if c.contains("Source") { "source" } else { "sink" })
+    let connector_type = payload
+        .config
+        .get("connector.class")
+        .map(|c| {
+            if c.contains("Source") {
+                "source"
+            } else {
+                "sink"
+            }
+        })
         .unwrap_or("unknown")
         .to_string();
 
     let info = ConnectorInfo {
         name: payload.name.clone(),
         config: payload.config,
-        tasks: vec![TaskId { connector: payload.name.clone(), task: 0 }],
+        tasks: vec![TaskId {
+            connector: payload.name.clone(),
+            task: 0,
+        }],
         connector_type,
     };
 
@@ -214,7 +250,9 @@ async fn update_config(
         }
         None => Err((
             StatusCode::NOT_FOUND,
-            Json(serde_json::json!({"error_code": 404, "message": format!("Connector {} not found", name)})),
+            Json(
+                serde_json::json!({"error_code": 404, "message": format!("Connector {} not found", name)}),
+            ),
         )),
     }
 }
@@ -325,14 +363,14 @@ async fn get_connector_tasks(
         }
         None => Err((
             StatusCode::NOT_FOUND,
-            Json(serde_json::json!({"error_code": 404, "message": format!("Connector {} not found", name)})),
+            Json(
+                serde_json::json!({"error_code": 404, "message": format!("Connector {} not found", name)}),
+            ),
         )),
     }
 }
 
-async fn get_task_status(
-    Path((_name, task_id)): Path<(String, i32)>,
-) -> Json<serde_json::Value> {
+async fn get_task_status(Path((_name, task_id)): Path<(String, i32)>) -> Json<serde_json::Value> {
     Json(serde_json::json!({
         "id": task_id,
         "state": "RUNNING",
@@ -341,9 +379,7 @@ async fn get_task_status(
     }))
 }
 
-async fn restart_task(
-    Path((name, task_id)): Path<(String, i32)>,
-) -> StatusCode {
+async fn restart_task(Path((name, task_id)): Path<(String, i32)>) -> StatusCode {
     tracing::info!(connector = %name, task = task_id, "Restarting task");
     StatusCode::NO_CONTENT
 }
@@ -356,7 +392,9 @@ async fn get_connector_offsets(
     if !connectors.contains_key(&name) {
         return Err((
             StatusCode::NOT_FOUND,
-            Json(serde_json::json!({"error_code": 404, "message": format!("Connector {} not found", name)})),
+            Json(
+                serde_json::json!({"error_code": 404, "message": format!("Connector {} not found", name)}),
+            ),
         ));
     }
     Ok(Json(serde_json::json!({
@@ -422,7 +460,7 @@ async fn validate_plugin_config(
             c.get("value")
                 .and_then(|v| v.get("errors"))
                 .and_then(|e| e.as_array())
-                .map_or(false, |a| !a.is_empty())
+                .is_some_and(|a| !a.is_empty())
         })
         .count();
 
@@ -464,7 +502,11 @@ mod tests {
     async fn test_list_plugins() {
         let app = test_app();
         let resp = app
-            .oneshot(Request::get("/connector-plugins").body(Body::empty()).unwrap())
+            .oneshot(
+                Request::get("/connector-plugins")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
             .await
             .unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
@@ -474,7 +516,11 @@ mod tests {
     async fn test_get_missing_connector() {
         let app = test_app();
         let resp = app
-            .oneshot(Request::get("/connectors/missing").body(Body::empty()).unwrap())
+            .oneshot(
+                Request::get("/connectors/missing")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
             .await
             .unwrap();
         assert_eq!(resp.status(), StatusCode::NOT_FOUND);
@@ -491,7 +537,9 @@ mod tests {
             .unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
         let body: serde_json::Value = serde_json::from_slice(
-            &axum::body::to_bytes(resp.into_body(), 10_000).await.unwrap(),
+            &axum::body::to_bytes(resp.into_body(), 10_000)
+                .await
+                .unwrap(),
         )
         .unwrap();
         assert!(body.get("version").is_some());
@@ -526,7 +574,11 @@ mod tests {
         // Get — rebuild router with same state to avoid Router consumption issues
         let app2 = kafka_connect_router().with_state(state);
         let resp = app2
-            .oneshot(Request::get("/connectors/test-sink").body(Body::empty()).unwrap())
+            .oneshot(
+                Request::get("/connectors/test-sink")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
             .await
             .unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
@@ -765,7 +817,9 @@ mod tests {
             .unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
         let body: serde_json::Value = serde_json::from_slice(
-            &axum::body::to_bytes(resp.into_body(), 50_000).await.unwrap(),
+            &axum::body::to_bytes(resp.into_body(), 50_000)
+                .await
+                .unwrap(),
         )
         .unwrap();
         assert!(body.get("configs").is_some());

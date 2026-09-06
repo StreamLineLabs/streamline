@@ -517,11 +517,8 @@ message Test {
         // Completely different schema — should pass with None
         let new_schema = r#""int""#;
 
-        let result = checker.check_compatibility_transitive(
-            new_schema,
-            &schemas,
-            CompatibilityLevel::None,
-        );
+        let result =
+            checker.check_compatibility_transitive(new_schema, &schemas, CompatibilityLevel::None);
         assert!(result.is_ok());
         assert!(result.unwrap().is_compatible);
     }
@@ -530,7 +527,8 @@ message Test {
     fn test_empty_schemas_always_compatible() {
         let checker = CompatibilityChecker::new();
 
-        let new_schema = r#"{"type": "record", "name": "Test", "fields": [{"name": "name", "type": "string"}]}"#;
+        let new_schema =
+            r#"{"type": "record", "name": "Test", "fields": [{"name": "name", "type": "string"}]}"#;
 
         for level in &[
             CompatibilityLevel::Backward,
@@ -551,18 +549,17 @@ message Test {
     fn test_protobuf_transitive_compatibility() {
         let checker = CompatibilityChecker::new();
 
-        let schemas = vec![
-            RegisteredSchema {
-                subject: "proto-test".to_string(),
-                version: 1,
-                id: 1,
-                schema_type: SchemaType::Protobuf,
-                schema: "syntax = \"proto3\";\n\nmessage Test {\n    string name = 1;\n}\n".to_string(),
-                references: vec![],
-            },
-        ];
+        let schemas = vec![RegisteredSchema {
+            subject: "proto-test".to_string(),
+            version: 1,
+            id: 1,
+            schema_type: SchemaType::Protobuf,
+            schema: "syntax = \"proto3\";\n\nmessage Test {\n    string name = 1;\n}\n".to_string(),
+            references: vec![],
+        }];
 
-        let new_schema = "syntax = \"proto3\";\n\nmessage Test {\n    string name = 1;\n    int32 age = 2;\n}\n";
+        let new_schema =
+            "syntax = \"proto3\";\n\nmessage Test {\n    string name = 1;\n    int32 age = 2;\n}\n";
 
         let result = checker.check_compatibility_transitive(
             new_schema,
@@ -577,16 +574,14 @@ message Test {
     fn test_json_schema_transitive_compatibility() {
         let checker = CompatibilityChecker::new();
 
-        let schemas = vec![
-            RegisteredSchema {
-                subject: "json-test".to_string(),
-                version: 1,
-                id: 1,
-                schema_type: SchemaType::Json,
-                schema: r#"{"type": "object", "properties": {"name": {"type": "string"}}}"#.to_string(),
-                references: vec![],
-            },
-        ];
+        let schemas = vec![RegisteredSchema {
+            subject: "json-test".to_string(),
+            version: 1,
+            id: 1,
+            schema_type: SchemaType::Json,
+            schema: r#"{"type": "object", "properties": {"name": {"type": "string"}}}"#.to_string(),
+            references: vec![],
+        }];
 
         let new_schema = r#"{"type": "object", "properties": {"name": {"type": "string"}, "age": {"type": "integer"}}}"#;
 

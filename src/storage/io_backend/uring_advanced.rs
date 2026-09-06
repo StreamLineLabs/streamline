@@ -168,8 +168,7 @@ struct RegisteredBufferPoolStats {
 }
 
 impl RegisteredBufferPool {
-    /// Create a new registered buffer pool
-    pub fn new(config: RegisteredBufferConfig) -> Result<Self> {
+    fn from_config(config: RegisteredBufferConfig) -> Self {
         let mut buffers = Vec::new();
         let mut free_by_size: HashMap<usize, VecDeque<u32>> = HashMap::new();
         let mut bytes_capacity = 0u64;
@@ -201,7 +200,7 @@ impl RegisteredBufferPool {
             bytes_capacity
         );
 
-        Ok(Self {
+        Self {
             buffers: RwLock::new(buffers),
             free_by_size: Mutex::new(free_by_size),
             size_classes: config.size_classes.clone(),
@@ -214,7 +213,12 @@ impl RegisteredBufferPool {
                 bytes_in_use: AtomicU64::new(0),
             },
             is_registered: AtomicBool::new(false),
-        })
+        }
+    }
+
+    /// Create a new registered buffer pool
+    pub fn new(config: RegisteredBufferConfig) -> Result<Self> {
+        Ok(Self::from_config(config))
     }
 
     /// Create with default configuration
@@ -266,8 +270,7 @@ impl RegisteredBufferPool {
         // No free buffer available
         self.stats.cache_misses.fetch_add(1, Ordering::Relaxed);
         Err(StreamlineError::storage_msg(format!(
-            "No registered buffer available for size class {}",
-            size_class
+            "No registered buffer available for size class {size_class}"
         )))
     }
 
@@ -441,7 +444,7 @@ pub struct FixedFileConfig {
     /// Maximum number of fixed files (io_uring limit is typically 32768)
     pub max_files: usize,
 
-    /// Enable automatic eviction of least recently used files
+    /// Enable automatic eviction of least recently used unreferenced files
     pub enable_lru_eviction: bool,
 }
 
@@ -498,6 +501,8 @@ struct FixedFileEntry {
     path: std::path::PathBuf,
     /// Generation counter
     generation: u32,
+    /// Number of open handles sharing this deduplicated path entry
+    ref_count: usize,
     /// Whether this slot is in use (for future validation)
     #[allow(dead_code)]
     in_use: bool,
@@ -510,14 +515,20 @@ struct FixedFileEntry {
 /// This registry manages file descriptors that are pre-registered with io_uring,
 /// eliminating the need for the kernel to look up the file for each operation.
 pub struct FixedFileRegistry {
+    /// Serialize structural register/unregister changes
+    mutation_lock: Mutex<()>,
+
     /// File entries (indexed by fixed file ID)
     entries: RwLock<Vec<Option<FixedFileEntry>>>,
 
     /// Free indices
     free_indices: Mutex<VecDeque<u32>>,
 
-    /// Path to index mapping for deduplication
-    path_to_index: RwLock<HashMap<std::path::PathBuf, u32>>,
+    /// Monotonic generation per slot, retained while the slot is vacant
+    generations: RwLock<Vec<u32>>,
+
+    /// Exact `(path, fd)` registration to slot mapping for deduplication
+    registration_to_index: RwLock<HashMap<(std::path::PathBuf, i32), u32>>,
 
     /// Configuration
     config: FixedFileConfig,
@@ -534,8 +545,7 @@ struct FixedFileRegistryStats {
 }
 
 impl FixedFileRegistry {
-    /// Create a new fixed file registry
-    pub fn new(config: FixedFileConfig) -> Result<Self> {
+    fn from_config(config: FixedFileConfig) -> Self {
         let mut entries = Vec::with_capacity(config.max_files);
         let mut free_indices = VecDeque::with_capacity(config.max_files);
 
@@ -549,17 +559,24 @@ impl FixedFileRegistry {
             config.max_files
         );
 
-        Ok(Self {
+        Self {
+            mutation_lock: Mutex::new(()),
             entries: RwLock::new(entries),
             free_indices: Mutex::new(free_indices),
-            path_to_index: RwLock::new(HashMap::new()),
+            generations: RwLock::new(vec![0; config.max_files]),
+            registration_to_index: RwLock::new(HashMap::new()),
             config,
             stats: FixedFileRegistryStats {
                 registrations: AtomicU64::new(0),
                 unregistrations: AtomicU64::new(0),
                 evictions: AtomicU64::new(0),
             },
-        })
+        }
+    }
+
+    /// Create a new fixed file registry
+    pub fn new(config: FixedFileConfig) -> Result<Self> {
+        Ok(Self::from_config(config))
     }
 
     /// Create with default configuration
@@ -571,14 +588,22 @@ impl FixedFileRegistry {
     ///
     /// Returns a fixed file ID that can be used with io_uring operations.
     pub fn register(&self, fd: i32, path: std::path::PathBuf) -> Result<FixedFileId> {
-        // Check if already registered
-        {
-            let path_map = self.path_to_index.read();
-            if let Some(&index) = path_map.get(&path) {
-                let entries = self.entries.read();
-                if let Some(Some(entry)) = entries.get(index as usize) {
-                    return Ok(FixedFileId::new(index, entry.generation));
-                }
+        let _mutation = self.mutation_lock.lock();
+        let registration_key = (path.clone(), fd);
+
+        // Repeated registration of the exact same open descriptor shares a slot.
+        let existing_index = {
+            self.registration_to_index
+                .read()
+                .get(&registration_key)
+                .copied()
+        };
+        if let Some(index) = existing_index {
+            let mut entries = self.entries.write();
+            if let Some(Some(entry)) = entries.get_mut(index as usize) {
+                entry.ref_count += 1;
+                entry.last_access = std::time::Instant::now();
+                return Ok(FixedFileId::new(index, entry.generation));
             }
         }
 
@@ -602,28 +627,31 @@ impl FixedFileRegistry {
 
         // Register the file
         let generation = {
+            let mut generations = self.generations.write();
+            let generation = generations[index as usize].wrapping_add(1).max(1);
+            generations[index as usize] = generation;
+
             let mut entries = self.entries.write();
             let entry = entries.get_mut(index as usize).ok_or_else(|| {
                 StreamlineError::storage_msg("Invalid fixed file index".to_string())
             })?;
 
-            let gen = entry.as_ref().map(|e| e.generation + 1).unwrap_or(0);
-
             *entry = Some(FixedFileEntry {
                 fd,
                 path: path.clone(),
-                generation: gen,
+                generation,
+                ref_count: 1,
                 in_use: true,
                 last_access: std::time::Instant::now(),
             });
 
-            gen
+            generation
         };
 
-        // Update path mapping
+        // Update exact registration mapping
         {
-            let mut path_map = self.path_to_index.write();
-            path_map.insert(path.clone(), index);
+            let mut registrations = self.registration_to_index.write();
+            registrations.insert(registration_key, index);
         }
 
         debug!("Registered fixed file {} at slot {}", path.display(), index);
@@ -632,38 +660,48 @@ impl FixedFileRegistry {
     }
 
     /// Unregister a file
-    pub fn unregister(&self, id: FixedFileId) -> Result<()> {
-        self.stats.unregistrations.fetch_add(1, Ordering::Relaxed);
-
+    pub fn unregister(&self, id: FixedFileId) -> Result<bool> {
+        let _mutation = self.mutation_lock.lock();
         let path = {
             let mut entries = self.entries.write();
             let entry = entries.get_mut(id.index as usize).ok_or_else(|| {
                 StreamlineError::storage_msg("Invalid fixed file index".to_string())
             })?;
 
-            if let Some(e) = entry.take() {
-                if e.generation != id.generation {
-                    return Err(StreamlineError::storage_msg(
-                        "Fixed file generation mismatch".to_string(),
-                    ));
-                }
-                Some(e.path)
-            } else {
-                None
+            let registered = entry.as_mut().ok_or_else(|| {
+                StreamlineError::storage_msg("Fixed file not registered".to_string())
+            })?;
+            if registered.generation != id.generation {
+                return Err(StreamlineError::storage_msg(
+                    "Fixed file generation mismatch".to_string(),
+                ));
             }
+
+            if registered.ref_count > 1 {
+                registered.ref_count -= 1;
+                registered.last_access = std::time::Instant::now();
+                return Ok(false);
+            }
+
+            entry
+                .take()
+                .map(|registered| (registered.path, registered.fd))
         };
 
-        // Remove from path mapping
-        if let Some(path) = path {
-            let mut path_map = self.path_to_index.write();
-            path_map.remove(&path);
+        // Remove from exact registration mapping
+        if let Some((path, fd)) = path {
+            let key = (path, fd);
+            let mut registrations = self.registration_to_index.write();
+            if registrations.get(&key) == Some(&id.index) {
+                registrations.remove(&key);
+            }
         }
 
         // Return to free list
-        let mut free = self.free_indices.lock();
-        free.push_back(id.index);
+        self.free_indices.lock().push_back(id.index);
+        self.stats.unregistrations.fetch_add(1, Ordering::Relaxed);
 
-        Ok(())
+        Ok(true)
     }
 
     /// Touch a file to update its LRU timestamp
@@ -697,29 +735,30 @@ impl FixedFileRegistry {
 
     /// Evict the least recently used entry
     fn evict_lru(&self) -> Result<u32> {
-        self.stats.evictions.fetch_add(1, Ordering::Relaxed);
-
         let mut entries = self.entries.write();
         let mut oldest_idx = None;
         let mut oldest_time = std::time::Instant::now();
 
         for (idx, entry) in entries.iter().enumerate() {
             if let Some(e) = entry {
-                if e.last_access < oldest_time {
+                if e.ref_count == 0 && e.last_access < oldest_time {
                     oldest_time = e.last_access;
                     oldest_idx = Some(idx);
                 }
             }
         }
 
-        let idx = oldest_idx
-            .ok_or_else(|| StreamlineError::storage_msg("No entries to evict".to_string()))?
-            as u32;
+        let idx = oldest_idx.ok_or_else(|| {
+            StreamlineError::storage_msg(
+                "Fixed file registry full: every slot is still referenced".to_string(),
+            )
+        })? as u32;
+        self.stats.evictions.fetch_add(1, Ordering::Relaxed);
 
         // Remove the entry
         if let Some(entry) = entries[idx as usize].take() {
-            let mut path_map = self.path_to_index.write();
-            path_map.remove(&entry.path);
+            let mut registrations = self.registration_to_index.write();
+            registrations.remove(&(entry.path.clone(), entry.fd));
             debug!(
                 "Evicted fixed file {} from slot {}",
                 entry.path.display(),
@@ -974,20 +1013,27 @@ pub struct AdvancedUringManagerStats {
 }
 
 impl AdvancedUringManager {
-    /// Create a new advanced io_uring manager
-    pub fn new(
+    pub(crate) fn from_configs(
         buffer_config: RegisteredBufferConfig,
         file_config: FixedFileConfig,
-    ) -> Result<Self> {
-        Ok(Self {
-            buffer_pool: Arc::new(RegisteredBufferPool::new(buffer_config)?),
-            file_registry: Arc::new(FixedFileRegistry::new(file_config)?),
+    ) -> Self {
+        Self {
+            buffer_pool: Arc::new(RegisteredBufferPool::from_config(buffer_config)),
+            file_registry: Arc::new(FixedFileRegistry::from_config(file_config)),
             stats: AdvancedUringStats {
                 batches_submitted: AtomicU64::new(0),
                 total_ops_submitted: AtomicU64::new(0),
                 batch_avg_size: AtomicUsize::new(0),
             },
-        })
+        }
+    }
+
+    /// Create a new advanced io_uring manager
+    pub fn new(
+        buffer_config: RegisteredBufferConfig,
+        file_config: FixedFileConfig,
+    ) -> Result<Self> {
+        Ok(Self::from_configs(buffer_config, file_config))
     }
 
     /// Create with default configuration
@@ -1143,10 +1189,103 @@ mod tests {
         assert_eq!(fd, 42);
 
         // Unregister
-        registry.unregister(id).unwrap();
+        assert!(registry.unregister(id).unwrap());
         let stats = registry.stats();
         assert_eq!(stats.registered_files, 0);
         assert_eq!(stats.unregistrations, 1);
+    }
+
+    #[test]
+    fn duplicate_fixed_file_registration_releases_only_on_last_handle() {
+        let registry = FixedFileRegistry::new(FixedFileConfig {
+            max_files: 1,
+            enable_lru_eviction: false,
+        })
+        .unwrap();
+        let path = std::path::PathBuf::from("/test/shared");
+
+        let first = registry.register(42, path.clone()).unwrap();
+        let second = registry.register(42, path).unwrap();
+        assert_eq!(first, second);
+        assert_eq!(registry.get_fd(second).unwrap(), 42);
+        assert!(!registry.unregister(first).unwrap());
+        assert_eq!(registry.get_fd(second).unwrap(), 42);
+        assert_eq!(registry.stats().registered_files, 1);
+        assert_eq!(registry.stats().unregistrations, 0);
+
+        assert!(registry.unregister(second).unwrap());
+        assert!(registry.get_fd(second).is_err());
+        assert_eq!(registry.stats().registered_files, 0);
+        assert_eq!(registry.stats().unregistrations, 1);
+    }
+
+    #[test]
+    fn recycled_fixed_file_slot_gets_a_new_generation() {
+        let registry = FixedFileRegistry::new(FixedFileConfig {
+            max_files: 1,
+            enable_lru_eviction: false,
+        })
+        .unwrap();
+
+        let old = registry
+            .register(42, std::path::PathBuf::from("/test/old"))
+            .unwrap();
+        assert!(registry.unregister(old).unwrap());
+
+        let new = registry
+            .register(43, std::path::PathBuf::from("/test/new"))
+            .unwrap();
+        assert_eq!(old.index(), new.index());
+        assert_ne!(old, new);
+        assert!(registry.get_fd(old).is_err());
+        assert_eq!(registry.get_fd(new).unwrap(), 43);
+    }
+
+    #[test]
+    fn duplicate_path_with_distinct_descriptors_uses_per_open_slots() {
+        let registry = FixedFileRegistry::new(FixedFileConfig {
+            max_files: 2,
+            enable_lru_eviction: false,
+        })
+        .unwrap();
+        let path = std::path::PathBuf::from("/test/shared");
+
+        let first = registry.register(42, path.clone()).unwrap();
+        let second = registry.register(43, path).unwrap();
+        assert_ne!(first, second);
+        assert_eq!(registry.get_fd(first).unwrap(), 42);
+        assert_eq!(registry.get_fd(second).unwrap(), 43);
+
+        assert!(registry.unregister(first).unwrap());
+        assert!(registry.get_fd(first).is_err());
+        assert_eq!(registry.get_fd(second).unwrap(), 43);
+
+        let replacement = registry
+            .register(44, std::path::PathBuf::from("/test/replacement"))
+            .unwrap();
+        assert_eq!(replacement.index(), first.index());
+        assert_ne!(replacement, first);
+        assert_eq!(registry.get_fd(replacement).unwrap(), 44);
+        assert_eq!(registry.get_fd(second).unwrap(), 43);
+    }
+
+    #[test]
+    fn lru_does_not_evict_a_still_referenced_deduplicated_entry() {
+        let registry = FixedFileRegistry::new(FixedFileConfig {
+            max_files: 1,
+            enable_lru_eviction: true,
+        })
+        .unwrap();
+        let shared_path = std::path::PathBuf::from("/test/shared");
+        let first = registry.register(42, shared_path.clone()).unwrap();
+        let second = registry.register(42, shared_path).unwrap();
+
+        assert!(registry
+            .register(43, std::path::PathBuf::from("/test/other"))
+            .is_err());
+        assert_eq!(registry.get_fd(first).unwrap(), 42);
+        assert!(!registry.unregister(first).unwrap());
+        assert!(registry.unregister(second).unwrap());
     }
 
     #[test]

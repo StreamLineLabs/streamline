@@ -29,11 +29,7 @@ use streamline::transaction::{
 fn setup_coordinator_with_topics(
     topics: &[(&str, i32)],
     timeout_config: Option<TransactionTimeoutConfig>,
-) -> (
-    TransactionCoordinator,
-    Arc<TopicManager>,
-    tempfile::TempDir,
-) {
+) -> (TransactionCoordinator, Arc<TopicManager>, tempfile::TempDir) {
     let data_dir = tempfile::tempdir().unwrap();
     let topic_manager = Arc::new(TopicManager::new(data_dir.path()).unwrap());
     let producer_state_manager = Arc::new(ProducerStateManager::in_memory().unwrap());
@@ -56,11 +52,7 @@ fn setup_coordinator_with_topics(
 }
 
 /// Shorthand: coordinator with a single topic ("txn-topic", 4 partitions).
-fn setup_default() -> (
-    TransactionCoordinator,
-    Arc<TopicManager>,
-    tempfile::TempDir,
-) {
+fn setup_default() -> (TransactionCoordinator, Arc<TopicManager>, tempfile::TempDir) {
     setup_coordinator_with_topics(&[("txn-topic", 4)], None)
 }
 
@@ -80,9 +72,7 @@ fn test_bulk_produce_transaction_commit() {
     assert_eq!(epoch, 0);
 
     // Register all 4 partitions (simulating producing to each)
-    let partitions: Vec<(String, i32)> = (0..4)
-        .map(|p| ("txn-topic".to_string(), p))
-        .collect();
+    let partitions: Vec<(String, i32)> = (0..4).map(|p| ("txn-topic".to_string(), p)).collect();
 
     let results = coordinator
         .add_partitions_to_txn("bulk-txn", pid, epoch, partitions)
@@ -93,14 +83,16 @@ fn test_bulk_produce_transaction_commit() {
         assert_eq!(
             results.get(&("txn-topic".to_string(), p)),
             Some(&0),
-            "Partition {} should be added successfully",
-            p
+            "Partition {p} should be added successfully"
         );
     }
 
     // Verify transaction is active
     let state = coordinator.get_transaction("bulk-txn").unwrap();
-    assert!(state.is_some(), "Transaction should be active before commit");
+    assert!(
+        state.is_some(),
+        "Transaction should be active before commit"
+    );
 
     // Commit the transaction
     coordinator
@@ -133,10 +125,7 @@ fn test_abort_transaction_no_messages_visible() {
             "abort-txn",
             pid,
             epoch,
-            vec![
-                ("txn-topic".to_string(), 0),
-                ("txn-topic".to_string(), 1),
-            ],
+            vec![("txn-topic".to_string(), 0), ("txn-topic".to_string(), 1)],
         )
         .unwrap();
 
@@ -151,10 +140,7 @@ fn test_abort_transaction_no_messages_visible() {
 
     // No ongoing producers on the partition
     let producers = coordinator.get_ongoing_producer_ids("txn-topic", 0);
-    assert!(
-        producers.is_empty(),
-        "No ongoing producers after abort"
-    );
+    assert!(producers.is_empty(), "No ongoing producers after abort");
 
     assert_eq!(coordinator.active_transaction_count(), 0);
 }
@@ -168,14 +154,13 @@ fn test_abort_transaction_no_messages_visible() {
 #[test]
 fn test_transaction_timeout_automatic_abort() {
     let config = TransactionTimeoutConfig {
-        min_timeout_ms: 1, // Allow 1ms timeout for testing
+        min_timeout_ms: 1,          // Allow 1ms timeout for testing
         write_abort_markers: false, // Skip markers (no real data written)
         fence_on_timeout: false,
         ..Default::default()
     };
 
-    let (coordinator, _tm, _dir) =
-        setup_coordinator_with_topics(&[("txn-topic", 4)], Some(config));
+    let (coordinator, _tm, _dir) = setup_coordinator_with_topics(&[("txn-topic", 4)], Some(config));
 
     // Begin with 1ms timeout
     let (_pid, _epoch) = coordinator
@@ -223,24 +208,17 @@ fn test_concurrent_transactions_same_partition() {
     let (pid_b, epoch_b) = coordinator.begin_transaction("txn-b", None).unwrap();
 
     // Different transactional IDs get different producer IDs
-    assert_ne!(pid_a, pid_b, "Concurrent transactions should have different PIDs");
+    assert_ne!(
+        pid_a, pid_b,
+        "Concurrent transactions should have different PIDs"
+    );
 
     // Both add the same partition
     let res_a = coordinator
-        .add_partitions_to_txn(
-            "txn-a",
-            pid_a,
-            epoch_a,
-            vec![("txn-topic".to_string(), 0)],
-        )
+        .add_partitions_to_txn("txn-a", pid_a, epoch_a, vec![("txn-topic".to_string(), 0)])
         .unwrap();
     let res_b = coordinator
-        .add_partitions_to_txn(
-            "txn-b",
-            pid_b,
-            epoch_b,
-            vec![("txn-topic".to_string(), 0)],
-        )
+        .add_partitions_to_txn("txn-b", pid_b, epoch_b, vec![("txn-topic".to_string(), 0)])
         .unwrap();
 
     assert_eq!(res_a.get(&("txn-topic".to_string(), 0)), Some(&0));
@@ -274,7 +252,9 @@ fn test_transaction_spanning_multiple_partitions() {
         None,
     );
 
-    let (pid, epoch) = coordinator.begin_transaction("multi-part-txn", None).unwrap();
+    let (pid, epoch) = coordinator
+        .begin_transaction("multi-part-txn", None)
+        .unwrap();
 
     // Register partitions from three different topics
     let partitions = vec![
@@ -295,9 +275,7 @@ fn test_transaction_spanning_multiple_partitions() {
         assert_eq!(
             results.get(&(topic.clone(), *partition)),
             Some(&0),
-            "{}:{} should succeed",
-            topic,
-            partition
+            "{topic}:{partition} should succeed"
         );
     }
 
@@ -334,12 +312,7 @@ fn test_idempotent_producer_with_transactions() {
 
     // Duplicate of the same batch → detected
     let result = eos.validate_produce("txn-topic", 0, producer_id, epoch, 0, 4);
-    assert_eq!(
-        result,
-        SequenceValidation::Duplicate {
-            existing_offset: 0
-        }
-    );
+    assert_eq!(result, SequenceValidation::Duplicate { existing_offset: 0 });
 
     // Next batch: sequences 5–9 → valid
     let result = eos.validate_produce("txn-topic", 0, producer_id, epoch, 5, 9);
@@ -359,10 +332,7 @@ fn test_idempotent_producer_with_transactions() {
     // Epoch fencing: old epoch rejected after fence
     eos.fence_producer("txn-topic", 0, producer_id, 1);
     let result = eos.validate_produce("txn-topic", 0, producer_id, epoch, 10, 14);
-    assert_eq!(
-        result,
-        SequenceValidation::EpochFenced { current_epoch: 1 }
-    );
+    assert_eq!(result, SequenceValidation::EpochFenced { current_epoch: 1 });
 
     // New epoch can produce starting from sequence 0
     let result = eos.validate_produce("txn-topic", 0, producer_id, 1, 0, 4);
@@ -391,12 +361,7 @@ fn test_read_committed_isolation() {
     // Begin a transaction and add partition 0
     let (pid, epoch) = coordinator.begin_transaction("iso-txn", None).unwrap();
     coordinator
-        .add_partitions_to_txn(
-            "iso-txn",
-            pid,
-            epoch,
-            vec![("txn-topic".to_string(), 0)],
-        )
+        .add_partitions_to_txn("iso-txn", pid, epoch, vec![("txn-topic".to_string(), 0)])
         .unwrap();
 
     // The partition is registered but without a base_offset yet, so
@@ -441,10 +406,8 @@ fn test_read_committed_isolation() {
 /// part of the same atomic unit.
 #[test]
 fn test_consume_transform_produce_pattern() {
-    let (coordinator, _tm, _dir) = setup_coordinator_with_topics(
-        &[("input-topic", 2), ("output-topic", 2)],
-        None,
-    );
+    let (coordinator, _tm, _dir) =
+        setup_coordinator_with_topics(&[("input-topic", 2), ("output-topic", 2)], None);
 
     let (pid, epoch) = coordinator.begin_transaction("ctp-txn", None).unwrap();
 
@@ -460,8 +423,14 @@ fn test_consume_transform_produce_pattern() {
             ],
         )
         .unwrap();
-    assert_eq!(produce_results.get(&("output-topic".to_string(), 0)), Some(&0));
-    assert_eq!(produce_results.get(&("output-topic".to_string(), 1)), Some(&0));
+    assert_eq!(
+        produce_results.get(&("output-topic".to_string(), 0)),
+        Some(&0)
+    );
+    assert_eq!(
+        produce_results.get(&("output-topic".to_string(), 1)),
+        Some(&0)
+    );
 
     // Step 2: Register consumer group for offset commit
     coordinator
@@ -535,7 +504,10 @@ fn test_cannot_add_partitions_after_commit() {
         epoch,
         vec![("txn-topic".to_string(), 0)],
     );
-    assert!(result.is_err(), "Should fail to add partitions to completed txn");
+    assert!(
+        result.is_err(),
+        "Should fail to add partitions to completed txn"
+    );
 }
 
 /// Wrong producer epoch is rejected (producer fencing).
@@ -565,8 +537,7 @@ fn test_producer_fencing_in_transaction() {
 /// Offset commit without prior AddOffsetsToTxn should be rejected.
 #[test]
 fn test_offset_commit_requires_add_offsets_first() {
-    let (coordinator, _tm, _dir) =
-        setup_coordinator_with_topics(&[("input-topic", 1)], None);
+    let (coordinator, _tm, _dir) = setup_coordinator_with_topics(&[("input-topic", 1)], None);
 
     let (pid, epoch) = coordinator.begin_transaction("no-group-txn", None).unwrap();
 
@@ -598,8 +569,7 @@ fn test_timeout_checker_idempotent() {
         ..Default::default()
     };
 
-    let (coordinator, _tm, _dir) =
-        setup_coordinator_with_topics(&[("txn-topic", 1)], Some(config));
+    let (coordinator, _tm, _dir) = setup_coordinator_with_topics(&[("txn-topic", 1)], Some(config));
 
     coordinator
         .begin_transaction("idempotent-timeout", Some(1))

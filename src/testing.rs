@@ -432,7 +432,12 @@ pub struct TestRecord {
 }
 
 impl TestRecord {
-    /// Get the key as a string, panics if no key
+    /// Get the key as a string, panics if no key.
+    ///
+    /// This is a test-assertion helper: panicking on a missing key is the
+    /// documented contract, so the `expect` is deliberate. `TestRecord` is
+    /// public API, so the signature cannot become fallible.
+    #[allow(clippy::expect_used)]
     pub fn key_str(&self) -> &str {
         self.key.as_ref().expect("Expected record to have a key")
     }
@@ -455,7 +460,7 @@ impl TestRecord {
     /// Parse the value as JSON
     pub fn value_json<T: serde::de::DeserializeOwned>(&self) -> Result<T> {
         serde_json::from_str(&self.value)
-            .map_err(|e| StreamlineError::Internal(format!("Failed to parse JSON: {}", e)))
+            .map_err(|e| StreamlineError::Internal(format!("Failed to parse JSON: {e}")))
     }
 }
 
@@ -507,7 +512,7 @@ impl TestAssertions for Vec<TestRecord> {
     fn assert_values_contain(&self, expected: &[&str]) -> &Self {
         for exp in expected {
             let found = self.iter().any(|r| r.value.contains(exp));
-            assert!(found, "Expected to find record containing '{}'", exp);
+            assert!(found, "Expected to find record containing '{exp}'");
         }
         self
     }
@@ -524,7 +529,7 @@ impl TestFixtures {
     /// Generate a batch of test messages
     pub fn messages(count: usize) -> Vec<(String, String)> {
         (0..count)
-            .map(|i| (format!("key-{}", i), format!("value-{}", i)))
+            .map(|i| (format!("key-{i}"), format!("value-{i}")))
             .collect()
     }
 
@@ -537,7 +542,7 @@ impl TestFixtures {
                     "name": format!("item-{}", i),
                     "timestamp": chrono::Utc::now().timestamp_millis()
                 });
-                (format!("key-{}", i), json.to_string())
+                (format!("key-{i}"), json.to_string())
             })
             .collect()
     }
@@ -546,7 +551,7 @@ impl TestFixtures {
     pub fn large_messages(count: usize, size_bytes: usize) -> Vec<(String, String)> {
         let value: String = "x".repeat(size_bytes);
         (0..count)
-            .map(|i| (format!("key-{}", i), value.clone()))
+            .map(|i| (format!("key-{i}"), value.clone()))
             .collect()
     }
 }
@@ -884,7 +889,7 @@ impl DataGenerator {
     /// Generate sequential integer messages
     pub fn sequential(count: usize) -> Vec<(String, String)> {
         (0..count)
-            .map(|i| (format!("seq-{}", i), format!("{}", i)))
+            .map(|i| (format!("seq-{i}"), format!("{i}")))
             .collect()
     }
 
@@ -939,7 +944,7 @@ impl DataGenerator {
                     "timestamp": chrono::Utc::now().timestamp_millis() + i as i64,
                     "trace_id": format!("trace-{:08x}", i)
                 });
-                (format!("{}-{}", service, i), json.to_string())
+                (format!("{service}-{i}"), json.to_string())
             })
             .collect()
     }
@@ -948,7 +953,7 @@ impl DataGenerator {
     pub fn fixed_size(count: usize, value_size: usize) -> Vec<(String, String)> {
         let value: String = "A".repeat(value_size);
         (0..count)
-            .map(|i| (format!("key-{}", i), value.clone()))
+            .map(|i| (format!("key-{i}"), value.clone()))
             .collect()
     }
 }
@@ -1005,9 +1010,7 @@ impl StreamMatchers for Vec<TestRecord> {
             if let Some(ref key) = record.key {
                 assert!(
                     key.starts_with(prefix),
-                    "Key '{}' does not start with '{}'",
-                    key,
-                    prefix
+                    "Key '{key}' does not start with '{prefix}'"
                 );
             }
         }
@@ -1018,7 +1021,7 @@ impl StreamMatchers for Vec<TestRecord> {
         let mut seen = std::collections::HashSet::new();
         for record in self {
             if let Some(ref key) = record.key {
-                assert!(seen.insert(key.clone()), "Duplicate key found: '{}'", key);
+                assert!(seen.insert(key.clone()), "Duplicate key found: '{key}'");
             }
         }
         self
@@ -1235,7 +1238,7 @@ mod tests {
         let producer = test.producer("poll-exact-test");
         for i in 0..5 {
             producer
-                .send(&format!("k{}", i), &format!("v{}", i))
+                .send(&format!("k{i}"), &format!("v{i}"))
                 .await
                 .unwrap();
         }

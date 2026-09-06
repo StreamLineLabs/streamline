@@ -51,8 +51,7 @@ fn test_api_versions_response_header_always_v0() {
         let header_version = KafkaHandler::response_header_version(18, version);
         assert_eq!(
             header_version, 0,
-            "ApiVersions v{} must use response header v0 (bootstrap), got {}",
-            version, header_version
+            "ApiVersions v{version} must use response header v0 (bootstrap), got {header_version}"
         );
     }
 }
@@ -81,8 +80,7 @@ fn test_api_versions_contains_all_core_apis() {
     for key in expected {
         assert!(
             api_keys.contains(&key),
-            "ApiVersions must include API key {}",
-            key
+            "ApiVersions must include API key {key}"
         );
     }
 }

@@ -491,12 +491,11 @@ impl SchemaInferrer {
     /// Detect schema drift between two schemas
     pub fn detect_drift(&self, old: &InferredType, new: &InferredType) -> Vec<SchemaDrift> {
         let mut drifts = Vec::new();
-        self.detect_drift_recursive(old, new, "", &mut drifts);
+        Self::detect_drift_recursive(old, new, "", &mut drifts);
         drifts
     }
 
     fn detect_drift_recursive(
-        &self,
         old: &InferredType,
         new: &InferredType,
         path: &str,
@@ -513,7 +512,7 @@ impl SchemaInferrer {
                         let field_path = if path.is_empty() {
                             key.clone()
                         } else {
-                            format!("{}.{}", path, key)
+                            format!("{path}.{key}")
                         };
                         drifts.push(SchemaDrift::FieldRemoved {
                             path: field_path,
@@ -528,7 +527,7 @@ impl SchemaInferrer {
                         let field_path = if path.is_empty() {
                             key.clone()
                         } else {
-                            format!("{}.{}", path, key)
+                            format!("{path}.{key}")
                         };
                         drifts.push(SchemaDrift::FieldAdded {
                             path: field_path,
@@ -543,7 +542,7 @@ impl SchemaInferrer {
                         let field_path = if path.is_empty() {
                             key.clone()
                         } else {
-                            format!("{}.{}", path, key)
+                            format!("{path}.{key}")
                         };
 
                         if old_field.field_type != new_field.field_type {
@@ -567,7 +566,7 @@ impl SchemaInferrer {
                         }
 
                         // Recurse for nested objects
-                        self.detect_drift_recursive(
+                        Self::detect_drift_recursive(
                             &old_field.field_type,
                             &new_field.field_type,
                             &field_path,
@@ -583,9 +582,9 @@ impl SchemaInferrer {
                 let array_path = if path.is_empty() {
                     "[]".to_string()
                 } else {
-                    format!("{}[]", path)
+                    format!("{path}[]")
                 };
-                self.detect_drift_recursive(old_items, new_items, &array_path, drifts);
+                Self::detect_drift_recursive(old_items, new_items, &array_path, drifts);
             }
             _ => {
                 // Type change at this level
@@ -609,8 +608,7 @@ impl SchemaInferrer {
                     drift: drift.clone(),
                     action: MigrationAction::AddFieldWithDefault,
                     description: format!(
-                        "Add field '{}' of type {:?} with a default value",
-                        path, field_type
+                        "Add field '{path}' of type {field_type:?} with a default value"
                     ),
                     breaking: false,
                 },
@@ -618,8 +616,7 @@ impl SchemaInferrer {
                     drift: drift.clone(),
                     action: MigrationAction::MakeOptional,
                     description: format!(
-                        "Make field '{}' optional before removing, or use schema compatibility BACKWARD",
-                        path
+                        "Make field '{path}' optional before removing, or use schema compatibility BACKWARD"
                     ),
                     breaking: true,
                 },
@@ -627,8 +624,7 @@ impl SchemaInferrer {
                     drift: drift.clone(),
                     action: MigrationAction::TypeCoercion,
                     description: format!(
-                        "Type change at '{}' from {:?} to {:?}. Consider using a union type or separate versioned schemas.",
-                        path, old_type, new_type
+                        "Type change at '{path}' from {old_type:?} to {new_type:?}. Consider using a union type or separate versioned schemas."
                     ),
                     breaking: true,
                 },
@@ -642,8 +638,7 @@ impl SchemaInferrer {
                             drift: drift.clone(),
                             action: MigrationAction::MakeOptional,
                             description: format!(
-                                "Field '{}' became nullable. This is backward compatible.",
-                                path
+                                "Field '{path}' became nullable. This is backward compatible."
                             ),
                             breaking: false,
                         }
@@ -652,8 +647,7 @@ impl SchemaInferrer {
                             drift: drift.clone(),
                             action: MigrationAction::AddFieldWithDefault,
                             description: format!(
-                                "Field '{}' became required. Add a default value for backward compatibility.",
-                                path
+                                "Field '{path}' became required. Add a default value for backward compatibility."
                             ),
                             breaking: true,
                         }
@@ -787,6 +781,17 @@ fn generate_doc_from_name(name: &str) -> String {
     sentence
 }
 
+/// Infer a JSON Schema document from a sample JSON value.
+///
+/// Returns the serialized JSON Schema, suitable for registration with the
+/// schema registry as a [`SchemaType::Json`](crate::schema::SchemaType) schema.
+pub fn infer_json_schema(value: &Value) -> String {
+    SchemaInferrer::new()
+        .infer_from_value(value)
+        .to_json_schema()
+        .to_string()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -833,7 +838,7 @@ mod tests {
                 assert_eq!(fields["name"].field_type, InferredType::String);
                 assert_eq!(fields["age"].field_type, InferredType::Integer);
             }
-            other => assert!(false, "Expected Object type, got {:?}", other),
+            other => panic!("Expected Object type, got {other:?}"),
         }
     }
 
@@ -847,7 +852,7 @@ mod tests {
             InferredType::Array { ref items } => {
                 assert_eq!(**items, InferredType::Integer);
             }
-            other => assert!(false, "Expected Array type, got {:?}", other),
+            other => panic!("Expected Array type, got {other:?}"),
         }
     }
 
@@ -863,7 +868,7 @@ mod tests {
             InferredType::Object { ref fields } => {
                 assert!(fields["name"].field_type.is_nullable());
             }
-            other => assert!(false, "Expected Object type, got {:?}", other),
+            other => panic!("Expected Object type, got {other:?}"),
         }
     }
 
@@ -879,7 +884,7 @@ mod tests {
             InferredType::Object { ref fields } => {
                 assert!(fields["age"].field_type.is_nullable());
             }
-            other => assert!(false, "Expected Object type, got {:?}", other),
+            other => panic!("Expected Object type, got {other:?}"),
         }
     }
 
@@ -943,5 +948,24 @@ mod tests {
         assert_eq!(to_pascal_case("my_field"), "MyField");
         assert_eq!(to_pascal_case("user-id"), "UserId");
         assert_eq!(to_pascal_case("simple"), "Simple");
+    }
+
+    #[test]
+    fn test_infer_json_schema_from_object() {
+        let value = serde_json::json!({"id": 1, "name": "Alice", "active": true});
+        let schema: Value = serde_json::from_str(&infer_json_schema(&value))
+            .expect("inferred schema must be valid JSON");
+
+        assert_eq!(schema["type"], "object");
+        assert_eq!(schema["properties"]["id"]["type"], "integer");
+        assert_eq!(schema["properties"]["name"]["type"], "string");
+        assert_eq!(schema["properties"]["active"]["type"], "boolean");
+    }
+
+    #[test]
+    fn test_infer_json_schema_from_scalar() {
+        let schema: Value = serde_json::from_str(&infer_json_schema(&serde_json::json!("hello")))
+            .expect("inferred schema must be valid JSON");
+        assert_eq!(schema["type"], "string");
     }
 }

@@ -113,11 +113,7 @@ impl EntityKey {
 
     /// Get the composite key as a string
     pub fn to_key_string(&self) -> String {
-        let mut parts: Vec<String> = self
-            .keys
-            .iter()
-            .map(|(k, v)| format!("{}={}", k, v))
-            .collect();
+        let mut parts: Vec<String> = self.keys.iter().map(|(k, v)| format!("{k}={v}")).collect();
         parts.sort();
         format!("{}:{}", self.entity_type, parts.join(","))
     }
@@ -204,11 +200,11 @@ impl EntityValue {
 impl fmt::Display for EntityValue {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            EntityValue::String(s) => write!(f, "{}", s),
-            EntityValue::Int32(i) => write!(f, "{}", i),
-            EntityValue::Int64(i) => write!(f, "{}", i),
-            EntityValue::Float(v) => write!(f, "{}", v),
-            EntityValue::Double(v) => write!(f, "{}", v),
+            EntityValue::String(s) => write!(f, "{s}"),
+            EntityValue::Int32(i) => write!(f, "{i}"),
+            EntityValue::Int64(i) => write!(f, "{i}"),
+            EntityValue::Float(v) => write!(f, "{v}"),
+            EntityValue::Double(v) => write!(f, "{v}"),
             EntityValue::Bytes(b) => write!(f, "[{} bytes]", b.len()),
         }
     }

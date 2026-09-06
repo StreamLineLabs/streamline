@@ -165,13 +165,12 @@ pub fn install_completions<C: CommandFactory>(shell: Shell) -> Result<PathBuf, S
 
     // Create parent directory if needed
     if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)
-            .map_err(|e| format!("Failed to create directory: {}", e))?;
+        std::fs::create_dir_all(parent).map_err(|e| format!("Failed to create directory: {e}"))?;
     }
 
     // Generate and write completions
     let mut file =
-        std::fs::File::create(&path).map_err(|e| format!("Failed to create file: {}", e))?;
+        std::fs::File::create(&path).map_err(|e| format!("Failed to create file: {e}"))?;
 
     generate(shell, &mut cmd, name, &mut file);
 
@@ -219,7 +218,7 @@ fn get_completion_path(shell: Shell) -> Result<(PathBuf, bool), String> {
             }
             Err("Could not determine config directory".into())
         }
-        _ => Err(format!("Unsupported shell: {:?}", shell)),
+        _ => Err(format!("Unsupported shell: {shell:?}")),
     }
 }
 
@@ -245,8 +244,7 @@ pub fn print_dynamic_completion_script(shell: Shell) {
         Shell::Fish => print_fish_dynamic_script(),
         _ => {
             eprintln!(
-                "Dynamic completions are not supported for {:?}. Use static completions instead.",
-                shell
+                "Dynamic completions are not supported for {shell:?}. Use static completions instead."
             );
         }
     }

@@ -239,10 +239,8 @@ async fn get_endpoint(State(state): State<CloudApiState>, Path(id): Path<String>
     match state.cloud.get_endpoint(&id).await {
         Some(endpoint) => (StatusCode::OK, Json(serde_json::json!(endpoint))).into_response(),
         None => {
-            let err = CloudErrorResponse::new(
-                "ENDPOINT_NOT_FOUND",
-                format!("Endpoint not found: {}", id),
-            );
+            let err =
+                CloudErrorResponse::new("ENDPOINT_NOT_FOUND", format!("Endpoint not found: {id}"));
             (StatusCode::NOT_FOUND, Json(err)).into_response()
         }
     }
@@ -472,7 +470,7 @@ async fn get_organization(
             StatusCode::NOT_FOUND,
             Json(CloudErrorResponse::new(
                 "NOT_FOUND",
-                format!("Organization '{}' not found", org_id),
+                format!("Organization '{org_id}' not found"),
             )),
         )
             .into_response(),
@@ -584,7 +582,7 @@ async fn get_project(
             StatusCode::NOT_FOUND,
             Json(CloudErrorResponse::new(
                 "NOT_FOUND",
-                format!("Project '{}' not found", project_id),
+                format!("Project '{project_id}' not found"),
             )),
         )
             .into_response(),
@@ -747,7 +745,7 @@ async fn get_cluster(
             StatusCode::NOT_FOUND,
             Json(CloudErrorResponse::new(
                 "NOT_FOUND",
-                format!("Cluster '{}' not found", cluster_id),
+                format!("Cluster '{cluster_id}' not found"),
             )),
         )
             .into_response(),
@@ -877,7 +875,10 @@ async fn managed_create_tenant(
     if req.name.is_empty() {
         return (
             StatusCode::BAD_REQUEST,
-            Json(CloudErrorResponse::new("INVALID_REQUEST", "name is required")),
+            Json(CloudErrorResponse::new(
+                "INVALID_REQUEST",
+                "name is required",
+            )),
         )
             .into_response();
     }
@@ -936,7 +937,7 @@ async fn managed_get_tenant(
             StatusCode::NOT_FOUND,
             Json(CloudErrorResponse::new(
                 "NOT_FOUND",
-                format!("Tenant '{}' not found", id),
+                format!("Tenant '{id}' not found"),
             )),
         )
             .into_response(),
@@ -950,7 +951,11 @@ async fn managed_get_tenant_usage(
 ) -> Response {
     let now = chrono::Utc::now();
     let from = now - chrono::Duration::days(30);
-    match state.metering_service.get_usage_summary(&id, from, now).await {
+    match state
+        .metering_service
+        .get_usage_summary(&id, from, now)
+        .await
+    {
         Ok(summary) => (StatusCode::OK, Json(serde_json::json!(summary))).into_response(),
         Err(e) => {
             let msg = e.to_string();
@@ -999,7 +1004,12 @@ async fn managed_provision_cluster(
     }
 
     // Verify tenant exists
-    if state.tenant_manager.get_tenant(&req.tenant_id).await.is_none() {
+    if state
+        .tenant_manager
+        .get_tenant(&req.tenant_id)
+        .await
+        .is_none()
+    {
         return (
             StatusCode::NOT_FOUND,
             Json(CloudErrorResponse::new(
@@ -1069,7 +1079,7 @@ async fn managed_get_cluster_status(
             StatusCode::NOT_FOUND,
             Json(CloudErrorResponse::new(
                 "NOT_FOUND",
-                format!("Cluster '{}' not found", id),
+                format!("Cluster '{id}' not found"),
             )),
         )
             .into_response(),

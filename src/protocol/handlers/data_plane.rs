@@ -25,7 +25,7 @@ pub(crate) async fn dispatch(
         ApiKey::Produce => {
             let request =
                 ProduceRequest::decode(&mut buf, header.request_api_version).map_err(|e| {
-                    StreamlineError::protocol("decode", format!("Failed to decode request: {}", e))
+                    StreamlineError::protocol("decode", format!("Failed to decode request: {e}"))
                 })?;
 
             let topics: Vec<&str> = request.topic_data.iter().map(|t| t.name.as_str()).collect();
@@ -48,7 +48,7 @@ pub(crate) async fn dispatch(
         ApiKey::Fetch => {
             let request =
                 FetchRequest::decode(&mut buf, header.request_api_version).map_err(|e| {
-                    StreamlineError::protocol("decode", format!("Failed to decode request: {}", e))
+                    StreamlineError::protocol("decode", format!("Failed to decode request: {e}"))
                 })?;
 
             let topics: Vec<&str> = request.topics.iter().map(|t| t.topic.as_str()).collect();
@@ -83,7 +83,7 @@ pub(crate) async fn dispatch(
         ApiKey::ListOffsets => {
             let request = ListOffsetsRequest::decode(&mut buf, header.request_api_version)
                 .map_err(|e| {
-                    StreamlineError::protocol("decode", format!("Failed to decode request: {}", e))
+                    StreamlineError::protocol("decode", format!("Failed to decode request: {e}"))
                 })?;
             let response = handler.handle_list_offsets(request, header.request_api_version)?;
             let response_body = handler.encode_response(&response, header.request_api_version)?;
@@ -102,7 +102,7 @@ pub(crate) async fn dispatch(
         }
         _ => Err(StreamlineError::protocol(
             "unsupported API key",
-            format!("{:?}", api_key),
+            format!("{api_key:?}"),
         )),
     }
 }

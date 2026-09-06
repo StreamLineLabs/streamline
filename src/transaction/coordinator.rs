@@ -403,7 +403,7 @@ impl TransactionCoordinator {
 
         // Validate transaction exists and matches producer info
         let mut txn = self.transactions.get_mut(transactional_id).ok_or_else(|| {
-            StreamlineError::protocol_msg(format!("Transaction not found: {}", transactional_id))
+            StreamlineError::protocol_msg(format!("Transaction not found: {transactional_id}"))
         })?;
 
         // Validate producer ID and epoch
@@ -469,7 +469,7 @@ impl TransactionCoordinator {
         group_id: &str,
     ) -> Result<()> {
         let mut txn = self.transactions.get_mut(transactional_id).ok_or_else(|| {
-            StreamlineError::protocol_msg(format!("Transaction not found: {}", transactional_id))
+            StreamlineError::protocol_msg(format!("Transaction not found: {transactional_id}"))
         })?;
 
         // Validate producer
@@ -511,7 +511,7 @@ impl TransactionCoordinator {
         let mut results = HashMap::new();
 
         let mut txn = self.transactions.get_mut(transactional_id).ok_or_else(|| {
-            StreamlineError::protocol_msg(format!("Transaction not found: {}", transactional_id))
+            StreamlineError::protocol_msg(format!("Transaction not found: {transactional_id}"))
         })?;
 
         // Validate producer
@@ -580,10 +580,7 @@ impl TransactionCoordinator {
         // First, validate and prepare the transaction
         {
             let mut txn = self.transactions.get_mut(transactional_id).ok_or_else(|| {
-                StreamlineError::protocol_msg(format!(
-                    "Transaction not found: {}",
-                    transactional_id
-                ))
+                StreamlineError::protocol_msg(format!("Transaction not found: {transactional_id}"))
             })?;
 
             // Validate producer

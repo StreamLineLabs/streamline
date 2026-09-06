@@ -211,10 +211,7 @@ fn register_metrics() {
         "streamline_cluster_elections_total",
         "Total number of leader elections"
     );
-    describe_gauge!(
-        "streamline_cluster_raft_term",
-        "Current Raft term number"
-    );
+    describe_gauge!("streamline_cluster_raft_term", "Current Raft term number");
     describe_gauge!(
         "streamline_cluster_raft_log_entries",
         "Number of entries in the Raft log"

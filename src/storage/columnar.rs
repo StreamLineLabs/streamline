@@ -116,7 +116,7 @@ impl ColumnarStorage {
     /// Create a new columnar storage manager
     pub fn new(config: ColumnarConfig) -> Result<Self> {
         std::fs::create_dir_all(&config.data_dir).map_err(|e| {
-            StreamlineError::storage_msg(format!("Failed to create columnar directory: {}", e))
+            StreamlineError::storage_msg(format!("Failed to create columnar directory: {e}"))
         })?;
 
         let schema = Arc::new(Self::create_schema());
@@ -218,11 +218,17 @@ impl ColumnarStorage {
             for header in &record.headers {
                 struct_builder
                     .field_builder::<StringBuilder>(0)
-                    .ok_or_else(|| StreamlineError::storage_msg("Missing header key field builder".to_string()))?
+                    .ok_or_else(|| {
+                        StreamlineError::storage_msg("Missing header key field builder".to_string())
+                    })?
                     .append_value(&header.key);
                 struct_builder
                     .field_builder::<BinaryBuilder>(1)
-                    .ok_or_else(|| StreamlineError::storage_msg("Missing header value field builder".to_string()))?
+                    .ok_or_else(|| {
+                        StreamlineError::storage_msg(
+                            "Missing header value field builder".to_string(),
+                        )
+                    })?
                     .append_value(header.value.as_ref());
                 struct_builder.append(true);
             }
@@ -234,7 +240,7 @@ impl ColumnarStorage {
             self.schema.clone(),
             vec![offsets, timestamps, keys, values, headers],
         )
-        .map_err(|e| StreamlineError::storage_msg(format!("Failed to create record batch: {}", e)))
+        .map_err(|e| StreamlineError::storage_msg(format!("Failed to create record batch: {e}")))
     }
 
     /// Convert Arrow RecordBatch back to records
@@ -335,7 +341,8 @@ impl ColumnarStorage {
 
         let mut writers = self.writers.write();
         if !writers.contains_key(&key) {
-            let new_writer = ColumnarWriter::new(&self.config, topic, partition, self.schema.clone())?;
+            let new_writer =
+                ColumnarWriter::new(&self.config, topic, partition, self.schema.clone())?;
             writers.insert(key.clone(), new_writer);
         }
         let writer = writers.get_mut(&key).ok_or_else(|| {
@@ -371,7 +378,7 @@ impl ColumnarStorage {
             .config
             .data_dir
             .join(topic)
-            .join(format!("partition-{}", partition));
+            .join(format!("partition-{partition}"));
 
         if !partition_dir.exists() {
             return Ok(Vec::new());
@@ -380,7 +387,7 @@ impl ColumnarStorage {
         let mut all_records = Vec::new();
         let mut files: Vec<_> = std::fs::read_dir(&partition_dir)
             .map_err(|e| {
-                StreamlineError::storage_msg(format!("Failed to read partition dir: {}", e))
+                StreamlineError::storage_msg(format!("Failed to read partition dir: {e}"))
             })?
             .filter_map(|e| e.ok())
             .filter(|e| e.path().extension().is_some_and(|ext| ext == "parquet"))
@@ -390,21 +397,19 @@ impl ColumnarStorage {
 
         for entry in files {
             let file = File::open(entry.path()).map_err(|e| {
-                StreamlineError::storage_msg(format!("Failed to open parquet file: {}", e))
+                StreamlineError::storage_msg(format!("Failed to open parquet file: {e}"))
             })?;
 
             let reader = ParquetRecordBatchReaderBuilder::try_new(file)
-                .map_err(|e| {
-                    StreamlineError::storage_msg(format!("Failed to create reader: {}", e))
-                })?
+                .map_err(|e| StreamlineError::storage_msg(format!("Failed to create reader: {e}")))?
                 .build()
                 .map_err(|e| {
-                    StreamlineError::storage_msg(format!("Failed to build reader: {}", e))
+                    StreamlineError::storage_msg(format!("Failed to build reader: {e}"))
                 })?;
 
             for batch_result in reader {
                 let batch = batch_result.map_err(|e| {
-                    StreamlineError::storage_msg(format!("Failed to read batch: {}", e))
+                    StreamlineError::storage_msg(format!("Failed to read batch: {e}"))
                 })?;
 
                 let records = self.batch_to_records(&batch)?;
@@ -466,7 +471,7 @@ impl ColumnarStorage {
             .config
             .data_dir
             .join(topic)
-            .join(format!("partition-{}", partition));
+            .join(format!("partition-{partition}"));
 
         if !partition_dir.exists() {
             return Ok(0);
@@ -474,7 +479,7 @@ impl ColumnarStorage {
 
         let mut files: Vec<_> = std::fs::read_dir(&partition_dir)
             .map_err(|e| {
-                StreamlineError::storage_msg(format!("Failed to read partition dir: {}", e))
+                StreamlineError::storage_msg(format!("Failed to read partition dir: {e}"))
             })?
             .filter_map(|e| e.ok())
             .filter(|e| e.path().extension().is_some_and(|ext| ext == "parquet"))
@@ -492,21 +497,19 @@ impl ColumnarStorage {
 
         for entry in &files {
             let file = File::open(entry.path()).map_err(|e| {
-                StreamlineError::storage_msg(format!("Failed to open parquet file: {}", e))
+                StreamlineError::storage_msg(format!("Failed to open parquet file: {e}"))
             })?;
 
             let reader = ParquetRecordBatchReaderBuilder::try_new(file)
-                .map_err(|e| {
-                    StreamlineError::storage_msg(format!("Failed to create reader: {}", e))
-                })?
+                .map_err(|e| StreamlineError::storage_msg(format!("Failed to create reader: {e}")))?
                 .build()
                 .map_err(|e| {
-                    StreamlineError::storage_msg(format!("Failed to build reader: {}", e))
+                    StreamlineError::storage_msg(format!("Failed to build reader: {e}"))
                 })?;
 
             for batch_result in reader {
                 let batch = batch_result.map_err(|e| {
-                    StreamlineError::storage_msg(format!("Failed to read batch: {}", e))
+                    StreamlineError::storage_msg(format!("Failed to read batch: {e}"))
                 })?;
                 let records = self.batch_to_records(&batch)?;
                 all_records.extend(records);
@@ -525,7 +528,7 @@ impl ColumnarStorage {
             chrono::Utc::now().timestamp_millis()
         ));
         let file = File::create(&compacted_file).map_err(|e| {
-            StreamlineError::storage_msg(format!("Failed to create compacted file: {}", e))
+            StreamlineError::storage_msg(format!("Failed to create compacted file: {e}"))
         })?;
 
         let props = WriterProperties::builder()
@@ -533,19 +536,19 @@ impl ColumnarStorage {
             .build();
 
         let mut writer = ArrowWriter::try_new(file, self.schema.clone(), Some(props))
-            .map_err(|e| StreamlineError::storage_msg(format!("Failed to create writer: {}", e)))?;
+            .map_err(|e| StreamlineError::storage_msg(format!("Failed to create writer: {e}")))?;
 
         // Write in batches
         for chunk in all_records.chunks(self.config.batch_size) {
             let batch = self.records_to_batch(chunk)?;
-            writer.write(&batch).map_err(|e| {
-                StreamlineError::storage_msg(format!("Failed to write batch: {}", e))
-            })?;
+            writer
+                .write(&batch)
+                .map_err(|e| StreamlineError::storage_msg(format!("Failed to write batch: {e}")))?;
         }
 
         writer
             .close()
-            .map_err(|e| StreamlineError::storage_msg(format!("Failed to close writer: {}", e)))?;
+            .map_err(|e| StreamlineError::storage_msg(format!("Failed to close writer: {e}")))?;
 
         // Remove old files
         let files_removed = files_to_remove.len();
@@ -591,9 +594,9 @@ impl ColumnarWriter {
         let partition_dir = config
             .data_dir
             .join(topic)
-            .join(format!("partition-{}", partition));
+            .join(format!("partition-{partition}"));
         std::fs::create_dir_all(&partition_dir).map_err(|e| {
-            StreamlineError::storage_msg(format!("Failed to create partition dir: {}", e))
+            StreamlineError::storage_msg(format!("Failed to create partition dir: {e}"))
         })?;
 
         Ok(Self {
@@ -624,7 +627,7 @@ impl ColumnarWriter {
         })?;
         writer
             .write(batch)
-            .map_err(|e| StreamlineError::storage_msg(format!("Failed to write batch: {}", e)))?;
+            .map_err(|e| StreamlineError::storage_msg(format!("Failed to write batch: {e}")))?;
 
         self.records_in_file += batch.num_rows();
         // Estimate bytes written
@@ -639,7 +642,7 @@ impl ColumnarWriter {
         let file_path = self.partition_dir.join(&file_name);
 
         let file = File::create(&file_path).map_err(|e| {
-            StreamlineError::storage_msg(format!("Failed to create parquet file: {}", e))
+            StreamlineError::storage_msg(format!("Failed to create parquet file: {e}"))
         })?;
 
         let props = WriterProperties::builder()
@@ -649,7 +652,7 @@ impl ColumnarWriter {
             .build();
 
         let writer = ArrowWriter::try_new(file, self.schema.clone(), Some(props)).map_err(|e| {
-            StreamlineError::storage_msg(format!("Failed to create arrow writer: {}", e))
+            StreamlineError::storage_msg(format!("Failed to create arrow writer: {e}"))
         })?;
 
         self.current_file = Some(file_path);
@@ -666,7 +669,7 @@ impl ColumnarWriter {
     pub fn flush(&mut self) -> Result<()> {
         if let Some(writer) = self.writer.take() {
             writer.close().map_err(|e| {
-                StreamlineError::storage_msg(format!("Failed to close writer: {}", e))
+                StreamlineError::storage_msg(format!("Failed to close writer: {e}"))
             })?;
             info!(
                 "Flushed columnar file with {} records",
@@ -701,16 +704,16 @@ impl ColumnarReader {
         let partition_dir = config
             .data_dir
             .join(topic)
-            .join(format!("partition-{}", partition));
+            .join(format!("partition-{partition}"));
         let schema = Arc::new(ColumnarStorage::create_schema());
 
         let mut files = Vec::new();
         if partition_dir.exists() {
             for entry in std::fs::read_dir(&partition_dir).map_err(|e| {
-                StreamlineError::storage_msg(format!("Failed to read partition dir: {}", e))
+                StreamlineError::storage_msg(format!("Failed to read partition dir: {e}"))
             })? {
                 let entry = entry.map_err(|e| {
-                    StreamlineError::storage_msg(format!("Failed to read dir entry: {}", e))
+                    StreamlineError::storage_msg(format!("Failed to read dir entry: {e}"))
                 })?;
                 if entry.path().extension().is_some_and(|ext| ext == "parquet") {
                     files.push(entry.path());
@@ -734,8 +737,7 @@ impl ColumnarReader {
                 Ok(f) => f,
                 Err(e) => {
                     return vec![Err(StreamlineError::storage_msg(format!(
-                        "Failed to open file: {}",
-                        e
+                        "Failed to open file: {e}"
                     )))]
                     .into_iter()
                 }
@@ -746,16 +748,14 @@ impl ColumnarReader {
                     Ok(r) => r,
                     Err(e) => {
                         return vec![Err(StreamlineError::storage_msg(format!(
-                            "Failed to build reader: {}",
-                            e
+                            "Failed to build reader: {e}"
                         )))]
                         .into_iter()
                     }
                 },
                 Err(e) => {
                     return vec![Err(StreamlineError::storage_msg(format!(
-                        "Failed to create reader: {}",
-                        e
+                        "Failed to create reader: {e}"
                     )))]
                     .into_iter()
                 }
@@ -764,7 +764,7 @@ impl ColumnarReader {
             reader
                 .map(|r| {
                     r.map_err(|e| {
-                        StreamlineError::storage_msg(format!("Failed to read batch: {}", e))
+                        StreamlineError::storage_msg(format!("Failed to read batch: {e}"))
                     })
                 })
                 .collect::<Vec<_>>()
@@ -784,7 +784,7 @@ impl ColumnarReader {
         let mut total = 0;
         for file in &self.files {
             let meta = std::fs::metadata(file).map_err(|e| {
-                StreamlineError::storage_msg(format!("Failed to get file metadata: {}", e))
+                StreamlineError::storage_msg(format!("Failed to get file metadata: {e}"))
             })?;
             total += meta.len();
         }
@@ -838,11 +838,11 @@ mod tests {
                 Record::with_headers(
                     i as i64,
                     chrono::Utc::now().timestamp_millis() + i as i64,
-                    Some(Bytes::from(format!("key-{}", i))),
-                    Bytes::from(format!("value-{}", i)),
+                    Some(Bytes::from(format!("key-{i}"))),
+                    Bytes::from(format!("value-{i}")),
                     vec![Header {
                         key: "header-key".to_string(),
-                        value: Bytes::from(format!("header-value-{}", i)),
+                        value: Bytes::from(format!("header-value-{i}")),
                     }],
                 )
             })

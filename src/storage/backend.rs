@@ -314,7 +314,7 @@ impl PartitionManifest {
 
     /// Get the object path for the manifest
     pub fn manifest_path(topic: &str, partition: i32) -> String {
-        format!("v1/topics/{}/partition-{}/manifest.json", topic, partition)
+        format!("v1/topics/{topic}/partition-{partition}/manifest.json")
     }
 
     /// Serialize the manifest to JSON
@@ -347,18 +347,12 @@ impl SegmentManifestEntry {
 
     /// Get the object path for a segment
     pub fn segment_path(topic: &str, partition: i32, base_offset: i64) -> String {
-        format!(
-            "v1/topics/{}/partition-{}/{:020}/data.segment",
-            topic, partition, base_offset
-        )
+        format!("v1/topics/{topic}/partition-{partition}/{base_offset:020}/data.segment")
     }
 
     /// Get the object path for a segment index
     pub fn index_path_for(topic: &str, partition: i32, base_offset: i64) -> String {
-        format!(
-            "v1/topics/{}/partition-{}/{:020}/index.sparse",
-            topic, partition, base_offset
-        )
+        format!("v1/topics/{topic}/partition-{partition}/{base_offset:020}/index.sparse")
     }
 }
 

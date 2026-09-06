@@ -118,7 +118,7 @@ repos:
       - id: cargo-audit
         name: cargo audit
         description: Check for security vulnerabilities
-        entry: cargo audit
+        entry: cargo audit --deny unsound
         language: system
         files: '(Cargo\.toml|Cargo\.lock)$'
         pass_filenames: false

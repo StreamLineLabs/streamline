@@ -110,7 +110,7 @@ async fn revoke_api_key(
         .await
         .map(|_| {
             Json(DeleteResponse {
-                message: format!("API key '{}' revoked", id),
+                message: format!("API key '{id}' revoked"),
             })
         })
         .map_err(|e| {

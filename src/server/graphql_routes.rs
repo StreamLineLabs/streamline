@@ -6,7 +6,10 @@
 //! - `GET /graphql` - GraphQL Playground (interactive IDE)
 //! - `GET /graphql/ws` - WebSocket transport for subscriptions
 
-use async_graphql::http::{playground_source, GraphQLPlaygroundConfig, WsMessage, ALL_WEBSOCKET_PROTOCOLS, WebSocketProtocols};
+use async_graphql::http::{
+    playground_source, GraphQLPlaygroundConfig, WebSocketProtocols, WsMessage,
+    ALL_WEBSOCKET_PROTOCOLS,
+};
 use axum::{
     extract::{State, WebSocketUpgrade},
     http::StatusCode,
@@ -42,12 +45,7 @@ async fn graphql_handler(
 ) -> Response {
     let response = state.schema.execute(request).await;
     let body = serde_json::to_string(&response).unwrap_or_default();
-    (
-        StatusCode::OK,
-        [("content-type", "application/json")],
-        body,
-    )
-        .into_response()
+    (StatusCode::OK, [("content-type", "application/json")], body).into_response()
 }
 
 /// Serve the GraphQL Playground IDE via GET
@@ -61,10 +59,7 @@ async fn graphql_playground_handler() -> impl IntoResponse {
 ///
 /// Negotiates the graphql-ws or graphql-transport-ws sub-protocol and
 /// bridges axum's WebSocket to async-graphql's subscription executor.
-async fn graphql_ws_handler(
-    State(state): State<GraphQLState>,
-    ws: WebSocketUpgrade,
-) -> Response {
+async fn graphql_ws_handler(State(state): State<GraphQLState>, ws: WebSocketUpgrade) -> Response {
     // Negotiate the sub-protocol: prefer graphql-transport-ws, fall back to graphql-ws
     let protocol = WebSocketProtocols::GraphQLWS;
 
@@ -75,9 +70,7 @@ async fn graphql_ws_handler(
             // Convert axum WS stream into the format async-graphql expects
             let input = stream.filter_map(|msg| async move {
                 match msg {
-                    Ok(axum::extract::ws::Message::Text(text)) => {
-                        Some(text.to_string())
-                    }
+                    Ok(axum::extract::ws::Message::Text(text)) => Some(text.to_string()),
                     Ok(axum::extract::ws::Message::Close(_)) => None,
                     _ => None,
                 }
@@ -90,7 +83,7 @@ async fn graphql_ws_handler(
 
             while let Some(ws_msg) = gql_stream.next().await {
                 let axum_msg = match ws_msg {
-                    WsMessage::Text(text) => axum::extract::ws::Message::Text(text.into()),
+                    WsMessage::Text(text) => axum::extract::ws::Message::Text(text),
                     WsMessage::Close(code, reason) => {
                         axum::extract::ws::Message::Close(Some(axum::extract::ws::CloseFrame {
                             code,

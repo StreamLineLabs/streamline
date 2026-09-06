@@ -83,7 +83,11 @@ impl AuditEvent {
         self
     }
 
-    pub fn with_resource(mut self, resource_type: impl Into<String>, resource_name: impl Into<String>) -> Self {
+    pub fn with_resource(
+        mut self,
+        resource_type: impl Into<String>,
+        resource_name: impl Into<String>,
+    ) -> Self {
         self.resource_type = Some(resource_type.into());
         self.resource_name = Some(resource_name.into());
         self
@@ -181,7 +185,10 @@ mod tests {
         assert_eq!(event.principal.as_deref(), Some("alice"));
         assert_eq!(event.resource_type.as_deref(), Some("topic"));
         assert_eq!(event.resource_name.as_deref(), Some("orders"));
-        assert_eq!(event.details.get("partitions").map(|s| s.as_str()), Some("3"));
+        assert_eq!(
+            event.details.get("partitions").map(|s| s.as_str()),
+            Some("3")
+        );
     }
 
     #[test]

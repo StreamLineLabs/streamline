@@ -8,12 +8,12 @@
 //! - `constants` - Protocol constants and version tables
 //! - `auth_stubs` - Stub types for lite builds without auth feature
 
-mod constants;
-#[cfg(test)]
-mod tests;
 mod authorization;
 mod connection;
+mod constants;
 mod control_records;
+#[cfg(test)]
+mod tests;
 
 // Re-export constants used within this module
 use constants::ProcessedResponse;
@@ -26,49 +26,45 @@ pub(crate) use control_records::{ATTR_CONTROL_BIT, ATTR_TRANSACTIONAL_BIT, RECOR
 
 // Re-exports for test access
 #[cfg(test)]
-pub(crate) use kafka_protocol::messages::{
-    ApiVersionsRequest, ApiVersionsResponse, CreateTopicsRequest, DeleteTopicsRequest,
-    FetchResponse, FindCoordinatorResponse, GroupId, HeartbeatResponse, InitProducerIdResponse,
-    JoinGroupResponse, ListOffsetsRequest, MetadataRequest, SaslAuthenticateResponse, TopicName,
-    ProducerId as KafkaProducerId,
-};
-#[cfg(test)]
 pub(crate) use super::handlers::error_codes::{
-    NONE, UNKNOWN_SERVER_ERROR, OFFSET_OUT_OF_RANGE, CORRUPT_MESSAGE,
-    UNKNOWN_TOPIC_OR_PARTITION, INVALID_FETCH_SIZE, LEADER_NOT_AVAILABLE,
-    NOT_LEADER_OR_FOLLOWER, REQUEST_TIMED_OUT, BROKER_NOT_AVAILABLE,
-    REPLICA_NOT_AVAILABLE, MESSAGE_TOO_LARGE, STALE_CONTROLLER_EPOCH,
-    OFFSET_METADATA_TOO_LARGE, NETWORK_EXCEPTION, COORDINATOR_LOAD_IN_PROGRESS,
-    COORDINATOR_NOT_AVAILABLE, NOT_COORDINATOR, INVALID_TOPIC_EXCEPTION,
-    RECORD_LIST_TOO_LARGE, NOT_ENOUGH_REPLICAS, NOT_ENOUGH_REPLICAS_AFTER_APPEND,
-    INVALID_REQUIRED_ACKS, ILLEGAL_GENERATION, INCONSISTENT_GROUP_PROTOCOL,
-    INVALID_GROUP_ID, UNKNOWN_MEMBER_ID, INVALID_SESSION_TIMEOUT,
-    REBALANCE_IN_PROGRESS, INVALID_COMMIT_OFFSET_SIZE, TOPIC_AUTHORIZATION_FAILED,
-    GROUP_AUTHORIZATION_FAILED, CLUSTER_AUTHORIZATION_FAILED, INVALID_TIMESTAMP,
-    UNSUPPORTED_SASL_MECHANISM, ILLEGAL_SASL_STATE, UNSUPPORTED_VERSION,
-    TOPIC_ALREADY_EXISTS, INVALID_PARTITIONS, INVALID_REPLICATION_FACTOR,
-    INVALID_REPLICA_ASSIGNMENT, INVALID_CONFIG, NOT_CONTROLLER, INVALID_REQUEST,
-    UNSUPPORTED_FOR_MESSAGE_FORMAT, POLICY_VIOLATION, OUT_OF_ORDER_SEQUENCE_NUMBER,
-    DUPLICATE_SEQUENCE_NUMBER, INVALID_PRODUCER_EPOCH, INVALID_TXN_STATE,
-    INVALID_PRODUCER_ID_MAPPING, INVALID_TRANSACTION_TIMEOUT, CONCURRENT_TRANSACTIONS,
-    TRANSACTION_COORDINATOR_FENCED, TRANSACTIONAL_ID_AUTHORIZATION_FAILED,
-    SECURITY_DISABLED, OPERATION_NOT_ATTEMPTED, KAFKA_STORAGE_ERROR, LOG_DIR_NOT_FOUND,
-    SASL_AUTHENTICATION_FAILED, UNKNOWN_PRODUCER_ID, REASSIGNMENT_IN_PROGRESS,
-    DELEGATION_TOKEN_AUTH_DISABLED, DELEGATION_TOKEN_NOT_FOUND,
-    DELEGATION_TOKEN_OWNER_MISMATCH, DELEGATION_TOKEN_REQUEST_NOT_ALLOWED,
-    DELEGATION_TOKEN_AUTHORIZATION_FAILED, DELEGATION_TOKEN_EXPIRED,
-    INVALID_PRINCIPAL_TYPE, NON_EMPTY_GROUP, GROUP_ID_NOT_FOUND,
-    FETCH_SESSION_ID_NOT_FOUND, INVALID_FETCH_SESSION_EPOCH, LISTENER_NOT_FOUND,
-    TOPIC_DELETION_DISABLED, FENCED_LEADER_EPOCH, UNKNOWN_LEADER_EPOCH,
-    UNSUPPORTED_COMPRESSION_TYPE, STALE_BROKER_EPOCH, OFFSET_NOT_AVAILABLE,
-    MEMBER_ID_REQUIRED, PREFERRED_LEADER_NOT_AVAILABLE, GROUP_MAX_SIZE_REACHED,
-    FENCED_INSTANCE_ID, THROTTLING_QUOTA_EXCEEDED, PRODUCER_FENCED,
-    TRANSACTIONAL_ID_NOT_FOUND,
+    BROKER_NOT_AVAILABLE, CLUSTER_AUTHORIZATION_FAILED, CONCURRENT_TRANSACTIONS,
+    COORDINATOR_LOAD_IN_PROGRESS, COORDINATOR_NOT_AVAILABLE, CORRUPT_MESSAGE,
+    DELEGATION_TOKEN_AUTHORIZATION_FAILED, DELEGATION_TOKEN_AUTH_DISABLED,
+    DELEGATION_TOKEN_EXPIRED, DELEGATION_TOKEN_NOT_FOUND, DELEGATION_TOKEN_OWNER_MISMATCH,
+    DELEGATION_TOKEN_REQUEST_NOT_ALLOWED, DUPLICATE_SEQUENCE_NUMBER, FENCED_INSTANCE_ID,
+    FENCED_LEADER_EPOCH, FETCH_SESSION_ID_NOT_FOUND, GROUP_AUTHORIZATION_FAILED,
+    GROUP_ID_NOT_FOUND, GROUP_MAX_SIZE_REACHED, ILLEGAL_GENERATION, ILLEGAL_SASL_STATE,
+    INCONSISTENT_GROUP_PROTOCOL, INVALID_COMMIT_OFFSET_SIZE, INVALID_CONFIG,
+    INVALID_FETCH_SESSION_EPOCH, INVALID_FETCH_SIZE, INVALID_GROUP_ID, INVALID_PARTITIONS,
+    INVALID_PRINCIPAL_TYPE, INVALID_PRODUCER_EPOCH, INVALID_PRODUCER_ID_MAPPING,
+    INVALID_REPLICATION_FACTOR, INVALID_REPLICA_ASSIGNMENT, INVALID_REQUEST, INVALID_REQUIRED_ACKS,
+    INVALID_SESSION_TIMEOUT, INVALID_TIMESTAMP, INVALID_TOPIC_EXCEPTION,
+    INVALID_TRANSACTION_TIMEOUT, INVALID_TXN_STATE, KAFKA_STORAGE_ERROR, LEADER_NOT_AVAILABLE,
+    LISTENER_NOT_FOUND, LOG_DIR_NOT_FOUND, MEMBER_ID_REQUIRED, MESSAGE_TOO_LARGE,
+    NETWORK_EXCEPTION, NONE, NON_EMPTY_GROUP, NOT_CONTROLLER, NOT_COORDINATOR, NOT_ENOUGH_REPLICAS,
+    NOT_ENOUGH_REPLICAS_AFTER_APPEND, NOT_LEADER_OR_FOLLOWER, OFFSET_METADATA_TOO_LARGE,
+    OFFSET_NOT_AVAILABLE, OFFSET_OUT_OF_RANGE, OPERATION_NOT_ATTEMPTED,
+    OUT_OF_ORDER_SEQUENCE_NUMBER, POLICY_VIOLATION, PREFERRED_LEADER_NOT_AVAILABLE,
+    PRODUCER_FENCED, REASSIGNMENT_IN_PROGRESS, REBALANCE_IN_PROGRESS, RECORD_LIST_TOO_LARGE,
+    REPLICA_NOT_AVAILABLE, REQUEST_TIMED_OUT, SASL_AUTHENTICATION_FAILED, SECURITY_DISABLED,
+    STALE_BROKER_EPOCH, STALE_CONTROLLER_EPOCH, THROTTLING_QUOTA_EXCEEDED, TOPIC_ALREADY_EXISTS,
+    TOPIC_AUTHORIZATION_FAILED, TOPIC_DELETION_DISABLED, TRANSACTIONAL_ID_AUTHORIZATION_FAILED,
+    TRANSACTIONAL_ID_NOT_FOUND, TRANSACTION_COORDINATOR_FENCED, UNKNOWN_LEADER_EPOCH,
+    UNKNOWN_MEMBER_ID, UNKNOWN_PRODUCER_ID, UNKNOWN_SERVER_ERROR, UNKNOWN_TOPIC_OR_PARTITION,
+    UNSUPPORTED_COMPRESSION_TYPE, UNSUPPORTED_FOR_MESSAGE_FORMAT, UNSUPPORTED_SASL_MECHANISM,
+    UNSUPPORTED_VERSION,
 };
 #[cfg(test)]
 pub(crate) use crate::storage::storage_mode::StorageMode;
 #[cfg(test)]
 pub(crate) use crate::storage::topic::CleanupPolicy;
+#[cfg(test)]
+pub(crate) use kafka_protocol::messages::{
+    ApiVersionsRequest, ApiVersionsResponse, CreateTopicsRequest, DeleteTopicsRequest,
+    FetchResponse, FindCoordinatorResponse, GroupId, HeartbeatResponse, InitProducerIdResponse,
+    JoinGroupResponse, ListOffsetsRequest, MetadataRequest, ProducerId as KafkaProducerId,
+    SaslAuthenticateResponse, TopicName,
+};
 
 // Test-only constants for protocol attribute bit masks
 #[cfg(test)]
@@ -157,21 +153,21 @@ use crate::config::AclConfig;
 use crate::config::AuthConfig;
 
 // Stub types when auth is disabled - provides no-op implementations
+mod admin_handlers;
+mod auth_handlers;
 #[cfg(not(feature = "auth"))]
 #[allow(dead_code)]
 mod auth_stubs;
+mod consumer_groups;
 mod core_api;
 mod data_plane;
-mod topic_mgmt;
-mod consumer_groups;
-mod auth_handlers;
-mod transaction_handlers;
-mod admin_handlers;
 mod kip848_handlers;
-mod security_handlers;
 #[cfg(feature = "semantic-topics")]
 #[allow(dead_code)]
 mod search_api;
+mod security_handlers;
+mod topic_mgmt;
+mod transaction_handlers;
 
 use crate::consumer::kip848::ReconciliationEngine;
 use crate::consumer::GroupCoordinator;
@@ -188,15 +184,13 @@ pub(crate) use auth_stubs::{Operation, ResourceType, SaslMechanism, SessionManag
 #[cfg(test)]
 use bytes::Buf;
 use bytes::{Bytes, BytesMut};
-use kafka_protocol::messages::{
-    ApiKey, RequestHeader, ResponseHeader,
-};
+use kafka_protocol::messages::{ApiKey, RequestHeader, ResponseHeader};
 use kafka_protocol::protocol::{Decodable, Encodable, StrBytes};
 use std::sync::Arc;
 use std::time::Instant;
-use tracing::{debug, warn};
 #[cfg(feature = "auth")]
 use tracing::info;
+use tracing::{debug, warn};
 
 use super::pipeline::PipelineConfig;
 use super::response_cache::ResponseCache;
@@ -364,9 +358,8 @@ fn validate_client_id(client_id: &Option<StrBytes>) -> Result<()> {
     for (i, byte) in client_id.as_bytes().iter().enumerate() {
         if !matches!(byte, 0x20..=0x7E) {
             return Err(StreamlineError::InvalidClientId(format!(
-                "Client ID contains invalid character at position {}: byte 0x{:02X}. \
-                 Only printable ASCII characters (space through tilde) are allowed",
-                i, byte
+                "Client ID contains invalid character at position {i}: byte 0x{byte:02X}. \
+                 Only printable ASCII characters (space through tilde) are allowed"
             )));
         }
     }
@@ -759,7 +752,6 @@ impl KafkaHandler {
         self
     }
 
-
     /// Create a cloneable handle for use in spawned tasks
     fn clone_for_task(&self) -> KafkaHandlerHandle {
         KafkaHandlerHandle {
@@ -843,7 +835,6 @@ impl KafkaHandler {
         Ok(response)
     }
 
-
     /// Process a Kafka message and return the response (inner implementation)
     #[tracing::instrument(level = "debug", skip(self, data, session_manager))]
     async fn process_message_inner(
@@ -885,9 +876,8 @@ impl KafkaHandler {
         let header_version = Self::request_header_version(api_key, api_version);
 
         // Parse request header
-        let header = RequestHeader::decode(&mut buf, header_version).map_err(|e| {
-            StreamlineError::protocol_msg(format!("Failed to decode header: {}", e))
-        })?;
+        let header = RequestHeader::decode(&mut buf, header_version)
+            .map_err(|e| StreamlineError::protocol_msg(format!("Failed to decode header: {e}")))?;
 
         // Validate client ID BEFORE logging to prevent log injection attacks
         // Invalid client IDs with control characters (newlines, etc.) could corrupt logs
@@ -960,7 +950,7 @@ impl KafkaHandler {
         response_header
             .encode(&mut response_buf, response_header_version)
             .map_err(|e| {
-                StreamlineError::protocol_msg(format!("Failed to encode response header: {}", e))
+                StreamlineError::protocol_msg(format!("Failed to encode response header: {e}"))
             })?;
         let header_len = response_buf.len();
         response_buf.extend_from_slice(&response_body);
@@ -1004,49 +994,6 @@ impl KafkaHandler {
         .await
     }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     /// Encode a response message
     pub(super) fn encode_response<T: Encodable>(
         &self,
@@ -1055,7 +1002,7 @@ impl KafkaHandler {
     ) -> Result<Vec<u8>> {
         let mut buf = BytesMut::new();
         response.encode(&mut buf, version).map_err(|e| {
-            StreamlineError::protocol_msg(format!("Failed to encode response: {}", e))
+            StreamlineError::protocol_msg(format!("Failed to encode response: {e}"))
         })?;
         Ok(buf.to_vec())
     }
@@ -1064,52 +1011,4 @@ impl KafkaHandler {
     pub(super) fn create_response_header(&self, correlation_id: i32) -> ResponseHeader {
         ResponseHeader::default().with_correlation_id(correlation_id)
     }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 }

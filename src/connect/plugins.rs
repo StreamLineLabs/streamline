@@ -169,7 +169,11 @@ impl PluginRegistry {
             config_schema: vec![
                 ConfigParam::required("file", "Path to the input file"),
                 ConfigParam::required("topic", "Target topic to produce messages to"),
-                ConfigParam::optional("poll.interval.ms", "Polling interval in milliseconds", "1000"),
+                ConfigParam::optional(
+                    "poll.interval.ms",
+                    "Polling interval in milliseconds",
+                    "1000",
+                ),
             ],
         });
 

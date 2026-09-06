@@ -434,11 +434,11 @@ impl ConfigFile {
     pub fn load<P: AsRef<Path>>(path: P) -> Result<Self> {
         let path = path.as_ref();
         let contents = std::fs::read_to_string(path).map_err(|e| {
-            StreamlineError::Config(format!("Failed to read config file {:?}: {}", path, e))
+            StreamlineError::Config(format!("Failed to read config file {path:?}: {e}"))
         })?;
 
         toml::from_str(&contents).map_err(|e| {
-            StreamlineError::Config(format!("Failed to parse config file {:?}: {}", path, e))
+            StreamlineError::Config(format!("Failed to parse config file {path:?}: {e}"))
         })
     }
 

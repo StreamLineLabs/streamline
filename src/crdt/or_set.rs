@@ -227,8 +227,8 @@ mod tests {
         let mut set = ObservedRemoveSet::new("node1");
         set.add("x".to_string());
         set.add("x".to_string()); // second add of same element
-        // Both adds generate unique tags; element is present with 2 tags
-        let tags = set.entries.get(&"x".to_string()).unwrap();
+                                  // Both adds generate unique tags; element is present with 2 tags
+        let tags = set.entries.get("x").unwrap();
         assert_eq!(tags.len(), 2);
     }
 

@@ -110,9 +110,8 @@ impl NamespacePath {
                 .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
             {
                 return Err(StreamlineError::Validation(format!(
-                    "namespace segment '{}' contains invalid characters; \
-                     only alphanumeric, hyphens, and underscores are allowed",
-                    segment
+                    "namespace segment '{segment}' contains invalid characters; \
+                     only alphanumeric, hyphens, and underscores are allowed"
                 )));
             }
         }
@@ -662,8 +661,7 @@ impl HierarchicalNamespaceManager {
         let key = ns_path.to_string();
         if map.contains_key(&key) {
             return Err(StreamlineError::Tenant(format!(
-                "namespace '{}' already exists",
-                key,
+                "namespace '{key}' already exists",
             )));
         }
 
@@ -698,8 +696,7 @@ impl HierarchicalNamespaceManager {
         let mut map = self.namespaces.write().await;
         if map.remove(&key).is_none() {
             return Err(StreamlineError::Tenant(format!(
-                "namespace '{}' not found",
-                key,
+                "namespace '{key}' not found",
             )));
         }
 
@@ -718,7 +715,7 @@ impl HierarchicalNamespaceManager {
         let map = self.namespaces.read().await;
         map.get(&key)
             .cloned()
-            .ok_or_else(|| StreamlineError::Tenant(format!("namespace '{}' not found", key)))
+            .ok_or_else(|| StreamlineError::Tenant(format!("namespace '{key}' not found")))
     }
 
     /// List namespaces that are direct children of `parent`. If `parent`
@@ -744,7 +741,7 @@ impl HierarchicalNamespaceManager {
         let mut map = self.namespaces.write().await;
         let ns = map
             .get_mut(&key)
-            .ok_or_else(|| StreamlineError::Tenant(format!("namespace '{}' not found", key)))?;
+            .ok_or_else(|| StreamlineError::Tenant(format!("namespace '{key}' not found")))?;
 
         ns.quotas = quotas;
         ns.updated_at = chrono::Utc::now().timestamp_millis();
@@ -759,7 +756,7 @@ impl HierarchicalNamespaceManager {
         let mut map = self.namespaces.write().await;
         let ns = map
             .get_mut(&key)
-            .ok_or_else(|| StreamlineError::Tenant(format!("namespace '{}' not found", key)))?;
+            .ok_or_else(|| StreamlineError::Tenant(format!("namespace '{key}' not found")))?;
 
         ns.status = NamespaceStatus::Suspended;
         ns.updated_at = chrono::Utc::now().timestamp_millis();
@@ -774,7 +771,7 @@ impl HierarchicalNamespaceManager {
         let mut map = self.namespaces.write().await;
         let ns = map
             .get_mut(&key)
-            .ok_or_else(|| StreamlineError::Tenant(format!("namespace '{}' not found", key)))?;
+            .ok_or_else(|| StreamlineError::Tenant(format!("namespace '{key}' not found")))?;
 
         ns.status = NamespaceStatus::Active;
         ns.updated_at = chrono::Utc::now().timestamp_millis();
@@ -787,7 +784,7 @@ impl HierarchicalNamespaceManager {
     /// segments with the configured separator and appending the topic name.
     pub fn resolve_topic(&self, namespace_path: &NamespacePath, topic_name: &str) -> String {
         let prefix = namespace_path.topic_prefix(&self.config.separator);
-        format!("{}{}", prefix, topic_name)
+        format!("{prefix}{topic_name}")
     }
 
     /// Validate that a given operation is permitted within the namespace.
@@ -807,7 +804,7 @@ impl HierarchicalNamespaceManager {
         let map = self.namespaces.read().await;
         let ns = map
             .get(&key)
-            .ok_or_else(|| StreamlineError::Tenant(format!("namespace '{}' not found", key)))?;
+            .ok_or_else(|| StreamlineError::Tenant(format!("namespace '{key}' not found")))?;
 
         if ns.status != NamespaceStatus::Active {
             return Err(StreamlineError::Tenant(format!(
@@ -834,8 +831,7 @@ impl HierarchicalNamespaceManager {
                     >= ns.quotas.max_produce_rate_bytes_per_sec as f64
                 {
                     return Err(StreamlineError::ResourceExhausted(format!(
-                        "namespace '{}' has exceeded the produce rate quota",
-                        key,
+                        "namespace '{key}' has exceeded the produce rate quota",
                     )));
                 }
             }
@@ -844,8 +840,7 @@ impl HierarchicalNamespaceManager {
                     >= ns.quotas.max_consume_rate_bytes_per_sec as f64
                 {
                     return Err(StreamlineError::ResourceExhausted(format!(
-                        "namespace '{}' has exceeded the consume rate quota",
-                        key,
+                        "namespace '{key}' has exceeded the consume rate quota",
                     )));
                 }
             }
@@ -874,7 +869,7 @@ impl HierarchicalNamespaceManager {
         let map = self.namespaces.read().await;
         let ns = map
             .get(&key)
-            .ok_or_else(|| StreamlineError::Tenant(format!("namespace '{}' not found", key)))?;
+            .ok_or_else(|| StreamlineError::Tenant(format!("namespace '{key}' not found")))?;
 
         let meter = self.meter.read().await;
         Ok(meter.get_usage(&key, &ns.quotas))

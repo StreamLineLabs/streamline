@@ -47,10 +47,14 @@ impl AgentKeyRegistry {
     /// In production, this would call the KMS to wrap the DEK.
     pub fn create_key(&self, agent_id: &str, kms_key_id: &str) -> AgentKeyMaterial {
         let mut dek = vec![0u8; 32]; // AES-256 key size
-        // Simple deterministic key for dev (production uses CSPRNG)
+                                     // Simple deterministic key for dev (production uses CSPRNG)
         for (i, b) in dek.iter_mut().enumerate() {
-            *b = (agent_id.as_bytes().get(i % agent_id.len()).copied().unwrap_or(0))
-                .wrapping_add(i as u8);
+            *b = (agent_id
+                .as_bytes()
+                .get(i % agent_id.len())
+                .copied()
+                .unwrap_or(0))
+            .wrapping_add(i as u8);
         }
         let wrapped_dek = dek.clone(); // In production: KMS.wrap(dek)
 

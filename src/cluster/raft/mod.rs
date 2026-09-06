@@ -67,7 +67,7 @@ pub fn create_raft_config_full(
     };
 
     Ok(Arc::new(config.validate().map_err(|e| {
-        StreamlineError::Config(format!("Invalid Raft configuration: {}", e))
+        StreamlineError::Config(format!("Invalid Raft configuration: {e}"))
     })?))
 }
 

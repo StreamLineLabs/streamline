@@ -42,7 +42,6 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::Path;
-use tracing::{debug, info, warn};
 
 /// Top-level connector pipeline manifest
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -377,8 +376,8 @@ pub fn validate_manifest(manifest: &ConnectorManifest) -> ValidationResult {
 
 /// Load a connector manifest from a YAML file
 pub fn load_manifest_from_file(path: &Path) -> Result<ConnectorManifest, String> {
-    let content =
-        std::fs::read_to_string(path).map_err(|e| format!("Failed to read {}: {}", path.display(), e))?;
+    let content = std::fs::read_to_string(path)
+        .map_err(|e| format!("Failed to read {}: {}", path.display(), e))?;
     load_manifest_from_str(&content)
 }
 
@@ -386,7 +385,7 @@ pub fn load_manifest_from_file(path: &Path) -> Result<ConnectorManifest, String>
 pub fn load_manifest_from_str(content: &str) -> Result<ConnectorManifest, String> {
     serde_yaml::from_str(content)
         .or_else(|_| serde_json::from_str(content).map_err(|e| e.to_string()))
-        .map_err(|e| format!("Failed to parse connector manifest: {}", e))
+        .map_err(|e| format!("Failed to parse connector manifest: {e}"))
 }
 
 /// Generate a scaffold YAML manifest for a given connector type
@@ -420,7 +419,7 @@ spec:
             .map(|t| t
                 .required_config
                 .iter()
-                .map(|k| format!("# {}: <required>", k))
+                .map(|k| format!("# {k}: <required>"))
                 .collect::<Vec<_>>()
                 .join("\n      "))
             .unwrap_or_default(),
@@ -430,7 +429,7 @@ spec:
             .map(|t| t
                 .required_config
                 .iter()
-                .map(|k| format!("# {}: <required>", k))
+                .map(|k| format!("# {k}: <required>"))
                 .collect::<Vec<_>>()
                 .join("\n      "))
             .unwrap_or_default(),

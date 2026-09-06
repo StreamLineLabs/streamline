@@ -111,18 +111,18 @@ impl TenantQuotas {
             TenantTier::Free => Self {
                 max_topics: 5,
                 max_partitions: 15,
-                max_storage_bytes: 1_073_741_824,       // 1 GB
-                max_produce_rate_bytes: 1_048_576,       // 1 MB/s
-                max_consume_rate_bytes: 5_242_880,       // 5 MB/s
+                max_storage_bytes: 1_073_741_824,  // 1 GB
+                max_produce_rate_bytes: 1_048_576, // 1 MB/s
+                max_consume_rate_bytes: 5_242_880, // 5 MB/s
                 max_connections: 10,
                 retention_max_hours: 24,
             },
             TenantTier::Pro => Self {
                 max_topics: 100,
                 max_partitions: 500,
-                max_storage_bytes: 107_374_182_400,      // 100 GB
-                max_produce_rate_bytes: 52_428_800,      // 50 MB/s
-                max_consume_rate_bytes: 104_857_600,     // 100 MB/s
+                max_storage_bytes: 107_374_182_400,  // 100 GB
+                max_produce_rate_bytes: 52_428_800,  // 50 MB/s
+                max_consume_rate_bytes: 104_857_600, // 100 MB/s
                 max_connections: 500,
                 retention_max_hours: 720,
             },
@@ -140,7 +140,7 @@ impl TenantQuotas {
 }
 
 /// Current resource usage for a tenant.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct TenantUsage {
     pub topics_count: u32,
     pub partitions_count: u32,
@@ -151,22 +151,6 @@ pub struct TenantUsage {
     pub messages_produced_total: u64,
     pub messages_consumed_total: u64,
     pub last_activity_at: Option<String>,
-}
-
-impl Default for TenantUsage {
-    fn default() -> Self {
-        Self {
-            topics_count: 0,
-            partitions_count: 0,
-            storage_bytes: 0,
-            produce_rate_bytes: 0,
-            consume_rate_bytes: 0,
-            active_connections: 0,
-            messages_produced_total: 0,
-            messages_consumed_total: 0,
-            last_activity_at: None,
-        }
-    }
 }
 
 /// An API key associated with a tenant.
@@ -231,9 +215,7 @@ fn now_iso8601() -> String {
 }
 
 fn error_json(msg: impl Into<String>) -> Json<ErrorResponse> {
-    Json(ErrorResponse {
-        error: msg.into(),
-    })
+    Json(ErrorResponse { error: msg.into() })
 }
 
 // ---------------------------------------------------------------------------
@@ -307,9 +289,7 @@ async fn create_tenant(
     Ok((StatusCode::CREATED, Json(tenant)))
 }
 
-async fn list_tenants(
-    State(state): State<TenantApiState>,
-) -> Json<Vec<Tenant>> {
+async fn list_tenants(State(state): State<TenantApiState>) -> Json<Vec<Tenant>> {
     let tenants = state.tenants.read().await;
     Json(tenants.values().cloned().collect())
 }
@@ -513,9 +493,9 @@ async fn create_api_key(
     let key_id = Uuid::new_v4().to_string();
     let now = now_iso8601();
 
-    let expires_at = req.expires_in_hours.map(|h| {
-        (chrono::Utc::now() + chrono::Duration::hours(h as i64)).to_rfc3339()
-    });
+    let expires_at = req
+        .expires_in_hours
+        .map(|h| (chrono::Utc::now() + chrono::Duration::hours(h as i64)).to_rfc3339());
 
     let api_key = ApiKey {
         id: key_id.clone(),
@@ -556,10 +536,7 @@ async fn revoke_api_key(
     let before = tenant.api_keys.len();
     tenant.api_keys.retain(|k| k.id != key_id);
     if tenant.api_keys.len() == before {
-        return Err((
-            StatusCode::NOT_FOUND,
-            error_json("api key not found"),
-        ));
+        return Err((StatusCode::NOT_FOUND, error_json("api key not found")));
     }
     tenant.updated_at = now_iso8601();
     info!(tenant_id = %id, key_id = %key_id, "api key revoked");
@@ -1265,10 +1242,7 @@ mod tests {
             .clone()
             .oneshot(empty_request(
                 "DELETE",
-                &format!(
-                    "/api/v1/tenants/{}/api-keys/{}",
-                    tenant.id, key_resp.id
-                ),
+                &format!("/api/v1/tenants/{}/api-keys/{}", tenant.id, key_resp.id),
             ))
             .await
             .unwrap();

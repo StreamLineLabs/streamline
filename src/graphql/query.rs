@@ -150,7 +150,10 @@ impl QueryRoot {
         &self,
         ctx: &Context<'_>,
         name: String,
-        #[graphql(default_with = r#""5m".to_string()"#, desc = "Time window (e.g. '1m', '5m', '1h')")]
+        #[graphql(
+            default_with = r#""5m".to_string()"#,
+            desc = "Time window (e.g. '1m', '5m', '1h')"
+        )]
         window: String,
     ) -> Result<TopicStatsWindow> {
         let topic_manager = ctx.data::<Arc<TopicManager>>()?;
@@ -225,7 +228,7 @@ impl QueryRoot {
             .get_topic_stats(&topic)
             .map_err(|e| async_graphql::Error::new(format!("Topic not found: {e}")))?;
 
-        let limit = limit.min(1000).max(1) as usize;
+        let limit = limit.clamp(1, 1000) as usize;
         let query_lower = query.to_lowercase();
         let mut matches = Vec::new();
         let mut scanned: i64 = 0;
@@ -275,13 +278,13 @@ fn parse_window_duration(window: &str) -> std::result::Result<i64, String> {
     let (num_str, unit) = trimmed.split_at(trimmed.len() - 1);
     let num: i64 = num_str
         .parse()
-        .map_err(|_| format!("invalid number in window: '{}'", num_str))?;
+        .map_err(|_| format!("invalid number in window: '{num_str}'"))?;
 
     match unit {
         "s" => Ok(num * 1_000),
         "m" => Ok(num * 60_000),
         "h" => Ok(num * 3_600_000),
         "d" => Ok(num * 86_400_000),
-        _ => Err(format!("unknown time unit '{}', use s/m/h/d", unit)),
+        _ => Err(format!("unknown time unit '{unit}', use s/m/h/d")),
     }
 }

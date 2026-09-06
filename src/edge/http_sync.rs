@@ -11,7 +11,7 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, warn};
 
 /// Configuration for the HTTP sync client
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -183,7 +183,7 @@ impl HttpSyncClient {
 
         // Serialize payload
         let body = serde_json::to_vec(&payload).map_err(|e| {
-            StreamlineError::storage_msg(format!("Failed to serialize sync batch: {}", e))
+            StreamlineError::storage_msg(format!("Failed to serialize sync batch: {e}"))
         })?;
         let body_len = body.len() as u64;
 
@@ -266,10 +266,16 @@ impl HttpSyncClient {
     // When reqwest is available (via auth/ai/serverless/web-ui features),
     // use real HTTP calls. Otherwise, fall back to stubs.
 
-    #[cfg(any(feature = "auth", feature = "ai", feature = "serverless", feature = "web-ui"))]
+    #[cfg(any(
+        feature = "auth",
+        feature = "ai",
+        feature = "serverless",
+        feature = "web-ui"
+    ))]
     async fn do_upload(&self, body: &[u8]) -> Result<SyncUploadResponse> {
         let url = format!("{}/api/v1/edge/upload", self.config.endpoint);
-        let mut builder = reqwest::Client::new()
+        let mut builder = crate::http_client::client()
+            .map_err(|e| StreamlineError::storage_msg(format!("HTTP client init failed: {e}")))?
             .post(&url)
             .header("Content-Type", "application/json")
             .header("X-Edge-ID", &self.config.edge_id)
@@ -280,9 +286,10 @@ impl HttpSyncClient {
             builder = builder.bearer_auth(api_key);
         }
 
-        let resp = builder.send().await.map_err(|e| {
-            StreamlineError::storage_msg(format!("Upload request failed: {}", e))
-        })?;
+        let resp = builder
+            .send()
+            .await
+            .map_err(|e| StreamlineError::storage_msg(format!("Upload request failed: {e}")))?;
 
         if !resp.status().is_success() {
             return Err(StreamlineError::storage_msg(format!(
@@ -292,11 +299,16 @@ impl HttpSyncClient {
         }
 
         resp.json::<SyncUploadResponse>().await.map_err(|e| {
-            StreamlineError::storage_msg(format!("Failed to parse upload response: {}", e))
+            StreamlineError::storage_msg(format!("Failed to parse upload response: {e}"))
         })
     }
 
-    #[cfg(not(any(feature = "auth", feature = "ai", feature = "serverless", feature = "web-ui")))]
+    #[cfg(not(any(
+        feature = "auth",
+        feature = "ai",
+        feature = "serverless",
+        feature = "web-ui"
+    )))]
     async fn do_upload(&self, _body: &[u8]) -> Result<SyncUploadResponse> {
         Ok(SyncUploadResponse {
             accepted: true,
@@ -306,9 +318,15 @@ impl HttpSyncClient {
         })
     }
 
-    #[cfg(any(feature = "auth", feature = "ai", feature = "serverless", feature = "web-ui"))]
+    #[cfg(any(
+        feature = "auth",
+        feature = "ai",
+        feature = "serverless",
+        feature = "web-ui"
+    ))]
     async fn do_fetch(&self, url: &str) -> Result<SyncFetchResponse> {
-        let mut builder = reqwest::Client::new()
+        let mut builder = crate::http_client::client()
+            .map_err(|e| StreamlineError::storage_msg(format!("HTTP client init failed: {e}")))?
             .get(url)
             .header("X-Edge-ID", &self.config.edge_id)
             .timeout(self.config.timeout);
@@ -317,9 +335,10 @@ impl HttpSyncClient {
             builder = builder.bearer_auth(api_key);
         }
 
-        let resp = builder.send().await.map_err(|e| {
-            StreamlineError::storage_msg(format!("Fetch request failed: {}", e))
-        })?;
+        let resp = builder
+            .send()
+            .await
+            .map_err(|e| StreamlineError::storage_msg(format!("Fetch request failed: {e}")))?;
 
         if !resp.status().is_success() {
             return Err(StreamlineError::storage_msg(format!(
@@ -329,11 +348,16 @@ impl HttpSyncClient {
         }
 
         resp.json::<SyncFetchResponse>().await.map_err(|e| {
-            StreamlineError::storage_msg(format!("Failed to parse fetch response: {}", e))
+            StreamlineError::storage_msg(format!("Failed to parse fetch response: {e}"))
         })
     }
 
-    #[cfg(not(any(feature = "auth", feature = "ai", feature = "serverless", feature = "web-ui")))]
+    #[cfg(not(any(
+        feature = "auth",
+        feature = "ai",
+        feature = "serverless",
+        feature = "web-ui"
+    )))]
     async fn do_fetch(&self, _url: &str) -> Result<SyncFetchResponse> {
         Ok(SyncFetchResponse {
             records: vec![],
@@ -342,9 +366,20 @@ impl HttpSyncClient {
         })
     }
 
-    #[cfg(any(feature = "auth", feature = "ai", feature = "serverless", feature = "web-ui"))]
+    #[cfg(any(
+        feature = "auth",
+        feature = "ai",
+        feature = "serverless",
+        feature = "web-ui"
+    ))]
     async fn do_health_check(&self, url: &str) -> Result<bool> {
-        match reqwest::Client::new()
+        // A client that cannot be constructed is reported the same way as an
+        // unreachable peer: this probe answers "healthy?", never "why not".
+        let Ok(client) = crate::http_client::client() else {
+            return Ok(false);
+        };
+
+        match client
             .get(url)
             .timeout(std::time::Duration::from_secs(5))
             .send()
@@ -355,7 +390,12 @@ impl HttpSyncClient {
         }
     }
 
-    #[cfg(not(any(feature = "auth", feature = "ai", feature = "serverless", feature = "web-ui")))]
+    #[cfg(not(any(
+        feature = "auth",
+        feature = "ai",
+        feature = "serverless",
+        feature = "web-ui"
+    )))]
     async fn do_health_check(&self, _url: &str) -> Result<bool> {
         Ok(true)
     }
@@ -364,21 +404,66 @@ impl HttpSyncClient {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use axum::routing::{get, post};
+    use axum::{Json, Router};
     use bytes::Bytes;
 
     fn make_record(value: &[u8]) -> Record {
-        Record {
-            offset: 0,
-            timestamp: chrono::Utc::now().timestamp_millis(),
-            key: None,
-            value: Bytes::copy_from_slice(value),
-            headers: Vec::new(),
+        Record::new(
+            0,
+            chrono::Utc::now().timestamp_millis(),
+            None,
+            Bytes::copy_from_slice(value),
+        )
+    }
+
+    /// Spawn a minimal in-process cloud endpoint so the HTTP transport can be
+    /// exercised without depending on an externally running server.
+    async fn cloud_stub_config() -> HttpSyncConfig {
+        let app = Router::new()
+            .route("/health", get(|| async { "ok" }))
+            .route(
+                "/api/v1/edge/upload",
+                post(|body: String| async move {
+                    let (records, sequence) = serde_json::from_str::<SyncBatchPayload>(&body)
+                        .map(|p| (p.records.len() as u64, p.sequence))
+                        .unwrap_or((0, 0));
+                    Json(SyncUploadResponse {
+                        accepted: true,
+                        records_processed: records,
+                        ack_sequence: sequence,
+                        errors: vec![],
+                    })
+                }),
+            )
+            .route(
+                "/api/v1/edge/fetch",
+                get(|| async {
+                    Json(SyncFetchResponse {
+                        records: vec![],
+                        has_more: false,
+                        next_offset: HashMap::new(),
+                    })
+                }),
+            );
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind cloud stub");
+        let addr = listener.local_addr().expect("cloud stub address");
+        tokio::spawn(async move {
+            let _ = axum::serve(listener, app).await;
+        });
+
+        HttpSyncConfig {
+            endpoint: format!("http://{addr}"),
+            ..Default::default()
         }
     }
 
     #[tokio::test]
     async fn test_upload_empty_batch() {
-        let client = HttpSyncClient::new(HttpSyncConfig::default());
+        let client = HttpSyncClient::new(cloud_stub_config().await);
         let response = client.upload_batch("test", 0, &[]).await.unwrap();
         assert!(response.accepted);
         assert_eq!(response.records_processed, 0);
@@ -386,7 +471,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_upload_batch() {
-        let client = HttpSyncClient::new(HttpSyncConfig::default());
+        let client = HttpSyncClient::new(cloud_stub_config().await);
         let records = vec![make_record(b"hello"), make_record(b"world")];
         let response = client.upload_batch("test", 0, &records).await.unwrap();
         assert!(response.accepted);
@@ -394,21 +479,21 @@ mod tests {
 
     #[tokio::test]
     async fn test_fetch_records() {
-        let client = HttpSyncClient::new(HttpSyncConfig::default());
+        let client = HttpSyncClient::new(cloud_stub_config().await);
         let response = client.fetch_records("test", 0, 0, 100).await.unwrap();
         assert!(!response.has_more);
     }
 
     #[tokio::test]
     async fn test_check_connectivity() {
-        let client = HttpSyncClient::new(HttpSyncConfig::default());
+        let client = HttpSyncClient::new(cloud_stub_config().await);
         let connected = client.check_connectivity().await.unwrap();
         assert!(connected);
     }
 
     #[tokio::test]
     async fn test_stats_tracking() {
-        let client = HttpSyncClient::new(HttpSyncConfig::default());
+        let client = HttpSyncClient::new(cloud_stub_config().await);
         let records = vec![make_record(b"test")];
         client.upload_batch("t", 0, &records).await.unwrap();
 

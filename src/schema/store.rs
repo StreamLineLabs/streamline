@@ -16,7 +16,7 @@ use std::sync::atomic::{AtomicI32, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
-use tracing::{debug, info, warn};
+use tracing::{debug, info};
 
 /// Schema cache entry with TTL
 #[derive(Debug, Clone)]
@@ -335,7 +335,10 @@ impl SchemaStore {
     }
 
     /// Create a new schema store with persistence via TopicManager
-    pub fn with_topic_manager(config: SchemaRegistryConfig, topic_manager: Arc<TopicManager>) -> Self {
+    pub fn with_topic_manager(
+        config: SchemaRegistryConfig,
+        topic_manager: Arc<TopicManager>,
+    ) -> Self {
         Self {
             cache: Arc::new(SchemaCache::new(
                 config.cache_ttl_seconds,
@@ -517,7 +520,7 @@ impl SchemaStore {
     pub fn get_schema_by_id(&self, id: i32) -> Result<RegisteredSchema, SchemaError> {
         self.cache
             .get_by_id(id)
-            .ok_or_else(|| SchemaError::SchemaNotFound(format!("Schema ID {}", id)))
+            .ok_or_else(|| SchemaError::SchemaNotFound(format!("Schema ID {id}")))
     }
 
     /// Get schema by subject and version
@@ -651,8 +654,9 @@ impl SchemaStore {
         drop(events);
 
         // Persist to _schemas topic
-        self.persist_event(subject, &event)
-            .map_err(|_| SchemaError::StorageError("Failed to persist compatibility change".into()))?;
+        self.persist_event(subject, &event).map_err(|_| {
+            SchemaError::StorageError("Failed to persist compatibility change".into())
+        })?;
 
         info!(
             subject = subject,
@@ -683,8 +687,9 @@ impl SchemaStore {
         drop(events);
 
         // Persist to _schemas topic
-        self.persist_event("_global", &event)
-            .map_err(|_| SchemaError::StorageError("Failed to persist global compatibility".into()))?;
+        self.persist_event("_global", &event).map_err(|_| {
+            SchemaError::StorageError("Failed to persist global compatibility".into())
+        })?;
 
         info!(compatibility = %level, "Global compatibility set");
         Ok(())
@@ -741,12 +746,9 @@ impl SchemaStore {
         events.push(event.clone());
         drop(events);
 
-        self.persist_event(subject, &event)
-            .map_err(|_| {
-                SchemaError::StorageError(
-                    "Failed to persist compatibility deletion".into(),
-                )
-            })?;
+        self.persist_event(subject, &event).map_err(|_| {
+            SchemaError::StorageError("Failed to persist compatibility deletion".into())
+        })?;
 
         info!(
             subject = subject,
@@ -841,17 +843,12 @@ impl SchemaStore {
         let key = (subject.to_string(), version);
         if !visited.insert(key.clone()) {
             return Err(SchemaError::InvalidSchema(format!(
-                "Circular schema reference detected: subject='{}' version={}",
-                subject, version
+                "Circular schema reference detected: subject='{subject}' version={version}"
             )));
         }
         if let Some(schema) = self.cache.get_by_subject_version(subject, version) {
             for reference in &schema.references {
-                self.detect_circular_refs(
-                    &reference.subject,
-                    reference.version,
-                    visited,
-                )?;
+                self.detect_circular_refs(&reference.subject, reference.version, visited)?;
             }
         }
         visited.remove(&key);
@@ -905,9 +902,15 @@ impl SchemaRegistry {
     }
 
     /// Create a new schema registry with topic-based persistence
-    pub fn with_topic_manager(config: SchemaRegistryConfig, topic_manager: Arc<TopicManager>) -> Self {
+    pub fn with_topic_manager(
+        config: SchemaRegistryConfig,
+        topic_manager: Arc<TopicManager>,
+    ) -> Self {
         Self {
-            store: Arc::new(SchemaStore::with_topic_manager(config.clone(), topic_manager)),
+            store: Arc::new(SchemaStore::with_topic_manager(
+                config.clone(),
+                topic_manager,
+            )),
             config,
         }
     }
@@ -970,7 +973,7 @@ impl ProduceSchemaValidator {
         }
 
         // Check for value schema
-        let value_subject = format!("{}-value", topic);
+        let value_subject = format!("{topic}-value");
         if let Ok(schema) = self.store.get_latest_schema(&value_subject) {
             // Try to extract schema ID from Confluent wire format (magic byte + 4-byte ID)
             if value.len() > 5 && value[0] == 0 {
@@ -988,28 +991,25 @@ impl ProduceSchemaValidator {
                 let schema_str = crate::schema::inference::infer_json_schema(&inferred);
                 let _ = self
                     .store
-                    .register_schema(
-                        &value_subject,
-                        &schema_str,
-                        SchemaType::Json,
-                        vec![],
-                    )
+                    .register_schema(&value_subject, &schema_str, SchemaType::Json, vec![])
                     .await;
             }
         }
 
         // Check for key schema (optional)
         if let Some(key_data) = key {
-            let key_subject = format!("{}-key", topic);
+            let key_subject = format!("{topic}-key");
             if let Ok(schema) = self.store.get_latest_schema(&key_subject) {
                 if key_data.len() > 5 && key_data[0] == 0 {
                     let schema_id =
                         i32::from_be_bytes([key_data[1], key_data[2], key_data[3], key_data[4]]);
                     self.store.validate_data(schema_id, &key_data[5..])?;
                 } else {
-                    self.store
-                        .checker
-                        .validate_data(&schema.schema, schema.schema_type, key_data)?;
+                    self.store.checker.validate_data(
+                        &schema.schema,
+                        schema.schema_type,
+                        key_data,
+                    )?;
                 }
             }
         }
@@ -1024,10 +1024,7 @@ impl ProduceSchemaValidator {
 
     /// Get the schema ID for a subject's latest version.
     pub fn latest_schema_id(&self, subject: &str) -> Option<i32> {
-        self.store
-            .get_latest_schema(subject)
-            .ok()
-            .map(|s| s.id)
+        self.store.get_latest_schema(subject).ok().map(|s| s.id)
     }
 }
 
@@ -1438,9 +1435,7 @@ message Test {
         let validator = ProduceSchemaValidator::new(Arc::clone(&store), true, true);
 
         let json_msg = br#"{"name": "Alice", "age": 30}"#;
-        let result = validator
-            .validate_produce("users", None, json_msg)
-            .await;
+        let result = validator.validate_produce("users", None, json_msg).await;
         assert!(result.is_ok());
 
         // Schema should have been auto-registered
@@ -1452,7 +1447,8 @@ message Test {
         let store = Arc::new(SchemaStore::new(test_config()));
 
         // Register a JSON schema
-        let schema = r#"{"type":"object","properties":{"name":{"type":"string"}},"required":["name"]}"#;
+        let schema =
+            r#"{"type":"object","properties":{"name":{"type":"string"}},"required":["name"]}"#;
         store
             .register_schema("events-value", schema, SchemaType::Json, vec![])
             .await
@@ -1462,7 +1458,10 @@ message Test {
 
         // Valid message
         let valid = br#"{"name": "test"}"#;
-        assert!(validator.validate_produce("events", None, valid).await.is_ok());
+        assert!(validator
+            .validate_produce("events", None, valid)
+            .await
+            .is_ok());
     }
 
     #[test]

@@ -235,7 +235,7 @@ pub fn create_router(state: WebUiState) -> Router {
         .route("/api/v1/streamql/execute", post(api_execute_streamql))
         .route("/api/v1/streamql/validate", post(api_validate_streamql))
         .route("/api/v1/streamql/history", get(api_get_streamql_history))
-        .route("/api/v1/streamql/views", get(api_list_materialized_views))
+        .route("/api/v1/streamql/views", get(api_list_streamql_views))
         // Message Inspector (deep-dive into individual messages)
         .route("/messages/inspect", get(message_inspector_page))
         .route("/api/v1/messages/decode", post(api_decode_message))
@@ -243,9 +243,18 @@ pub fn create_router(state: WebUiState) -> Router {
         // Connector Management UI
         .route("/connectors", get(connectors_page))
         .route("/connectors/:name", get(connector_details_page))
-        .route("/api/v1/connectors", get(api_list_connectors_ui).post(api_create_connector_ui))
-        .route("/api/v1/connectors/:name", get(api_get_connector_ui).delete(api_delete_connector_ui))
-        .route("/api/v1/connectors/:name/restart", post(api_restart_connector_ui))
+        .route(
+            "/api/v1/connectors",
+            get(api_list_connectors_ui).post(api_create_connector_ui),
+        )
+        .route(
+            "/api/v1/connectors/:name",
+            get(api_get_connector_ui).delete(api_delete_connector_ui),
+        )
+        .route(
+            "/api/v1/connectors/:name/restart",
+            post(api_restart_connector_ui),
+        )
         // SPA shell for client-side routing (returns the same HTML for all /app/* paths)
         .route("/app", get(spa_shell_page))
         .route("/app/*path", get(spa_shell_page))
@@ -268,7 +277,7 @@ async fn dashboard_page(State(state): State<WebUiState>) -> impl IntoResponse {
         Err(e) => {
             let html = state.templates.error_page(
                 "Connection Error",
-                &format!("Failed to connect to Streamline: {}", e),
+                &format!("Failed to connect to Streamline: {e}"),
             );
             Html(html)
         }
@@ -281,7 +290,7 @@ async fn topics_page(State(state): State<WebUiState>) -> impl IntoResponse {
         Err(e) => {
             let html = state
                 .templates
-                .error_page("Error", &format!("Failed to load topics: {}", e));
+                .error_page("Error", &format!("Failed to load topics: {e}"));
             Html(html)
         }
     }
@@ -296,13 +305,13 @@ async fn topic_details_page(
         Err(ClientError::ApiError(msg)) if msg.contains("404") => {
             let html = state
                 .templates
-                .error_page("Not Found", &format!("Topic '{}' not found", name));
+                .error_page("Not Found", &format!("Topic '{name}' not found"));
             Html(html)
         }
         Err(e) => {
             let html = state
                 .templates
-                .error_page("Error", &format!("Failed to load topic: {}", e));
+                .error_page("Error", &format!("Failed to load topic: {e}"));
             Html(html)
         }
     }
@@ -332,13 +341,13 @@ async fn topic_browse_page(
         Err(ClientError::ApiError(msg)) if msg.contains("404") => {
             let html = state
                 .templates
-                .error_page("Not Found", &format!("Topic '{}' not found", name));
+                .error_page("Not Found", &format!("Topic '{name}' not found"));
             Html(html)
         }
         Err(e) => {
             let html = state
                 .templates
-                .error_page("Error", &format!("Failed to load topic: {}", e));
+                .error_page("Error", &format!("Failed to load topic: {e}"));
             Html(html)
         }
     }
@@ -353,13 +362,13 @@ async fn topic_produce_page(
         Err(ClientError::ApiError(msg)) if msg.contains("404") => {
             let html = state
                 .templates
-                .error_page("Not Found", &format!("Topic '{}' not found", name));
+                .error_page("Not Found", &format!("Topic '{name}' not found"));
             Html(html)
         }
         Err(e) => {
             let html = state
                 .templates
-                .error_page("Error", &format!("Failed to load topic: {}", e));
+                .error_page("Error", &format!("Failed to load topic: {e}"));
             Html(html)
         }
     }
@@ -374,13 +383,13 @@ async fn topic_config_page(
         Err(ClientError::ApiError(msg)) if msg.contains("404") => {
             let html = state
                 .templates
-                .error_page("Not Found", &format!("Topic '{}' not found", name));
+                .error_page("Not Found", &format!("Topic '{name}' not found"));
             Html(html)
         }
         Err(e) => {
             let html = state
                 .templates
-                .error_page("Error", &format!("Failed to load topic: {}", e));
+                .error_page("Error", &format!("Failed to load topic: {e}"));
             Html(html)
         }
     }
@@ -392,7 +401,7 @@ async fn consumer_groups_page(State(state): State<WebUiState>) -> impl IntoRespo
         Err(e) => {
             let html = state
                 .templates
-                .error_page("Error", &format!("Failed to load consumer groups: {}", e));
+                .error_page("Error", &format!("Failed to load consumer groups: {e}"));
             Html(html)
         }
     }
@@ -411,13 +420,13 @@ async fn consumer_group_details_page(
         Err(ClientError::ApiError(msg)) if msg.contains("404") => {
             let html = state
                 .templates
-                .error_page("Not Found", &format!("Consumer group '{}' not found", id));
+                .error_page("Not Found", &format!("Consumer group '{id}' not found"));
             Html(html)
         }
         Err(e) => {
             let html = state
                 .templates
-                .error_page("Error", &format!("Failed to load consumer group: {}", e));
+                .error_page("Error", &format!("Failed to load consumer group: {e}"));
             Html(html)
         }
     }
@@ -440,13 +449,13 @@ async fn consumer_group_offsets_page(
         Err(ClientError::ApiError(msg)) if msg.contains("404") => {
             let html = state
                 .templates
-                .error_page("Not Found", &format!("Consumer group '{}' not found", id));
+                .error_page("Not Found", &format!("Consumer group '{id}' not found"));
             Html(html)
         }
         Err(e) => {
             let html = state
                 .templates
-                .error_page("Error", &format!("Failed to load consumer group: {}", e));
+                .error_page("Error", &format!("Failed to load consumer group: {e}"));
             Html(html)
         }
     }
@@ -458,7 +467,7 @@ async fn brokers_page(State(state): State<WebUiState>) -> impl IntoResponse {
         Err(e) => {
             let html = state
                 .templates
-                .error_page("Error", &format!("Failed to load brokers: {}", e));
+                .error_page("Error", &format!("Failed to load brokers: {e}"));
             Html(html)
         }
     }
@@ -474,7 +483,7 @@ async fn lag_heatmap_page(State(state): State<WebUiState>) -> impl IntoResponse 
         Err(e) => {
             let html = state
                 .templates
-                .error_page("Error", &format!("Failed to load heatmap data: {}", e));
+                .error_page("Error", &format!("Failed to load heatmap data: {e}"));
             Html(html)
         }
     }
@@ -1275,7 +1284,7 @@ async fn api_get_topic_timeline(
     let partitions: Vec<_> = topic_info.partitions.iter().collect();
     let total_messages: usize = partitions
         .iter()
-        .filter(|p| query.partition.map_or(true, |pnum| p.partition_id == pnum))
+        .filter(|p| query.partition.is_none_or(|pnum| p.partition_id == pnum))
         .map(|p| (p.end_offset - p.start_offset).max(0) as usize)
         .sum();
 
@@ -1477,8 +1486,8 @@ async fn api_get_dlq_messages(
                 "TimeoutError" => "Processing timeout after 30000ms".to_string(),
                 _ => "Unknown error occurred".to_string(),
             },
-            original_key: Some(format!("key-{}", i)),
-            original_value_preview: Some(format!(r#"{{"id": {}, "type": "test"}}"#, i)),
+            original_key: Some(format!("key-{i}")),
+            original_value_preview: Some(format!(r#"{{"id": {i}, "type": "test"}}"#)),
         });
     }
 
@@ -1766,7 +1775,7 @@ async fn api_export_lag_history(
         .header(header::CONTENT_TYPE, "text/csv; charset=utf-8")
         .header(
             header::CONTENT_DISPOSITION,
-            format!("attachment; filename=\"{}\"", filename),
+            format!("attachment; filename=\"{filename}\""),
         )
         .body(Body::from(csv))
         .unwrap_or_else(|_| Response::new(Body::empty()))
@@ -2154,8 +2163,8 @@ async fn api_get_cluster(
     // In production, this would read from cluster registry
     let cluster = ClusterInfo {
         id: id.clone(),
-        name: format!("Cluster {}", id),
-        url: format!("{}.streamline.io:9092", id),
+        name: format!("Cluster {id}"),
+        url: format!("{id}.streamline.io:9092"),
         health: ClusterHealth::Healthy,
         version: Some(env!("CARGO_PKG_VERSION").to_string()),
         broker_count: 3,
@@ -2382,7 +2391,7 @@ async fn api_get_group_rebalances(
     // Generate mock rebalance history for a specific group
     let events = vec![
         RebalanceEvent {
-            id: format!("{}-rb-001", group_id),
+            id: format!("{group_id}-rb-001"),
             group_id: group_id.clone(),
             trigger: RebalanceTrigger::MemberJoin,
             started_at: "2024-12-13T19:45:00Z".to_string(),
@@ -2396,7 +2405,7 @@ async fn api_get_group_rebalances(
             status: RebalanceStatus::Completed,
         },
         RebalanceEvent {
-            id: format!("{}-rb-002", group_id),
+            id: format!("{group_id}-rb-002"),
             group_id: group_id.clone(),
             trigger: RebalanceTrigger::MemberLeave,
             started_at: "2024-12-13T18:30:00Z".to_string(),
@@ -2410,7 +2419,7 @@ async fn api_get_group_rebalances(
             status: RebalanceStatus::Completed,
         },
         RebalanceEvent {
-            id: format!("{}-rb-003", group_id),
+            id: format!("{group_id}-rb-003"),
             group_id: group_id.clone(),
             trigger: RebalanceTrigger::Manual,
             started_at: "2024-12-13T15:00:00Z".to_string(),
@@ -2759,7 +2768,7 @@ async fn cdc_source_details_page(
     Path(name): Path<String>,
 ) -> impl IntoResponse {
     Html(state.templates.details_page(
-        &format!("CDC Source: {}", name),
+        &format!("CDC Source: {name}"),
         &[
             ("Status", "Running"),
             ("Type", "PostgreSQL"),
@@ -3216,7 +3225,11 @@ async fn streamql_editor_page(State(state): State<WebUiState>) -> impl IntoRespo
             document.getElementById('query-status').textContent = data.valid ? '✅ Valid query' : '❌ ' + data.error;
         }
         </script>"#;
-    Html(state.templates.layout("StreamQL Editor", content, "streamql"))
+    Html(
+        state
+            .templates
+            .layout("StreamQL Editor", content, "streamql"),
+    )
 }
 
 async fn streamql_history_page(State(state): State<WebUiState>) -> impl IntoResponse {
@@ -3235,13 +3248,8 @@ async fn streamql_history_page(State(state): State<WebUiState>) -> impl IntoResp
     Html(state.templates.layout("Query History", content, "streamql"))
 }
 
-async fn api_execute_streamql(
-    Json(payload): Json<serde_json::Value>,
-) -> Json<serde_json::Value> {
-    let query = payload
-        .get("query")
-        .and_then(|v| v.as_str())
-        .unwrap_or("");
+async fn api_execute_streamql(Json(payload): Json<serde_json::Value>) -> Json<serde_json::Value> {
+    let query = payload.get("query").and_then(|v| v.as_str()).unwrap_or("");
     Json(serde_json::json!({
         "query": query,
         "columns": ["placeholder"],
@@ -3252,13 +3260,8 @@ async fn api_execute_streamql(
     }))
 }
 
-async fn api_validate_streamql(
-    Json(payload): Json<serde_json::Value>,
-) -> Json<serde_json::Value> {
-    let query = payload
-        .get("query")
-        .and_then(|v| v.as_str())
-        .unwrap_or("");
+async fn api_validate_streamql(Json(payload): Json<serde_json::Value>) -> Json<serde_json::Value> {
+    let query = payload.get("query").and_then(|v| v.as_str()).unwrap_or("");
     let valid = !query.trim().is_empty();
     Json(serde_json::json!({
         "valid": valid,
@@ -3270,7 +3273,7 @@ async fn api_get_streamql_history() -> Json<serde_json::Value> {
     Json(serde_json::json!({"queries": []}))
 }
 
-async fn api_list_materialized_views() -> Json<serde_json::Value> {
+async fn api_list_streamql_views() -> Json<serde_json::Value> {
     Json(serde_json::json!({"views": []}))
 }
 
@@ -3291,16 +3294,15 @@ async fn message_inspector_page(State(state): State<WebUiState>) -> impl IntoRes
         </div>
         <div id="inspect-result" style="margin-top:16px;"></div>
         </div>"#;
-    Html(state.templates.layout("Message Inspector", content, "messages"))
+    Html(
+        state
+            .templates
+            .layout("Message Inspector", content, "messages"),
+    )
 }
 
-async fn api_decode_message(
-    Json(payload): Json<serde_json::Value>,
-) -> Json<serde_json::Value> {
-    let value = payload
-        .get("value")
-        .and_then(|v| v.as_str())
-        .unwrap_or("");
+async fn api_decode_message(Json(payload): Json<serde_json::Value>) -> Json<serde_json::Value> {
+    let value = payload.get("value").and_then(|v| v.as_str()).unwrap_or("");
     // Try JSON parsing
     let decoded = serde_json::from_str::<serde_json::Value>(value)
         .map(|v| serde_json::json!({"format": "json", "decoded": v}))
@@ -3309,7 +3311,7 @@ async fn api_decode_message(
 }
 
 async fn api_search_messages(
-    axum::extract::Query(params): axum::extract::Query<HashMap<String, String>>,
+    axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
 ) -> Json<serde_json::Value> {
     let topic = params.get("topic").cloned().unwrap_or_default();
     let query = params.get("q").cloned().unwrap_or_default();
@@ -3358,7 +3360,11 @@ async fn connector_details_page(
         }});
         </script>"#
     );
-    Html(state.templates.layout(&format!("Connector: {}", name), &content, "connectors"))
+    Html(
+        state
+            .templates
+            .layout(&format!("Connector: {name}"), &content, "connectors"),
+    )
 }
 
 async fn api_list_connectors_ui() -> Json<serde_json::Value> {
@@ -3380,11 +3386,11 @@ async fn api_get_connector_ui(Path(name): Path<String>) -> Json<serde_json::Valu
     }))
 }
 
-async fn api_delete_connector_ui(Path(name): Path<String>) -> StatusCode {
+async fn api_delete_connector_ui(Path(_name): Path<String>) -> StatusCode {
     StatusCode::NO_CONTENT
 }
 
-async fn api_restart_connector_ui(Path(name): Path<String>) -> StatusCode {
+async fn api_restart_connector_ui(Path(_name): Path<String>) -> StatusCode {
     StatusCode::NO_CONTENT
 }
 
@@ -3431,7 +3437,11 @@ async fn spa_shell_page(State(state): State<WebUiState>) -> impl IntoResponse {
     const initial = window.location.pathname.replace('/app/', '') || 'topics';
     loadRoute(initial);
     </script>"#;
-    Html(state.templates.layout("Streamline Dashboard", content, "app"))
+    Html(
+        state
+            .templates
+            .layout("Streamline Dashboard", content, "app"),
+    )
 }
 
 // ── Canvas Lag Heatmap API ───────────────────────────────────────────────────

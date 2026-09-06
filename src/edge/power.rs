@@ -11,11 +11,9 @@
 //! - **Mesh Health**: Adjusts mesh participation (discovery broadcasting,
 //!   replication) based on power budget.
 
-use crate::error::{Result, StreamlineError};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicU8, Ordering};
-use std::sync::Arc;
 use tokio::sync::RwLock;
 
 /// Power profile presets.
@@ -66,7 +64,7 @@ impl PowerProfile {
     /// Compression level (higher = more aggressive = more CPU but less I/O).
     pub fn compression_level(&self) -> u32 {
         match self {
-            PowerProfile::Full => 1,      // Fast
+            PowerProfile::Full => 1,       // Fast
             PowerProfile::Balanced => 3,   // Standard
             PowerProfile::PowerSaver => 6, // High
             PowerProfile::Critical => 1,   // Fast (save CPU)
@@ -183,9 +181,7 @@ pub struct ProfileChange {
 impl PowerManager {
     /// Create a new power manager.
     pub fn new(config: PowerConfig) -> Self {
-        let initial = config
-            .override_profile
-            .unwrap_or(PowerProfile::Full);
+        let initial = config.override_profile.unwrap_or(PowerProfile::Full);
 
         Self {
             config,
@@ -234,7 +230,11 @@ impl PowerManager {
             reason: format!(
                 "Battery {}% ({})",
                 status.level_pct.unwrap_or(0),
-                if status.charging { "charging" } else { "discharging" }
+                if status.charging {
+                    "charging"
+                } else {
+                    "discharging"
+                }
             ),
             battery_level: status.level_pct,
             timestamp: Utc::now(),
@@ -285,15 +285,11 @@ impl PowerManager {
         }
 
         match status.level_pct {
-            Some(level) if level <= self.config.thresholds.critical_pct => {
-                PowerProfile::Critical
-            }
+            Some(level) if level <= self.config.thresholds.critical_pct => PowerProfile::Critical,
             Some(level) if level <= self.config.thresholds.power_saver_pct => {
                 PowerProfile::PowerSaver
             }
-            Some(level) if level >= self.config.thresholds.full_pct => {
-                PowerProfile::Full
-            }
+            Some(level) if level >= self.config.thresholds.full_pct => PowerProfile::Full,
             Some(_) => PowerProfile::Balanced,
             None => PowerProfile::Balanced, // Unknown battery → balanced
         }

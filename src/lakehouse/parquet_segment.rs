@@ -317,13 +317,11 @@ impl ParquetSegmentWriter {
             schema.clone(),
             vec![offset_array, timestamp_array, key_array, value_array],
         )
-        .map_err(|e| {
-            StreamlineError::storage_msg(format!("Failed to create record batch: {}", e))
-        })?;
+        .map_err(|e| StreamlineError::storage_msg(format!("Failed to create record batch: {e}")))?;
 
         // Write to Parquet file
         let file = File::create(&self.segment.path)
-            .map_err(|e| StreamlineError::storage_msg(format!("Failed to create file: {}", e)))?;
+            .map_err(|e| StreamlineError::storage_msg(format!("Failed to create file: {e}")))?;
 
         let compression = match self.config.compression {
             super::config::ParquetCompression::None => Compression::UNCOMPRESSED,
@@ -340,15 +338,15 @@ impl ParquetSegmentWriter {
             .build();
 
         let mut writer = ArrowWriter::try_new(BufWriter::new(file), schema, Some(props))
-            .map_err(|e| StreamlineError::storage_msg(format!("Failed to create writer: {}", e)))?;
+            .map_err(|e| StreamlineError::storage_msg(format!("Failed to create writer: {e}")))?;
 
         writer
             .write(&batch)
-            .map_err(|e| StreamlineError::storage_msg(format!("Failed to write batch: {}", e)))?;
+            .map_err(|e| StreamlineError::storage_msg(format!("Failed to write batch: {e}")))?;
 
         writer
             .close()
-            .map_err(|e| StreamlineError::storage_msg(format!("Failed to close writer: {}", e)))?;
+            .map_err(|e| StreamlineError::storage_msg(format!("Failed to close writer: {e}")))?;
 
         // Update segment metadata
         if let Some(last) = records.last() {
@@ -455,21 +453,20 @@ impl ParquetSegmentReader {
         use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
 
         let file = File::open(&self.segment.path)
-            .map_err(|e| StreamlineError::storage_msg(format!("Failed to open file: {}", e)))?;
+            .map_err(|e| StreamlineError::storage_msg(format!("Failed to open file: {e}")))?;
 
         let builder = ParquetRecordBatchReaderBuilder::try_new(file)
-            .map_err(|e| StreamlineError::storage_msg(format!("Failed to create reader: {}", e)))?;
+            .map_err(|e| StreamlineError::storage_msg(format!("Failed to create reader: {e}")))?;
 
         let reader = builder
             .build()
-            .map_err(|e| StreamlineError::storage_msg(format!("Failed to build reader: {}", e)))?;
+            .map_err(|e| StreamlineError::storage_msg(format!("Failed to build reader: {e}")))?;
 
         let mut records = Vec::new();
 
         for batch_result in reader {
-            let batch = batch_result.map_err(|e| {
-                StreamlineError::storage_msg(format!("Failed to read batch: {}", e))
-            })?;
+            let batch = batch_result
+                .map_err(|e| StreamlineError::storage_msg(format!("Failed to read batch: {e}")))?;
 
             // Convert batch to records
             for i in 0..batch.num_rows() {
@@ -525,13 +522,13 @@ impl ParquetSegmentManager {
         let path = self
             .base_path
             .join(topic)
-            .join(format!("partition-{}", partition))
-            .join(format!("{:020}.parquet", base_offset));
+            .join(format!("partition-{partition}"))
+            .join(format!("{base_offset:020}.parquet"));
 
         // Ensure directory exists
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent).map_err(|e| {
-                StreamlineError::storage_msg(format!("Failed to create directory: {}", e))
+                StreamlineError::storage_msg(format!("Failed to create directory: {e}"))
             })?;
         }
 

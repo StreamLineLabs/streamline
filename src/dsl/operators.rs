@@ -92,7 +92,7 @@ impl Expression {
             Expression::Variable(name) => ctx
                 .get_var(name)
                 .cloned()
-                .ok_or_else(|| DslError::FieldNotFound(format!("variable: {}", name))),
+                .ok_or_else(|| DslError::FieldNotFound(format!("variable: {name}"))),
         }
     }
 
@@ -226,7 +226,7 @@ impl BinaryOperator {
             BinaryOperator::Concat => {
                 let l = value_to_string(left);
                 let r = value_to_string(right);
-                Ok(serde_json::Value::String(format!("{}{}", l, r)))
+                Ok(serde_json::Value::String(format!("{l}{r}")))
             }
             BinaryOperator::Like => {
                 let text = left.as_str().unwrap_or("");
@@ -680,14 +680,14 @@ impl JoinOperator {
         // Add left fields with prefix
         if let serde_json::Value::Object(map) = &left.value {
             for (k, v) in map {
-                merged.insert(format!("left_{}", k), v.clone());
+                merged.insert(format!("left_{k}"), v.clone());
             }
         }
 
         // Add right fields with prefix
         if let serde_json::Value::Object(map) = &right.value {
             for (k, v) in map {
-                merged.insert(format!("right_{}", k), v.clone());
+                merged.insert(format!("right_{k}"), v.clone());
             }
         }
 
@@ -819,7 +819,7 @@ fn value_to_string(value: &serde_json::Value) -> String {
 fn like_match(text: &str, pattern: &str) -> bool {
     // Simple LIKE pattern matching (% = any, _ = single char)
     let regex_pattern = pattern.replace('%', ".*").replace('_', ".");
-    regex::Regex::new(&format!("^{}$", regex_pattern))
+    regex::Regex::new(&format!("^{regex_pattern}$"))
         .map(|re| re.is_match(text))
         .unwrap_or(false)
 }
@@ -877,8 +877,7 @@ fn evaluate_function(name: &str, args: &[serde_json::Value]) -> DslResult<serde_
             Ok(serde_json::Value::String(result))
         }
         _ => Err(DslError::InvalidOperator(format!(
-            "Unknown function: {}",
-            name
+            "Unknown function: {name}"
         ))),
     }
 }

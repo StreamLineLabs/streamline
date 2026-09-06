@@ -56,7 +56,7 @@ impl StdioTransport {
                 }
                 Err(e) => {
                     let error_response =
-                        JsonRpcResponse::error(None, -32700, format!("Parse error: {}", e));
+                        JsonRpcResponse::error(None, -32700, format!("Parse error: {e}"));
                     let response_json = serde_json::to_string(&error_response)
                         .map_err(|e| StreamlineError::Internal(e.to_string()))?;
                     stdout
@@ -104,13 +104,13 @@ impl SseMessage {
     pub fn to_sse_string(&self) -> String {
         let mut output = String::new();
         if let Some(ref event) = self.event {
-            output.push_str(&format!("event: {}\n", event));
+            output.push_str(&format!("event: {event}\n"));
         }
         if let Some(ref id) = self.id {
-            output.push_str(&format!("id: {}\n", id));
+            output.push_str(&format!("id: {id}\n"));
         }
         for line in self.data.lines() {
-            output.push_str(&format!("data: {}\n", line));
+            output.push_str(&format!("data: {line}\n"));
         }
         output.push('\n');
         output

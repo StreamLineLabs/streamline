@@ -4,7 +4,7 @@ Getting started with Streamline development in under 5 minutes.
 
 ## Prerequisites
 
-- **Rust 1.80+**: `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`
+- **Rust 1.88+**: `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`
 - **Git**: For cloning the repository
 
 Optional:

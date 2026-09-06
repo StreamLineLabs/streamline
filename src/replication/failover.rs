@@ -125,7 +125,7 @@ impl std::fmt::Display for RoutingPreference {
             Self::LowestLag => write!(f, "lowest-lag"),
             Self::RoundRobin => write!(f, "round-robin"),
             Self::RegionAffinity { preferred_region } => {
-                write!(f, "affinity({})", preferred_region)
+                write!(f, "affinity({preferred_region})")
             }
         }
     }
@@ -217,7 +217,7 @@ impl FailoverOrchestrator {
         let mut regions = self.regions.write().await;
         let region = regions
             .get_mut(region_id)
-            .ok_or_else(|| StreamlineError::Internal(format!("Region not found: {}", region_id)))?;
+            .ok_or_else(|| StreamlineError::Internal(format!("Region not found: {region_id}")))?;
 
         region.last_heartbeat = Utc::now();
         region.replication_lag_ms = replication_lag_ms;
@@ -239,7 +239,7 @@ impl FailoverOrchestrator {
         // First pass: update failure count and check if failover is needed
         let (should_failover, was_active) = {
             let region = regions.get_mut(region_id).ok_or_else(|| {
-                StreamlineError::Internal(format!("Region not found: {}", region_id))
+                StreamlineError::Internal(format!("Region not found: {region_id}"))
             })?;
 
             region.consecutive_failures += 1;
@@ -418,7 +418,10 @@ impl FailoverOrchestrator {
     /// Returns a monotonically increasing epoch number that must be included
     /// in all write requests. A leader with a stale epoch will be fenced out.
     pub async fn issue_fencing_token(&self) -> u64 {
-        let new_epoch = self.fencing_epoch.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;
+        let new_epoch = self
+            .fencing_epoch
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst)
+            + 1;
         info!(epoch = new_epoch, "Issued new fencing token");
         new_epoch
     }
@@ -441,10 +444,11 @@ impl FailoverOrchestrator {
     /// Returns any failover events triggered.
     pub async fn check_automated_failover(&self) -> Result<Vec<FailoverEvent>> {
         let mut triggered_events = Vec::new();
-        let regions: Vec<RegionFailoverState> = self.regions.read().await.values().cloned().collect();
+        let regions: Vec<RegionFailoverState> =
+            self.regions.read().await.values().cloned().collect();
 
         for region in &regions {
-            if region.role == RegionRole::Active && region.health == RegionHealth::Unhealthy {
+            if region.role == RegionRole::Active && region.health == RegionHealth::Unreachable {
                 if let Some(event) = self.record_failure(&region.region_id).await? {
                     triggered_events.push(event);
                 }
@@ -527,6 +531,45 @@ mod tests {
         // Second failure - triggers failover
         let event = orch.record_failure("us-east-1").await.unwrap();
         assert!(event.is_some());
+
+        let regions = orch.region_states().await;
+        let west = regions.iter().find(|r| r.region_id == "us-west-2").unwrap();
+        assert_eq!(west.role, RegionRole::Active);
+    }
+
+    #[tokio::test]
+    async fn test_automated_failover_promotes_on_unreachable_active() {
+        let config = FailoverConfig {
+            failure_threshold: 1,
+            auto_failover: true,
+            ..Default::default()
+        };
+        let orch = FailoverOrchestrator::new("us-east-1", config);
+
+        orch.register_region("us-east-1", "east:9092", RegionRole::Active)
+            .await
+            .unwrap();
+
+        // Healthy regions are never failed over automatically.
+        orch.record_heartbeat("us-east-1", 100).await.unwrap();
+        assert!(orch.check_automated_failover().await.unwrap().is_empty());
+
+        // Without a standby the active region is marked unreachable but stays active.
+        assert!(orch.record_failure("us-east-1").await.unwrap().is_none());
+        let regions = orch.region_states().await;
+        let east = regions.iter().find(|r| r.region_id == "us-east-1").unwrap();
+        assert_eq!(east.health, RegionHealth::Unreachable);
+        assert_eq!(east.role, RegionRole::Active);
+
+        // Once a standby exists, the automated sweep detects the stale active
+        // region and promotes the standby.
+        orch.register_region("us-west-2", "west:9092", RegionRole::Standby)
+            .await
+            .unwrap();
+        let events = orch.check_automated_failover().await.unwrap();
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].from_region, "us-east-1");
+        assert_eq!(events[0].to_region, "us-west-2");
 
         let regions = orch.region_states().await;
         let west = regions.iter().find(|r| r.region_id == "us-west-2").unwrap();

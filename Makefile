@@ -142,7 +142,7 @@ validate: fmt-check clippy test doc
 
 ## Run security audit
 security-audit:
-	cargo audit
+	cargo audit --deny unsound
 
 ## Run cargo-deny checks (licenses, advisories, bans)
 deny:

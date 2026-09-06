@@ -26,7 +26,7 @@ pub(crate) async fn dispatch(
         ApiKey::SaslHandshake => {
             let request = SaslHandshakeRequest::decode(&mut buf, header.request_api_version)
                 .map_err(|e| {
-                    StreamlineError::protocol("decode", format!("Failed to decode request: {}", e))
+                    StreamlineError::protocol("decode", format!("Failed to decode request: {e}"))
                 })?;
             let response = handler
                 .handle_sasl_handshake(request, session_manager)
@@ -42,7 +42,7 @@ pub(crate) async fn dispatch(
         ApiKey::SaslAuthenticate => {
             let request = SaslAuthenticateRequest::decode(&mut buf, header.request_api_version)
                 .map_err(|e| {
-                    StreamlineError::protocol("decode", format!("Failed to decode request: {}", e))
+                    StreamlineError::protocol("decode", format!("Failed to decode request: {e}"))
                 })?;
             let response = handler
                 .handle_sasl_authenticate(request, session_manager)
@@ -58,7 +58,7 @@ pub(crate) async fn dispatch(
         ApiKey::DescribeAcls => {
             let request = DescribeAclsRequest::decode(&mut buf, header.request_api_version)
                 .map_err(|e| {
-                    StreamlineError::protocol("decode", format!("Failed to decode request: {}", e))
+                    StreamlineError::protocol("decode", format!("Failed to decode request: {e}"))
                 })?;
 
             handler
@@ -83,7 +83,7 @@ pub(crate) async fn dispatch(
         ApiKey::CreateAcls => {
             let request =
                 CreateAclsRequest::decode(&mut buf, header.request_api_version).map_err(|e| {
-                    StreamlineError::protocol("decode", format!("Failed to decode request: {}", e))
+                    StreamlineError::protocol("decode", format!("Failed to decode request: {e}"))
                 })?;
 
             handler
@@ -108,7 +108,7 @@ pub(crate) async fn dispatch(
         ApiKey::DeleteAcls => {
             let request =
                 DeleteAclsRequest::decode(&mut buf, header.request_api_version).map_err(|e| {
-                    StreamlineError::protocol("decode", format!("Failed to decode request: {}", e))
+                    StreamlineError::protocol("decode", format!("Failed to decode request: {e}"))
                 })?;
 
             handler
@@ -136,7 +136,7 @@ pub(crate) async fn dispatch(
                     .map_err(|e| {
                         StreamlineError::protocol(
                             "decode",
-                            format!("Failed to decode request: {}", e),
+                            format!("Failed to decode request: {e}"),
                         )
                     })?;
 
@@ -155,7 +155,7 @@ pub(crate) async fn dispatch(
         ApiKey::RenewDelegationToken => {
             let request = RenewDelegationTokenRequest::decode(&mut buf, header.request_api_version)
                 .map_err(|e| {
-                    StreamlineError::protocol("decode", format!("Failed to decode request: {}", e))
+                    StreamlineError::protocol("decode", format!("Failed to decode request: {e}"))
                 })?;
 
             #[cfg(feature = "auth")]
@@ -176,7 +176,7 @@ pub(crate) async fn dispatch(
                     .map_err(|e| {
                         StreamlineError::protocol(
                             "decode",
-                            format!("Failed to decode request: {}", e),
+                            format!("Failed to decode request: {e}"),
                         )
                     })?;
 
@@ -198,7 +198,7 @@ pub(crate) async fn dispatch(
                     .map_err(|e| {
                         StreamlineError::protocol(
                             "decode",
-                            format!("Failed to decode request: {}", e),
+                            format!("Failed to decode request: {e}"),
                         )
                     })?;
 
@@ -215,7 +215,7 @@ pub(crate) async fn dispatch(
             let request =
                 DescribeUserScramCredentialsRequest::decode(&mut buf, header.request_api_version)
                     .map_err(|e| {
-                    StreamlineError::protocol("decode", format!("Failed to decode request: {}", e))
+                    StreamlineError::protocol("decode", format!("Failed to decode request: {e}"))
                 })?;
 
             let response = handler.handle_describe_user_scram_credentials(request)?;
@@ -233,7 +233,7 @@ pub(crate) async fn dispatch(
                     .map_err(|e| {
                         StreamlineError::protocol(
                             "decode",
-                            format!("Failed to decode request: {}", e),
+                            format!("Failed to decode request: {e}"),
                         )
                     })?;
 
@@ -248,7 +248,7 @@ pub(crate) async fn dispatch(
         }
         _ => Err(StreamlineError::protocol(
             "unsupported API key",
-            format!("{:?}", api_key),
+            format!("{api_key:?}"),
         )),
     }
 }

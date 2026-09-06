@@ -80,12 +80,7 @@ impl ConnectorOffsetStore {
     }
 
     /// Save an offset for a specific connector and partition.
-    pub async fn save_offset(
-        &self,
-        connector: &str,
-        partition: &str,
-        offset: serde_json::Value,
-    ) {
+    pub async fn save_offset(&self, connector: &str, partition: &str, offset: serde_json::Value) {
         let mut cache = self.cache.write().await;
         cache
             .entry(connector.to_string())
@@ -99,16 +94,9 @@ impl ConnectorOffsetStore {
     }
 
     /// Load a single partition offset for a connector.
-    pub async fn load_offset(
-        &self,
-        connector: &str,
-        partition: &str,
-    ) -> Option<serde_json::Value> {
+    pub async fn load_offset(&self, connector: &str, partition: &str) -> Option<serde_json::Value> {
         let cache = self.cache.read().await;
-        cache
-            .get(connector)
-            .and_then(|m| m.get(partition))
-            .cloned()
+        cache.get(connector).and_then(|m| m.get(partition)).cloned()
     }
 
     /// Load all partition offsets for a connector.
@@ -133,7 +121,7 @@ impl ConnectorOffsetStore {
             std::fs::remove_file(&path).map_err(|e| {
                 StreamlineError::storage(
                     "delete_offsets",
-                    format!("failed to remove offset file {:?}: {}", path, e),
+                    format!("failed to remove offset file {path:?}: {e}"),
                 )
             })?;
         }
@@ -173,17 +161,19 @@ impl ConnectorOffsetStore {
         // Sanitise connector name for safe filesystem use.
         let safe_name: String = connector
             .chars()
-            .map(|c| if c.is_alphanumeric() || c == '-' || c == '_' { c } else { '_' })
+            .map(|c| {
+                if c.is_alphanumeric() || c == '-' || c == '_' {
+                    c
+                } else {
+                    '_'
+                }
+            })
             .collect();
-        self.config.data_dir.join(format!("{}.json", safe_name))
+        self.config.data_dir.join(format!("{safe_name}.json"))
     }
 
     /// Atomically write a connector's offsets to disk.
-    fn write_connector_offsets(
-        &self,
-        connector: &str,
-        offsets: &PartitionOffsets,
-    ) -> Result<()> {
+    fn write_connector_offsets(&self, connector: &str, offsets: &PartitionOffsets) -> Result<()> {
         let dest = self.connector_path(connector);
         let tmp = dest.with_extension("json.tmp");
 
@@ -193,20 +183,20 @@ impl ConnectorOffsetStore {
         };
 
         let data = serde_json::to_vec_pretty(&file).map_err(|e| {
-            StreamlineError::storage_msg(format!("failed to serialize offsets: {}", e))
+            StreamlineError::storage_msg(format!("failed to serialize offsets: {e}"))
         })?;
 
         std::fs::write(&tmp, &data).map_err(|e| {
             StreamlineError::storage(
                 "write_offsets",
-                format!("failed to write temp file {:?}: {}", tmp, e),
+                format!("failed to write temp file {tmp:?}: {e}"),
             )
         })?;
 
         std::fs::rename(&tmp, &dest).map_err(|e| {
             StreamlineError::storage(
                 "write_offsets",
-                format!("failed to rename {:?} -> {:?}: {}", tmp, dest, e),
+                format!("failed to rename {tmp:?} -> {dest:?}: {e}"),
             )
         })?;
 
@@ -224,8 +214,15 @@ impl ConnectorOffsetStore {
         })?;
 
         let cache = self.cache.clone();
-        // We're in a synchronous context at startup; use blocking lock.
-        let mut cache_guard = cache.blocking_write();
+        // Startup runs before the store is shared, so the lock is uncontended.
+        // `try_write` avoids blocking the calling thread, which panics when the
+        // store is constructed from inside an async runtime.
+        let mut cache_guard = cache.try_write().map_err(|_| {
+            StreamlineError::storage(
+                "load_offsets",
+                "offset cache was already locked during startup",
+            )
+        })?;
 
         for entry in entries {
             let entry = match entry {
@@ -252,24 +249,21 @@ impl ConnectorOffsetStore {
             }
         }
 
-        info!(connectors = cache_guard.len(), "Loaded offset files from disk");
+        info!(
+            connectors = cache_guard.len(),
+            "Loaded offset files from disk"
+        );
         Ok(())
     }
 
     /// Read and deserialize a single offset file.
     fn read_offset_file(path: &Path) -> Result<OffsetFile> {
         let data = std::fs::read(path).map_err(|e| {
-            StreamlineError::storage(
-                "read_offset_file",
-                format!("failed to read {:?}: {}", path, e),
-            )
+            StreamlineError::storage("read_offset_file", format!("failed to read {path:?}: {e}"))
         })?;
 
         serde_json::from_slice::<OffsetFile>(&data).map_err(|e| {
-            StreamlineError::storage(
-                "read_offset_file",
-                format!("failed to parse {:?}: {}", path, e),
-            )
+            StreamlineError::storage("read_offset_file", format!("failed to parse {path:?}: {e}"))
         })
     }
 }
@@ -292,7 +286,9 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         let store = ConnectorOffsetStore::new(test_config(tmp.path())).unwrap();
 
-        store.save_offset("my-source", "partition-0", json!(42)).await;
+        store
+            .save_offset("my-source", "partition-0", json!(42))
+            .await;
 
         let val = store.load_offset("my-source", "partition-0").await;
         assert_eq!(val, Some(json!(42)));
@@ -324,7 +320,9 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         let store = ConnectorOffsetStore::new(test_config(tmp.path())).unwrap();
 
-        store.save_offset("source-1", "p0", json!({"pos": 100})).await;
+        store
+            .save_offset("source-1", "p0", json!({"pos": 100}))
+            .await;
         store.flush().await.unwrap();
 
         // Verify file exists on disk
@@ -361,8 +359,12 @@ mod tests {
         // First instance: write and flush
         {
             let store = ConnectorOffsetStore::new(test_config(tmp.path())).unwrap();
-            store.save_offset("persistent", "p0", json!({"offset": 55})).await;
-            store.save_offset("persistent", "p1", json!({"offset": 66})).await;
+            store
+                .save_offset("persistent", "p0", json!({"offset": 55}))
+                .await;
+            store
+                .save_offset("persistent", "p1", json!({"offset": 66}))
+                .await;
             store.flush().await.unwrap();
         }
 

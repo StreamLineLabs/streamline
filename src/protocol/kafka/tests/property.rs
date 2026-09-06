@@ -41,8 +41,7 @@ fn test_property_header_version_consistency() {
             if req_header == 2 {
                 assert_eq!(
                     resp_header, 1,
-                    "API {:?} version {} has request header v2, should have response header v1",
-                    api_key, version
+                    "API {api_key:?} version {version} has request header v2, should have response header v1"
                 );
             }
         }
@@ -59,8 +58,7 @@ fn test_property_api_versions_always_header_v0() {
             KafkaHandler::response_header_version(ApiKey::ApiVersions as i16, version);
         assert_eq!(
             resp_header, 0,
-            "ApiVersions v{} should ALWAYS use response header v0",
-            version
+            "ApiVersions v{version} should ALWAYS use response header v0"
         );
     }
 }
@@ -75,8 +73,7 @@ fn test_property_sasl_handshake_always_header_v0() {
             KafkaHandler::response_header_version(ApiKey::SaslHandshake as i16, version);
         assert_eq!(
             resp_header, 0,
-            "SaslHandshake v{} should use response header v0",
-            version
+            "SaslHandshake v{version} should use response header v0"
         );
     }
 }
@@ -114,8 +111,7 @@ fn test_property_all_defined_error_codes_in_valid_range() {
     for code in valid_error_codes {
         assert!(
             (-1..=200).contains(&code),
-            "Error code {} should be in valid range",
-            code
+            "Error code {code} should be in valid range"
         );
     }
 }
@@ -170,8 +166,7 @@ fn test_property_correlation_id_any_value_preserved() {
         let header = ResponseHeader::default().with_correlation_id(correlation_id);
         assert_eq!(
             header.correlation_id, correlation_id,
-            "Correlation ID {} should be preserved",
-            correlation_id
+            "Correlation ID {correlation_id} should be preserved"
         );
     }
 }
@@ -196,8 +191,7 @@ fn test_property_valid_topic_names_accepted() {
         assert!(
             name.chars()
                 .all(|c| c.is_alphanumeric() || c == '-' || c == '_'),
-            "Topic name '{}' should only contain alphanumeric, hyphen, or underscore",
-            name
+            "Topic name '{name}' should only contain alphanumeric, hyphen, or underscore"
         );
     }
 }
@@ -227,8 +221,7 @@ fn test_property_partition_index_valid_range() {
     for partition in valid_partitions {
         assert!(
             partition >= 0,
-            "Partition index {} should be non-negative",
-            partition
+            "Partition index {partition} should be non-negative"
         );
     }
 }
@@ -241,8 +234,7 @@ fn test_property_acks_values() {
     for acks in &valid_acks {
         assert!(
             *acks == -1 || *acks == 0 || *acks == 1,
-            "Acks value {} should be -1, 0, or 1",
-            acks
+            "Acks value {acks} should be -1, 0, or 1"
         );
     }
 

@@ -11,8 +11,8 @@
 //!
 //! ## Buffer Types
 //!
-//! - [`LocalBuffer`]: Minimal buffering for immediate writes (local storage)
-//! - [`BatchingBuffer`]: Accumulates records for batch writes (object storage)
+//! - `LocalBuffer`: Minimal buffering for immediate writes (local storage)
+//! - `BatchingBuffer`: Accumulates records for batch writes (object storage)
 
 mod batching;
 mod local;

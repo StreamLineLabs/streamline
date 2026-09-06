@@ -3,7 +3,7 @@
 [![Build Status](https://img.shields.io/github/actions/workflow/status/streamlinelabs/streamline/ci-full.yml?branch=main&style=flat-square)](https://github.com/streamlinelabs/streamline/actions)
 [![codecov](https://img.shields.io/codecov/c/github/streamlinelabs/streamline?style=flat-square)](https://codecov.io/gh/streamlinelabs/streamline)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue?style=flat-square)](LICENSE)
-[![Rust](https://img.shields.io/badge/rust-1.80%2B-orange?style=flat-square)](https://www.rust-lang.org/)
+[![Rust](https://img.shields.io/badge/rust-1.88%2B-orange?style=flat-square)](https://www.rust-lang.org/)
 [![Stability](https://img.shields.io/badge/stability-alpha-yellow?style=flat-square)](#project-status)
 [![Documentation](https://img.shields.io/badge/docs-streamlinelabs.dev-blue?style=flat-square)](https://streamlinelabs.dev/docs/)
 [![Benchmarks](https://img.shields.io/badge/benchmarks-live-brightgreen?style=flat-square)](https://streamlinelabs.dev/dev/bench/)
@@ -24,7 +24,7 @@
 ```bash
 # Start the server — that's it, no config needed
 $ streamline --playground
-[INFO] Streamline v0.2.0 — listening on 0.0.0.0:9092 (Kafka) / 0.0.0.0:9094 (HTTP)
+[INFO] Streamline v0.4.0 — listening on 0.0.0.0:9092 (Kafka) / 0.0.0.0:9094 (HTTP)
 [INFO] Playground mode: created topics [demo-events, demo-logs, demo-metrics, demo-orders]
 
 # Create a topic with 3 partitions
@@ -78,7 +78,7 @@ docker compose up -d && curl http://localhost:9094/health
 # Full demo with produce/consume in Docker
 docker compose -f docker-compose.demo.yml up
 
-# From source (requires Rust 1.80+)
+# From source (requires Rust 1.88+)
 git clone https://github.com/streamlinelabs/streamline.git && cd streamline
 cargo run -- --playground
 
@@ -172,18 +172,32 @@ make test-lite
 
 *First build on a modern CPU. Subsequent incremental builds: ~10-30 seconds. Install [sccache](https://github.com/mozilla/sccache) for faster cross-branch rebuilds.
 
-Individual features: `auth`, `clustering`, `telemetry`, `metrics`, `cloud-storage`, `schema-registry`, `encryption`, `analytics`, `iceberg`, `delta-lake`
+Individual features: `auth`, `clustering`, `telemetry`, `metrics`, `cloud-storage`, `schema-registry`, `encryption`, `analytics`
+
+> **Lakehouse sink connectors are unavailable in this release.** The `iceberg`
+> and `delta-lake` features still exist as compatibility no-ops, but they enable
+> no dependencies and the connectors cannot be constructed. Every upstream
+> release compatible with our MSRV (1.88) pulls `quick-xml < 0.41`
+> ([RUSTSEC-2026-0194](https://rustsec.org/advisories/RUSTSEC-2026-0194),
+> [RUSTSEC-2026-0195](https://rustsec.org/advisories/RUSTSEC-2026-0195) — both
+> CVSS 7.5, reachable from object-storage XML) and, for Delta Lake,
+> `native-tls`/OpenSSL. We do not suppress advisories, so the dependencies were
+> removed rather than shipped vulnerable. See
+> [`src/sink/unavailable.rs`](src/sink/unavailable.rs) for the full rationale
+> and the upstream trackers to watch.
 
 ## Features
 
 ### Core (Stable)
-Persistent segment-based storage, log compaction, TLS/mTLS, Gzip/LZ4/Snappy/Zstd compression, zero-copy I/O, WebSocket gateway, Redis-like simple protocol, built-in TUI dashboard
+Persistent segment-based storage, log compaction, TLS/mTLS, Gzip/LZ4/Snappy/Zstd compression, zero-copy I/O, WebSocket gateway, Redis-like simple protocol, built-in TUI dashboard, and feature-gated SQL analytics (DuckDB)
 
 ### Enterprise (Feature-Gated)
 SASL/OAuth authentication, ACL authorization, Raft-based clustering & replication, tiered storage (S3/Azure/GCS), Schema Registry (Avro/Protobuf/JSON Schema), client quotas, OpenTelemetry tracing, Prometheus metrics
 
 ### Experimental (Feature-Gated)
-SQL analytics (DuckDB), Apache Iceberg & Delta Lake sinks, CDC (PostgreSQL/MySQL), stateful processing, time-series storage
+CDC (PostgreSQL/MySQL), stateful processing, time-series storage, Parquet lakehouse export, serverless/cloud-function sinks
+
+> Apache Iceberg & Delta Lake sinks are **not available** in this release — see the note under [Build Editions](#build-editions).
 
 ## Experimental: Moonshot Features
 
@@ -382,7 +396,7 @@ See **[Configuration Reference](docs/CONFIGURATION.md)** for all options (TLS, c
          │                │                      │
     ┌────┴────┐    ┌──────┴──────┐    ┌─────────┴─────────┐
     │  SDKs   │    │  Operator   │    │  Sink Connectors   │
-    │ 7 langs │    │  (K8s CRDs) │    │ Iceberg/Delta/S3   │
+    │ 7 langs │    │  (K8s CRDs) │    │ Parquet/S3/Webhook │
     └─────────┘    └─────────────┘    └───────────────────┘
 ```
 
@@ -427,4 +441,3 @@ Apache-2.0
 
 Built with ❤️ by [Jose David Baena](https://github.com/josedab)
 <!-- test: 451d957d -->
-

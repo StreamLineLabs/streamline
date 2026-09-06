@@ -326,11 +326,7 @@ impl AggregationWindow {
     }
 
     /// Create a custom sliding window
-    pub fn sliding(
-        name: impl Into<String>,
-        duration_seconds: u64,
-        slide_seconds: u64,
-    ) -> Self {
+    pub fn sliding(name: impl Into<String>, duration_seconds: u64, slide_seconds: u64) -> Self {
         Self {
             name: name.into(),
             duration_seconds,

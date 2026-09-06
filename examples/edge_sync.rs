@@ -61,11 +61,8 @@ async fn main() -> Result<()> {
 
     let mut queued_count = 0;
     for (id, value, sensor_type) in &sensor_readings {
-        let payload = format!(
-            r#"{{"id":{},"type":"{}","value":{}}}"#,
-            id, sensor_type, value
-        );
-        println!("   Recording: {} = {}", sensor_type, value);
+        let payload = format!(r#"{{"id":{id},"type":"{sensor_type}","value":{value}}}"#);
+        println!("   Recording: {sensor_type} = {value}");
         queued_count += 1;
 
         // Store locally even when offline
@@ -76,16 +73,16 @@ async fn main() -> Result<()> {
             Bytes::from(payload),
         )?;
     }
-    println!("   Queued {} messages for sync\n", queued_count);
+    println!("   Queued {queued_count} messages for sync\n");
 
     // 4. Sync When Connected
     println!("4. Sync When Connected:");
     println!("   [ONLINE] Network connected");
     println!("   Starting sync with cloud...");
-    println!("   - Uploading {} sensor readings", queued_count);
+    println!("   - Uploading {queued_count} sensor readings");
     println!("   - Downloading config updates");
     for i in 1..=queued_count {
-        println!("   ✓ Synced message {}", i);
+        println!("   ✓ Synced message {i}");
     }
     println!("   Sync complete: 5 uploaded, 2 downloaded\n");
 

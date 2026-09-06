@@ -186,7 +186,7 @@ impl EosChecker {
                         .get("partition")
                         .and_then(|v| v.as_str())
                         .unwrap_or("0");
-                    let msg_id = format!("{}:{}:{}", partition, key, offset);
+                    let msg_id = format!("{partition}:{key}:{offset}");
 
                     // Check duplicates
                     let entries = seen_values.entry(msg_id.clone()).or_default();
@@ -194,7 +194,11 @@ impl EosChecker {
                     if entries.len() > 1 {
                         anomalies.push(Anomaly {
                             anomaly_type: AnomalyType::DuplicateDelivery,
-                            description: format!("Message {} delivered {} times", msg_id, entries.len()),
+                            description: format!(
+                                "Message {} delivered {} times",
+                                msg_id,
+                                entries.len()
+                            ),
                             operations: entries.clone(),
                         });
                     }
@@ -205,8 +209,7 @@ impl EosChecker {
                         anomalies.push(Anomaly {
                             anomaly_type: AnomalyType::OutOfOrder,
                             description: format!(
-                                "Partition {}: offset {} after {} (out of order)",
-                                partition, offset, last_offset
+                                "Partition {partition}: offset {offset} after {last_offset} (out of order)"
                             ),
                             operations: vec![op.index],
                         });
@@ -232,10 +235,7 @@ impl EosChecker {
         if !produce_ops.is_empty() && consume_ops.is_empty() && !produce_ops.is_empty() {
             anomalies.push(Anomaly {
                 anomaly_type: AnomalyType::LostMessage,
-                description: format!(
-                    "{} messages produced but none consumed",
-                    produce_ops.len()
-                ),
+                description: format!("{} messages produced but none consumed", produce_ops.len()),
                 operations: produce_ops.iter().map(|o| o.index).collect(),
             });
         }
@@ -260,7 +260,11 @@ pub fn generate_report(result: &TestResult) -> String {
     report.push_str(&format!("# Jepsen Test Report: {}\n\n", result.name));
     report.push_str(&format!(
         "**Result: {}**\n\n",
-        if result.passed { "✅ PASS" } else { "❌ FAIL" }
+        if result.passed {
+            "✅ PASS"
+        } else {
+            "❌ FAIL"
+        }
     ));
     report.push_str(&format!(
         "| Metric | Value |\n|--------|-------|\n\
@@ -292,11 +296,17 @@ pub fn generate_report(result: &TestResult) -> String {
         report.push_str(&format!(
             "### {} — {}\n\n{}\n\n",
             checker.name,
-            if checker.valid { "✅ PASS" } else { "❌ FAIL" },
+            if checker.valid {
+                "✅ PASS"
+            } else {
+                "❌ FAIL"
+            },
             checker.message
         ));
         if !checker.anomalies.is_empty() {
-            report.push_str("| Type | Description | Operations |\n|------|-------------|------------|\n");
+            report.push_str(
+                "| Type | Description | Operations |\n|------|-------------|------------|\n",
+            );
             for anomaly in &checker.anomalies {
                 report.push_str(&format!(
                     "| {:?} | {} | {:?} |\n",
@@ -328,9 +338,24 @@ mod tests {
     #[test]
     fn test_eos_checker_no_anomalies() {
         let history = vec![
-            make_op(0, OpType::Ok, "produce", serde_json::json!({"key": "a", "offset": 0})),
-            make_op(1, OpType::Ok, "consume", serde_json::json!({"key": "a", "offset": 0, "partition": "0"})),
-            make_op(2, OpType::Ok, "consume", serde_json::json!({"key": "b", "offset": 1, "partition": "0"})),
+            make_op(
+                0,
+                OpType::Ok,
+                "produce",
+                serde_json::json!({"key": "a", "offset": 0}),
+            ),
+            make_op(
+                1,
+                OpType::Ok,
+                "consume",
+                serde_json::json!({"key": "a", "offset": 0, "partition": "0"}),
+            ),
+            make_op(
+                2,
+                OpType::Ok,
+                "consume",
+                serde_json::json!({"key": "b", "offset": 1, "partition": "0"}),
+            ),
         ];
 
         let result = EosChecker::check(&history);
@@ -341,21 +366,44 @@ mod tests {
     #[test]
     fn test_eos_checker_detects_duplicates() {
         let history = vec![
-            make_op(0, OpType::Ok, "consume", serde_json::json!({"key": "a", "offset": 0, "partition": "0"})),
-            make_op(1, OpType::Ok, "consume", serde_json::json!({"key": "a", "offset": 0, "partition": "0"})),
+            make_op(
+                0,
+                OpType::Ok,
+                "consume",
+                serde_json::json!({"key": "a", "offset": 0, "partition": "0"}),
+            ),
+            make_op(
+                1,
+                OpType::Ok,
+                "consume",
+                serde_json::json!({"key": "a", "offset": 0, "partition": "0"}),
+            ),
         ];
 
         let result = EosChecker::check(&history);
         assert!(!result.valid);
         assert_eq!(result.anomalies.len(), 1);
-        assert_eq!(result.anomalies[0].anomaly_type, AnomalyType::DuplicateDelivery);
+        assert_eq!(
+            result.anomalies[0].anomaly_type,
+            AnomalyType::DuplicateDelivery
+        );
     }
 
     #[test]
     fn test_eos_checker_detects_out_of_order() {
         let history = vec![
-            make_op(0, OpType::Ok, "consume", serde_json::json!({"key": "a", "offset": 5, "partition": "0"})),
-            make_op(1, OpType::Ok, "consume", serde_json::json!({"key": "b", "offset": 3, "partition": "0"})),
+            make_op(
+                0,
+                OpType::Ok,
+                "consume",
+                serde_json::json!({"key": "a", "offset": 5, "partition": "0"}),
+            ),
+            make_op(
+                1,
+                OpType::Ok,
+                "consume",
+                serde_json::json!({"key": "b", "offset": 3, "partition": "0"}),
+            ),
         ];
 
         let result = EosChecker::check(&history);
@@ -366,8 +414,18 @@ mod tests {
     #[test]
     fn test_eos_checker_ignores_failed_ops() {
         let history = vec![
-            make_op(0, OpType::Fail, "consume", serde_json::json!({"key": "a", "offset": 0})),
-            make_op(1, OpType::Ok, "consume", serde_json::json!({"key": "a", "offset": 0, "partition": "0"})),
+            make_op(
+                0,
+                OpType::Fail,
+                "consume",
+                serde_json::json!({"key": "a", "offset": 0}),
+            ),
+            make_op(
+                1,
+                OpType::Ok,
+                "consume",
+                serde_json::json!({"key": "a", "offset": 0, "partition": "0"}),
+            ),
         ];
 
         let result = EosChecker::check(&history);
@@ -415,7 +473,6 @@ mod tests {
 /// Predefined test scenarios for comprehensive correctness verification.
 pub mod scenarios {
     use super::*;
-    
 
     /// Scenario 1: Append Linearizability.
     ///
@@ -487,7 +544,7 @@ pub mod scenarios {
         let mut idx = 0u64;
 
         for t in 0..num_txns {
-            let txn_id = format!("txn-{}", t);
+            let txn_id = format!("txn-{t}");
             let should_commit = t % 3 != 0; // Abort every 3rd transaction
 
             // Begin
@@ -523,7 +580,12 @@ pub mod scenarios {
             history.push(Operation {
                 index: idx,
                 op_type: OpType::Ok,
-                function: if should_commit { "txn-commit" } else { "txn-abort" }.to_string(),
+                function: if should_commit {
+                    "txn-commit"
+                } else {
+                    "txn-abort"
+                }
+                .to_string(),
                 value: serde_json::json!({"txn_id": txn_id}),
                 timestamp: Utc::now(),
                 process: 0,
@@ -757,9 +819,15 @@ pub mod scenarios {
         #[test]
         fn test_offset_consistency_scenario() {
             let history = offset_consistency(100);
-            let commits = history.iter().filter(|o| o.function == "offset-commit").count();
+            let commits = history
+                .iter()
+                .filter(|o| o.function == "offset-commit")
+                .count();
             assert_eq!(commits, 1);
-            let fetches = history.iter().filter(|o| o.function == "offset-fetch").count();
+            let fetches = history
+                .iter()
+                .filter(|o| o.function == "offset-fetch")
+                .count();
             assert_eq!(fetches, 1);
         }
 
@@ -775,7 +843,10 @@ pub mod scenarios {
         #[test]
         fn test_partition_recovery_scenario() {
             let history = partition_recovery(50, 20);
-            let produces = history.iter().filter(|o| o.function == "produce" && o.op_type == OpType::Ok).count();
+            let produces = history
+                .iter()
+                .filter(|o| o.function == "produce" && o.op_type == OpType::Ok)
+                .count();
             assert_eq!(produces, 70); // 50 before + 20 after
             let consumes = history.iter().filter(|o| o.function == "consume").count();
             assert_eq!(consumes, 50); // All pre-crash messages recovered

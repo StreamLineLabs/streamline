@@ -41,7 +41,7 @@ pub fn is_shared_topic(topic: &str) -> bool {
         _ => return false,
     }
     // Must have at least one more segment
-    parts.next().map_or(false, |s| !s.is_empty())
+    parts.next().is_some_and(|s| !s.is_empty())
 }
 
 /// Check whether `agent_id` is allowed to access the shared namespace.

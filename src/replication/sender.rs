@@ -232,11 +232,8 @@ impl ReplicaSender {
         source_region: &str,
         target_region: &str,
     ) -> Self {
-        let accumulator = super::wan_batch::WanBatchAccumulator::new(
-            wan_config,
-            source_region,
-            target_region,
-        );
+        let accumulator =
+            super::wan_batch::WanBatchAccumulator::new(wan_config, source_region, target_region);
         Self {
             node_id,
             config,

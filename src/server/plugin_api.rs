@@ -92,12 +92,12 @@ pub fn create_plugin_api_router(state: PluginApiState) -> Router {
         .route("/api/v1/plugins/stats", get(get_plugin_stats))
         .route("/api/v1/plugins/registry/search", get(search_registry))
         .route(
-            "/api/v1/plugins/{name}",
+            "/api/v1/plugins/:name",
             get(get_plugin).delete(uninstall_plugin),
         )
-        .route("/api/v1/plugins/{name}/enable", put(enable_plugin))
-        .route("/api/v1/plugins/{name}/disable", put(disable_plugin))
-        .route("/api/v1/plugins/{name}/config", put(configure_plugin))
+        .route("/api/v1/plugins/:name/enable", put(enable_plugin))
+        .route("/api/v1/plugins/:name/disable", put(disable_plugin))
+        .route("/api/v1/plugins/:name/config", put(configure_plugin))
         .with_state(state)
 }
 
@@ -140,7 +140,7 @@ async fn get_plugin(
             (
                 StatusCode::NOT_FOUND,
                 Json(PluginErrorResponse {
-                    error: format!("Plugin '{}' not found", name),
+                    error: format!("Plugin '{name}' not found"),
                 }),
             )
         })

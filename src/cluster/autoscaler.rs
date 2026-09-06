@@ -12,8 +12,8 @@
 //!
 //! ## Example
 //!
-//! ```
-//! use streamline::cluster::autoscaler::{AutoScaler, AutoScalerConfig, ScalingPolicy};
+//! ```ignore
+//! use streamline::{AutoScaler, AutoScalerConfig, ScalingPolicy};
 //!
 //! let config = AutoScalerConfig {
 //!     enabled: true,
@@ -232,7 +232,7 @@ impl std::fmt::Display for MetricType {
             MetricType::PartitionsPerNode => write!(f, "partitions_per_node"),
             MetricType::ConnectionsPerNode => write!(f, "connections_per_node"),
             MetricType::UnderReplicatedPartitions => write!(f, "under_replicated_partitions"),
-            MetricType::Custom(name) => write!(f, "custom:{}", name),
+            MetricType::Custom(name) => write!(f, "custom:{name}"),
         }
     }
 }

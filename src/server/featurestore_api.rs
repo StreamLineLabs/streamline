@@ -15,7 +15,7 @@
 use crate::featurestore::engine::FeatureStoreEngine;
 use crate::featurestore::feature::FeatureValue;
 use crate::featurestore::feature_view::{
-    AggregationWindow, AggregationType, FeatureDataType, FeatureDefinitionView,
+    AggregationType, AggregationWindow, FeatureDataType, FeatureDefinitionView,
     FeatureViewDefinition, FeatureViewEntity, WindowType,
 };
 use axum::{
@@ -56,10 +56,7 @@ pub fn create_featurestore_api_router(state: FeatureStoreApiState) -> Router {
             "/api/v1/feature-store/historical",
             post(get_historical_features),
         )
-        .route(
-            "/api/v1/feature-store/materialize/:view",
-            post(materialize),
-        )
+        .route("/api/v1/feature-store/materialize/:view", post(materialize))
         .route("/api/v1/feature-store/ingest", post(ingest_features))
         .route("/api/v1/feature-store/stats", get(get_stats))
         .with_state(state)
@@ -234,14 +231,18 @@ async fn register_view(
         view = view.with_owner(owner);
     }
 
-    state.engine.register_feature_view(view).await.map_err(|e| {
-        (
-            StatusCode::CONFLICT,
-            Json(FeatureStoreErrorResponse {
-                error: e.to_string(),
-            }),
-        )
-    })?;
+    state
+        .engine
+        .register_feature_view(view)
+        .await
+        .map_err(|e| {
+            (
+                StatusCode::CONFLICT,
+                Json(FeatureStoreErrorResponse {
+                    error: e.to_string(),
+                }),
+            )
+        })?;
 
     Ok((
         StatusCode::CREATED,
@@ -288,7 +289,7 @@ async fn get_view(
             (
                 StatusCode::NOT_FOUND,
                 Json(FeatureStoreErrorResponse {
-                    error: format!("Feature view '{}' not found", name),
+                    error: format!("Feature view '{name}' not found"),
                 }),
             )
         })
@@ -403,7 +404,12 @@ async fn ingest_features(
 
     state
         .engine
-        .ingest(&req.feature_view, &req.entity_key, features, event_timestamp)
+        .ingest(
+            &req.feature_view,
+            &req.entity_key,
+            features,
+            event_timestamp,
+        )
         .await
         .map_err(|e| {
             (
@@ -537,8 +543,8 @@ mod tests {
             FeatureValue::Int64(42)
         );
         assert_eq!(
-            json_to_feature_value(&serde_json::json!(3.14)),
-            FeatureValue::Float64(3.14)
+            json_to_feature_value(&serde_json::json!(2.5)),
+            FeatureValue::Float64(2.5)
         );
         assert_eq!(
             json_to_feature_value(&serde_json::json!("hello")),

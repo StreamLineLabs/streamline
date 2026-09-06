@@ -68,7 +68,7 @@ impl std::fmt::Display for WalMessageType {
             WalMessageType::Insert => write!(f, "INSERT"),
             WalMessageType::Update => write!(f, "UPDATE"),
             WalMessageType::Delete => write!(f, "DELETE"),
-            WalMessageType::Other(tag) => write!(f, "OTHER(0x{:02x})", tag),
+            WalMessageType::Other(tag) => write!(f, "OTHER(0x{tag:02x})"),
         }
     }
 }
@@ -447,7 +447,7 @@ impl LsnTracker {
     pub fn format_lsn(lsn: u64) -> String {
         let hi = (lsn >> 32) as u32;
         let lo = lsn as u32;
-        format!("{:X}/{:08X}", hi, lo)
+        format!("{hi:X}/{lo:08X}")
     }
 
     /// Parse a PostgreSQL LSN string (`X/YYYYYYYY`) into a u64.
@@ -596,10 +596,7 @@ pub fn wal_message_to_cdc_events(
 }
 
 /// Convert a WAL tuple into `CdcColumnValue` entries.
-fn tuple_to_columns(
-    tuple: &[WalTupleColumn],
-    col_info: &[WalColumnInfo],
-) -> Vec<CdcColumnValue> {
+fn tuple_to_columns(tuple: &[WalTupleColumn], col_info: &[WalColumnInfo]) -> Vec<CdcColumnValue> {
     tuple
         .iter()
         .zip(col_info.iter())
@@ -656,7 +653,7 @@ fn pg_type_name(oid: u32) -> String {
         1700 => "numeric".to_string(),
         2950 => "uuid".to_string(),
         3802 => "jsonb".to_string(),
-        _ => format!("pg_type_{}", oid),
+        _ => format!("pg_type_{oid}"),
     }
 }
 
@@ -753,19 +750,14 @@ impl PostgresCdcSource {
                 "CDC {field_name} cannot be empty"
             )));
         }
-        if !value
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || c == '_')
-        {
+        if !value.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
             return Err(StreamlineError::Config(format!(
-                "CDC {field_name} '{}' contains invalid characters. Only alphanumeric characters and underscores are allowed",
-                value
+                "CDC {field_name} '{value}' contains invalid characters. Only alphanumeric characters and underscores are allowed"
             )));
         }
         if value.len() > 63 {
             return Err(StreamlineError::Config(format!(
-                "CDC {field_name} '{}' exceeds maximum length of 63 characters",
-                value
+                "CDC {field_name} '{value}' exceeds maximum length of 63 characters"
             )));
         }
         Ok(())
@@ -775,7 +767,7 @@ impl PostgresCdcSource {
     async fn connect(&self) -> Result<Client> {
         let (client, connection) = tokio_postgres::connect(&self.config.connection_string, NoTls)
             .await
-            .map_err(|e| StreamlineError::Config(format!("PostgreSQL connection failed: {}", e)))?;
+            .map_err(|e| StreamlineError::Config(format!("PostgreSQL connection failed: {e}")))?;
 
         // Spawn the connection handler
         tokio::spawn(async move {
@@ -792,13 +784,12 @@ impl PostgresCdcSource {
         let row = client
             .query_one("SHOW wal_level", &[])
             .await
-            .map_err(|e| StreamlineError::Config(format!("Failed to check wal_level: {}", e)))?;
+            .map_err(|e| StreamlineError::Config(format!("Failed to check wal_level: {e}")))?;
 
         let wal_level: String = row.get(0);
         if wal_level != "logical" {
             return Err(StreamlineError::Config(format!(
-                "PostgreSQL wal_level must be 'logical', got '{}'. Set wal_level = logical in postgresql.conf",
-                wal_level
+                "PostgreSQL wal_level must be 'logical', got '{wal_level}'. Set wal_level = logical in postgresql.conf"
             )));
         }
 
@@ -827,7 +818,7 @@ impl PostgresCdcSource {
                 )
                 .await
                 .map_err(|e| {
-                    StreamlineError::Config(format!("Failed to create replication slot: {}", e))
+                    StreamlineError::Config(format!("Failed to create replication slot: {e}"))
                 })?;
 
             info!("Created replication slot: {}", self.config.slot_name);
@@ -872,7 +863,7 @@ impl PostgresCdcSource {
                         if t.contains('.') {
                             t.clone()
                         } else {
-                            format!("public.{}", t)
+                            format!("public.{t}")
                         }
                     })
                     .collect();
@@ -889,7 +880,7 @@ impl PostgresCdcSource {
                 )
                 .await
                 .map_err(|e| {
-                    StreamlineError::Config(format!("Failed to create publication: {}", e))
+                    StreamlineError::Config(format!("Failed to create publication: {e}"))
                 })?;
 
             info!("Created publication: {}", self.config.publication_name);
@@ -929,7 +920,7 @@ impl PostgresCdcSource {
                 &[],
             )
             .await
-            .map_err(|e| StreamlineError::Config(format!("Failed to load table schemas: {}", e)))?;
+            .map_err(|e| StreamlineError::Config(format!("Failed to load table schemas: {e}")))?;
 
         let mut schemas = HashMap::new();
         for row in rows {
@@ -945,7 +936,7 @@ impl PostgresCdcSource {
                 continue;
             }
 
-            let key = format!("{}.{}", schema_name, table_name);
+            let key = format!("{schema_name}.{table_name}");
 
             let column_name: String = row.get("column_name");
             let type_oid: u32 = row.get::<_, i32>("type_oid") as u32;
@@ -1009,7 +1000,7 @@ impl PostgresCdcSource {
             let rows = match client.query(&query, &[]).await {
                 Ok(rows) => rows,
                 Err(e) => {
-                    let msg = format!("Snapshot query failed for {}: {}", key, e);
+                    let msg = format!("Snapshot query failed for {key}: {e}");
                     warn!(table = %key, error = %e, "Snapshot query failed; skipping table");
                     self.metrics.write().record_error(&msg);
                     snapshot_errors.push(msg);
@@ -1129,9 +1120,7 @@ impl PostgresCdcSource {
         let base_backoff_ms = self.config.retry_backoff_ms;
 
         loop {
-            let result = self
-                .run_replication_loop(&tx, &mut shutdown_rx)
-                .await;
+            let result = self.run_replication_loop(&tx, &mut shutdown_rx).await;
 
             match result {
                 Ok(ShutdownReason::Requested) => {
@@ -1143,10 +1132,7 @@ impl PostgresCdcSource {
                     break;
                 }
                 Err(e) => {
-                    let failures = self
-                        .consecutive_failures
-                        .fetch_add(1, Ordering::Relaxed)
-                        + 1;
+                    let failures = self.consecutive_failures.fetch_add(1, Ordering::Relaxed) + 1;
                     self.metrics.write().record_error(&e.to_string());
 
                     if max_retries > 0 && failures > max_retries {
@@ -1159,8 +1145,8 @@ impl PostgresCdcSource {
                     }
 
                     // Exponential backoff: base * 2^(failures-1), capped at 30s
-                    let backoff_ms = (base_backoff_ms * (1u64 << (failures - 1).min(5)))
-                        .min(30_000);
+                    let backoff_ms =
+                        (base_backoff_ms * (1u64 << (failures - 1).min(5))).min(30_000);
                     warn!(
                         "CDC connection error (attempt {}), reconnecting in {}ms: {}",
                         failures, backoff_ms, e
@@ -1190,9 +1176,11 @@ impl PostgresCdcSource {
         // Connect to PostgreSQL
         let (client, connection) = tokio_postgres::connect(&self.config.connection_string, NoTls)
             .await
-            .map_err(|e| StreamlineError::Cdc(format!(
-                "PostgreSQL connection failed during replication: {}", e
-            )))?;
+            .map_err(|e| {
+                StreamlineError::Cdc(format!(
+                    "PostgreSQL connection failed during replication: {e}"
+                ))
+            })?;
 
         // Spawn connection handler
         let running = Arc::new(AtomicBool::new(true));
@@ -1275,7 +1263,7 @@ impl PostgresCdcSource {
                                 "CDC polling error while consuming replication slot changes"
                             );
                             return Err(StreamlineError::Cdc(
-                                format!("CDC polling error: {}", e),
+                                format!("CDC polling error: {e}"),
                             ));
                         }
                     }
@@ -1303,9 +1291,11 @@ impl PostgresCdcSource {
             let mut cache = self.relation_cache.write();
             if let Some(prev) = cache.get(&rel.relation_id) {
                 if prev.columns.len() != rel.columns.len()
-                    || prev.columns.iter().zip(rel.columns.iter()).any(|(a, b)| {
-                        a.name != b.name || a.type_oid != b.type_oid
-                    })
+                    || prev
+                        .columns
+                        .iter()
+                        .zip(rel.columns.iter())
+                        .any(|(a, b)| a.name != b.name || a.type_oid != b.type_oid)
                 {
                     info!(
                         relation_id = rel.relation_id,
@@ -1605,7 +1595,7 @@ impl PostgresCdcSource {
                 )
                 .await
                 .map_err(|e| {
-                    StreamlineError::Config(format!("Failed to drop replication slot: {}", e))
+                    StreamlineError::Config(format!("Failed to drop replication slot: {e}"))
                 })?;
         }
         Ok(())
@@ -1789,22 +1779,28 @@ mod tests {
 
     #[test]
     fn test_cdc_source_rejects_invalid_slot_name() {
-        let mut config = PostgresCdcConfig::default();
-        config.slot_name = "slot'; DROP TABLE users;--".to_string();
+        let config = PostgresCdcConfig {
+            slot_name: "slot'; DROP TABLE users;--".to_string(),
+            ..Default::default()
+        };
         assert!(PostgresCdcSource::new(config).is_err());
     }
 
     #[test]
     fn test_cdc_source_rejects_empty_slot_name() {
-        let mut config = PostgresCdcConfig::default();
-        config.slot_name = "".to_string();
+        let config = PostgresCdcConfig {
+            slot_name: "".to_string(),
+            ..Default::default()
+        };
         assert!(PostgresCdcSource::new(config).is_err());
     }
 
     #[test]
     fn test_cdc_source_accepts_valid_slot_name() {
-        let mut config = PostgresCdcConfig::default();
-        config.slot_name = "my_valid_slot_123".to_string();
+        let config = PostgresCdcConfig {
+            slot_name: "my_valid_slot_123".to_string(),
+            ..Default::default()
+        };
         assert!(PostgresCdcSource::new(config).is_ok());
     }
 
@@ -1895,7 +1891,7 @@ mod tests {
                 assert_eq!(commit_ts, 200);
                 assert_eq!(xid, 42);
             }
-            other => panic!("expected Begin, got {:?}", other),
+            other => panic!("expected Begin, got {other:?}"),
         }
     }
 
@@ -1919,7 +1915,7 @@ mod tests {
                 assert_eq!(end_lsn, 400);
                 assert_eq!(commit_ts, 500);
             }
-            other => panic!("expected Commit, got {:?}", other),
+            other => panic!("expected Commit, got {other:?}"),
         }
     }
 
@@ -1958,7 +1954,7 @@ mod tests {
                 assert!(!rel.columns[1].is_key);
                 assert_eq!(rel.columns[1].name, "name");
             }
-            other => panic!("expected Relation, got {:?}", other),
+            other => panic!("expected Relation, got {other:?}"),
         }
     }
 
@@ -1989,11 +1985,11 @@ mod tests {
                 assert_eq!(new_tuple.len(), 2);
                 match &new_tuple[0] {
                     WalTupleColumn::Text(s) => assert_eq!(s, "42"),
-                    other => panic!("expected Text, got {:?}", other),
+                    other => panic!("expected Text, got {other:?}"),
                 }
                 assert!(matches!(new_tuple[1], WalTupleColumn::Null));
             }
-            other => panic!("expected Insert, got {:?}", other),
+            other => panic!("expected Insert, got {other:?}"),
         }
     }
 
@@ -2020,7 +2016,7 @@ mod tests {
                 assert_eq!(relation_id, 1);
                 assert_eq!(old_tuple.len(), 1);
             }
-            other => panic!("expected Delete, got {:?}", other),
+            other => panic!("expected Delete, got {other:?}"),
         }
     }
 

@@ -1,5 +1,3 @@
-use super::*;
-
 #[test]
 fn test_tls_config_defaults() {
     // TlsConfig should have reasonable defaults
@@ -29,8 +27,7 @@ fn test_tls_min_version_options() {
     for version in valid_versions {
         assert!(
             version == "1.2" || version == "1.3",
-            "Version {} should be valid",
-            version
+            "Version {version} should be valid"
         );
     }
 }

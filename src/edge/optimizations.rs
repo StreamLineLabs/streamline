@@ -199,15 +199,15 @@ impl EdgeOptimizer {
     pub fn record_write(&self, topic: &str, bytes_written: u64) {
         let now = chrono::Utc::now().timestamp_millis();
         let mut usage = self.topic_usage.write();
-        let entry = usage.entry(topic.to_string()).or_insert_with(|| {
-            TopicStorageUsage {
+        let entry = usage
+            .entry(topic.to_string())
+            .or_insert_with(|| TopicStorageUsage {
                 topic: topic.to_string(),
                 bytes_used: 0,
                 record_count: 0,
                 last_accessed: now,
                 last_written: now,
-            }
-        });
+            });
         entry.bytes_used = entry.bytes_used.saturating_add(bytes_written);
         entry.record_count += 1;
         entry.last_written = now;
@@ -236,7 +236,10 @@ impl EdgeOptimizer {
             let mut topic_bytes = 0u64;
             let mut topic_records = 0u64;
             for partition in 0..topic_meta.num_partitions {
-                if let Ok(offset) = self.topic_manager.latest_offset(&topic_meta.name, partition) {
+                if let Ok(offset) = self
+                    .topic_manager
+                    .latest_offset(&topic_meta.name, partition)
+                {
                     let records = offset.max(0) as u64;
                     topic_records += records;
                     // Estimate ~256 bytes per record (conservative average)
@@ -283,9 +286,8 @@ impl EdgeOptimizer {
             topics
         };
 
-        let target_bytes = (self.config.max_storage_bytes as f64
-            * self.config.eviction_threshold
-            * 0.8) as u64; // Evict down to 80% of threshold
+        let target_bytes =
+            (self.config.max_storage_bytes as f64 * self.config.eviction_threshold * 0.8) as u64; // Evict down to 80% of threshold
         let current = self.stats.read().current_storage_bytes;
         let bytes_to_free = current.saturating_sub(target_bytes);
 
@@ -301,10 +303,8 @@ impl EdgeOptimizer {
             }
 
             // Delete the topic's oldest records by reading and truncating
-            let evicted = self.evict_topic_records(
-                &topic_info.topic,
-                self.config.eviction_batch_size,
-            )?;
+            let evicted =
+                self.evict_topic_records(&topic_info.topic, self.config.eviction_batch_size)?;
 
             if evicted > 0 {
                 let bytes = evicted * 256; // Estimated bytes per record
@@ -321,7 +321,9 @@ impl EdgeOptimizer {
             stats.eviction_cycles += 1;
             stats.total_records_evicted += result.records_evicted;
             stats.total_bytes_evicted += result.bytes_freed;
-            stats.current_storage_bytes = stats.current_storage_bytes.saturating_sub(result.bytes_freed);
+            stats.current_storage_bytes = stats
+                .current_storage_bytes
+                .saturating_sub(result.bytes_freed);
         }
 
         Ok(result)
@@ -341,12 +343,9 @@ impl EdgeOptimizer {
 
         for partition in 0..metadata.num_partitions {
             // Read the oldest records so we can compute the new base offset
-            let records = self.topic_manager.read(
-                topic,
-                partition,
-                0,
-                records_per_partition,
-            )?;
+            let records = self
+                .topic_manager
+                .read(topic, partition, 0, records_per_partition)?;
 
             if records.is_empty() {
                 continue;
@@ -356,7 +355,8 @@ impl EdgeOptimizer {
             // We use the offset of the last evicted record + 1 as new start.
             if let Some(last) = records.last() {
                 let new_start = last.offset + 1;
-                self.topic_manager.truncate_partition(topic, partition, new_start)?;
+                self.topic_manager
+                    .truncate_partition(topic, partition, new_start)?;
                 evicted += records.len() as u64;
             }
         }
@@ -410,7 +410,9 @@ impl EdgeOptimizer {
             }
 
             // Read all records in the partition
-            let records = self.topic_manager.read(topic, partition, 0, latest_offset as usize)?;
+            let records = self
+                .topic_manager
+                .read(topic, partition, 0, latest_offset as usize)?;
 
             if records.len() < 2 {
                 continue;
@@ -474,7 +476,7 @@ impl EdgeOptimizer {
                 buffer_pool_size: 16,
                 max_cache_entries: 4096,
                 max_concurrent_reads: self.effective_max_concurrent_reads(8),
-                use_memory_mapped_io: self.config.prefer_mmap || true,
+                use_memory_mapped_io: true,
                 description: "Standard mode: full buffers and caching".to_string(),
             }
         }
@@ -655,8 +657,7 @@ mod tests {
     #[test]
     fn test_lru_eviction() {
         let temp_dir = tempfile::TempDir::new().expect("temp dir");
-        let topic_manager =
-            Arc::new(TopicManager::new(temp_dir.path()).expect("TopicManager"));
+        let topic_manager = Arc::new(TopicManager::new(temp_dir.path()).expect("TopicManager"));
 
         // Tiny max storage to force eviction
         let config = EdgeOptimizationConfig {
@@ -676,8 +677,8 @@ mod tests {
                 .append(
                     "evict-test",
                     0,
-                    Some(bytes::Bytes::from(format!("key-{}", i))),
-                    bytes::Bytes::from(format!("value-{}", i)),
+                    Some(bytes::Bytes::from(format!("key-{i}"))),
+                    bytes::Bytes::from(format!("value-{i}")),
                 )
                 .expect("append");
         }
@@ -717,7 +718,7 @@ mod tests {
                     "compact-test",
                     0,
                     Some(key.clone()),
-                    bytes::Bytes::from(format!("value-{}", i)),
+                    bytes::Bytes::from(format!("value-{i}")),
                 )
                 .expect("append");
         }
@@ -725,7 +726,9 @@ mod tests {
         let result = optimizer.run_compaction().expect("compaction");
         // 3 records with same key → 2 should be identified as removable
         assert_eq!(result.records_removed, 2);
-        assert!(result.topics_compacted.contains(&"compact-test".to_string()));
+        assert!(result
+            .topics_compacted
+            .contains(&"compact-test".to_string()));
     }
 
     #[test]
@@ -747,8 +750,7 @@ mod tests {
     #[test]
     fn test_cpu_throttle_scales_concurrent_reads() {
         let temp_dir = tempfile::TempDir::new().expect("temp dir");
-        let topic_manager =
-            Arc::new(TopicManager::new(temp_dir.path()).expect("TopicManager"));
+        let topic_manager = Arc::new(TopicManager::new(temp_dir.path()).expect("TopicManager"));
         let config = EdgeOptimizationConfig {
             cpu_throttle: 0.25,
             ..Default::default()
@@ -762,8 +764,7 @@ mod tests {
     #[test]
     fn test_disk_compaction_threshold() {
         let temp_dir = tempfile::TempDir::new().expect("temp dir");
-        let topic_manager =
-            Arc::new(TopicManager::new(temp_dir.path()).expect("TopicManager"));
+        let topic_manager = Arc::new(TopicManager::new(temp_dir.path()).expect("TopicManager"));
         let config = EdgeOptimizationConfig {
             max_storage_bytes: 1000,
             disk_compaction_threshold: 0.5,

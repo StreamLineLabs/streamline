@@ -3,20 +3,20 @@
 //! This module contains handlers for produce, fetch, and offset operations
 //! that form the core data path of the streaming platform.
 
-
-use bytes::Bytes;
-use crate::error::{Result, StreamlineError};
-use crate::protocol::handlers::error_codes::*;
-use crate::storage::topic::validate_topic_name;
-#[cfg(feature = "clustering")]
-use crate::replication::AcksPolicy;
-use kafka_protocol::messages::TopicName;
-use kafka_protocol::messages::{
-    FetchRequest, FetchResponse, ListOffsetsRequest, ListOffsetsResponse, ProduceRequest, ProduceResponse,
-};
-use kafka_protocol::protocol::StrBytes;
 use super::KafkaHandler;
 use super::SessionManager;
+use crate::error::{Result, StreamlineError};
+use crate::protocol::handlers::error_codes::*;
+#[cfg(feature = "clustering")]
+use crate::replication::AcksPolicy;
+use crate::storage::topic::validate_topic_name;
+use bytes::Bytes;
+use kafka_protocol::messages::TopicName;
+use kafka_protocol::messages::{
+    FetchRequest, FetchResponse, ListOffsetsRequest, ListOffsetsResponse, ProduceRequest,
+    ProduceResponse,
+};
+use kafka_protocol::protocol::StrBytes;
 use tracing::{debug, error, warn};
 
 impl KafkaHandler {
@@ -890,5 +890,4 @@ impl KafkaHandler {
 
         Ok(response)
     }
-
 }

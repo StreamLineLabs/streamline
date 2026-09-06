@@ -62,7 +62,7 @@ fn prompt_language() -> Language {
     for (i, lang) in LANGUAGES.iter().enumerate() {
         println!("    {} {}", format!("{})", i + 1).cyan(), lang.label());
     }
-    print!("  {} [{}]: ", "Choice", "1".cyan());
+    print!("  Choice [{}]: ", "1".cyan());
     io::stdout().flush().ok();
 
     let mut input = String::new();
@@ -85,11 +85,7 @@ pub fn run_quickstart_wizard() -> crate::Result<()> {
     println!();
     println!("{}", "─".repeat(60).dimmed());
     println!();
-    println!(
-        "  {} {}",
-        "📦".to_string(),
-        "Generate a Sample Project".bold().cyan()
-    );
+    println!("  📦 {}", "Generate a Sample Project".bold().cyan());
     println!();
 
     let project_name = prompt("Project name", "streamline-demo");
@@ -145,7 +141,10 @@ pub fn run_quickstart_wizard() -> crate::Result<()> {
     match language {
         Language::Python => {
             println!("    {} cd {}", "→".cyan(), project_name);
-            println!("    {} python -m venv venv && source venv/bin/activate", "→".cyan());
+            println!(
+                "    {} python -m venv venv && source venv/bin/activate",
+                "→".cyan()
+            );
             println!("    {} pip install -r requirements.txt", "→".cyan());
             println!("    {} python producer.py", "→".cyan());
         }

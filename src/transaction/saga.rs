@@ -155,6 +155,12 @@ pub struct SagaOrchestrator {
     executions: HashMap<SagaId, SagaExecution>,
 }
 
+impl Default for SagaOrchestrator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SagaOrchestrator {
     /// Create a new saga orchestrator.
     pub fn new() -> Self {
@@ -186,7 +192,7 @@ impl SagaOrchestrator {
             .definitions
             .get(saga_name)
             .ok_or_else(|| {
-                StreamlineError::Config(format!("Saga definition '{}' not found", saga_name))
+                StreamlineError::Config(format!("Saga definition '{saga_name}' not found"))
             })?
             .clone();
 
@@ -249,12 +255,9 @@ impl SagaOrchestrator {
         success: bool,
         reply_data: Option<serde_json::Value>,
     ) -> Result<SagaReplyResult> {
-        let execution = self
-            .executions
-            .get_mut(saga_id)
-            .ok_or_else(|| {
-                StreamlineError::Config(format!("Saga execution '{}' not found", saga_id))
-            })?;
+        let execution = self.executions.get_mut(saga_id).ok_or_else(|| {
+            StreamlineError::Config(format!("Saga execution '{saga_id}' not found"))
+        })?;
 
         let definition = self
             .definitions
@@ -290,10 +293,8 @@ impl SagaOrchestrator {
                     execution.current_step = current + 1;
                     execution.retry_count = 0;
                     let next_step = &definition.steps[execution.current_step];
-                    execution.step_states[execution.current_step].state =
-                        StepState::AwaitingReply;
-                    execution.step_states[execution.current_step].action_sent_at =
-                        Some(Utc::now());
+                    execution.step_states[execution.current_step].state = StepState::AwaitingReply;
+                    execution.step_states[execution.current_step].action_sent_at = Some(Utc::now());
 
                     let message = self.render_template(
                         &next_step.action.message_template,
@@ -311,8 +312,13 @@ impl SagaOrchestrator {
                     // Step failed — begin compensation
                     execution.step_states[current].state = StepState::Failed;
                     execution.state = SagaState::Compensating;
-                    execution.error = Some(format!("Step '{}' failed", definition.steps[current].name));
-                    warn!(saga_id, step = current, "Saga step failed, starting compensation");
+                    execution.error =
+                        Some(format!("Step '{}' failed", definition.steps[current].name));
+                    warn!(
+                        saga_id,
+                        step = current,
+                        "Saga step failed, starting compensation"
+                    );
 
                     self.next_compensation(saga_id, &definition, current)
                 }
@@ -346,17 +352,21 @@ impl SagaOrchestrator {
     ) -> Result<SagaReplyResult> {
         // Walk backwards to find the previous completed step with a compensation
         for i in (0..=from_step).rev() {
-            let execution = self.executions.get_mut(saga_id).ok_or_else(|| {
-                StreamlineError::Config("Saga not found".into())
-            })?;
+            let execution = self
+                .executions
+                .get_mut(saga_id)
+                .ok_or_else(|| StreamlineError::Config("Saga not found".into()))?;
 
             if execution.step_states[i].state == StepState::Completed {
                 if let Some(ref comp) = definition.steps[i].compensation {
                     execution.current_step = i;
                     execution.step_states[i].state = StepState::Compensating;
 
-                    let message =
-                        self.render_template(&comp.message_template, saga_id, &definition.steps[i].name);
+                    let message = self.render_template(
+                        &comp.message_template,
+                        saga_id,
+                        &definition.steps[i].name,
+                    );
 
                     return Ok(SagaReplyResult::Compensate(ProduceAction {
                         topic: comp.topic.clone(),
@@ -600,37 +610,29 @@ mod tests {
         orch.register(test_definition()).unwrap();
 
         // Start saga
-        let start = orch
-            .start_saga("order-saga", HashMap::new())
-            .unwrap();
+        let start = orch.start_saga("order-saga", HashMap::new()).unwrap();
         assert_eq!(start.first_action.topic, "inventory-cmd");
 
         // Step 1 success
-        let result = orch
-            .handle_reply(&start.saga_id, true, None)
-            .unwrap();
+        let result = orch.handle_reply(&start.saga_id, true, None).unwrap();
         match result {
             SagaReplyResult::NextAction(action) => {
                 assert_eq!(action.topic, "payment-cmd");
             }
-            other => panic!("Expected NextAction, got {:?}", other),
+            other => panic!("Expected NextAction, got {other:?}"),
         }
 
         // Step 2 success
-        let result = orch
-            .handle_reply(&start.saga_id, true, None)
-            .unwrap();
+        let result = orch.handle_reply(&start.saga_id, true, None).unwrap();
         match result {
             SagaReplyResult::NextAction(action) => {
                 assert_eq!(action.topic, "shipping-cmd");
             }
-            other => panic!("Expected NextAction, got {:?}", other),
+            other => panic!("Expected NextAction, got {other:?}"),
         }
 
         // Step 3 success — saga complete
-        let result = orch
-            .handle_reply(&start.saga_id, true, None)
-            .unwrap();
+        let result = orch.handle_reply(&start.saga_id, true, None).unwrap();
         assert!(matches!(result, SagaReplyResult::Completed));
 
         let exec = orch.get_execution(&start.saga_id).unwrap();
@@ -642,16 +644,12 @@ mod tests {
         let mut orch = SagaOrchestrator::new();
         orch.register(test_definition()).unwrap();
 
-        let start = orch
-            .start_saga("order-saga", HashMap::new())
-            .unwrap();
+        let start = orch.start_saga("order-saga", HashMap::new()).unwrap();
 
         // Step 1 success
         orch.handle_reply(&start.saga_id, true, None).unwrap();
         // Step 2 fails — should trigger compensation
-        let result = orch
-            .handle_reply(&start.saga_id, false, None)
-            .unwrap();
+        let result = orch.handle_reply(&start.saga_id, false, None).unwrap();
 
         match result {
             SagaReplyResult::Compensate(action) => {
@@ -659,13 +657,11 @@ mod tests {
                 assert_eq!(action.topic, "inventory-cmd");
                 assert!(action.message.contains("release"));
             }
-            other => panic!("Expected Compensate, got {:?}", other),
+            other => panic!("Expected Compensate, got {other:?}"),
         }
 
         // Compensation reply
-        let result = orch
-            .handle_reply(&start.saga_id, true, None)
-            .unwrap();
+        let result = orch.handle_reply(&start.saga_id, true, None).unwrap();
         assert!(matches!(result, SagaReplyResult::Compensated));
 
         let exec = orch.get_execution(&start.saga_id).unwrap();
@@ -689,9 +685,7 @@ mod tests {
         let mut orch = SagaOrchestrator::new();
         orch.register(test_definition()).unwrap();
 
-        let start = orch
-            .start_saga("order-saga", HashMap::new())
-            .unwrap();
+        let start = orch.start_saga("order-saga", HashMap::new()).unwrap();
         assert_eq!(orch.list_active().len(), 1);
 
         orch.handle_reply(&start.saga_id, true, None).unwrap();

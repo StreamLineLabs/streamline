@@ -8,7 +8,7 @@
 //! - [`MessageInterceptor`]: Intercept and transform messages during produce/fetch
 //! - [`AuthenticationPlugin`]: Custom authentication mechanisms
 //! - [`MetricsPlugin`]: Custom metrics collection and export
-//! - [`StoragePlugin`]: Alternative storage backends
+//! - `StoragePlugin`: Planned alternative-storage extension point
 //!
 //! ## Example
 //!
@@ -601,17 +601,16 @@ impl PluginManager {
         // Create plugin directory
         let plugin_dir = self.plugins_dir.join(&name);
         std::fs::create_dir_all(&plugin_dir).map_err(|e| {
-            PluginError::OperationFailed(format!("Failed to create plugin directory: {}", e))
+            PluginError::OperationFailed(format!("Failed to create plugin directory: {e}"))
         })?;
 
         // Save manifest
         let manifest_path = plugin_dir.join("plugin.json");
         let manifest_json = serde_json::to_string_pretty(&manifest).map_err(|e| {
-            PluginError::OperationFailed(format!("Failed to serialize manifest: {}", e))
+            PluginError::OperationFailed(format!("Failed to serialize manifest: {e}"))
         })?;
-        std::fs::write(&manifest_path, manifest_json).map_err(|e| {
-            PluginError::OperationFailed(format!("Failed to write manifest: {}", e))
-        })?;
+        std::fs::write(&manifest_path, manifest_json)
+            .map_err(|e| PluginError::OperationFailed(format!("Failed to write manifest: {e}")))?;
 
         let installed = InstalledPlugin {
             manifest,
@@ -640,7 +639,7 @@ impl PluginManager {
         // Remove plugin directory
         if plugin.install_path.exists() {
             std::fs::remove_dir_all(&plugin.install_path).map_err(|e| {
-                PluginError::OperationFailed(format!("Failed to remove plugin directory: {}", e))
+                PluginError::OperationFailed(format!("Failed to remove plugin directory: {e}"))
             })?;
         }
 
@@ -676,14 +675,14 @@ impl PluginManager {
         }
 
         let entries = std::fs::read_dir(&self.plugins_dir).map_err(|e| {
-            PluginError::OperationFailed(format!("Failed to read plugins directory: {}", e))
+            PluginError::OperationFailed(format!("Failed to read plugins directory: {e}"))
         })?;
 
         for entry in entries.flatten() {
             let manifest_path = entry.path().join("plugin.json");
             if manifest_path.exists() {
                 let content = std::fs::read_to_string(&manifest_path).map_err(|e| {
-                    PluginError::OperationFailed(format!("Failed to read manifest: {}", e))
+                    PluginError::OperationFailed(format!("Failed to read manifest: {e}"))
                 })?;
                 if let Ok(manifest) = serde_json::from_str::<PluginManifest>(&content) {
                     manifests.push(manifest);
@@ -969,7 +968,7 @@ mod tests {
         PluginManifest {
             name: name.to_string(),
             version: "1.0.0".to_string(),
-            description: format!("Test {} plugin", name),
+            description: format!("Test {name} plugin"),
             author: "test".to_string(),
             plugin_type,
             min_streamline_version: None,

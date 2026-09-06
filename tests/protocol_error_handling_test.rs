@@ -914,7 +914,7 @@ fn test_retriable_vs_non_retriable_errors() {
 #[test]
 fn test_all_error_codes_have_valid_values() {
     // Test that all error codes we use are in valid range
-    let all_codes = vec![
+    let all_codes = [
         NONE,
         UNKNOWN_SERVER_ERROR,
         OFFSET_OUT_OF_RANGE,
@@ -929,6 +929,26 @@ fn test_all_error_codes_have_valid_values() {
         TRANSACTIONAL_ID_NOT_FOUND,
     ];
 
-    // All codes are already i16, just verify the collection is non-empty
-    assert!(!all_codes.is_empty(), "Expected at least one error code");
+    // Kafka reserves -1 for UNKNOWN_SERVER_ERROR and 0 for NONE; every other
+    // documented code is a positive i16. Also assert the codes are distinct so a
+    // copy/paste duplicate in the table above is caught.
+    for code in all_codes {
+        assert!(
+            code >= UNKNOWN_SERVER_ERROR,
+            "error code {code} is below the reserved minimum of {UNKNOWN_SERVER_ERROR}"
+        );
+    }
+
+    let mut sorted = all_codes;
+    sorted.sort_unstable();
+    let unique = {
+        let mut v = sorted.to_vec();
+        v.dedup();
+        v.len()
+    };
+    assert_eq!(
+        unique,
+        all_codes.len(),
+        "duplicate error code in the conformance table: {sorted:?}"
+    );
 }

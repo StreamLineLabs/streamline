@@ -100,15 +100,25 @@ pub struct RebalanceAction {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ActionType {
-    SplitPartition { partition: i32 },
-    MergePartitions { from: i32, into: i32 },
+    SplitPartition {
+        partition: i32,
+    },
+    MergePartitions {
+        from: i32,
+        into: i32,
+    },
     ReassignPartition {
         partition: i32,
         from_broker: i32,
         to_broker: i32,
     },
-    SuggestKeyStrategy { partition: i32, strategy: String },
-    AddPartitions { count: i32 },
+    SuggestKeyStrategy {
+        partition: i32,
+        strategy: String,
+    },
+    AddPartitions {
+        count: i32,
+    },
 }
 
 /// A rebalancing plan.
@@ -247,9 +257,7 @@ impl SmartRebalancer {
                 }
             }
 
-            if report.severity == SkewSeverity::Critical
-                || report.severity == SkewSeverity::High
-            {
+            if report.severity == SkewSeverity::Critical || report.severity == SkewSeverity::High {
                 let additional = (report.num_partitions as f64 * 0.5).ceil() as i32;
                 actions.push(RebalanceAction {
                     topic: report.topic.clone(),
@@ -368,10 +376,7 @@ impl SmartRebalancer {
                 }
             }
         }
-        movable.sort_by(|a, b| {
-            b.1.partial_cmp(&a.1)
-                .unwrap_or(std::cmp::Ordering::Equal)
-        });
+        movable.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
 
         let max_per_broker = self.config.max_partition_count_per_broker;
         let max_movement_bytes = {
@@ -403,10 +408,7 @@ impl SmartRebalancer {
                     if bid == from_broker {
                         return false;
                     }
-                    let count = broker_parts
-                        .get(&bid)
-                        .map(|v| v.len())
-                        .unwrap_or(0) as u32;
+                    let count = broker_parts.get(&bid).map(|v| v.len()).unwrap_or(0) as u32;
                     if count >= max_per_broker {
                         return false;
                     }
@@ -418,10 +420,7 @@ impl SmartRebalancer {
                     }
                     true
                 })
-                .min_by(|a, b| {
-                    a.1.partial_cmp(b.1)
-                        .unwrap_or(std::cmp::Ordering::Equal)
-                })
+                .min_by(|a, b| a.1.partial_cmp(b.1).unwrap_or(std::cmp::Ordering::Equal))
                 .map(|(&bid, _)| bid);
 
             if let Some(to_broker) = target {
@@ -556,10 +555,7 @@ impl SmartRebalancer {
                 if from_rack.is_some() && from_rack == to_rack {
                     errors.push(ValidationError {
                         code: "RACK_AWARENESS_VIOLATION".into(),
-                        message: format!(
-                            "Partition {} moving within same rack",
-                            mv.partition_id,
-                        ),
+                        message: format!("Partition {} moving within same rack", mv.partition_id,),
                         severity: ValidationSeverity::Warning,
                     });
                 }
@@ -584,16 +580,16 @@ impl SmartRebalancer {
             if count == 0 {
                 errors.push(ValidationError {
                     code: "EMPTY_BROKER".into(),
-                    message: format!(
-                        "Broker {} would have 0 partitions after rebalance",
-                        broker
-                    ),
+                    message: format!("Broker {broker} would have 0 partitions after rebalance"),
                     severity: ValidationSeverity::Warning,
                 });
             }
         }
 
-        if errors.iter().any(|e| e.severity == ValidationSeverity::Error) {
+        if errors
+            .iter()
+            .any(|e| e.severity == ValidationSeverity::Error)
+        {
             Err(errors)
         } else {
             Ok(())
@@ -601,11 +597,7 @@ impl SmartRebalancer {
     }
 
     /// Simulate executing the plan without applying changes.
-    pub fn dry_run(
-        &self,
-        plan: &RebalancePlan,
-        brokers: &[BrokerState],
-    ) -> DryRunResult {
+    pub fn dry_run(&self, plan: &RebalancePlan, brokers: &[BrokerState]) -> DryRunResult {
         let pre_state = build_cluster_state(brokers, plan.current_skew);
 
         let mut post_brokers = brokers.to_vec();
@@ -681,10 +673,7 @@ fn estimate_duration_secs(bytes: u64, throughput_bytes_per_sec: u64) -> f64 {
 }
 
 fn build_cluster_state(brokers: &[BrokerState], skew: f64) -> ClusterState {
-    let total_partitions: u32 = brokers
-        .iter()
-        .map(|b| b.partition_ids.len() as u32)
-        .sum();
+    let total_partitions: u32 = brokers.iter().map(|b| b.partition_ids.len() as u32).sum();
     ClusterState {
         brokers: brokers.to_vec(),
         total_partitions,
@@ -857,11 +846,41 @@ mod tests {
         ];
 
         let assignments = vec![
-            PartitionAssignment { partition_id: 0, broker_id: 0, is_leader: true, size_bytes: 1_000_000, throughput_mps: 400.0 },
-            PartitionAssignment { partition_id: 1, broker_id: 0, is_leader: true, size_bytes: 1_000_000, throughput_mps: 200.0 },
-            PartitionAssignment { partition_id: 2, broker_id: 0, is_leader: true, size_bytes: 1_000_000, throughput_mps: 100.0 },
-            PartitionAssignment { partition_id: 3, broker_id: 0, is_leader: true, size_bytes: 1_000_000, throughput_mps: 100.0 },
-            PartitionAssignment { partition_id: 4, broker_id: 1, is_leader: true, size_bytes: 1_000_000, throughput_mps: 100.0 },
+            PartitionAssignment {
+                partition_id: 0,
+                broker_id: 0,
+                is_leader: true,
+                size_bytes: 1_000_000,
+                throughput_mps: 400.0,
+            },
+            PartitionAssignment {
+                partition_id: 1,
+                broker_id: 0,
+                is_leader: true,
+                size_bytes: 1_000_000,
+                throughput_mps: 200.0,
+            },
+            PartitionAssignment {
+                partition_id: 2,
+                broker_id: 0,
+                is_leader: true,
+                size_bytes: 1_000_000,
+                throughput_mps: 100.0,
+            },
+            PartitionAssignment {
+                partition_id: 3,
+                broker_id: 0,
+                is_leader: true,
+                size_bytes: 1_000_000,
+                throughput_mps: 100.0,
+            },
+            PartitionAssignment {
+                partition_id: 4,
+                broker_id: 1,
+                is_leader: true,
+                size_bytes: 1_000_000,
+                throughput_mps: 100.0,
+            },
         ];
 
         let analysis = skew_analysis(0.6, 5);
@@ -870,7 +889,9 @@ mod tests {
 
         assert!(!plan.moves.is_empty(), "should produce moves");
         assert!(
-            plan.moves.iter().all(|m| m.from_broker == 0 && m.to_broker == 1),
+            plan.moves
+                .iter()
+                .all(|m| m.from_broker == 0 && m.to_broker == 1),
             "all moves should be from broker 0 to broker 1"
         );
         assert!(plan.data_to_move_bytes > 0);
@@ -878,8 +899,10 @@ mod tests {
 
     #[test]
     fn test_plan_rebalance_rack_awareness() {
-        let mut config = RebalanceConfig::default();
-        config.rack_awareness = true;
+        let config = RebalanceConfig {
+            rack_awareness: true,
+            ..Default::default()
+        };
 
         let brokers = vec![
             BrokerState {
@@ -910,8 +933,10 @@ mod tests {
 
     #[test]
     fn test_plan_rebalance_respects_max_partitions() {
-        let mut config = RebalanceConfig::default();
-        config.max_partition_count_per_broker = 2;
+        let config = RebalanceConfig {
+            max_partition_count_per_broker: 2,
+            ..Default::default()
+        };
 
         let brokers = vec![
             BrokerState {
@@ -990,8 +1015,10 @@ mod tests {
 
     #[test]
     fn test_validate_plan_max_partitions_exceeded() {
-        let mut config = RebalanceConfig::default();
-        config.max_partition_count_per_broker = 4;
+        let config = RebalanceConfig {
+            max_partition_count_per_broker: 4,
+            ..Default::default()
+        };
 
         let brokers = make_brokers(2, 4);
 
@@ -1061,8 +1088,10 @@ mod tests {
 
     #[test]
     fn test_validate_plan_insufficient_brokers_for_replication() {
-        let mut config = RebalanceConfig::default();
-        config.min_replica_factor = 3;
+        let config = RebalanceConfig {
+            min_replica_factor: 3,
+            ..Default::default()
+        };
 
         let brokers = make_brokers(2, 4);
         let plan = RebalancePlan {

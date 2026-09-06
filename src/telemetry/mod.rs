@@ -132,8 +132,13 @@ impl TelemetryConfig {
 /// Telemetry manager handles collecting and sending telemetry data
 pub struct TelemetryManager {
     config: TelemetryConfig,
+    // `None` when the HTTP client could not be built. `new()` is infallible by
+    // contract (it is public API), and the previous `.unwrap_or_default()` is
+    // no longer an option: `reqwest::Client::default()` is `Client::new()`,
+    // which panics without a process-wide crypto provider. Reporting is
+    // therefore what fails, not construction.
     #[cfg(feature = "auth")]
-    client: reqwest::Client,
+    client: Option<reqwest::Client>,
     last_report: Arc<RwLock<Option<TelemetryReport>>>,
 }
 
@@ -141,11 +146,18 @@ impl TelemetryManager {
     /// Create a new telemetry manager
     #[cfg(feature = "auth")]
     pub fn new(config: TelemetryConfig) -> Self {
-        let client = reqwest::Client::builder()
-            .timeout(Duration::from_secs(30))
-            .user_agent(format!("streamline/{}", env!("CARGO_PKG_VERSION")))
-            .build()
-            .unwrap_or_default();
+        let client = match crate::http_client::builder() {
+            Ok(builder) => builder
+                .timeout(Duration::from_secs(30))
+                .user_agent(format!("streamline/{}", env!("CARGO_PKG_VERSION")))
+                .build()
+                .inspect_err(|e| debug!("Telemetry HTTP client unavailable: {e}"))
+                .ok(),
+            Err(e) => {
+                debug!("Telemetry HTTP client unavailable: {e}");
+                None
+            }
+        };
 
         Self {
             config,
@@ -220,8 +232,11 @@ impl TelemetryManager {
 
         // Note: In the initial release, telemetry endpoint is not active.
         // This code is ready for when the endpoint is deployed.
-        let response = self
-            .client
+        let client = self.client.as_ref().ok_or_else(|| {
+            TelemetryError::Network("telemetry HTTP client is unavailable".to_string())
+        })?;
+
+        let response = client
             .post(&self.config.endpoint)
             .json(report)
             .send()
@@ -396,7 +411,7 @@ pub fn display_telemetry_notice(installation_id: &str) {
     println!("View current report: streamline-cli telemetry show");
     println!("Disable anytime:     --telemetry-enabled=false");
     println!();
-    println!("Installation ID: {}", installation_id);
+    println!("Installation ID: {installation_id}");
     println!();
 }
 

@@ -82,7 +82,7 @@ echo "  4. SECURITY"
 echo "  ───────────"
 
 if command -v cargo-audit >/dev/null 2>&1; then
-    AUDIT=$(cd "$REPO" && cargo audit 2>&1 | tail -1)
+    AUDIT=$(cd "$REPO" && cargo audit --deny unsound 2>&1 | tail -1)
     if echo "$AUDIT" | grep -q "0 vulnerabilities"; then
         check "cargo-audit: no vulnerabilities" pass
     else

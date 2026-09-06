@@ -316,7 +316,7 @@ impl TimeTravelEngine {
         let store = self.messages.read();
         let topic_messages = store
             .get(topic)
-            .ok_or_else(|| StreamlineError::storage_msg(format!("Topic '{}' not found", topic)))?;
+            .ok_or_else(|| StreamlineError::storage_msg(format!("Topic '{topic}' not found")))?;
 
         let collect_by_key = |start: i64, end: i64| -> HashMap<String, TimeTravelMessage> {
             let mut map = HashMap::new();
@@ -396,7 +396,7 @@ impl TimeTravelEngine {
         let to_replay: Vec<TimeTravelMessage> = {
             let store = self.messages.read();
             let topic_messages = store.get(topic).ok_or_else(|| {
-                StreamlineError::storage_msg(format!("Topic '{}' not found", topic))
+                StreamlineError::storage_msg(format!("Topic '{topic}' not found"))
             })?;
 
             topic_messages
@@ -433,7 +433,7 @@ impl TimeTravelEngine {
         let store = self.messages.read();
         let topic_messages = store
             .get(topic)
-            .ok_or_else(|| StreamlineError::storage_msg(format!("Topic '{}' not found", topic)))?;
+            .ok_or_else(|| StreamlineError::storage_msg(format!("Topic '{topic}' not found")))?;
 
         topic_messages
             .iter()
@@ -442,8 +442,7 @@ impl TimeTravelEngine {
             .next()
             .ok_or_else(|| {
                 StreamlineError::storage_msg(format!(
-                    "No message found at or after timestamp {} in {}/{}",
-                    timestamp, topic, partition
+                    "No message found at or after timestamp {timestamp} in {topic}/{partition}"
                 ))
             })
     }

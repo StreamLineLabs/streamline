@@ -503,8 +503,7 @@ fn test_txn_offset_commit_no_coordinator() {
         partition_error == COORDINATOR_NOT_AVAILABLE
             || partition_error == NONE
             || partition_error == UNKNOWN_SERVER_ERROR,
-        "Expected COORDINATOR_NOT_AVAILABLE (15), NONE (0), or UNKNOWN_SERVER_ERROR (-1), got {}",
-        partition_error
+        "Expected COORDINATOR_NOT_AVAILABLE (15), NONE (0), or UNKNOWN_SERVER_ERROR (-1), got {partition_error}"
     );
 }
 

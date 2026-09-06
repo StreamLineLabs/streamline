@@ -52,8 +52,8 @@ fn test_multi_partition_write_read() {
                 .append(
                     "multi-partition-test",
                     partition,
-                    Some(Bytes::from(format!("key-{}", partition))),
-                    Bytes::from(format!("value-{}", partition)),
+                    Some(Bytes::from(format!("key-{partition}"))),
+                    Bytes::from(format!("value-{partition}")),
                 )
                 .unwrap()
         })
@@ -68,8 +68,8 @@ fn test_multi_partition_write_read() {
             .append(
                 "multi-partition-test",
                 0,
-                Some(Bytes::from(format!("key-{}", i))),
-                Bytes::from(format!("value-{}", i)),
+                Some(Bytes::from(format!("key-{i}"))),
+                Bytes::from(format!("value-{i}")),
             )
             .unwrap();
         assert_eq!(offset, i);
@@ -106,7 +106,7 @@ fn test_offset_tracking() {
     // Write some records
     for i in 0..5 {
         manager
-            .append("offset-test", 0, None, Bytes::from(format!("msg-{}", i)))
+            .append("offset-test", 0, None, Bytes::from(format!("msg-{i}")))
             .unwrap();
     }
 
@@ -236,7 +236,7 @@ fn test_large_batch_write() {
             .append(
                 "large-batch",
                 0,
-                Some(Bytes::from(format!("key-{:05}", i))),
+                Some(Bytes::from(format!("key-{i:05}"))),
                 Bytes::from(format!("value-{:05}-{}", i, "x".repeat(100))),
             )
             .unwrap();

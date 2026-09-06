@@ -64,7 +64,7 @@ impl AnalyticsError {
         } else {
             sql.to_string()
         };
-        Self::InvalidSql(format!("{} (query: {})", detail, sql_preview))
+        Self::InvalidSql(format!("{detail} (query: {sql_preview})"))
     }
 
     /// Create a `TopicNotFound` error for a specific topic name.

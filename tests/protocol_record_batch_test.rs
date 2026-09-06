@@ -833,8 +833,8 @@ fn test_record_batch_size_calculation() {
             offset: i as i64,
             sequence: -1,
             timestamp: 1609459200000 + (i as i64 * 100),
-            key: Some(Bytes::from(format!("key-{}", i))),
-            value: Some(Bytes::from(format!("value-{}", i))),
+            key: Some(Bytes::from(format!("key-{i}"))),
+            value: Some(Bytes::from(format!("value-{i}"))),
             headers: Default::default(),
         })
         .collect();

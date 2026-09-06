@@ -27,7 +27,7 @@ pub(super) fn handle_query_command(
 
     // Create tokio runtime for async operations
     let runtime = tokio::runtime::Runtime::new()
-        .map_err(|e| StreamlineError::Server(format!("Failed to create runtime: {}", e)))?;
+        .map_err(|e| StreamlineError::Server(format!("Failed to create runtime: {e}")))?;
 
     // Handle EXPLAIN mode
     if explain {
@@ -50,7 +50,7 @@ pub(super) fn handle_query_command(
                 println!("{} {}", "Rewritten SQL:".bold(), result.rewritten_sql);
                 println!();
                 for line in &result.plan {
-                    println!("  {}", line);
+                    println!("  {line}");
                 }
             }
         }
@@ -79,10 +79,7 @@ pub(super) fn handle_query_command(
                 "execution_time_ms": result.execution_time_ms,
                 "from_cache": result.from_cache
             });
-            println!(
-                "{}",
-                serde_json::to_string_pretty(&json)?
-            );
+            println!("{}", serde_json::to_string_pretty(&json)?);
         }
         _ => {
             // Text format - display as a table
@@ -120,7 +117,7 @@ pub(super) fn handle_query_command(
                 table.add_row(cells);
             }
 
-            println!("{}", table);
+            println!("{table}");
             println!();
             println!(
                 "{} {} row(s) in {} ms{}",
@@ -288,7 +285,7 @@ pub(super) fn handle_telemetry_command(cmd: TelemetryCommands, ctx: &CliContext)
             if !yes && !ctx.skip_confirm {
                 println!("{}", "Reset Telemetry Installation ID".bold().yellow());
                 println!();
-                println!("Current ID: {}", current_id);
+                println!("Current ID: {current_id}");
                 println!();
                 println!("This will:");
                 println!(
@@ -316,8 +313,7 @@ pub(super) fn handle_telemetry_command(cmd: TelemetryCommands, ctx: &CliContext)
             std::fs::write(&id_file, &new_id)?;
 
             ctx.success(&format!(
-                "Installation ID reset successfully\n  Old ID: {}\n  New ID: {}",
-                current_id, new_id
+                "Installation ID reset successfully\n  Old ID: {current_id}\n  New ID: {new_id}"
             ));
         }
 

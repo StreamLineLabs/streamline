@@ -82,6 +82,12 @@ pub struct PlaygroundCloudStats {
     pub templates_loaded: AtomicU64,
 }
 
+impl Default for PlaygroundCloudStats {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl PlaygroundCloudStats {
     pub fn new() -> Self {
         Self {
@@ -104,6 +110,12 @@ pub struct PlaygroundCloudState {
     templates: Vec<PlaygroundTemplate>,
     shared: Arc<RwLock<HashMap<String, String>>>,
     stats: Arc<PlaygroundCloudStats>,
+}
+
+impl Default for PlaygroundCloudState {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl PlaygroundCloudState {
@@ -179,19 +191,35 @@ fn build_default_templates() -> Vec<PlaygroundTemplate> {
         PlaygroundTemplate {
             id: "cdc-demo".into(),
             name: "CDC Demo".into(),
-            description: "Change Data Capture pipeline — track inserts, updates, and deletes from a database".into(),
+            description:
+                "Change Data Capture pipeline — track inserts, updates, and deletes from a database"
+                    .into(),
             category: "Data Integration".into(),
-            topics: vec![SessionTopic { name: "cdc.public.users".into(), messages: vec![], partitions: 3 }],
-            queries: vec!["SELECT * FROM cdc.public.users".into(), "SELECT * FROM cdc.public.users WHERE op = 'INSERT'".into()],
+            topics: vec![SessionTopic {
+                name: "cdc.public.users".into(),
+                messages: vec![],
+                partitions: 3,
+            }],
+            queries: vec![
+                "SELECT * FROM cdc.public.users".into(),
+                "SELECT * FROM cdc.public.users WHERE op = 'INSERT'".into(),
+            ],
             difficulty: "beginner".into(),
         },
         PlaygroundTemplate {
             id: "iot-sensor-stream".into(),
             name: "IoT Sensor Stream".into(),
-            description: "Real-time sensor data from IoT devices with temperature, humidity, and GPS".into(),
+            description:
+                "Real-time sensor data from IoT devices with temperature, humidity, and GPS".into(),
             category: "IoT".into(),
-            topics: vec![SessionTopic { name: "sensors.temperature".into(), messages: vec![], partitions: 4 }],
-            queries: vec!["SELECT avg(temperature) FROM sensors.temperature GROUP BY device_id".into()],
+            topics: vec![SessionTopic {
+                name: "sensors.temperature".into(),
+                messages: vec![],
+                partitions: 4,
+            }],
+            queries: vec![
+                "SELECT avg(temperature) FROM sensors.temperature GROUP BY device_id".into(),
+            ],
             difficulty: "beginner".into(),
         },
         PlaygroundTemplate {
@@ -200,8 +228,16 @@ fn build_default_templates() -> Vec<PlaygroundTemplate> {
             description: "Clickstream and purchase events for an online store".into(),
             category: "Analytics".into(),
             topics: vec![
-                SessionTopic { name: "shop.clicks".into(), messages: vec![], partitions: 2 },
-                SessionTopic { name: "shop.purchases".into(), messages: vec![], partitions: 2 },
+                SessionTopic {
+                    name: "shop.clicks".into(),
+                    messages: vec![],
+                    partitions: 2,
+                },
+                SessionTopic {
+                    name: "shop.purchases".into(),
+                    messages: vec![],
+                    partitions: 2,
+                },
             ],
             queries: vec!["SELECT count(*) FROM shop.purchases WHERE amount > 100".into()],
             difficulty: "intermediate".into(),
@@ -211,20 +247,35 @@ fn build_default_templates() -> Vec<PlaygroundTemplate> {
             name: "Log Analytics".into(),
             description: "Structured application logs with severity levels and trace IDs".into(),
             category: "Observability".into(),
-            topics: vec![SessionTopic { name: "logs.app".into(), messages: vec![], partitions: 6 }],
+            topics: vec![SessionTopic {
+                name: "logs.app".into(),
+                messages: vec![],
+                partitions: 6,
+            }],
             queries: vec!["SELECT * FROM logs.app WHERE level = 'ERROR' LIMIT 10".into()],
             difficulty: "beginner".into(),
         },
         PlaygroundTemplate {
             id: "ai-pipeline".into(),
             name: "AI Pipeline".into(),
-            description: "ML inference pipeline with feature vectors, predictions, and feedback loops".into(),
+            description:
+                "ML inference pipeline with feature vectors, predictions, and feedback loops".into(),
             category: "Machine Learning".into(),
             topics: vec![
-                SessionTopic { name: "ml.features".into(), messages: vec![], partitions: 2 },
-                SessionTopic { name: "ml.predictions".into(), messages: vec![], partitions: 2 },
+                SessionTopic {
+                    name: "ml.features".into(),
+                    messages: vec![],
+                    partitions: 2,
+                },
+                SessionTopic {
+                    name: "ml.predictions".into(),
+                    messages: vec![],
+                    partitions: 2,
+                },
             ],
-            queries: vec!["SELECT model, avg(latency_ms) FROM ml.predictions GROUP BY model".into()],
+            queries: vec![
+                "SELECT model, avg(latency_ms) FROM ml.predictions GROUP BY model".into(),
+            ],
             difficulty: "advanced".into(),
         },
         PlaygroundTemplate {
@@ -232,17 +283,29 @@ fn build_default_templates() -> Vec<PlaygroundTemplate> {
             name: "Real-Time Metrics".into(),
             description: "System and application metrics aggregated in real time".into(),
             category: "Observability".into(),
-            topics: vec![SessionTopic { name: "metrics.system".into(), messages: vec![], partitions: 3 }],
+            topics: vec![SessionTopic {
+                name: "metrics.system".into(),
+                messages: vec![],
+                partitions: 3,
+            }],
             queries: vec!["SELECT host, max(cpu_percent) FROM metrics.system GROUP BY host".into()],
             difficulty: "beginner".into(),
         },
         PlaygroundTemplate {
             id: "consumer-groups".into(),
             name: "Consumer Groups".into(),
-            description: "Demonstrates consumer group rebalancing, offsets, and lag monitoring".into(),
+            description: "Demonstrates consumer group rebalancing, offsets, and lag monitoring"
+                .into(),
             category: "Kafka Basics".into(),
-            topics: vec![SessionTopic { name: "demo.events".into(), messages: vec![], partitions: 4 }],
-            queries: vec!["SHOW CONSUMER GROUPS".into(), "DESCRIBE CONSUMER GROUP 'demo-group'".into()],
+            topics: vec![SessionTopic {
+                name: "demo.events".into(),
+                messages: vec![],
+                partitions: 4,
+            }],
+            queries: vec![
+                "SHOW CONSUMER GROUPS".into(),
+                "DESCRIBE CONSUMER GROUP 'demo-group'".into(),
+            ],
             difficulty: "intermediate".into(),
         },
         PlaygroundTemplate {
@@ -251,8 +314,16 @@ fn build_default_templates() -> Vec<PlaygroundTemplate> {
             description: "Apply WebAssembly transformations to streaming data in-flight".into(),
             category: "Processing".into(),
             topics: vec![
-                SessionTopic { name: "raw.events".into(), messages: vec![], partitions: 2 },
-                SessionTopic { name: "transformed.events".into(), messages: vec![], partitions: 2 },
+                SessionTopic {
+                    name: "raw.events".into(),
+                    messages: vec![],
+                    partitions: 2,
+                },
+                SessionTopic {
+                    name: "transformed.events".into(),
+                    messages: vec![],
+                    partitions: 2,
+                },
             ],
             queries: vec!["SELECT * FROM transformed.events LIMIT 5".into()],
             difficulty: "advanced".into(),
@@ -262,7 +333,11 @@ fn build_default_templates() -> Vec<PlaygroundTemplate> {
             name: "StreamQL Tutorial".into(),
             description: "Step-by-step tutorial for Streamline's SQL-like query language".into(),
             category: "Getting Started".into(),
-            topics: vec![SessionTopic { name: "tutorial.events".into(), messages: vec![], partitions: 1 }],
+            topics: vec![SessionTopic {
+                name: "tutorial.events".into(),
+                messages: vec![],
+                partitions: 1,
+            }],
             queries: vec![
                 "SELECT * FROM tutorial.events".into(),
                 "SELECT count(*) FROM tutorial.events".into(),
@@ -273,13 +348,24 @@ fn build_default_templates() -> Vec<PlaygroundTemplate> {
         PlaygroundTemplate {
             id: "compliance-audit".into(),
             name: "Compliance Audit".into(),
-            description: "Audit trail for data access, retention policies, and PII detection".into(),
+            description: "Audit trail for data access, retention policies, and PII detection"
+                .into(),
             category: "Governance".into(),
             topics: vec![
-                SessionTopic { name: "audit.access".into(), messages: vec![], partitions: 2 },
-                SessionTopic { name: "audit.retention".into(), messages: vec![], partitions: 1 },
+                SessionTopic {
+                    name: "audit.access".into(),
+                    messages: vec![],
+                    partitions: 2,
+                },
+                SessionTopic {
+                    name: "audit.retention".into(),
+                    messages: vec![],
+                    partitions: 1,
+                },
             ],
-            queries: vec!["SELECT * FROM audit.access WHERE action = 'DELETE' ORDER BY ts DESC".into()],
+            queries: vec![
+                "SELECT * FROM audit.access WHERE action = 'DELETE' ORDER BY ts DESC".into(),
+            ],
             difficulty: "intermediate".into(),
         },
         PlaygroundTemplate {
@@ -287,7 +373,11 @@ fn build_default_templates() -> Vec<PlaygroundTemplate> {
             name: "Financial Trades".into(),
             description: "Simulated stock trade stream with order books and price ticks".into(),
             category: "Finance".into(),
-            topics: vec![SessionTopic { name: "trades.ticks".into(), messages: vec![], partitions: 8 }],
+            topics: vec![SessionTopic {
+                name: "trades.ticks".into(),
+                messages: vec![],
+                partitions: 8,
+            }],
             queries: vec!["SELECT symbol, last(price) FROM trades.ticks GROUP BY symbol".into()],
             difficulty: "advanced".into(),
         },
@@ -309,10 +399,7 @@ pub fn create_playground_cloud_api_router(state: PlaygroundCloudState) -> Router
             post(execute_query),
         )
         .route("/api/v1/playground/templates", get(list_templates))
-        .route(
-            "/api/v1/playground/sessions/:id/share",
-            post(share_session),
-        )
+        .route("/api/v1/playground/sessions/:id/share", post(share_session))
         .route("/api/v1/playground/shared/:token", get(load_shared))
         .route("/api/v1/playground/stats", get(get_stats))
         .with_state(state)
@@ -469,7 +556,7 @@ async fn share_session(
     Ok((
         StatusCode::CREATED,
         Json(ShareResponse {
-            url: format!("/api/v1/playground/shared/{}", token),
+            url: format!("/api/v1/playground/shared/{token}"),
             token,
         }),
     ))
@@ -492,9 +579,7 @@ async fn load_shared(
         .ok_or(StatusCode::NOT_FOUND)
 }
 
-async fn get_stats(
-    State(state): State<PlaygroundCloudState>,
-) -> Json<PlaygroundStatsResponse> {
+async fn get_stats(State(state): State<PlaygroundCloudState>) -> Json<PlaygroundStatsResponse> {
     let active = state.sessions.read().await.len() as u64;
     Json(PlaygroundStatsResponse {
         total_sessions: state.stats.sessions_created.load(Ordering::Relaxed),
@@ -536,7 +621,9 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(resp.status(), StatusCode::CREATED);
-        let body = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
         serde_json::from_slice(&body).unwrap()
     }
 
@@ -552,7 +639,8 @@ mod tests {
     #[tokio::test]
     async fn test_create_session_with_topics() {
         let app = create_test_app();
-        let body = r#"{"topics":[{"name":"my-topic","partitions":4},{"name":"other","partitions":2}]}"#;
+        let body =
+            r#"{"topics":[{"name":"my-topic","partitions":4},{"name":"other","partitions":2}]}"#;
         let resp = app
             .oneshot(
                 Request::builder()
@@ -565,7 +653,9 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(resp.status(), StatusCode::CREATED);
-        let b = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let b = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let s: PlaygroundSession = serde_json::from_slice(&b).unwrap();
         assert_eq!(s.topics.len(), 2);
         assert_eq!(s.topics[0].partitions, 4);
@@ -587,7 +677,9 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(resp.status(), StatusCode::CREATED);
-        let b = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let b = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let s: PlaygroundSession = serde_json::from_slice(&b).unwrap();
         assert_eq!(s.topics[0].name, "cdc.public.users");
     }
@@ -608,7 +700,9 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
-        let b = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let b = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let s: PlaygroundSession = serde_json::from_slice(&b).unwrap();
         assert_eq!(s.id, session.id);
     }
@@ -698,7 +792,9 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
-        let b = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let b = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let r: ExecuteQueryResponse = serde_json::from_slice(&b).unwrap();
         assert!(r.result.is_some());
         assert!(r.error.is_none());
@@ -727,7 +823,9 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
-        let b = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let b = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let r: ExecuteQueryResponse = serde_json::from_slice(&b).unwrap();
         assert!(r.result.is_none());
         assert_eq!(r.error.as_deref(), Some("empty query"));
@@ -764,7 +862,9 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
-        let b = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let b = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let templates: Vec<PlaygroundTemplate> = serde_json::from_slice(&b).unwrap();
         assert!(templates.len() >= 10);
 
@@ -791,17 +891,16 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .method("POST")
-                    .uri(format!(
-                        "/api/v1/playground/sessions/{}/share",
-                        session.id
-                    ))
+                    .uri(format!("/api/v1/playground/sessions/{}/share", session.id))
                     .body(Body::empty())
                     .unwrap(),
             )
             .await
             .unwrap();
         assert_eq!(resp.status(), StatusCode::CREATED);
-        let b = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let b = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let share: ShareResponse = serde_json::from_slice(&b).unwrap();
         assert!(!share.token.is_empty());
         assert!(share.url.contains(&share.token));
@@ -834,16 +933,15 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .method("POST")
-                    .uri(format!(
-                        "/api/v1/playground/sessions/{}/share",
-                        session.id
-                    ))
+                    .uri(format!("/api/v1/playground/sessions/{}/share", session.id))
                     .body(Body::empty())
                     .unwrap(),
             )
             .await
             .unwrap();
-        let b = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let b = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let share: ShareResponse = serde_json::from_slice(&b).unwrap();
 
         // Load via token
@@ -858,7 +956,9 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
-        let b = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let b = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let loaded: PlaygroundSession = serde_json::from_slice(&b).unwrap();
         assert_eq!(loaded.id, session.id);
     }
@@ -911,7 +1011,9 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
-        let b = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let b = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let stats: PlaygroundStatsResponse = serde_json::from_slice(&b).unwrap();
         assert_eq!(stats.total_sessions, 1);
         assert_eq!(stats.active_sessions, 1);
@@ -951,7 +1053,9 @@ mod tests {
             )
             .await
             .unwrap();
-        let b = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let b = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let s: PlaygroundSession = serde_json::from_slice(&b).unwrap();
         assert_eq!(s.query_history.len(), 1);
         assert_eq!(s.query_history[0].query, "SELECT count(*)");
@@ -991,7 +1095,9 @@ mod tests {
             )
             .await
             .unwrap();
-        let b = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let b = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let s: PlaygroundSession = serde_json::from_slice(&b).unwrap();
         assert!(s.variables.contains_key("limit"));
     }

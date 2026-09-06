@@ -204,7 +204,10 @@ async fn search_handler(
     let batch_size = 100;
 
     while offset < latest && results.len() < limit {
-        let records = match state.topic_manager.read(&topic, partition, offset, batch_size) {
+        let records = match state
+            .topic_manager
+            .read(&topic, partition, offset, batch_size)
+        {
             Ok(r) => r,
             Err(_) => break,
         };

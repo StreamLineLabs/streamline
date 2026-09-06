@@ -41,7 +41,9 @@ impl SyntheticDataset {
         let mut out = Vec::with_capacity(n);
         let mut s = self.seed;
         for i in 0..n {
-            s = s.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            s = s
+                .wrapping_mul(6364136223846793005)
+                .wrapping_add(1442695040888963407);
             let key = format!("k{i}");
             let mut value = Vec::with_capacity(self.avg_value_bytes);
             let txt = self.text_corpus[(s as usize) % self.text_corpus.len()];
@@ -60,7 +62,9 @@ impl SyntheticDataset {
         let mut out = Vec::with_capacity(n);
         let mut s = self.seed;
         for _ in 0..n {
-            s = s.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            s = s
+                .wrapping_mul(6364136223846793005)
+                .wrapping_add(1442695040888963407);
             out.push(self.text_corpus[(s as usize) % self.text_corpus.len()].to_string());
         }
         out

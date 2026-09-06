@@ -780,8 +780,7 @@ fn test_retriable_error_codes() {
         let decoded = FetchResponse::decode(&mut read_buf, 4).unwrap();
         assert_eq!(
             decoded.responses[0].partitions[0].error_code, error_code,
-            "Failed for error code {}",
-            error_code
+            "Failed for error code {error_code}"
         );
     }
 }

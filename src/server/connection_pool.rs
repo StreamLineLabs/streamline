@@ -198,20 +198,18 @@ impl ConnectionPool {
                 let rr = self.rr_counter.fetch_add(1, Ordering::Relaxed) as usize;
                 candidates[rr % candidates.len()]
             }
-            LoadBalanceStrategy::LeastConnections => {
-                *candidates
-                    .iter()
-                    .min_by_key(|&&i| conns[i].active_streams)
-                    .unwrap()
-            }
+            LoadBalanceStrategy::LeastConnections => candidates
+                .iter()
+                .min_by_key(|&&i| conns[i].active_streams)
+                .copied()
+                .unwrap_or(candidates[0]),
             LoadBalanceStrategy::Random => {
                 // Deterministic-ish fallback without pulling in rand for this hot path.
                 let pseudo = now_epoch() as usize;
                 candidates[pseudo % candidates.len()]
             }
             LoadBalanceStrategy::WeightedRoundRobin => {
-                let total_weight: u32 =
-                    candidates.iter().map(|&i| conns[i].weight.max(1)).sum();
+                let total_weight: u32 = candidates.iter().map(|&i| conns[i].weight.max(1)).sum();
                 let rr = self.rr_counter.fetch_add(1, Ordering::Relaxed) as u32;
                 let target = rr % total_weight;
                 let mut cumulative = 0u32;
@@ -232,7 +230,9 @@ impl ConnectionPool {
         conn.last_used_at = now_epoch();
         conn.active_streams += 1;
 
-        self.stats.active_connections.fetch_add(1, Ordering::Relaxed);
+        self.stats
+            .active_connections
+            .fetch_add(1, Ordering::Relaxed);
         self.stats.idle_connections.fetch_sub(1, Ordering::Relaxed);
         self.stats.requests_served.fetch_add(1, Ordering::Relaxed);
 
@@ -251,7 +251,9 @@ impl ConnectionPool {
             }
             conn.last_used_at = now_epoch();
 
-            self.stats.active_connections.fetch_sub(1, Ordering::Relaxed);
+            self.stats
+                .active_connections
+                .fetch_sub(1, Ordering::Relaxed);
             self.stats.idle_connections.fetch_add(1, Ordering::Relaxed);
             debug!(id = %id, "connection released");
         } else {
@@ -282,7 +284,9 @@ impl ConnectionPool {
         conns.push(conn);
         self.stats.total_connections.fetch_add(1, Ordering::Relaxed);
         self.stats.idle_connections.fetch_add(1, Ordering::Relaxed);
-        self.stats.connections_created.fetch_add(1, Ordering::Relaxed);
+        self.stats
+            .connections_created
+            .fetch_add(1, Ordering::Relaxed);
         info!(id = %id, host = %host, "target added to pool");
     }
 
@@ -338,7 +342,11 @@ impl ConnectionPool {
 
     /// Resize the maximum number of connections.
     pub async fn resize(&self, new_max: usize) {
-        info!(old = self.config.max_connections, new = new_max, "resizing pool");
+        info!(
+            old = self.config.max_connections,
+            new = new_max,
+            "resizing pool"
+        );
         // NOTE: config is owned, so we mutate via interior pattern in real
         // implementation. Here we trim excess connections.
         let mut conns = self.connections.write().await;
@@ -348,9 +356,7 @@ impl ConnectionPool {
                 .rposition(|c| c.status == ConnectionStatus::Available)
             {
                 conns.remove(pos);
-                self.stats
-                    .total_connections
-                    .fetch_sub(1, Ordering::Relaxed);
+                self.stats.total_connections.fetch_sub(1, Ordering::Relaxed);
                 self.stats
                     .connections_closed
                     .fetch_add(1, Ordering::Relaxed);
@@ -514,8 +520,10 @@ mod tests {
     // 11
     #[tokio::test]
     async fn test_health_check_marks_degraded_on_idle() {
-        let mut cfg = PoolConfig::default();
-        cfg.idle_timeout_secs = 0; // immediate idle
+        let cfg = PoolConfig {
+            idle_timeout_secs: 0, // immediate idle
+            ..Default::default()
+        };
         let pool = ConnectionPool::new(cfg);
         pool.add_target("host:1").await;
         // Sleep briefly so last_used_at < now
@@ -528,8 +536,10 @@ mod tests {
     // 12
     #[tokio::test]
     async fn test_health_check_marks_unhealthy_on_lifetime() {
-        let mut cfg = PoolConfig::default();
-        cfg.max_lifetime_secs = 0; // immediate expiry
+        let cfg = PoolConfig {
+            max_lifetime_secs: 0, // immediate expiry
+            ..Default::default()
+        };
         let pool = ConnectionPool::new(cfg);
         pool.add_target("host:1").await;
         tokio::time::sleep(std::time::Duration::from_millis(1100)).await;
@@ -575,8 +585,10 @@ mod tests {
     // 16
     #[tokio::test]
     async fn test_add_target_respects_max() {
-        let mut cfg = PoolConfig::default();
-        cfg.max_connections = 1;
+        let cfg = PoolConfig {
+            max_connections: 1,
+            ..Default::default()
+        };
         let pool = ConnectionPool::new(cfg);
         pool.add_target("a:1").await;
         pool.add_target("b:2").await; // should be ignored
@@ -587,8 +599,10 @@ mod tests {
     // 17
     #[tokio::test]
     async fn test_least_connections_strategy() {
-        let mut cfg = PoolConfig::default();
-        cfg.load_balancing = LoadBalanceStrategy::LeastConnections;
+        let cfg = PoolConfig {
+            load_balancing: LoadBalanceStrategy::LeastConnections,
+            ..Default::default()
+        };
         let pool = ConnectionPool::new(cfg);
         pool.add_target("a:1").await;
         pool.add_target("b:2").await;

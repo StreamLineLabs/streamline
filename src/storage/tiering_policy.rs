@@ -72,10 +72,22 @@ pub enum TierCondition {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "lowercase")]
 pub enum TierBackend {
-    Local { path: String },
-    S3 { bucket: String, prefix: String, region: String },
-    Azure { container: String, prefix: String },
-    Gcs { bucket: String, prefix: String },
+    Local {
+        path: String,
+    },
+    S3 {
+        bucket: String,
+        prefix: String,
+        region: String,
+    },
+    Azure {
+        container: String,
+        prefix: String,
+    },
+    Gcs {
+        bucket: String,
+        prefix: String,
+    },
 }
 
 // ---------------------------------------------------------------------------
@@ -328,7 +340,9 @@ impl TieringPolicyEngine {
         current_tier: StorageTier,
         reads_per_hour: f64,
     ) -> Option<SegmentTieringDecision> {
-        self.stats.segments_evaluated.fetch_add(1, Ordering::Relaxed);
+        self.stats
+            .segments_evaluated
+            .fetch_add(1, Ordering::Relaxed);
 
         let rules = self.resolve_rules(topic);
         self.evaluate_against_rules(
@@ -353,7 +367,9 @@ impl TieringPolicyEngine {
         let mut decisions = Vec::new();
 
         for seg in segments {
-            self.stats.segments_evaluated.fetch_add(1, Ordering::Relaxed);
+            self.stats
+                .segments_evaluated
+                .fetch_add(1, Ordering::Relaxed);
             if let Some(d) = self.evaluate_against_rules(
                 &rules,
                 topic,
@@ -423,6 +439,7 @@ impl TieringPolicyEngine {
     ///
     /// Rules are sorted by descending tier coldness; the first matching condition wins.
     /// A decision is only returned when the target tier is colder than the current tier.
+    #[allow(clippy::too_many_arguments)] // one argument per segment attribute
     fn evaluate_against_rules(
         &self,
         rules: &[TierRule],
@@ -467,9 +484,9 @@ impl TieringPolicyEngine {
         match cond {
             TierCondition::AgeHours(h) => age_hours >= *h as f64,
             TierCondition::SizeBytes(s) => size_bytes >= *s,
-            TierCondition::AccessFrequencyBelow { reads_per_hour: threshold } => {
-                reads_per_hour < *threshold
-            }
+            TierCondition::AccessFrequencyBelow {
+                reads_per_hour: threshold,
+            } => reads_per_hour < *threshold,
             TierCondition::Combined {
                 age_hours: h,
                 size_bytes: s,
@@ -486,14 +503,13 @@ impl TieringPolicyEngine {
                 format!("Segment size exceeds {s} bytes; moving to {tier}")
             }
             TierCondition::AccessFrequencyBelow { reads_per_hour } => {
-                format!(
-                    "Read frequency below {reads_per_hour} reads/hour; moving to {tier}"
-                )
+                format!("Read frequency below {reads_per_hour} reads/hour; moving to {tier}")
             }
-            TierCondition::Combined { age_hours, size_bytes } => {
-                format!(
-                    "Segment age >= {age_hours}h and size >= {size_bytes}B; moving to {tier}"
-                )
+            TierCondition::Combined {
+                age_hours,
+                size_bytes,
+            } => {
+                format!("Segment age >= {age_hours}h and size >= {size_bytes}B; moving to {tier}")
             }
         }
     }
@@ -613,12 +629,8 @@ mod tests {
     #[test]
     fn test_list_policies() {
         let engine = default_engine();
-        engine
-            .set_topic_policy(sample_topic_policy("a"))
-            .unwrap();
-        engine
-            .set_topic_policy(sample_topic_policy("b"))
-            .unwrap();
+        engine.set_topic_policy(sample_topic_policy("a")).unwrap();
+        engine.set_topic_policy(sample_topic_policy("b")).unwrap();
         let list = engine.list_policies();
         assert_eq!(list.len(), 2);
         let topics: Vec<&str> = list.iter().map(|p| p.topic.as_str()).collect();
@@ -726,13 +738,21 @@ mod tests {
             size_bytes: 1000,
         };
         // Both met
-        assert!(TieringPolicyEngine::condition_matches(&cond, 25.0, 1500, 0.0));
+        assert!(TieringPolicyEngine::condition_matches(
+            &cond, 25.0, 1500, 0.0
+        ));
         // Only age met
-        assert!(!TieringPolicyEngine::condition_matches(&cond, 25.0, 500, 0.0));
+        assert!(!TieringPolicyEngine::condition_matches(
+            &cond, 25.0, 500, 0.0
+        ));
         // Only size met
-        assert!(!TieringPolicyEngine::condition_matches(&cond, 12.0, 1500, 0.0));
+        assert!(!TieringPolicyEngine::condition_matches(
+            &cond, 12.0, 1500, 0.0
+        ));
         // Neither met
-        assert!(!TieringPolicyEngine::condition_matches(&cond, 12.0, 500, 0.0));
+        assert!(!TieringPolicyEngine::condition_matches(
+            &cond, 12.0, 500, 0.0
+        ));
     }
 
     // -- Segment evaluation (global defaults) --------------------------------
@@ -759,8 +779,7 @@ mod tests {
     fn test_evaluate_segment_warm_to_cold() {
         let engine = default_engine();
         // 200-hour-old segment in warm tier; global warm retention = 168h
-        let decision =
-            engine.evaluate_segment("t", 0, "seg1", 200.0, 100, StorageTier::Warm, 1.0);
+        let decision = engine.evaluate_segment("t", 0, "seg1", 200.0, 100, StorageTier::Warm, 1.0);
         assert!(decision.is_some());
         let d = decision.unwrap();
         assert_eq!(d.target_tier, StorageTier::Cold);
@@ -770,8 +789,7 @@ mod tests {
     fn test_evaluate_segment_cold_to_delete() {
         let engine = default_engine();
         // very old segment in cold tier; global cold retention = 8760h
-        let decision =
-            engine.evaluate_segment("t", 0, "seg1", 9000.0, 100, StorageTier::Cold, 0.0);
+        let decision = engine.evaluate_segment("t", 0, "seg1", 9000.0, 100, StorageTier::Cold, 0.0);
         assert!(decision.is_some());
         let d = decision.unwrap();
         assert_eq!(d.target_tier, StorageTier::Delete);
@@ -917,7 +935,10 @@ mod tests {
         let json = serde_json::to_string(&cond).unwrap();
         let deser: TierCondition = serde_json::from_str(&json).unwrap();
         match deser {
-            TierCondition::Combined { age_hours, size_bytes } => {
+            TierCondition::Combined {
+                age_hours,
+                size_bytes,
+            } => {
                 assert_eq!(age_hours, 24);
                 assert_eq!(size_bytes, 1_000_000);
             }
@@ -949,8 +970,7 @@ mod tests {
     fn test_no_downgrade_same_tier() {
         let engine = default_engine();
         // Already warm, and age only qualifies for warm → no move
-        let decision =
-            engine.evaluate_segment("t", 0, "seg1", 25.0, 100, StorageTier::Warm, 100.0);
+        let decision = engine.evaluate_segment("t", 0, "seg1", 25.0, 100, StorageTier::Warm, 100.0);
         // 25h > 24h qualifies for warm, but segment is already warm.
         // It doesn't qualify for cold (168h), so no decision.
         assert!(decision.is_none());
@@ -960,8 +980,7 @@ mod tests {
     fn test_skip_warmer_tier_when_already_cold() {
         let engine = default_engine();
         // Segment is already Cold. Age qualifies for warm but that's warmer → skip.
-        let decision =
-            engine.evaluate_segment("t", 0, "seg1", 50.0, 100, StorageTier::Cold, 0.0);
+        let decision = engine.evaluate_segment("t", 0, "seg1", 50.0, 100, StorageTier::Cold, 0.0);
         assert!(decision.is_none());
     }
 
@@ -973,9 +992,7 @@ mod tests {
             tiers: vec![TierRule {
                 tier: StorageTier::Frozen,
                 condition: TierCondition::AgeHours(1),
-                backend: TierBackend::Local {
-                    path: "/f".into(),
-                },
+                backend: TierBackend::Local { path: "/f".into() },
             }],
             override_global: false,
             created_at: 0,
@@ -991,17 +1008,13 @@ mod tests {
 
     #[test]
     fn test_format_reason_messages() {
-        let r1 = TieringPolicyEngine::format_reason(
-            &TierCondition::AgeHours(24),
-            &StorageTier::Warm,
-        );
+        let r1 =
+            TieringPolicyEngine::format_reason(&TierCondition::AgeHours(24), &StorageTier::Warm);
         assert!(r1.contains("24 hours"));
         assert!(r1.contains("warm"));
 
-        let r2 = TieringPolicyEngine::format_reason(
-            &TierCondition::SizeBytes(500),
-            &StorageTier::Cold,
-        );
+        let r2 =
+            TieringPolicyEngine::format_reason(&TierCondition::SizeBytes(500), &StorageTier::Cold);
         assert!(r2.contains("500 bytes"));
 
         let r3 = TieringPolicyEngine::format_reason(
@@ -1026,9 +1039,7 @@ mod tests {
     #[test]
     fn test_policy_overwrite() {
         let engine = default_engine();
-        engine
-            .set_topic_policy(sample_topic_policy("x"))
-            .unwrap();
+        engine.set_topic_policy(sample_topic_policy("x")).unwrap();
         assert_eq!(engine.get_topic_policy("x").unwrap().tiers.len(), 2);
 
         let mut p2 = sample_topic_policy("x");

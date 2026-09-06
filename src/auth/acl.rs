@@ -448,10 +448,10 @@ impl AclStore {
     /// Load ACLs from a YAML file
     pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self> {
         let content = fs::read_to_string(path.as_ref())
-            .map_err(|e| StreamlineError::Config(format!("Failed to read ACL file: {}", e)))?;
+            .map_err(|e| StreamlineError::Config(format!("Failed to read ACL file: {e}")))?;
 
         let acl_file: AclFile = serde_yaml::from_str(&content)
-            .map_err(|e| StreamlineError::Config(format!("Failed to parse ACL file: {}", e)))?;
+            .map_err(|e| StreamlineError::Config(format!("Failed to parse ACL file: {e}")))?;
 
         let mut store = Self::new();
         for acl in acl_file.acls {
@@ -468,19 +468,19 @@ impl AclStore {
         };
 
         let content = serde_yaml::to_string(&acl_file)
-            .map_err(|e| StreamlineError::Config(format!("Failed to serialize ACLs: {}", e)))?;
+            .map_err(|e| StreamlineError::Config(format!("Failed to serialize ACLs: {e}")))?;
 
         // Create parent directory if it doesn't exist
         if let Some(parent) = path.as_ref().parent() {
             if !parent.exists() {
                 fs::create_dir_all(parent).map_err(|e| {
-                    StreamlineError::Config(format!("Failed to create ACL directory: {}", e))
+                    StreamlineError::Config(format!("Failed to create ACL directory: {e}"))
                 })?;
             }
         }
 
         fs::write(path.as_ref(), content)
-            .map_err(|e| StreamlineError::Config(format!("Failed to write ACL file: {}", e)))?;
+            .map_err(|e| StreamlineError::Config(format!("Failed to write ACL file: {e}")))?;
 
         Ok(())
     }
@@ -1052,7 +1052,7 @@ mod tests {
             Permission::Allow,
         );
 
-        let display = format!("{}", acl);
+        let display = format!("{acl}");
         assert!(display.contains("User:alice"));
         assert!(display.contains("Read"));
         assert!(display.contains("Topic"));

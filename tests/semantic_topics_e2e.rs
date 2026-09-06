@@ -12,9 +12,7 @@
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use streamline::ai::semantic_topics::{
-    registry, EmbedJob, EmbedWorker, HashEmbedder,
-};
+use streamline::ai::semantic_topics::{registry, EmbedJob, EmbedWorker, HashEmbedder};
 use streamline::server::search_api::{handle_search, SearchRequest};
 
 fn submit_records(topic: &str, records: &[(i64, &str)]) {
@@ -92,5 +90,9 @@ fn search_returns_empty_on_unindexed_topic() {
     );
     assert!(resp.hits.is_empty());
     // Latency should still be reported (handler runs the embedder + lookup).
-    assert!(resp.took_ms < 100, "took {}ms, expected <100ms", resp.took_ms);
+    assert!(
+        resp.took_ms < 100,
+        "took {}ms, expected <100ms",
+        resp.took_ms
+    );
 }

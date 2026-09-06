@@ -41,9 +41,9 @@ use std::sync::Arc;
 #[cfg(feature = "serverless")]
 use std::time::Duration;
 use tokio::sync::RwLock;
-use tracing::{error, info};
 #[cfg(feature = "serverless")]
 use tracing::{debug, warn};
+use tracing::{error, info};
 
 /// Cloud function provider types
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -496,12 +496,11 @@ impl CloudFunctionConnector {
             state: Arc::new(RwLock::new(CloudFunctionState::default())),
             shutdown_tx: None,
             #[cfg(feature = "serverless")]
-            http_client: reqwest::Client::builder()
+            http_client: crate::http_client::builder()
+                .map_err(|e| StreamlineError::Sink(format!("Failed to create HTTP client: {e}")))?
                 .timeout(Duration::from_secs(60))
                 .build()
-                .map_err(|e| {
-                    StreamlineError::Sink(format!("Failed to create HTTP client: {}", e))
-                })?,
+                .map_err(|e| StreamlineError::Sink(format!("Failed to create HTTP client: {e}")))?,
         })
     }
 
@@ -563,7 +562,7 @@ impl CloudFunctionConnector {
     fn resolve_secret(secret_ref: &str) -> Result<String> {
         if let Some(var_name) = secret_ref.strip_prefix('$') {
             std::env::var(var_name).map_err(|_| {
-                StreamlineError::Sink(format!("Environment variable '{}' not found", var_name))
+                StreamlineError::Sink(format!("Environment variable '{var_name}' not found"))
             })
         } else {
             Ok(secret_ref.to_string())
@@ -583,7 +582,7 @@ impl CloudFunctionConnector {
                     .collect::<Result<Vec<_>>>()?;
 
                 let json = serde_json::to_vec(&items).map_err(|e| {
-                    StreamlineError::Sink(format!("Failed to serialize payload: {}", e))
+                    StreamlineError::Sink(format!("Failed to serialize payload: {e}"))
                 })?;
                 Ok(Bytes::from(json))
             }
@@ -592,7 +591,7 @@ impl CloudFunctionConnector {
                 for record in records {
                     let json = self.record_to_json(topic, partition, record, transform)?;
                     let line = serde_json::to_string(&json).map_err(|e| {
-                        StreamlineError::Sink(format!("Failed to serialize record: {}", e))
+                        StreamlineError::Sink(format!("Failed to serialize record: {e}"))
                     })?;
                     lines.push(line);
                 }
@@ -605,7 +604,7 @@ impl CloudFunctionConnector {
                     .collect::<Result<Vec<_>>>()?;
 
                 let json = serde_json::to_vec(&events).map_err(|e| {
-                    StreamlineError::Sink(format!("Failed to serialize CloudEvents: {}", e))
+                    StreamlineError::Sink(format!("Failed to serialize CloudEvents: {e}"))
                 })?;
                 Ok(Bytes::from(json))
             }
@@ -631,7 +630,7 @@ impl CloudFunctionConnector {
                 });
 
                 let json = serde_json::to_vec(&kinesis_batch).map_err(|e| {
-                    StreamlineError::Sink(format!("Failed to serialize Kinesis batch: {}", e))
+                    StreamlineError::Sink(format!("Failed to serialize Kinesis batch: {e}"))
                 })?;
                 Ok(Bytes::from(json))
             }
@@ -803,10 +802,7 @@ impl CloudFunctionConnector {
                             success: false,
                             status_code: None,
                             response: None,
-                            error: Some(format!(
-                                "Failed after {} retries: {}",
-                                attempts, last_error
-                            )),
+                            error: Some(format!("Failed after {attempts} retries: {last_error}")),
                             latency_ms: 0,
                         });
                     }
@@ -911,8 +907,7 @@ impl CloudFunctionConnector {
         let signed_headers = "host;x-amz-date";
 
         let canonical_request = format!(
-            "POST\n{}\n{}\n{}\n{}\n{}",
-            canonical_uri, canonical_querystring, canonical_headers, signed_headers, payload_hash
+            "POST\n{canonical_uri}\n{canonical_querystring}\n{canonical_headers}\n{signed_headers}\n{payload_hash}"
         );
 
         let algorithm = "AWS4-HMAC-SHA256";
@@ -927,7 +922,7 @@ impl CloudFunctionConnector {
 
         // Calculate signature
         let k_date = Self::hmac_sha256(
-            format!("AWS4{}", secret_key).as_bytes(),
+            format!("AWS4{secret_key}").as_bytes(),
             date_stamp.as_bytes(),
         )?;
         let k_region = Self::hmac_sha256(&k_date, config.region.as_bytes())?;
@@ -936,8 +931,7 @@ impl CloudFunctionConnector {
         let signature = hex::encode(Self::hmac_sha256(&k_signing, string_to_sign.as_bytes())?);
 
         let authorization = format!(
-            "{} Credential={}/{}, SignedHeaders={}, Signature={}",
-            algorithm, access_key, credential_scope, signed_headers, signature
+            "{algorithm} Credential={access_key}/{credential_scope}, SignedHeaders={signed_headers}, Signature={signature}"
         );
 
         // Make request
@@ -951,7 +945,7 @@ impl CloudFunctionConnector {
             .body(payload.to_vec())
             .send()
             .await
-            .map_err(|e| StreamlineError::Sink(format!("Lambda invocation failed: {}", e)))?;
+            .map_err(|e| StreamlineError::Sink(format!("Lambda invocation failed: {e}")))?;
 
         let status = response.status();
         let body = response.text().await.unwrap_or_default();
@@ -982,7 +976,7 @@ impl CloudFunctionConnector {
 
         type HmacSha256 = Hmac<Sha256>;
         let mut mac = HmacSha256::new_from_slice(key)
-            .map_err(|e| StreamlineError::Sink(format!("HMAC key error: {}", e)))?;
+            .map_err(|e| StreamlineError::Sink(format!("HMAC key error: {e}")))?;
         mac.update(data);
         Ok(mac.finalize().into_bytes().to_vec())
     }
@@ -1018,13 +1012,13 @@ impl CloudFunctionConnector {
 
         // Try to get an access token from the metadata server
         if let Ok(token) = self.get_gcp_access_token().await {
-            request = request.header("Authorization", format!("Bearer {}", token));
+            request = request.header("Authorization", format!("Bearer {token}"));
         }
 
         let response = request
             .send()
             .await
-            .map_err(|e| StreamlineError::Sink(format!("GCF invocation failed: {}", e)))?;
+            .map_err(|e| StreamlineError::Sink(format!("GCF invocation failed: {e}")))?;
 
         let status = response.status();
         let body = response.text().await.unwrap_or_default();
@@ -1061,11 +1055,11 @@ impl CloudFunctionConnector {
             .timeout(Duration::from_secs(2))
             .send()
             .await
-            .map_err(|e| StreamlineError::Sink(format!("Failed to get GCP token: {}", e)))?;
+            .map_err(|e| StreamlineError::Sink(format!("Failed to get GCP token: {e}")))?;
 
         if response.status().is_success() {
             let body: serde_json::Value = response.json().await.map_err(|e| {
-                StreamlineError::Sink(format!("Failed to parse GCP token response: {}", e))
+                StreamlineError::Sink(format!("Failed to parse GCP token response: {e}"))
             })?;
 
             body["access_token"]
@@ -1109,9 +1103,10 @@ impl CloudFunctionConnector {
             request = request.header("x-functions-key", resolved_key);
         }
 
-        let response = request.send().await.map_err(|e| {
-            StreamlineError::Sink(format!("Azure Function invocation failed: {}", e))
-        })?;
+        let response = request
+            .send()
+            .await
+            .map_err(|e| StreamlineError::Sink(format!("Azure Function invocation failed: {e}")))?;
 
         let status = response.status();
         let body = response.text().await.unwrap_or_default();
@@ -1159,11 +1154,11 @@ impl CloudFunctionConnector {
         // Add API token if provided
         if let Some(ref token) = config.api_token {
             let resolved_token = Self::resolve_secret(token)?;
-            request = request.header("Authorization", format!("Bearer {}", resolved_token));
+            request = request.header("Authorization", format!("Bearer {resolved_token}"));
         }
 
         let response = request.send().await.map_err(|e| {
-            StreamlineError::Sink(format!("Cloudflare Worker invocation failed: {}", e))
+            StreamlineError::Sink(format!("Cloudflare Worker invocation failed: {e}"))
         })?;
 
         let status = response.status();
@@ -1191,7 +1186,7 @@ impl CloudFunctionConnector {
     /// Send failed records to DLQ
     fn send_to_dlq(&self, record: &Record, topic: &str, partition: i32, error: &str) {
         if let Some(ref dlq_manager) = self.dlq_manager {
-            let context = DlqContext::new(format!("Cloud function invocation failed: {}", error));
+            let context = DlqContext::new(format!("Cloud function invocation failed: {error}"));
             if let Err(e) = dlq_manager.send_to_dlq(record, topic, partition, context) {
                 error!(
                     connector = %self.name,
@@ -1336,7 +1331,7 @@ impl SinkConnector for CloudFunctionConnector {
                 // Update committed offset
                 let state = self.state.read().await;
                 if let Ok(mut offsets) = state.committed_offsets.write() {
-                    let key = format!("{}-{}", topic, partition);
+                    let key = format!("{topic}-{partition}");
                     offsets.insert(key, highest_offset);
                 }
 
@@ -1586,7 +1581,7 @@ mod tests {
 
         for (format, expected) in formats {
             let json = serde_json::to_string(&format).unwrap();
-            assert_eq!(json, format!("\"{}\"", expected));
+            assert_eq!(json, format!("\"{expected}\""));
         }
     }
 }

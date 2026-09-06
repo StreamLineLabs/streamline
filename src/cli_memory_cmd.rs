@@ -3,8 +3,6 @@
 //!
 //! Stability: Experimental. Only compiled with `agent-memory`.
 
-#![cfg(feature = "agent-memory")]
-
 use clap::Subcommand;
 use serde::{Deserialize, Serialize};
 use streamline::Result;
@@ -141,8 +139,7 @@ pub(crate) fn handle(cmd: MemoryCli) -> Result<()> {
                 k,
                 min_hits,
             };
-            let resp: RecallResponse =
-                cli_http::post_json(&base, "/api/v1/memory/recall", &body)?;
+            let resp: RecallResponse = cli_http::post_json(&base, "/api/v1/memory/recall", &body)?;
             if resp.hits.is_empty() {
                 println!("(no recall)");
                 return Ok(());

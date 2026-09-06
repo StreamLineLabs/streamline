@@ -254,16 +254,15 @@ impl GrpcAdapter {
             .insert(client_id.to_string(), session);
 
         self.stats.connections_total.fetch_add(1, Ordering::Relaxed);
-        self.stats.connections_active.fetch_add(1, Ordering::Relaxed);
+        self.stats
+            .connections_active
+            .fetch_add(1, Ordering::Relaxed);
 
         info!(client_id, remote_addr, "gRPC client connected");
     }
 
     /// Handle a produce request. Returns the Streamline topic and validates the message.
-    pub async fn handle_produce(
-        &self,
-        request: &GrpcProduceRequest,
-    ) -> Result<String> {
+    pub async fn handle_produce(&self, request: &GrpcProduceRequest) -> Result<String> {
         if request.topic.is_empty() {
             self.stats.errors.fetch_add(1, Ordering::Relaxed);
             return Err(StreamlineError::Gateway("topic is required".into()));
@@ -297,10 +296,7 @@ impl GrpcAdapter {
     }
 
     /// Handle a consume request. Returns the Streamline topic to consume from.
-    pub async fn handle_consume(
-        &self,
-        request: &GrpcConsumeRequest,
-    ) -> Result<String> {
+    pub async fn handle_consume(&self, request: &GrpcConsumeRequest) -> Result<String> {
         if request.topic.is_empty() {
             self.stats.errors.fetch_add(1, Ordering::Relaxed);
             return Err(StreamlineError::Gateway("topic is required".into()));
@@ -324,7 +320,9 @@ impl GrpcAdapter {
         let mut sessions = self.sessions.write().await;
         if let Some(session) = sessions.get_mut(client_id) {
             session.connected = false;
-            self.stats.connections_active.fetch_sub(1, Ordering::Relaxed);
+            self.stats
+                .connections_active
+                .fetch_sub(1, Ordering::Relaxed);
             info!(client_id, "gRPC client disconnected");
         }
         sessions.remove(client_id);

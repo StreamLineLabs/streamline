@@ -367,7 +367,7 @@ impl LifecycleManager {
                 segment_id: segment.id.clone(),
                 from_tier: segment.current_tier,
                 to_tier: recommended_tier,
-                reason: format!("Age-based migration: data is {:?}", age),
+                reason: format!("Age-based migration: data is {age:?}"),
             });
         }
 
@@ -389,8 +389,7 @@ impl LifecycleManager {
             return Some(LifecycleAction::Delete {
                 segment_id: segment.id.clone(),
                 reason: format!(
-                    "Retention expired: {} days old, retention is {} days",
-                    age_days, retention_days
+                    "Retention expired: {age_days} days old, retention is {retention_days} days"
                 ),
             });
         }

@@ -424,7 +424,7 @@ mod tests {
     fn create_test_member(id: &str, topics: Vec<String>) -> GroupMember {
         GroupMember {
             member_id: id.to_string(),
-            client_id: format!("client-{}", id),
+            client_id: format!("client-{id}"),
             client_host: "localhost".to_string(),
             session_timeout_ms: 45000,
             rebalance_timeout_ms: 300000,
@@ -495,7 +495,7 @@ mod tests {
     ) -> GroupMember {
         GroupMember {
             member_id: id.to_string(),
-            client_id: format!("client-{}", id),
+            client_id: format!("client-{id}"),
             client_host: "localhost".to_string(),
             session_timeout_ms: 45000,
             rebalance_timeout_ms: 300000,
@@ -513,7 +513,7 @@ mod tests {
     ) -> GroupMember {
         GroupMember {
             member_id: id.to_string(),
-            client_id: format!("client-{}", id),
+            client_id: format!("client-{id}"),
             client_host: "localhost".to_string(),
             session_timeout_ms: 45000,
             rebalance_timeout_ms: 300000,

@@ -86,7 +86,7 @@ impl BuiltinFunction for JsonFilter {
 
     fn execute(&self, input: &TransformInput) -> Result<TransformOutput> {
         let json: serde_json::Value = serde_json::from_slice(&input.value)
-            .map_err(|e| WasmError::Wasm(format!("Invalid JSON input: {}", e)))?;
+            .map_err(|e| WasmError::Wasm(format!("Invalid JSON input: {e}")))?;
 
         let field_value = resolve_json_path(&json, &self.field);
 
@@ -186,7 +186,7 @@ impl BuiltinFunction for JsonTransform {
 
     fn execute(&self, input: &TransformInput) -> Result<TransformOutput> {
         let mut json: serde_json::Value = serde_json::from_slice(&input.value)
-            .map_err(|e| WasmError::Wasm(format!("Invalid JSON input: {}", e)))?;
+            .map_err(|e| WasmError::Wasm(format!("Invalid JSON input: {e}")))?;
 
         if let Some(obj) = json.as_object_mut() {
             // Remove fields
@@ -203,15 +203,12 @@ impl BuiltinFunction for JsonTransform {
 
             // Add fields
             for (field, value) in &self.additions {
-                obj.insert(
-                    field.clone(),
-                    serde_json::Value::String(value.clone()),
-                );
+                obj.insert(field.clone(), serde_json::Value::String(value.clone()));
             }
         }
 
         let output_bytes = serde_json::to_vec(&json)
-            .map_err(|e| WasmError::Wasm(format!("Failed to serialize JSON: {}", e)))?;
+            .map_err(|e| WasmError::Wasm(format!("Failed to serialize JSON: {e}")))?;
 
         Ok(TransformOutput::Transformed(vec![TransformResult {
             key: input.key.clone(),
@@ -262,13 +259,13 @@ impl BuiltinFunction for JsonFlatten {
 
     fn execute(&self, input: &TransformInput) -> Result<TransformOutput> {
         let json: serde_json::Value = serde_json::from_slice(&input.value)
-            .map_err(|e| WasmError::Wasm(format!("Invalid JSON input: {}", e)))?;
+            .map_err(|e| WasmError::Wasm(format!("Invalid JSON input: {e}")))?;
 
         let mut flat = serde_json::Map::new();
         flatten_value(&json, "", &self.separator, self.max_depth, 0, &mut flat);
 
         let output_bytes = serde_json::to_vec(&serde_json::Value::Object(flat))
-            .map_err(|e| WasmError::Wasm(format!("Failed to serialize JSON: {}", e)))?;
+            .map_err(|e| WasmError::Wasm(format!("Failed to serialize JSON: {e}")))?;
 
         Ok(TransformOutput::Transformed(vec![TransformResult {
             key: input.key.clone(),
@@ -302,9 +299,7 @@ impl TimestampExtract {
     pub fn from_config(config: &HashMap<String, String>) -> Result<Self> {
         let field = config
             .get("field")
-            .ok_or_else(|| {
-                WasmError::Configuration("timestamp_extract requires 'field'".into())
-            })?
+            .ok_or_else(|| WasmError::Configuration("timestamp_extract requires 'field'".into()))?
             .clone();
         let format = match config.get("format").map(|s| s.as_str()) {
             Some("epoch_s") => TimestampFormat::EpochS,
@@ -326,7 +321,7 @@ impl BuiltinFunction for TimestampExtract {
 
     fn execute(&self, input: &TransformInput) -> Result<TransformOutput> {
         let json: serde_json::Value = serde_json::from_slice(&input.value)
-            .map_err(|e| WasmError::Wasm(format!("Invalid JSON input: {}", e)))?;
+            .map_err(|e| WasmError::Wasm(format!("Invalid JSON input: {e}")))?;
 
         let field_value = resolve_json_path(&json, &self.field)
             .ok_or_else(|| WasmError::Wasm(format!("Field '{}' not found", self.field)))?;
@@ -346,7 +341,7 @@ impl BuiltinFunction for TimestampExtract {
                     .as_str()
                     .ok_or_else(|| WasmError::Wasm("Expected string timestamp".into()))?;
                 chrono::DateTime::parse_from_rfc3339(s)
-                    .map_err(|e| WasmError::Wasm(format!("Invalid ISO 8601 timestamp: {}", e)))?
+                    .map_err(|e| WasmError::Wasm(format!("Invalid ISO 8601 timestamp: {e}")))?
                     .timestamp_millis()
             }
         };
@@ -418,7 +413,7 @@ impl BuiltinFunction for FieldMask {
 
     fn execute(&self, input: &TransformInput) -> Result<TransformOutput> {
         let mut json: serde_json::Value = serde_json::from_slice(&input.value)
-            .map_err(|e| WasmError::Wasm(format!("Invalid JSON input: {}", e)))?;
+            .map_err(|e| WasmError::Wasm(format!("Invalid JSON input: {e}")))?;
 
         if let Some(obj) = json.as_object_mut() {
             for field in &self.fields {
@@ -430,7 +425,7 @@ impl BuiltinFunction for FieldMask {
         }
 
         let output_bytes = serde_json::to_vec(&json)
-            .map_err(|e| WasmError::Wasm(format!("Failed to serialize JSON: {}", e)))?;
+            .map_err(|e| WasmError::Wasm(format!("Failed to serialize JSON: {e}")))?;
 
         Ok(TransformOutput::Transformed(vec![TransformResult {
             key: input.key.clone(),
@@ -501,8 +496,7 @@ pub fn create_builtin(
         "timestamp_extract" => Ok(Box::new(TimestampExtract::from_config(config)?)),
         "field_mask" => Ok(Box::new(FieldMask::from_config(config)?)),
         _ => Err(WasmError::Validation(format!(
-            "Unknown built-in function: '{}'",
-            name
+            "Unknown built-in function: '{name}'"
         ))),
     }
 }
@@ -544,9 +538,16 @@ fn flatten_value(
                 let new_prefix = if prefix.is_empty() {
                     key.clone()
                 } else {
-                    format!("{}{}{}", prefix, separator, key)
+                    format!("{prefix}{separator}{key}")
                 };
-                flatten_value(val, &new_prefix, separator, max_depth, current_depth + 1, output);
+                flatten_value(
+                    val,
+                    &new_prefix,
+                    separator,
+                    max_depth,
+                    current_depth + 1,
+                    output,
+                );
             }
         }
         _ => {
@@ -562,10 +563,10 @@ fn mask_value(value: &serde_json::Value, strategy: &MaskStrategy) -> String {
         MaskStrategy::Redact => "***REDACTED***".to_string(),
         MaskStrategy::Hash => {
             // Simple deterministic hash (not cryptographic)
-            let hash: u64 = original.bytes().fold(0u64, |acc, b| {
-                acc.wrapping_mul(31).wrapping_add(b as u64)
-            });
-            format!("masked_{:016x}", hash)
+            let hash: u64 = original
+                .bytes()
+                .fold(0u64, |acc, b| acc.wrapping_mul(31).wrapping_add(b as u64));
+            format!("masked_{hash:016x}")
         }
         MaskStrategy::Partial => {
             if original.contains('@') {
@@ -726,8 +727,7 @@ mod tests {
             field: "created_at".to_string(),
             format: TimestampFormat::Iso8601,
         };
-        let input =
-            make_json_input(r#"{"created_at": "2024-01-15T12:00:00Z", "data": "test"}"#);
+        let input = make_json_input(r#"{"created_at": "2024-01-15T12:00:00Z", "data": "test"}"#);
         let output = extract.execute(&input).unwrap();
         assert!(matches!(output, TransformOutput::Transformed(_)));
     }
@@ -740,8 +740,9 @@ mod tests {
             fields: vec!["email".to_string(), "phone".to_string()],
             strategy: MaskStrategy::Redact,
         };
-        let input =
-            make_json_input(r#"{"email": "alice@example.com", "phone": "555-1234", "name": "Alice"}"#);
+        let input = make_json_input(
+            r#"{"email": "alice@example.com", "phone": "555-1234", "name": "Alice"}"#,
+        );
         let output = mask.execute(&input).unwrap();
 
         if let TransformOutput::Transformed(results) = output {
@@ -818,8 +819,7 @@ mod tests {
 
     #[test]
     fn test_resolve_json_path() {
-        let json: serde_json::Value =
-            serde_json::from_str(r#"{"a": {"b": {"c": 42}}}"#).unwrap();
+        let json: serde_json::Value = serde_json::from_str(r#"{"a": {"b": {"c": 42}}}"#).unwrap();
         let val = resolve_json_path(&json, "a.b.c").unwrap();
         assert_eq!(val, &serde_json::json!(42));
     }

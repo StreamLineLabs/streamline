@@ -189,10 +189,7 @@ pub fn create_feature_store_api_router(state: FeatureStoreApiState) -> Router {
             post(ingest_features),
         )
         .route("/api/v1/features/serve", post(serve_features))
-        .route(
-            "/api/v1/features/serve/:group/:entity",
-            get(serve_entity),
-        )
+        .route("/api/v1/features/serve/:group/:entity", get(serve_entity))
         .route("/api/v1/features/serve/batch", post(batch_serve))
         .route("/api/v1/features/stats", get(feature_stats))
         .with_state(state)
@@ -227,9 +224,7 @@ async fn create_group(
     Ok((StatusCode::CREATED, Json(group)))
 }
 
-async fn list_groups(
-    State(state): State<FeatureStoreApiState>,
-) -> Json<Vec<FeatureGroup>> {
+async fn list_groups(State(state): State<FeatureStoreApiState>) -> Json<Vec<FeatureGroup>> {
     let groups = state.groups.read().await;
     Json(groups.values().cloned().collect())
 }
@@ -239,18 +234,14 @@ async fn get_group(
     Path(name): Path<String>,
 ) -> Result<Json<FeatureGroup>, (StatusCode, Json<ErrorResponse>)> {
     let groups = state.groups.read().await;
-    groups
-        .get(&name)
-        .cloned()
-        .map(Json)
-        .ok_or_else(|| {
-            (
-                StatusCode::NOT_FOUND,
-                Json(ErrorResponse {
-                    error: format!("Feature group '{}' not found", name),
-                }),
-            )
-        })
+    groups.get(&name).cloned().map(Json).ok_or_else(|| {
+        (
+            StatusCode::NOT_FOUND,
+            Json(ErrorResponse {
+                error: format!("Feature group '{name}' not found"),
+            }),
+        )
+    })
 }
 
 async fn delete_group(
@@ -262,7 +253,7 @@ async fn delete_group(
         return Err((
             StatusCode::NOT_FOUND,
             Json(ErrorResponse {
-                error: format!("Feature group '{}' not found", name),
+                error: format!("Feature group '{name}' not found"),
             }),
         ));
     }
@@ -285,7 +276,7 @@ async fn ingest_features(
             return Err((
                 StatusCode::NOT_FOUND,
                 Json(ErrorResponse {
-                    error: format!("Feature group '{}' not found", name),
+                    error: format!("Feature group '{name}' not found"),
                 }),
             ));
         }
@@ -293,10 +284,7 @@ async fn ingest_features(
 
     let key = (name.clone(), req.entity_id.clone());
     let mut feats = state.features.write().await;
-    let version = feats
-        .get(&key)
-        .map(|v| v.version + 1)
-        .unwrap_or(1);
+    let version = feats.get(&key).map(|v| v.version + 1).unwrap_or(1);
 
     let is_new = !feats.contains_key(&key);
 
@@ -405,9 +393,7 @@ async fn batch_serve(
     serve_features(State(state), Json(req)).await
 }
 
-async fn feature_stats(
-    State(state): State<FeatureStoreApiState>,
-) -> Json<FeatureStoreStats> {
+async fn feature_stats(State(state): State<FeatureStoreApiState>) -> Json<FeatureStoreStats> {
     let groups = state.groups.read().await;
     let feats = state.features.read().await;
     Json(FeatureStoreStats {
@@ -501,13 +487,21 @@ mod tests {
 
         let resp = router
             .clone()
-            .oneshot(json_request(Method::POST, "/api/v1/features/groups", req_body.clone()))
+            .oneshot(json_request(
+                Method::POST,
+                "/api/v1/features/groups",
+                req_body.clone(),
+            ))
             .await
             .unwrap();
         assert_eq!(resp.status(), StatusCode::CREATED);
 
         let resp2 = router
-            .oneshot(json_request(Method::POST, "/api/v1/features/groups", req_body))
+            .oneshot(json_request(
+                Method::POST,
+                "/api/v1/features/groups",
+                req_body,
+            ))
             .await
             .unwrap();
         assert_eq!(resp2.status(), StatusCode::CONFLICT);
@@ -611,7 +605,10 @@ mod tests {
     #[tokio::test]
     async fn test_delete_group_not_found() {
         let resp = app()
-            .oneshot(empty_request(Method::DELETE, "/api/v1/features/groups/nope"))
+            .oneshot(empty_request(
+                Method::DELETE,
+                "/api/v1/features/groups/nope",
+            ))
             .await
             .unwrap();
         assert_eq!(resp.status(), StatusCode::NOT_FOUND);
@@ -705,12 +702,22 @@ mod tests {
         // create group + ingest
         router
             .clone()
-            .oneshot(json_request(Method::POST, "/api/v1/features/groups", serde_json::json!({"name":"g","entity_key":"id"})))
-            .await.unwrap();
+            .oneshot(json_request(
+                Method::POST,
+                "/api/v1/features/groups",
+                serde_json::json!({"name":"g","entity_key":"id"}),
+            ))
+            .await
+            .unwrap();
         router
             .clone()
-            .oneshot(json_request(Method::POST, "/api/v1/features/groups/g/ingest", serde_json::json!({"entity_id":"e1","features":{"x":1.0}})))
-            .await.unwrap();
+            .oneshot(json_request(
+                Method::POST,
+                "/api/v1/features/groups/g/ingest",
+                serde_json::json!({"entity_id":"e1","features":{"x":1.0}}),
+            ))
+            .await
+            .unwrap();
 
         let resp = router
             .oneshot(json_request(
@@ -743,8 +750,24 @@ mod tests {
     async fn test_serve_entity_endpoint() {
         let state = FeatureStoreApiState::new();
         let router = create_feature_store_api_router(state);
-        router.clone().oneshot(json_request(Method::POST, "/api/v1/features/groups", serde_json::json!({"name":"g","entity_key":"id"}))).await.unwrap();
-        router.clone().oneshot(json_request(Method::POST, "/api/v1/features/groups/g/ingest", serde_json::json!({"entity_id":"e1","features":{"v":42}}))).await.unwrap();
+        router
+            .clone()
+            .oneshot(json_request(
+                Method::POST,
+                "/api/v1/features/groups",
+                serde_json::json!({"name":"g","entity_key":"id"}),
+            ))
+            .await
+            .unwrap();
+        router
+            .clone()
+            .oneshot(json_request(
+                Method::POST,
+                "/api/v1/features/groups/g/ingest",
+                serde_json::json!({"entity_id":"e1","features":{"v":42}}),
+            ))
+            .await
+            .unwrap();
 
         let resp = router
             .oneshot(empty_request(Method::GET, "/api/v1/features/serve/g/e1"))
@@ -759,7 +782,10 @@ mod tests {
     #[tokio::test]
     async fn test_serve_entity_not_found() {
         let resp = app()
-            .oneshot(empty_request(Method::GET, "/api/v1/features/serve/g/missing"))
+            .oneshot(empty_request(
+                Method::GET,
+                "/api/v1/features/serve/g/missing",
+            ))
             .await
             .unwrap();
         assert_eq!(resp.status(), StatusCode::NOT_FOUND);
@@ -769,9 +795,33 @@ mod tests {
     async fn test_batch_serve() {
         let state = FeatureStoreApiState::new();
         let router = create_feature_store_api_router(state);
-        router.clone().oneshot(json_request(Method::POST, "/api/v1/features/groups", serde_json::json!({"name":"g","entity_key":"id"}))).await.unwrap();
-        router.clone().oneshot(json_request(Method::POST, "/api/v1/features/groups/g/ingest", serde_json::json!({"entity_id":"e1","features":{"a":1}}))).await.unwrap();
-        router.clone().oneshot(json_request(Method::POST, "/api/v1/features/groups/g/ingest", serde_json::json!({"entity_id":"e2","features":{"a":2}}))).await.unwrap();
+        router
+            .clone()
+            .oneshot(json_request(
+                Method::POST,
+                "/api/v1/features/groups",
+                serde_json::json!({"name":"g","entity_key":"id"}),
+            ))
+            .await
+            .unwrap();
+        router
+            .clone()
+            .oneshot(json_request(
+                Method::POST,
+                "/api/v1/features/groups/g/ingest",
+                serde_json::json!({"entity_id":"e1","features":{"a":1}}),
+            ))
+            .await
+            .unwrap();
+        router
+            .clone()
+            .oneshot(json_request(
+                Method::POST,
+                "/api/v1/features/groups/g/ingest",
+                serde_json::json!({"entity_id":"e2","features":{"a":2}}),
+            ))
+            .await
+            .unwrap();
 
         let resp = router
             .oneshot(json_request(
@@ -805,8 +855,24 @@ mod tests {
     async fn test_stats_after_operations() {
         let state = FeatureStoreApiState::new();
         let router = create_feature_store_api_router(state);
-        router.clone().oneshot(json_request(Method::POST, "/api/v1/features/groups", serde_json::json!({"name":"g","entity_key":"id"}))).await.unwrap();
-        router.clone().oneshot(json_request(Method::POST, "/api/v1/features/groups/g/ingest", serde_json::json!({"entity_id":"e1","features":{"v":1}}))).await.unwrap();
+        router
+            .clone()
+            .oneshot(json_request(
+                Method::POST,
+                "/api/v1/features/groups",
+                serde_json::json!({"name":"g","entity_key":"id"}),
+            ))
+            .await
+            .unwrap();
+        router
+            .clone()
+            .oneshot(json_request(
+                Method::POST,
+                "/api/v1/features/groups/g/ingest",
+                serde_json::json!({"entity_id":"e1","features":{"v":1}}),
+            ))
+            .await
+            .unwrap();
 
         let resp = router
             .oneshot(empty_request(Method::GET, "/api/v1/features/stats"))
@@ -824,8 +890,24 @@ mod tests {
     async fn test_serve_with_feature_filter() {
         let state = FeatureStoreApiState::new();
         let router = create_feature_store_api_router(state);
-        router.clone().oneshot(json_request(Method::POST, "/api/v1/features/groups", serde_json::json!({"name":"g","entity_key":"id"}))).await.unwrap();
-        router.clone().oneshot(json_request(Method::POST, "/api/v1/features/groups/g/ingest", serde_json::json!({"entity_id":"e1","features":{"a":1,"b":2,"c":3}}))).await.unwrap();
+        router
+            .clone()
+            .oneshot(json_request(
+                Method::POST,
+                "/api/v1/features/groups",
+                serde_json::json!({"name":"g","entity_key":"id"}),
+            ))
+            .await
+            .unwrap();
+        router
+            .clone()
+            .oneshot(json_request(
+                Method::POST,
+                "/api/v1/features/groups/g/ingest",
+                serde_json::json!({"entity_id":"e1","features":{"a":1,"b":2,"c":3}}),
+            ))
+            .await
+            .unwrap();
 
         let resp = router
             .oneshot(json_request(
@@ -846,10 +928,30 @@ mod tests {
     async fn test_delete_group_removes_features() {
         let state = FeatureStoreApiState::new();
         let router = create_feature_store_api_router(state.clone());
-        router.clone().oneshot(json_request(Method::POST, "/api/v1/features/groups", serde_json::json!({"name":"g","entity_key":"id"}))).await.unwrap();
-        router.clone().oneshot(json_request(Method::POST, "/api/v1/features/groups/g/ingest", serde_json::json!({"entity_id":"e1","features":{"v":1}}))).await.unwrap();
+        router
+            .clone()
+            .oneshot(json_request(
+                Method::POST,
+                "/api/v1/features/groups",
+                serde_json::json!({"name":"g","entity_key":"id"}),
+            ))
+            .await
+            .unwrap();
+        router
+            .clone()
+            .oneshot(json_request(
+                Method::POST,
+                "/api/v1/features/groups/g/ingest",
+                serde_json::json!({"entity_id":"e1","features":{"v":1}}),
+            ))
+            .await
+            .unwrap();
 
-        router.clone().oneshot(empty_request(Method::DELETE, "/api/v1/features/groups/g")).await.unwrap();
+        router
+            .clone()
+            .oneshot(empty_request(Method::DELETE, "/api/v1/features/groups/g"))
+            .await
+            .unwrap();
 
         // Feature vectors should be cleaned up.
         let feats = state.features.read().await;

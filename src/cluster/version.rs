@@ -394,7 +394,7 @@ mod tests {
     #[test]
     fn test_version_display() {
         let v = StreamlineVersion::new(1, 2, 3, 4);
-        assert_eq!(format!("{}", v), "1.2.3 (protocol v4)");
+        assert_eq!(format!("{v}"), "1.2.3 (protocol v4)");
         assert_eq!(v.semver(), "1.2.3");
     }
 

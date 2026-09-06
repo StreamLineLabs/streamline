@@ -262,7 +262,7 @@ impl ConnectorHealthMonitor {
                 } else {
                     (
                         HealthStatus::Degraded,
-                        Some(format!("Tasks failed: {:?}", failed)),
+                        Some(format!("Tasks failed: {failed:?}")),
                     )
                 }
             }

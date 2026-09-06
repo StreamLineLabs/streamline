@@ -216,9 +216,14 @@ impl HwAccelerationEngine {
         self.stats
             .bytes_processed_simd
             .fetch_add(total_bytes, Ordering::Relaxed);
-        self.stats
-            .simd_operations
-            .fetch_add(if method != ProcessMethod::Scalar { 1 } else { 0 }, Ordering::Relaxed);
+        self.stats.simd_operations.fetch_add(
+            if method != ProcessMethod::Scalar {
+                1
+            } else {
+                0
+            },
+            Ordering::Relaxed,
+        );
 
         let _ = BatchProcessResult {
             records_processed: data.len(),
@@ -257,9 +262,14 @@ impl HwAccelerationEngine {
             .map(|buf| Self::find_byte_scalar(buf, needle))
             .collect();
 
-        self.stats
-            .simd_operations
-            .fetch_add(if method != ProcessMethod::Scalar { 1 } else { 0 }, Ordering::Relaxed);
+        self.stats.simd_operations.fetch_add(
+            if method != ProcessMethod::Scalar {
+                1
+            } else {
+                0
+            },
+            Ordering::Relaxed,
+        );
 
         results
     }
@@ -273,7 +283,10 @@ impl HwAccelerationEngine {
     /// Estimate compressed sizes for a batch of buffers by counting unique
     /// byte frequencies — a cheap heuristic for compressibility.
     pub fn batch_compress_estimate(&self, data: &[&[u8]]) -> Vec<usize> {
-        let results: Vec<usize> = data.iter().map(|buf| Self::compress_estimate_scalar(buf)).collect();
+        let results: Vec<usize> = data
+            .iter()
+            .map(|buf| Self::compress_estimate_scalar(buf))
+            .collect();
 
         self.stats
             .compression_accel_ops
@@ -544,8 +557,10 @@ mod tests {
 
     #[test]
     fn test_optimal_batch_size_simd_disabled() {
-        let mut cfg = HwAccelConfig::default();
-        cfg.enable_simd = false;
+        let cfg = HwAccelConfig {
+            enable_simd: false,
+            ..Default::default()
+        };
         let engine = HwAccelerationEngine::new(cfg.clone());
         assert_eq!(engine.optimal_batch_size(), cfg.simd_batch_size);
     }
@@ -590,8 +605,10 @@ mod tests {
 
     #[test]
     fn test_select_method_simd_disabled() {
-        let mut cfg = HwAccelConfig::default();
-        cfg.enable_simd = false;
+        let cfg = HwAccelConfig {
+            enable_simd: false,
+            ..Default::default()
+        };
         let engine = HwAccelerationEngine::new(cfg);
         // When SIMD is disabled the engine should always choose Scalar.
         let data = b"check";

@@ -1,5 +1,3 @@
-use super::*;
-
 #[test]
 fn test_quota_limits_config_defaults() {
     // LimitsConfig should have sensible defaults

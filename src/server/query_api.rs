@@ -5,7 +5,7 @@
 
 use axum::{
     extract::{Json, State},
-    http::StatusCode,
+    http::{header::CONTENT_TYPE, StatusCode},
     response::IntoResponse,
     routing::post,
     Router,
@@ -39,10 +39,14 @@ pub struct QueryRequest {
     pub format: QueryFormat,
 }
 
-fn default_timeout() -> u64 { 30000 }
-fn default_max_rows() -> usize { 10000 }
+fn default_timeout() -> u64 {
+    30000
+}
+fn default_max_rows() -> usize {
+    10000
+}
 
-#[derive(Debug, Default, Deserialize, Serialize)]
+#[derive(Debug, Clone, Copy, Default, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum QueryFormat {
     #[default]
@@ -105,7 +109,8 @@ async fn execute_query(
             Json(serde_json::json!({
                 "error": { "code": "EMPTY_QUERY", "message": "SQL query cannot be empty" }
             })),
-        ).into_response();
+        )
+            .into_response();
     }
 
     // Streaming queries should use the dedicated stream endpoint
@@ -117,9 +122,22 @@ async fn execute_query(
 
     debug!(sql, "Executing unified query");
 
-    // Delegate to StreamQL engine
-    match state.streamql.execute(sql).await {
-        Ok(result) => {
+    // StreamQL currently performs synchronous storage scans internally. Run it
+    // on the blocking pool so the request deadline is observable and the async
+    // HTTP worker is not occupied by the scan.
+    let streamql = state.streamql.clone();
+    let sql_owned = sql.to_string();
+    let runtime = tokio::runtime::Handle::current();
+    let query_task =
+        tokio::task::spawn_blocking(move || runtime.block_on(streamql.execute(&sql_owned)));
+
+    match tokio::time::timeout(
+        std::time::Duration::from_millis(request.timeout_ms),
+        query_task,
+    )
+    .await
+    {
+        Ok(Ok(Ok(result))) => {
             let columns: Vec<ColumnInfo> = result
                 .schema
                 .columns
@@ -143,17 +161,27 @@ async fn execute_query(
                         .iter()
                         .map(|v| match v {
                             crate::streamql::types::Value::Null => serde_json::Value::Null,
-                            crate::streamql::types::Value::Boolean(b) => serde_json::Value::Bool(*b),
+                            crate::streamql::types::Value::Boolean(b) => {
+                                serde_json::Value::Bool(*b)
+                            }
                             crate::streamql::types::Value::Int64(i) => serde_json::json!(i),
                             crate::streamql::types::Value::Float64(f) => serde_json::json!(f),
-                            crate::streamql::types::Value::String(s) => serde_json::Value::String(s.clone()),
+                            crate::streamql::types::Value::String(s) => {
+                                serde_json::Value::String(s.clone())
+                            }
                             crate::streamql::types::Value::Timestamp(ts) => serde_json::json!(ts),
-                            crate::streamql::types::Value::Binary(b) => serde_json::json!(base64::engine::general_purpose::STANDARD.encode(b)),
+                            crate::streamql::types::Value::Binary(b) => serde_json::json!(
+                                base64::engine::general_purpose::STANDARD.encode(b)
+                            ),
                             crate::streamql::types::Value::Date(d) => serde_json::json!(d),
                             crate::streamql::types::Value::Duration(d) => serde_json::json!(d),
                             crate::streamql::types::Value::Json(j) => serde_json::json!(j),
-                            crate::streamql::types::Value::Array(arr) => serde_json::json!(format!("{:?}", arr)),
-                            crate::streamql::types::Value::Map(m) => serde_json::json!(format!("{:?}", m)),
+                            crate::streamql::types::Value::Array(arr) => {
+                                serde_json::json!(format!("{:?}", arr))
+                            }
+                            crate::streamql::types::Value::Map(m) => {
+                                serde_json::json!(format!("{:?}", m))
+                            }
                         })
                         .collect()
                 })
@@ -161,7 +189,11 @@ async fn execute_query(
 
             let rows_returned = rows.len();
             let elapsed = start.elapsed().as_millis() as u64;
-            info!(rows_returned, elapsed_ms = elapsed, "Unified query completed");
+            info!(
+                rows_returned,
+                elapsed_ms = elapsed,
+                "Unified query completed"
+            );
 
             let response = QueryResponse {
                 columns,
@@ -174,14 +206,89 @@ async fn execute_query(
                 },
             };
 
-            (StatusCode::OK, Json(response)).into_response()
+            match request.format {
+                QueryFormat::Json => (StatusCode::OK, Json(response)).into_response(),
+                QueryFormat::Csv => (
+                    StatusCode::OK,
+                    [(CONTENT_TYPE, "text/csv; charset=utf-8")],
+                    render_csv(&response),
+                )
+                    .into_response(),
+            }
         }
-        Err(e) => {
+        Ok(Ok(Err(e))) => {
             error!(error = %e, "Query execution failed");
-            (StatusCode::BAD_REQUEST, Json(serde_json::json!({
-                "error": { "code": "QUERY_ERROR", "message": format!("{e}") }
-            }))).into_response()
+            (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({
+                    "error": { "code": "QUERY_ERROR", "message": format!("{e}") }
+                })),
+            )
+                .into_response()
         }
+        Ok(Err(e)) => {
+            error!(error = %e, "Query task failed");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({
+                    "error": {
+                        "code": "QUERY_TASK_FAILED",
+                        "message": "Query execution task failed"
+                    }
+                })),
+            )
+                .into_response()
+        }
+        Err(_) => (
+            StatusCode::REQUEST_TIMEOUT,
+            Json(serde_json::json!({
+                "error": {
+                    "code": "QUERY_TIMEOUT",
+                    "message": format!("Query exceeded timeout of {}ms", request.timeout_ms)
+                }
+            })),
+        )
+            .into_response(),
+    }
+}
+
+fn render_csv(response: &QueryResponse) -> String {
+    let mut output = String::new();
+    output.push_str(
+        &response
+            .columns
+            .iter()
+            .map(|column| escape_csv(&column.name))
+            .collect::<Vec<_>>()
+            .join(","),
+    );
+    output.push('\n');
+
+    for row in &response.rows {
+        output.push_str(
+            &row.iter()
+                .map(|value| {
+                    let value = match value {
+                        serde_json::Value::Null => String::new(),
+                        serde_json::Value::String(value) => value.clone(),
+                        value => value.to_string(),
+                    };
+                    escape_csv(&value)
+                })
+                .collect::<Vec<_>>()
+                .join(","),
+        );
+        output.push('\n');
+    }
+
+    output
+}
+
+fn escape_csv(value: &str) -> String {
+    if value.contains(',') || value.contains('"') || value.contains('\n') || value.contains('\r') {
+        format!("\"{}\"", value.replace('"', "\"\""))
+    } else {
+        value.to_string()
     }
 }
 
@@ -190,13 +297,21 @@ async fn explain_query(
     Json(request): Json<ExplainRequest>,
 ) -> impl IntoResponse {
     match state.streamql.explain(&request.sql) {
-        Ok(plan) => (StatusCode::OK, Json(ExplainResponse {
-            plan,
-            estimated_cost: 1.0,
-        })).into_response(),
-        Err(e) => (StatusCode::BAD_REQUEST, Json(serde_json::json!({
-            "error": { "code": "EXPLAIN_ERROR", "message": format!("{e}") }
-        }))).into_response(),
+        Ok(plan) => (
+            StatusCode::OK,
+            Json(ExplainResponse {
+                plan,
+                estimated_cost: 1.0,
+            }),
+        )
+            .into_response(),
+        Err(e) => (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({
+                "error": { "code": "EXPLAIN_ERROR", "message": format!("{e}") }
+            })),
+        )
+            .into_response(),
     }
 }
 
@@ -235,20 +350,56 @@ mod tests {
     }
 
     #[test]
-    fn test_query_response_serialization() {
-        let resp = QueryResponse {
-            columns: vec![ColumnInfo { name: "id".to_string(), col_type: "int".to_string() }],
-            rows: vec![vec![serde_json::json!(1)]],
+    fn test_render_csv_escapes_values() {
+        let response = QueryResponse {
+            columns: vec![
+                ColumnInfo {
+                    name: "name".to_string(),
+                    col_type: "string".to_string(),
+                },
+                ColumnInfo {
+                    name: "count".to_string(),
+                    col_type: "int".to_string(),
+                },
+            ],
+            rows: vec![vec![
+                serde_json::json!("quoted, \"value\""),
+                serde_json::json!(2),
+            ]],
             metadata: QueryMetadata {
-                execution_time_ms: 5,
-                rows_scanned: 10,
+                execution_time_ms: 1,
+                rows_scanned: 1,
                 rows_returned: 1,
                 truncated: false,
             },
         };
-        let json = serde_json::to_string(&resp).unwrap();
-        assert!(json.contains("\"id\""));
-        assert!(json.contains("\"rows_returned\":1"));
+
+        assert_eq!(
+            render_csv(&response),
+            "name,count\n\"quoted, \"\"value\"\"\",2\n"
+        );
+    }
+
+    #[test]
+    fn test_query_response_serialization() {
+        let response = QueryResponse {
+            columns: vec![ColumnInfo {
+                name: "value".to_string(),
+                col_type: "integer".to_string(),
+            }],
+            rows: vec![vec![serde_json::json!(1)]],
+            metadata: QueryMetadata {
+                execution_time_ms: 2,
+                rows_scanned: 1,
+                rows_returned: 1,
+                truncated: false,
+            },
+        };
+
+        let value = serde_json::to_value(response).unwrap();
+        assert_eq!(value["columns"][0]["name"], "value");
+        assert_eq!(value["rows"][0], serde_json::json!([1]));
+        assert_eq!(value["metadata"]["rows_returned"], 1);
     }
 
     #[test]

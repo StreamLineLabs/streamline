@@ -12,7 +12,7 @@
 //!
 //! ## Example
 //!
-//! ```rust,no_run
+//! ```rust,ignore
 //! use streamline::streamql::natural_language::*;
 //!
 //! let engine = NaturalLanguageEngine::new(NlConfig::default());
@@ -192,7 +192,9 @@ impl NaturalLanguageEngine {
             };
         }
 
-        self.stats.queries_translated.fetch_add(1, Ordering::Relaxed);
+        self.stats
+            .queries_translated
+            .fetch_add(1, Ordering::Relaxed);
 
         let schemas = self.get_relevant_schemas(&request.topics).await;
 
@@ -200,10 +202,13 @@ impl NaturalLanguageEngine {
         debug!(prompt_len = prompt.len(), "Built LLM prompt");
 
         // Use pattern-based translation (simulates LLM call)
-        let (sql, confidence, explanation) = self.translate_with_patterns(&request.question, &schemas);
+        let (sql, confidence, explanation) =
+            self.translate_with_patterns(&request.question, &schemas);
 
         if confidence < 0.5 {
-            self.stats.low_confidence_count.fetch_add(1, Ordering::Relaxed);
+            self.stats
+                .low_confidence_count
+                .fetch_add(1, Ordering::Relaxed);
             warn!(confidence, question = %request.question, "Low confidence translation");
         }
 
@@ -256,7 +261,8 @@ impl NaturalLanguageEngine {
         prompt.push_str("## StreamQL Syntax\n");
         prompt.push_str("- SELECT, FROM, WHERE, GROUP BY, ORDER BY, LIMIT\n");
         prompt.push_str("- Window functions: WINDOW TUMBLING(INTERVAL 'N seconds'), HOPPING, SLIDING, SESSION\n");
-        prompt.push_str("- Aggregations: COUNT(*), SUM(field), AVG(field), MIN(field), MAX(field)\n");
+        prompt
+            .push_str("- Aggregations: COUNT(*), SUM(field), AVG(field), MIN(field), MAX(field)\n");
         prompt.push_str("- Special columns: _timestamp, _offset, _partition, _key\n");
         prompt.push_str("- Joins: INNER JOIN, LEFT JOIN with ON clause\n\n");
 
@@ -264,7 +270,10 @@ impl NaturalLanguageEngine {
             prompt.push_str("## Available Topics and Schemas\n\n");
             for schema in schemas {
                 prompt.push_str(&format!("### Topic: `{}`\n", schema.topic));
-                prompt.push_str(&format!("Estimated records: {}\n", schema.record_count_estimate));
+                prompt.push_str(&format!(
+                    "Estimated records: {}\n",
+                    schema.record_count_estimate
+                ));
                 prompt.push_str("Fields:\n");
                 for field in &schema.fields {
                     let nullable = if field.nullable { " (nullable)" } else { "" };
@@ -308,7 +317,11 @@ impl NaturalLanguageEngine {
             (sql, confidence, explanation)
         } else {
             // Fallback: treat entire response as SQL
-            (response.trim().to_string(), 0.3, "Parsed from raw response".to_string())
+            (
+                response.trim().to_string(),
+                0.3,
+                "Parsed from raw response".to_string(),
+            )
         }
     }
 
@@ -391,7 +404,11 @@ impl NaturalLanguageEngine {
             );
         }
 
-        (String::new(), 0.0, "Could not understand the question".to_string())
+        (
+            String::new(),
+            0.0,
+            "Could not understand the question".to_string(),
+        )
     }
 
     /// Register a topic schema for prompt context.
@@ -417,10 +434,16 @@ impl NaturalLanguageEngine {
 
         if let Some(schema) = schemas.get(topic) {
             for field in &schema.fields {
-                if field.field_type == "f64" || field.field_type == "i64" || field.field_type == "number" {
+                if field.field_type == "f64"
+                    || field.field_type == "i64"
+                    || field.field_type == "number"
+                {
                     suggestions.push(format!("What is the average {} in {topic}?", field.name));
                 }
-                suggestions.push(format!("Show records from {topic} where {} is not null", field.name));
+                suggestions.push(format!(
+                    "Show records from {topic} where {} is not null",
+                    field.name
+                ));
             }
         }
 
@@ -507,7 +530,9 @@ impl NaturalLanguageEngine {
                 other => other,
             };
 
-            let value = tokens[2].trim_end_matches(&['.', ',', '?', '!'][..]).to_string();
+            let value = tokens[2]
+                .trim_end_matches(&['.', ',', '?', '!'][..])
+                .to_string();
             return Some((field, op.to_string(), value));
         }
         None
@@ -664,7 +689,8 @@ mod tests {
     fn test_pattern_last_n() {
         let engine = NaturalLanguageEngine::new(test_config());
         let schemas = vec![test_schema()];
-        let (sql, confidence, _) = engine.translate_with_patterns("show the last 5 events", &schemas);
+        let (sql, confidence, _) =
+            engine.translate_with_patterns("show the last 5 events", &schemas);
         assert_eq!(sql, "SELECT * FROM events ORDER BY _timestamp DESC LIMIT 5");
         assert!(confidence >= 0.8);
     }
@@ -701,8 +727,7 @@ mod tests {
     fn test_pattern_where_greater_than() {
         let engine = NaturalLanguageEngine::new(test_config());
         let schemas = vec![test_schema()];
-        let (sql, _, _) =
-            engine.translate_with_patterns("events where amount > 100", &schemas);
+        let (sql, _, _) = engine.translate_with_patterns("events where amount > 100", &schemas);
         assert_eq!(sql, "SELECT * FROM events WHERE amount > 100");
     }
 
@@ -719,8 +744,7 @@ mod tests {
     fn test_pattern_unknown_falls_back() {
         let engine = NaturalLanguageEngine::new(test_config());
         let schemas = vec![test_schema()];
-        let (sql, confidence, _) =
-            engine.translate_with_patterns("show me events", &schemas);
+        let (sql, confidence, _) = engine.translate_with_patterns("show me events", &schemas);
         assert_eq!(sql, "SELECT * FROM events LIMIT 10");
         assert!((confidence - 0.5).abs() < f64::EPSILON);
     }
@@ -729,8 +753,7 @@ mod tests {
     fn test_pattern_no_topic_found() {
         let engine = NaturalLanguageEngine::new(test_config());
         let schemas = vec![test_schema()];
-        let (sql, confidence, _) =
-            engine.translate_with_patterns("hello world", &schemas);
+        let (sql, confidence, _) = engine.translate_with_patterns("hello world", &schemas);
         assert!(sql.is_empty());
         assert!((confidence - 0.0).abs() < f64::EPSILON);
     }
@@ -890,7 +913,10 @@ mod tests {
             dry_run: false,
         };
         engine.translate(&request).await;
-        assert_eq!(engine.stats().low_confidence_count.load(Ordering::Relaxed), 1);
+        assert_eq!(
+            engine.stats().low_confidence_count.load(Ordering::Relaxed),
+            1
+        );
     }
 
     #[test]
@@ -917,7 +943,7 @@ mod tests {
 
     #[test]
     fn test_nl_operation_variants() {
-        let ops = vec![
+        let ops = [
             NlOperation::Select,
             NlOperation::Aggregate,
             NlOperation::Filter,

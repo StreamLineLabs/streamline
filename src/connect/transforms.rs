@@ -373,7 +373,7 @@ fn flatten_value(
                 let new_prefix = if prefix.is_empty() {
                     key.clone()
                 } else {
-                    format!("{}{}{}", prefix, delimiter, key)
+                    format!("{prefix}{delimiter}{key}")
                 };
                 flatten_value(val, &new_prefix, delimiter, result);
             }
@@ -490,9 +490,7 @@ mod tests {
 
     #[test]
     fn test_replace_field_include() {
-        let transform = ReplaceField::new()
-            .include("id")
-            .include("name");
+        let transform = ReplaceField::new().include("id").include("name");
         let result = transform.apply(sample_record());
         if let TransformResult::Record(r) = result {
             let val = r.value.unwrap();

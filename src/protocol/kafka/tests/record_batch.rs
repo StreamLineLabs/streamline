@@ -9,8 +9,7 @@ fn test_record_batch_magic_byte_v2() {
     let magic = batch[16] as i8;
     assert_eq!(
         magic, RECORD_BATCH_MAGIC_V2,
-        "Record batch must use magic byte 2 (Kafka v2), got {}",
-        magic
+        "Record batch must use magic byte 2 (Kafka v2), got {magic}"
     );
 }
 
@@ -24,8 +23,7 @@ fn test_record_batch_base_offset() {
     let actual_offset = i64::from_be_bytes(batch[0..8].try_into().unwrap());
     assert_eq!(
         actual_offset, base_offset,
-        "Base offset mismatch: expected {}, got {}",
-        base_offset, actual_offset
+        "Base offset mismatch: expected {base_offset}, got {actual_offset}"
     );
 }
 
@@ -60,16 +58,14 @@ fn test_record_batch_producer_id_epoch() {
     let actual_producer_id = i64::from_be_bytes(batch[43..51].try_into().unwrap());
     assert_eq!(
         actual_producer_id, producer_id,
-        "Producer ID mismatch: expected {}, got {}",
-        producer_id, actual_producer_id
+        "Producer ID mismatch: expected {producer_id}, got {actual_producer_id}"
     );
 
     // producerEpoch is at offset 51
     let actual_epoch = i16::from_be_bytes(batch[51..53].try_into().unwrap());
     assert_eq!(
         actual_epoch, producer_epoch,
-        "Producer epoch mismatch: expected {}, got {}",
-        producer_epoch, actual_epoch
+        "Producer epoch mismatch: expected {producer_epoch}, got {actual_epoch}"
     );
 }
 
@@ -83,8 +79,7 @@ fn test_record_batch_base_sequence() {
     let actual_sequence = i32::from_be_bytes(batch[53..57].try_into().unwrap());
     assert_eq!(
         actual_sequence, base_sequence,
-        "Base sequence mismatch: expected {}, got {}",
-        base_sequence, actual_sequence
+        "Base sequence mismatch: expected {base_sequence}, got {actual_sequence}"
     );
 }
 
@@ -98,8 +93,7 @@ fn test_record_batch_attributes_compression_none() {
     let compression_type = attributes & 0x07; // bits 0-2
     assert_eq!(
         compression_type, 0,
-        "Compression type should be 0 (none), got {}",
-        compression_type
+        "Compression type should be 0 (none), got {compression_type}"
     );
 }
 
@@ -112,8 +106,7 @@ fn test_record_batch_attributes_compression_gzip() {
     let compression_type = attributes & 0x07;
     assert_eq!(
         compression_type, 1,
-        "Compression type should be 1 (gzip), got {}",
-        compression_type
+        "Compression type should be 1 (gzip), got {compression_type}"
     );
 }
 
@@ -126,8 +119,7 @@ fn test_record_batch_attributes_compression_snappy() {
     let compression_type = attributes & 0x07;
     assert_eq!(
         compression_type, 2,
-        "Compression type should be 2 (snappy), got {}",
-        compression_type
+        "Compression type should be 2 (snappy), got {compression_type}"
     );
 }
 
@@ -140,8 +132,7 @@ fn test_record_batch_attributes_compression_lz4() {
     let compression_type = attributes & 0x07;
     assert_eq!(
         compression_type, 3,
-        "Compression type should be 3 (lz4), got {}",
-        compression_type
+        "Compression type should be 3 (lz4), got {compression_type}"
     );
 }
 
@@ -154,8 +145,7 @@ fn test_record_batch_attributes_compression_zstd() {
     let compression_type = attributes & 0x07;
     assert_eq!(
         compression_type, 4,
-        "Compression type should be 4 (zstd), got {}",
-        compression_type
+        "Compression type should be 4 (zstd), got {compression_type}"
     );
 }
 
@@ -168,8 +158,7 @@ fn test_record_batch_attributes_timestamp_type() {
     let timestamp_type = (attributes >> 3) & 0x01;
     assert_eq!(
         timestamp_type, 0,
-        "Timestamp type should be 0 (CreateTime), got {}",
-        timestamp_type
+        "Timestamp type should be 0 (CreateTime), got {timestamp_type}"
     );
 }
 
@@ -183,8 +172,7 @@ fn test_record_batch_attributes_transactional_bit() {
     let transactional = (attributes >> 4) & 0x01;
     assert_eq!(
         transactional, 0,
-        "Transactional bit should be 0 (non-transactional), got {}",
-        transactional
+        "Transactional bit should be 0 (non-transactional), got {transactional}"
     );
 }
 
@@ -197,8 +185,7 @@ fn test_record_batch_attributes_control_bit() {
     let is_control = (attributes >> 5) & 0x01;
     assert_eq!(
         is_control, 0,
-        "Control bit should be 0 (data batch), got {}",
-        is_control
+        "Control bit should be 0 (data batch), got {is_control}"
     );
 }
 
@@ -216,8 +203,7 @@ fn test_record_batch_crc_calculation() {
 
     assert_eq!(
         stored_crc, calculated_crc,
-        "CRC mismatch: stored {} != calculated {}",
-        stored_crc, calculated_crc
+        "CRC mismatch: stored {stored_crc} != calculated {calculated_crc}"
     );
 }
 
@@ -249,8 +235,7 @@ fn test_record_batch_no_producer_id() {
     let producer_id = i64::from_be_bytes(batch[43..51].try_into().unwrap());
     assert_eq!(
         producer_id, -1,
-        "NO_PRODUCER_ID should be -1, got {}",
-        producer_id
+        "NO_PRODUCER_ID should be -1, got {producer_id}"
     );
 }
 
@@ -264,8 +249,7 @@ fn test_record_batch_record_count() {
     let actual_count = i32::from_be_bytes(batch[57..61].try_into().unwrap());
     assert_eq!(
         actual_count, record_count,
-        "Record count mismatch: expected {}, got {}",
-        record_count, actual_count
+        "Record count mismatch: expected {record_count}, got {actual_count}"
     );
 }
 
@@ -281,8 +265,7 @@ fn test_record_batch_batch_length() {
     let expected_length = (batch.len() - 12) as i32;
     assert_eq!(
         batch_length, expected_length,
-        "Batch length mismatch: expected {}, got {}",
-        expected_length, batch_length
+        "Batch length mismatch: expected {expected_length}, got {batch_length}"
     );
 }
 
@@ -361,8 +344,7 @@ fn test_record_batch_max_offset_calculation() {
 
     assert_eq!(
         max_offset, expected_max,
-        "Max offset should be {}, got {}",
-        expected_max, max_offset
+        "Max offset should be {expected_max}, got {max_offset}"
     );
 }
 

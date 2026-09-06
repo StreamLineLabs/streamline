@@ -72,24 +72,21 @@ impl ErrorHint for StreamlineError {
     fn hint(&self) -> Option<String> {
         match self {
             StreamlineError::TopicNotFound(topic) => Some(format!(
-                "Topic '{}' does not exist. List available topics with: `streamline-cli topics list` or create it with: `streamline-cli topics create {} --partitions 3`",
-                topic, topic
+                "Topic '{topic}' does not exist. List available topics with: `streamline-cli topics list` or create it with: `streamline-cli topics create {topic} --partitions 3`"
             )),
             StreamlineError::PartitionNotFound(topic, partition) => Some(format!(
                 "Partition {} does not exist for topic '{}' (topic may have fewer than {} partitions). Check available partitions with: `streamline-cli topics describe {}`",
                 partition, topic, partition + 1, topic
             )),
             StreamlineError::TopicAlreadyExists(topic) => Some(format!(
-                "Topic '{}' already exists. Inspect it with: `streamline-cli topics describe {}` or delete with: `streamline-cli topics delete {}`",
-                topic, topic, topic
+                "Topic '{topic}' already exists. Inspect it with: `streamline-cli topics describe {topic}` or delete with: `streamline-cli topics delete {topic}`"
             )),
             StreamlineError::InvalidTopicName(name) => Some(format!(
                 "Topic name '{}' is invalid. Names must be 1-255 characters using alphanumeric, '.', '_', or '-'. Validate with: `streamline-cli topics validate {}`",
                 name, name.replace('/', "_")
             )),
             StreamlineError::InvalidPartitionCount(msg) => Some(format!(
-                "{}. Partition count must be between 1 and 10,000. Use: `streamline-cli topics create <name> --partitions <N>`",
-                msg
+                "{msg}. Partition count must be between 1 and 10,000. Use: `streamline-cli topics create <name> --partitions <N>`"
             )),
             StreamlineError::AuthenticationFailed(_) => Some(
                 "Authentication failed. Check credentials in `~/.streamline/config.toml` or verify with: `streamline-cli doctor --check auth`".into()
@@ -101,12 +98,10 @@ impl ErrorHint for StreamlineError {
                 "Invalid credentials. Reset with: `streamline-cli auth configure` or check `~/.streamline/config.toml`".into()
             ),
             StreamlineError::MessageTooLarge(size, max) => Some(format!(
-                "Message size {} exceeds limit of {}. Reduce message size or increase `max.message.bytes` in server config: `streamline-cli config set max.message.bytes {}`",
-                size, max, size
+                "Message size {size} exceeds limit of {max}. Reduce message size or increase `max.message.bytes` in server config: `streamline-cli config set max.message.bytes {size}`"
             )),
             StreamlineError::InvalidOffset(offset) => Some(format!(
-                "Offset {} is out of range. Reset consumer position with: `streamline-cli consume <topic> --from-beginning` or check valid offsets with: `streamline-cli topics offsets <topic>`",
-                offset
+                "Offset {offset} is out of range. Reset consumer position with: `streamline-cli consume <topic> --from-beginning` or check valid offsets with: `streamline-cli topics offsets <topic>`"
             )),
             StreamlineError::RequestTimeout => Some(
                 "Request timed out. Check server status with: `streamline-cli doctor --check connectivity` or increase timeout: `--timeout 60000`".into()
@@ -135,8 +130,7 @@ impl ErrorHint for StreamlineError {
                 "Cluster error. Check cluster health with: `streamline-cli cluster status` and verify node connectivity: `streamline-cli doctor --check cluster`".into()
             ),
             StreamlineError::NotLeader(topic, partition) => Some(format!(
-                "This node is not the leader for {}/{}. Refresh metadata with: `streamline-cli metadata refresh` — clients should auto-retry",
-                topic, partition
+                "This node is not the leader for {topic}/{partition}. Refresh metadata with: `streamline-cli metadata refresh` — clients should auto-retry"
             )),
             StreamlineError::Replication(_) => Some(
                 "Replication error. Check replica status with: `streamline-cli cluster replicas` and verify network between nodes: `streamline-cli doctor --check cluster`".into()
@@ -157,8 +151,7 @@ impl ErrorHint for StreamlineError {
                 "System resources exhausted. Check resource usage: `streamline-cli metrics --system` and review limits in server configuration".into()
             ),
             StreamlineError::Analytics(msg) => Some(format!(
-                "Analytics query failed: {}. Verify SQL syntax with: `streamline-cli query --validate <sql>` or check the DuckDB documentation for supported functions",
-                msg
+                "Analytics query failed: {msg}. Verify SQL syntax with: `streamline-cli query --validate <sql>` or check the DuckDB documentation for supported functions"
             )),
             StreamlineError::Sink(_) => Some(
                 "Sink operation failed. Check sink configuration with: `streamline-cli connectors status` and verify the destination is reachable".into()
@@ -238,7 +231,6 @@ impl ErrorHint for StreamlineError {
             StreamlineError::Server(_) | StreamlineError::ServerDomain(_) => Some(
                 "Server error. Check server logs for details: `streamline-cli logs --tail 50` and restart if the error persists".into()
             ),
-            _ => None,
         }
     }
 
@@ -246,10 +238,10 @@ impl ErrorHint for StreamlineError {
     fn hint_with_context(&self, ctx: &ErrorContext) -> Option<String> {
         match self {
             StreamlineError::TopicNotFound(topic) => {
-                let base = format!("Topic '{}' not found.", topic);
+                let base = format!("Topic '{topic}' not found.");
                 if let Some(ref topics) = ctx.available_topics {
                     if topics.is_empty() {
-                        Some(format!("{} No topics exist yet.", base))
+                        Some(format!("{base} No topics exist yet."))
                     } else {
                         let display_topics: Vec<_> = topics.iter().take(5).collect();
                         let suffix = if topics.len() > 5 {
@@ -292,11 +284,10 @@ impl ErrorHint for StreamlineError {
     fn suggest_fix(&self) -> Option<String> {
         match self {
             StreamlineError::TopicNotFound(topic) => Some(format!(
-                "streamline-cli topics create {} --partitions 3",
-                topic
+                "streamline-cli topics create {topic} --partitions 3"
             )),
             StreamlineError::TopicAlreadyExists(topic) => {
-                Some(format!("streamline-cli topics delete {}", topic))
+                Some(format!("streamline-cli topics delete {topic}"))
             }
             StreamlineError::InvalidOffset(_) => {
                 Some("streamline-cli consume <topic> --from-beginning".into())
@@ -304,10 +295,9 @@ impl ErrorHint for StreamlineError {
             StreamlineError::AuthenticationFailed(_) | StreamlineError::InvalidCredentials => {
                 Some("streamline-cli doctor --check auth".into())
             }
-            StreamlineError::Storage(_) | StreamlineError::StorageDomain(_)
-            | StreamlineError::CorruptedData(_) => {
-                Some("streamline-cli doctor --deep".into())
-            }
+            StreamlineError::Storage(_)
+            | StreamlineError::StorageDomain(_)
+            | StreamlineError::CorruptedData(_) => Some("streamline-cli doctor --deep".into()),
             StreamlineError::RequestTimeout | StreamlineError::Network(_) => {
                 Some("streamline-cli doctor".into())
             }
@@ -326,30 +316,22 @@ impl ErrorHint for StreamlineError {
             StreamlineError::Sink(_) | StreamlineError::Connector(_) | StreamlineError::Cdc(_) => {
                 Some("streamline-cli connectors status".into())
             }
-            StreamlineError::Pipeline(_) => {
-                Some("streamline-cli pipelines status".into())
-            }
+            StreamlineError::Pipeline(_) => Some("streamline-cli pipelines status".into()),
             StreamlineError::Wasm(_) => {
                 Some("streamline-cli transforms validate <path-to-wasm>".into())
             }
             StreamlineError::Tenant(_) | StreamlineError::QuotaExceeded(_) => {
                 Some("streamline-cli quotas describe".into())
             }
-            StreamlineError::Namespace(_) => {
-                Some("streamline-cli namespaces list".into())
-            }
+            StreamlineError::Namespace(_) => Some("streamline-cli namespaces list".into()),
             StreamlineError::Rebalance(_) => {
                 Some("streamline-cli groups describe <group-id>".into())
             }
-            StreamlineError::Marketplace(_) => {
-                Some("streamline-cli marketplace status".into())
-            }
-            StreamlineError::Internal(_) | StreamlineError::Server(_) | StreamlineError::ServerDomain(_) => {
-                Some("streamline-cli logs --tail 50".into())
-            }
-            StreamlineError::Playground(_) => {
-                Some("streamline --playground".into())
-            }
+            StreamlineError::Marketplace(_) => Some("streamline-cli marketplace status".into()),
+            StreamlineError::Internal(_)
+            | StreamlineError::Server(_)
+            | StreamlineError::ServerDomain(_) => Some("streamline-cli logs --tail 50".into()),
+            StreamlineError::Playground(_) => Some("streamline --playground".into()),
             _ => None,
         }
     }
@@ -375,7 +357,7 @@ impl ErrorHint for StreamlineError {
                             "# Did you mean one of these?\n{}",
                             similar
                                 .iter()
-                                .map(|t| format!("streamline-cli topics describe {}", t))
+                                .map(|t| format!("streamline-cli topics describe {t}"))
                                 .collect::<Vec<_>>()
                                 .join("\n")
                         ));
@@ -394,75 +376,61 @@ impl ErrorHint for StreamlineError {
             StreamlineError::TopicNotFound(_)
             | StreamlineError::TopicAlreadyExists(_)
             | StreamlineError::InvalidTopicName(_)
-            | StreamlineError::InvalidPartitionCount(_) => Some(format!("{}/reference/topics", base)),
-            StreamlineError::PartitionNotFound(_, _) => {
-                Some(format!("{}/concepts/partitions", base))
-            }
+            | StreamlineError::InvalidPartitionCount(_) => Some(format!("{base}/reference/topics")),
+            StreamlineError::PartitionNotFound(_, _) => Some(format!("{base}/concepts/partitions")),
             StreamlineError::AuthenticationFailed(_) | StreamlineError::InvalidCredentials => {
-                Some(format!("{}/security/authentication", base))
+                Some(format!("{base}/security/authentication"))
             }
             StreamlineError::AuthorizationFailed(_) => {
-                Some(format!("{}/security/authorization", base))
+                Some(format!("{base}/security/authorization"))
             }
-            StreamlineError::Storage(_) | StreamlineError::StorageDomain(_)
-            | StreamlineError::CorruptedData(_) => {
-                Some(format!("{}/operations/storage", base))
-            }
+            StreamlineError::Storage(_)
+            | StreamlineError::StorageDomain(_)
+            | StreamlineError::CorruptedData(_) => Some(format!("{base}/operations/storage")),
             StreamlineError::Config(_) | StreamlineError::ConfigDomain(_) => {
-                Some(format!("{}/configuration", base))
+                Some(format!("{base}/configuration"))
             }
             StreamlineError::Cluster(_)
             | StreamlineError::ClusterDomain(_)
             | StreamlineError::NotLeader(_, _)
-            | StreamlineError::Replication(_) => Some(format!("{}/clustering", base)),
-            StreamlineError::MessageTooLarge(_, _) => Some(format!("{}/reference/limits", base)),
-            StreamlineError::RateLimitExceeded => Some(format!("{}/operations/quotas", base)),
+            | StreamlineError::Replication(_) => Some(format!("{base}/clustering")),
+            StreamlineError::MessageTooLarge(_, _) => Some(format!("{base}/reference/limits")),
+            StreamlineError::RateLimitExceeded => Some(format!("{base}/operations/quotas")),
             StreamlineError::Protocol(_) | StreamlineError::ProtocolDomain(_) => {
-                Some(format!("{}/reference/protocol", base))
+                Some(format!("{base}/reference/protocol"))
             }
             StreamlineError::Analytics(_) | StreamlineError::Query(_) => {
-                Some(format!("{}/features/analytics", base))
+                Some(format!("{base}/features/analytics"))
             }
             StreamlineError::Sink(_) | StreamlineError::Connector(_) | StreamlineError::Cdc(_) => {
-                Some(format!("{}/features/cdc", base))
+                Some(format!("{base}/features/cdc"))
             }
             StreamlineError::Pipeline(_) | StreamlineError::Wasm(_) => {
-                Some(format!("{}/features/transforms", base))
+                Some(format!("{base}/features/transforms"))
             }
-            StreamlineError::Tenant(_) | StreamlineError::Namespace(_)
-            | StreamlineError::QuotaExceeded(_) => {
-                Some(format!("{}/operations/multi-tenancy", base))
-            }
+            StreamlineError::Tenant(_)
+            | StreamlineError::Namespace(_)
+            | StreamlineError::QuotaExceeded(_) => Some(format!("{base}/operations/multi-tenancy")),
             StreamlineError::ReplicationConflict(_) | StreamlineError::Crdt(_) => {
-                Some(format!("{}/features/geo-replication", base))
+                Some(format!("{base}/features/geo-replication"))
             }
-            StreamlineError::Rebalance(_) => {
-                Some(format!("{}/concepts/consumer-groups", base))
-            }
-            StreamlineError::Marketplace(_) => {
-                Some(format!("{}/features/marketplace", base))
-            }
-            StreamlineError::Gateway(_) => {
-                Some(format!("{}/reference/grpc-api", base))
-            }
-            StreamlineError::Playground(_) => {
-                Some(format!("{}/getting-started/playground", base))
-            }
-            StreamlineError::Lineage(_) => {
-                Some(format!("{}/features/lineage", base))
-            }
-            StreamlineError::AI(_) => {
-                Some(format!("{}/features/ai", base))
-            }
-            StreamlineError::Validation(_) | StreamlineError::InvalidData(_)
-            | StreamlineError::Serialization(_) | StreamlineError::Parse(_) => {
-                Some(format!("{}/reference/schema-registry", base))
-            }
+            StreamlineError::Rebalance(_) => Some(format!("{base}/concepts/consumer-groups")),
+            StreamlineError::Marketplace(_) => Some(format!("{base}/features/marketplace")),
+            StreamlineError::Gateway(_) => Some(format!("{base}/reference/grpc-api")),
+            StreamlineError::Playground(_) => Some(format!("{base}/getting-started/playground")),
+            StreamlineError::Lineage(_) => Some(format!("{base}/features/lineage")),
+            StreamlineError::AI(_) => Some(format!("{base}/features/ai")),
+            StreamlineError::Validation(_)
+            | StreamlineError::InvalidData(_)
+            | StreamlineError::Serialization(_)
+            | StreamlineError::Parse(_) => Some(format!("{base}/reference/schema-registry")),
             StreamlineError::Network(_) | StreamlineError::Io(_) => {
-                Some(format!("{}/operations/troubleshooting", base))
+                Some(format!("{base}/operations/troubleshooting"))
             }
-            StreamlineError::Internal(_) | StreamlineError::Server(_) | StreamlineError::ServerDomain(_) => {
-                Some(format!("{}/operations/troubleshooting", base))
+            StreamlineError::Internal(_)
+            | StreamlineError::Server(_)
+            | StreamlineError::ServerDomain(_) => {
+                Some(format!("{base}/operations/troubleshooting"))
             }
             _ => None,
         }
@@ -472,17 +440,17 @@ impl ErrorHint for StreamlineError {
     fn with_hint(&self) -> String {
         let error_msg = self.to_string();
         match self.hint() {
-            Some(hint) => format!("{}\n  hint: {}", error_msg, hint),
+            Some(hint) => format!("{error_msg}\n  hint: {hint}"),
             None => error_msg,
         }
     }
 
     /// Format error with full context (hint, fix, docs)
     fn format_with_context(&self, ctx: &ErrorContext) -> String {
-        let mut output = format!("Error: {}", self);
+        let mut output = format!("Error: {self}");
 
         if let Some(hint) = self.hint_with_context(ctx) {
-            output.push_str(&format!("\n\n  Hint: {}", hint));
+            output.push_str(&format!("\n\n  Hint: {hint}"));
         }
 
         if let Some(fix) = self.suggest_fix_with_context(ctx) {
@@ -490,7 +458,7 @@ impl ErrorHint for StreamlineError {
         }
 
         if let Some(url) = self.docs_url() {
-            output.push_str(&format!("\n\n  Docs: {}", url));
+            output.push_str(&format!("\n\n  Docs: {url}"));
         }
 
         output
@@ -525,4 +493,3 @@ fn levenshtein_distance(a: &str, b: &str) -> usize {
 
     prev_row[b_len]
 }
-

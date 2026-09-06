@@ -50,7 +50,7 @@ impl AlertCondition {
     pub fn description(&self) -> String {
         match self {
             AlertCondition::ConsumerLagExceeds { group, topic } => {
-                format!("Consumer lag for group '{}' on topic '{}'", group, topic)
+                format!("Consumer lag for group '{group}' on topic '{topic}'")
             }
             AlertCondition::OfflinePartitions => "Offline partitions count".to_string(),
             AlertCondition::UnderReplicatedPartitions => {
@@ -467,7 +467,7 @@ mod tests {
         // Add 5 events, should only keep last 3
         for i in 0..5 {
             let mut event = AlertEvent::new(&alert, i as f64);
-            event.id = format!("event-{}", i);
+            event.id = format!("event-{i}");
             store.record_event(event);
         }
 

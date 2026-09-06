@@ -308,7 +308,7 @@ async fn get_benchmark_status(
         (
             StatusCode::NOT_FOUND,
             Json(ErrorResponse {
-                error: format!("Benchmark '{}' not found", id),
+                error: format!("Benchmark '{id}' not found"),
             }),
         )
     })
@@ -323,7 +323,7 @@ async fn get_benchmark_results(
         (
             StatusCode::NOT_FOUND,
             Json(ErrorResponse {
-                error: format!("Benchmark '{}' not found", id),
+                error: format!("Benchmark '{id}' not found"),
             }),
         )
     })?;

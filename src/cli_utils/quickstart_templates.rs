@@ -5,10 +5,7 @@
 /// Generate a Python project with producer and consumer examples.
 pub fn generate_python_project(topic: &str) -> Vec<(String, String)> {
     vec![
-        (
-            "requirements.txt".into(),
-            "streamline-sdk>=0.2.0\n".into(),
-        ),
+        ("requirements.txt".into(), "streamline-sdk>=0.2.0\n".into()),
         (
             "producer.py".into(),
             format!(
@@ -118,27 +115,26 @@ pub fn generate_node_project(topic: &str) -> Vec<(String, String)> {
     vec![
         (
             "package.json".into(),
-            format!(
-                r#"{{
+            r#"{
   "name": "streamline-demo",
   "version": "1.0.0",
   "description": "Streamline Node.js demo project",
-  "scripts": {{
+  "scripts": {
     "producer": "npx ts-node producer.ts",
     "consumer": "npx ts-node consumer.ts",
     "build": "tsc"
-  }},
-  "dependencies": {{
+  },
+  "dependencies": {
     "@streamlinelabs/streamline-sdk": "^0.2.0"
-  }},
-  "devDependencies": {{
+  },
+  "devDependencies": {
     "typescript": "^5.3.0",
     "ts-node": "^10.9.0",
     "@types/node": "^20.0.0"
-  }}
-}}
+  }
+}
 "#
-            ),
+            .to_string(),
         ),
         (
             "tsconfig.json".into(),
@@ -262,8 +258,7 @@ pub fn generate_java_project(topic: &str) -> Vec<(String, String)> {
     vec![
         (
             "pom.xml".into(),
-            format!(
-                r#"<?xml version="1.0" encoding="UTF-8"?>
+            r#"<?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
@@ -298,7 +293,7 @@ pub fn generate_java_project(topic: &str) -> Vec<(String, String)> {
     </build>
 </project>
 "#
-            ),
+            .to_string(),
         ),
         (
             "src/main/java/com/example/Producer.java".into(),

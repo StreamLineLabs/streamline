@@ -4,12 +4,11 @@
 //! broker connectivity, partition health, ISR status, replication lag,
 //! and overall cluster readiness.
 
-use crate::cluster::node::{NodeId, NodeState};
+use crate::cluster::node::NodeId;
 use crate::cluster::raft::state_machine::ClusterMetadata;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::time::{Duration, Instant};
-use tracing::{debug, warn};
+use std::time::Instant;
 
 /// Overall cluster health status
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -91,13 +90,13 @@ impl ClusterHealthMonitor {
 
     /// Run all health checks and produce a report
     pub fn evaluate(&mut self, metadata: &ClusterMetadata) -> ClusterHealthReport {
-        let mut checks = Vec::new();
-
-        checks.push(self.check_broker_health(metadata));
-        checks.push(self.check_controller_health(metadata));
-        checks.push(self.check_partition_health(metadata));
-        checks.push(self.check_isr_health(metadata));
-        checks.push(self.check_replication_coverage(metadata));
+        let mut checks = vec![
+            self.check_broker_health(metadata),
+            self.check_controller_health(metadata),
+            self.check_partition_health(metadata),
+            self.check_isr_health(metadata),
+            self.check_replication_coverage(metadata),
+        ];
         checks.push(self.check_load_distribution(metadata));
 
         let status = checks
@@ -139,22 +138,22 @@ impl ClusterHealthMonitor {
         let (status, message) = if dead == 0 {
             (
                 ClusterHealthStatus::Green,
-                format!("All {} brokers healthy", total),
+                format!("All {total} brokers healthy"),
             )
         } else if alive == 0 {
             (
                 ClusterHealthStatus::Red,
-                format!("All {} brokers offline", total),
+                format!("All {total} brokers offline"),
             )
         } else if dead as f64 / total as f64 > 0.5 {
             (
                 ClusterHealthStatus::Red,
-                format!("{}/{} brokers offline (majority lost)", dead, total),
+                format!("{dead}/{total} brokers offline (majority lost)"),
             )
         } else {
             (
                 ClusterHealthStatus::Yellow,
-                format!("{}/{} brokers offline", dead, total),
+                format!("{dead}/{total} brokers offline"),
             )
         };
 
@@ -165,7 +164,7 @@ impl ClusterHealthMonitor {
 
         for (id, broker) in &metadata.brokers {
             details.insert(
-                format!("broker_{}", id),
+                format!("broker_{id}"),
                 format!("{} ({})", broker.state, broker.advertised_addr),
             );
         }
@@ -190,12 +189,12 @@ impl ClusterHealthMonitor {
                 if alive {
                     (
                         ClusterHealthStatus::Green,
-                        format!("Controller node {} is healthy", id),
+                        format!("Controller node {id} is healthy"),
                     )
                 } else {
                     (
                         ClusterHealthStatus::Red,
-                        format!("Controller node {} is not alive", id),
+                        format!("Controller node {id} is not alive"),
                     )
                 }
             }
@@ -253,14 +252,13 @@ impl ClusterHealthMonitor {
             (
                 ClusterHealthStatus::Red,
                 format!(
-                    "{} offline partitions ({} leaderless) out of {}",
-                    offline, leaderless, total_partitions
+                    "{offline} offline partitions ({leaderless} leaderless) out of {total_partitions}"
                 ),
             )
         } else {
             (
                 ClusterHealthStatus::Green,
-                format!("All {} partitions have active leaders", total_partitions),
+                format!("All {total_partitions} partitions have active leaders"),
             )
         };
 
@@ -316,12 +314,12 @@ impl ClusterHealthMonitor {
         } else if shrunk_isr > 0 {
             (
                 ClusterHealthStatus::Yellow,
-                format!("{} partitions with shrunk ISR", shrunk_isr),
+                format!("{shrunk_isr} partitions with shrunk ISR"),
             )
         } else {
             (
                 ClusterHealthStatus::Green,
-                format!("All {} partitions have full ISR", total_partitions),
+                format!("All {total_partitions} partitions have full ISR"),
             )
         };
 
@@ -365,12 +363,12 @@ impl ClusterHealthMonitor {
         let (status, message) = if under_replicated > 0 {
             (
                 ClusterHealthStatus::Yellow,
-                format!("{}/{} partitions under-replicated", under_replicated, total),
+                format!("{under_replicated}/{total} partitions under-replicated"),
             )
         } else if total > 0 {
             (
                 ClusterHealthStatus::Green,
-                format!("All {} partitions fully replicated", total),
+                format!("All {total} partitions fully replicated"),
             )
         } else {
             (ClusterHealthStatus::Green, "No partitions".to_string())
@@ -437,17 +435,14 @@ impl ClusterHealthMonitor {
         } else {
             (
                 ClusterHealthStatus::Green,
-                format!(
-                    "Leaders well distributed — range [{}, {}], avg {:.1}",
-                    min, max, avg
-                ),
+                format!("Leaders well distributed — range [{min}, {max}], avg {avg:.1}"),
             )
         };
 
         let mut details = HashMap::new();
-        details.insert("leader_skew".to_string(), format!("{:.2}", skew));
+        details.insert("leader_skew".to_string(), format!("{skew:.2}"));
         for (&id, &count) in &load_map {
-            details.insert(format!("broker_{}_leaders", id), count.to_string());
+            details.insert(format!("broker_{id}_leaders"), count.to_string());
         }
 
         HealthCheck {
@@ -529,7 +524,7 @@ impl ClusterHealthMonitor {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cluster::node::BrokerInfo;
+    use crate::cluster::node::{BrokerInfo, NodeState};
     use crate::cluster::raft::types::{PartitionAssignment, TopicAssignment};
 
     fn make_broker(id: NodeId, state: NodeState) -> BrokerInfo {
@@ -596,12 +591,12 @@ mod tests {
     }
 
     #[test]
-    fn test_empty_cluster_is_green() {
+    fn test_empty_cluster_is_yellow_until_controller_is_elected() {
         let mut monitor = ClusterHealthMonitor::new(1);
         let metadata = ClusterMetadata::new("test".to_string());
 
         let report = monitor.evaluate(&metadata);
-        assert_eq!(report.status, ClusterHealthStatus::Green);
+        assert_eq!(report.status, ClusterHealthStatus::Yellow);
     }
 
     #[test]

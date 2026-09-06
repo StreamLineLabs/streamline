@@ -572,12 +572,12 @@ impl SyncRecord {
             .as_ref()
             .map(|k| STANDARD.decode(k))
             .transpose()
-            .map_err(|e| StreamlineError::storage_msg(format!("Invalid base64 key: {}", e)))?
+            .map_err(|e| StreamlineError::storage_msg(format!("Invalid base64 key: {e}")))?
             .map(Bytes::from);
 
         let value = STANDARD
             .decode(&self.value)
-            .map_err(|e| StreamlineError::storage_msg(format!("Invalid base64 value: {}", e)))?;
+            .map_err(|e| StreamlineError::storage_msg(format!("Invalid base64 value: {e}")))?;
 
         let headers: Result<Vec<Header>> = self
             .headers
@@ -590,7 +590,7 @@ impl SyncRecord {
                         value: Bytes::from(decoded),
                     })
                     .map_err(|e| {
-                        StreamlineError::storage_msg(format!("Invalid base64 header: {}", e))
+                        StreamlineError::storage_msg(format!("Invalid base64 header: {e}"))
                     })
             })
             .collect();

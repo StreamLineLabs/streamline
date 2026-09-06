@@ -17,6 +17,8 @@ use bytes::{Buf, BufMut, Bytes, BytesMut};
 use parking_lot::RwLock;
 use quinn::{Connection, Endpoint, RecvStream, SendStream, ServerConfig, TransportConfig};
 use rcgen::{CertificateParams, KeyPair};
+use rustls::pki_types::pem::{Error as PemError, PemObject};
+use rustls::pki_types::{CertificateDer, PrivateKeyDer};
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -116,7 +118,7 @@ impl WebTransportServer {
         let server_config = Self::build_server_config(&config)?;
 
         let endpoint = Endpoint::server(server_config, config.bind_addr).map_err(|e| {
-            StreamlineError::Config(format!("Failed to create WebTransport endpoint: {}", e))
+            StreamlineError::Config(format!("Failed to create WebTransport endpoint: {e}"))
         })?;
 
         info!("WebTransport server listening on {}", config.bind_addr);
@@ -134,39 +136,43 @@ impl WebTransportServer {
     /// Build server configuration with H3 ALPN
     fn build_server_config(config: &WebTransportConfig) -> Result<ServerConfig> {
         // Generate or load certificate
-        let (cert_der, key_der) =
-            if let (Some(cert_pem), Some(key_pem)) = (&config.cert_pem, &config.key_pem) {
-                let cert_chain = rustls_pemfile::certs(&mut cert_pem.as_bytes())
-                    .collect::<std::result::Result<Vec<_>, _>>()
-                    .map_err(|e| StreamlineError::Config(format!("Invalid certificate: {}", e)))?;
-                let key = rustls_pemfile::private_key(&mut key_pem.as_bytes())
-                    .map_err(|e| StreamlineError::Config(format!("Invalid private key: {}", e)))?
-                    .ok_or_else(|| StreamlineError::Config("No private key found".to_string()))?;
-                (cert_chain, key)
-            } else {
-                // Generate self-signed certificate
-                let key_pair = KeyPair::generate().map_err(|e| {
-                    StreamlineError::Config(format!("Failed to generate key pair: {}", e))
+        let (cert_der, key_der) = if let (Some(cert_pem), Some(key_pem)) =
+            (&config.cert_pem, &config.key_pem)
+        {
+            let cert_chain = CertificateDer::pem_slice_iter(cert_pem.as_bytes())
+                .collect::<std::result::Result<Vec<_>, _>>()
+                .map_err(|e| StreamlineError::Config(format!("Invalid certificate: {e}")))?;
+            let key = PrivateKeyDer::from_pem_slice(key_pem.as_bytes()).map_err(|e| match e {
+                PemError::NoItemsFound => {
+                    StreamlineError::Config("No private key found".to_string())
+                }
+                other => StreamlineError::Config(format!("Invalid private key: {other}")),
+            })?;
+            (cert_chain, key)
+        } else {
+            // Generate self-signed certificate
+            let key_pair = KeyPair::generate().map_err(|e| {
+                StreamlineError::Config(format!("Failed to generate key pair: {e}"))
+            })?;
+
+            let mut params =
+                CertificateParams::new(vec![config.server_name.clone()]).map_err(|e| {
+                    StreamlineError::Config(format!("Failed to create cert params: {e}"))
                 })?;
+            params.distinguished_name.push(
+                rcgen::DnType::CommonName,
+                rcgen::DnValue::Utf8String(config.server_name.clone()),
+            );
 
-                let mut params =
-                    CertificateParams::new(vec![config.server_name.clone()]).map_err(|e| {
-                        StreamlineError::Config(format!("Failed to create cert params: {}", e))
-                    })?;
-                params.distinguished_name.push(
-                    rcgen::DnType::CommonName,
-                    rcgen::DnValue::Utf8String(config.server_name.clone()),
-                );
+            let cert = params.self_signed(&key_pair).map_err(|e| {
+                StreamlineError::Config(format!("Failed to generate certificate: {e}"))
+            })?;
 
-                let cert = params.self_signed(&key_pair).map_err(|e| {
-                    StreamlineError::Config(format!("Failed to generate certificate: {}", e))
-                })?;
+            let cert_der = vec![cert.der().clone()];
+            let key_der = rustls::pki_types::PrivatePkcs8KeyDer::from(key_pair.serialize_der());
 
-                let cert_der = vec![cert.der().clone()];
-                let key_der = rustls::pki_types::PrivatePkcs8KeyDer::from(key_pair.serialize_der());
-
-                (cert_der, rustls::pki_types::PrivateKeyDer::Pkcs8(key_der))
-            };
+            (cert_der, rustls::pki_types::PrivateKeyDer::Pkcs8(key_der))
+        };
 
         // Build rustls config with H3 ALPN
         let alpn: Vec<Vec<u8>> = config
@@ -175,16 +181,28 @@ impl WebTransportServer {
             .map(|p| p.as_bytes().to_vec())
             .collect();
 
-        let mut rustls_config = rustls::ServerConfig::builder()
-            .with_no_client_auth()
-            .with_single_cert(cert_der, key_der)
-            .map_err(|e| StreamlineError::Config(format!("Failed to build TLS config: {}", e)))?;
+        // Build rustls config with H3 ALPN.
+        //
+        // HTTP/3 runs over QUIC, which is TLS 1.3 only. The provider is passed
+        // explicitly so the configuration does not depend on a process-wide
+        // default being installed (or on which one won the race to install it).
+        let mut rustls_config =
+            rustls::ServerConfig::builder_with_provider(crate::server::tls::crypto_provider())
+                .with_protocol_versions(&[&rustls::version::TLS13])
+                .map_err(|e| {
+                    StreamlineError::Config(format!(
+                        "Invalid WebTransport TLS protocol configuration: {e}"
+                    ))
+                })?
+                .with_no_client_auth()
+                .with_single_cert(cert_der, key_der)
+                .map_err(|e| StreamlineError::Config(format!("Failed to build TLS config: {e}")))?;
 
         rustls_config.alpn_protocols = alpn;
 
         let mut server_config = ServerConfig::with_crypto(Arc::new(
             quinn::crypto::rustls::QuicServerConfig::try_from(rustls_config).map_err(|e| {
-                StreamlineError::Config(format!("Failed to create QUIC crypto config: {}", e))
+                StreamlineError::Config(format!("Failed to create QUIC crypto config: {e}"))
             })?,
         ));
 
@@ -195,9 +213,7 @@ impl WebTransportServer {
         transport.max_idle_timeout(Some(
             Duration::from_millis(config.session_idle_timeout_ms)
                 .try_into()
-                .map_err(|e| {
-                    StreamlineError::Config(format!("Invalid idle timeout value: {}", e))
-                })?,
+                .map_err(|e| StreamlineError::Config(format!("Invalid idle timeout value: {e}")))?,
         ));
 
         if config.enable_datagrams {
@@ -223,7 +239,7 @@ impl WebTransportServer {
 
         let connection = incoming.await.map_err(|e| {
             self.metrics.write().errors += 1;
-            StreamlineError::protocol_msg(format!("WebTransport connection failed: {}", e))
+            StreamlineError::protocol_msg(format!("WebTransport connection failed: {e}"))
         })?;
 
         // Perform WebTransport handshake
@@ -259,7 +275,7 @@ impl WebTransportServer {
     async fn perform_handshake(&self, connection: Connection) -> Result<WebTransportSession> {
         // Accept the connect stream (first bidirectional stream)
         let (mut send, mut recv) = connection.accept_bi().await.map_err(|e| {
-            StreamlineError::protocol_msg(format!("Failed to accept handshake stream: {}", e))
+            StreamlineError::protocol_msg(format!("Failed to accept handshake stream: {e}"))
         })?;
 
         // Read CONNECT request (simplified - in production would parse full HTTP/3 frames)
@@ -267,7 +283,7 @@ impl WebTransportServer {
         let n = recv
             .read(&mut buf)
             .await
-            .map_err(|e| StreamlineError::protocol_msg(format!("Failed to read handshake: {}", e)))?
+            .map_err(|e| StreamlineError::protocol_msg(format!("Failed to read handshake: {e}")))?
             .unwrap_or(0);
 
         let request = String::from_utf8_lossy(&buf[..n]);
@@ -279,15 +295,14 @@ impl WebTransportServer {
         // Validate origin
         if !self.validate_origin(&origin) {
             return Err(StreamlineError::protocol_msg(format!(
-                "Origin '{}' not allowed",
-                origin
+                "Origin '{origin}' not allowed"
             )));
         }
 
         // Send 200 OK response (simplified HTTP/3 response)
         let response = b"HTTP/3 200 OK\r\n\r\n";
         send.write_all(response).await.map_err(|e| {
-            StreamlineError::protocol_msg(format!("Failed to send handshake response: {}", e))
+            StreamlineError::protocol_msg(format!("Failed to send handshake response: {e}"))
         })?;
 
         Ok(WebTransportSession {
@@ -407,23 +422,24 @@ impl WebTransportSession {
     pub async fn open_bi(&self) -> Result<WebTransportBiStream> {
         let (send, recv) =
             self.connection.open_bi().await.map_err(|e| {
-                StreamlineError::protocol_msg(format!("Failed to open stream: {}", e))
+                StreamlineError::protocol_msg(format!("Failed to open stream: {e}"))
             })?;
         Ok(WebTransportBiStream::new(send, recv))
     }
 
     /// Accept an incoming bidirectional stream
     pub async fn accept_bi(&self) -> Result<WebTransportBiStream> {
-        let (send, recv) = self.connection.accept_bi().await.map_err(|e| {
-            StreamlineError::protocol_msg(format!("Failed to accept stream: {}", e))
-        })?;
+        let (send, recv) =
+            self.connection.accept_bi().await.map_err(|e| {
+                StreamlineError::protocol_msg(format!("Failed to accept stream: {e}"))
+            })?;
         Ok(WebTransportBiStream::new(send, recv))
     }
 
     /// Open a unidirectional send stream
     pub async fn open_uni(&self) -> Result<WebTransportSendStream> {
         let send = self.connection.open_uni().await.map_err(|e| {
-            StreamlineError::protocol_msg(format!("Failed to open uni stream: {}", e))
+            StreamlineError::protocol_msg(format!("Failed to open uni stream: {e}"))
         })?;
         Ok(WebTransportSendStream::new(send))
     }
@@ -431,7 +447,7 @@ impl WebTransportSession {
     /// Accept an incoming unidirectional receive stream
     pub async fn accept_uni(&self) -> Result<WebTransportRecvStream> {
         let recv = self.connection.accept_uni().await.map_err(|e| {
-            StreamlineError::protocol_msg(format!("Failed to accept uni stream: {}", e))
+            StreamlineError::protocol_msg(format!("Failed to accept uni stream: {e}"))
         })?;
         Ok(WebTransportRecvStream::new(recv))
     }
@@ -440,14 +456,15 @@ impl WebTransportSession {
     pub fn send_datagram(&self, data: Bytes) -> Result<()> {
         self.connection
             .send_datagram(data)
-            .map_err(|e| StreamlineError::protocol_msg(format!("Failed to send datagram: {}", e)))
+            .map_err(|e| StreamlineError::protocol_msg(format!("Failed to send datagram: {e}")))
     }
 
     /// Receive a datagram (unreliable)
     pub async fn receive_datagram(&self) -> Result<Bytes> {
-        self.connection.read_datagram().await.map_err(|e| {
-            StreamlineError::protocol_msg(format!("Failed to receive datagram: {}", e))
-        })
+        self.connection
+            .read_datagram()
+            .await
+            .map_err(|e| StreamlineError::protocol_msg(format!("Failed to receive datagram: {e}")))
     }
 
     /// Get connection statistics
@@ -513,7 +530,7 @@ impl WebTransportBiStream {
         self.recv
             .read(buf)
             .await
-            .map_err(|e| StreamlineError::protocol_msg(format!("Read error: {}", e)))
+            .map_err(|e| StreamlineError::protocol_msg(format!("Read error: {e}")))
     }
 
     /// Write data to the stream
@@ -521,14 +538,14 @@ impl WebTransportBiStream {
         self.send
             .write_all(data)
             .await
-            .map_err(|e| StreamlineError::protocol_msg(format!("Write error: {}", e)))
+            .map_err(|e| StreamlineError::protocol_msg(format!("Write error: {e}")))
     }
 
     /// Finish the send side of the stream
     pub async fn finish(&mut self) -> Result<()> {
         self.send
             .finish()
-            .map_err(|e| StreamlineError::protocol_msg(format!("Finish error: {}", e)))
+            .map_err(|e| StreamlineError::protocol_msg(format!("Finish error: {e}")))
     }
 }
 
@@ -557,14 +574,14 @@ impl WebTransportSendStream {
         self.send
             .write_all(data)
             .await
-            .map_err(|e| StreamlineError::protocol_msg(format!("Write error: {}", e)))
+            .map_err(|e| StreamlineError::protocol_msg(format!("Write error: {e}")))
     }
 
     /// Finish the stream
     pub async fn finish(&mut self) -> Result<()> {
         self.send
             .finish()
-            .map_err(|e| StreamlineError::protocol_msg(format!("Finish error: {}", e)))
+            .map_err(|e| StreamlineError::protocol_msg(format!("Finish error: {e}")))
     }
 }
 
@@ -593,7 +610,7 @@ impl WebTransportRecvStream {
         self.recv
             .read(buf)
             .await
-            .map_err(|e| StreamlineError::protocol_msg(format!("Read error: {}", e)))
+            .map_err(|e| StreamlineError::protocol_msg(format!("Read error: {e}")))
     }
 
     /// Read to end
@@ -601,7 +618,7 @@ impl WebTransportRecvStream {
         self.recv
             .read_to_end(max_size)
             .await
-            .map_err(|e| StreamlineError::protocol_msg(format!("Read to end error: {}", e)))
+            .map_err(|e| StreamlineError::protocol_msg(format!("Read to end error: {e}")))
     }
 }
 
@@ -832,8 +849,7 @@ impl WebTransportMessage {
             Self::TYPE_PING => Ok(WebTransportMessage::Ping),
             Self::TYPE_PONG => Ok(WebTransportMessage::Pong),
             _ => Err(StreamlineError::protocol_msg(format!(
-                "Unknown message type: {}",
-                msg_type
+                "Unknown message type: {msg_type}"
             ))),
         }
     }
@@ -851,7 +867,7 @@ impl WebTransportMessage {
             ));
         }
         let s = String::from_utf8(buf[..len].to_vec())
-            .map_err(|e| StreamlineError::protocol_msg(format!("Invalid UTF-8: {}", e)))?;
+            .map_err(|e| StreamlineError::protocol_msg(format!("Invalid UTF-8: {e}")))?;
         buf.advance(len);
         Ok(s)
     }
@@ -918,8 +934,16 @@ impl WebTransportMessage {
 mod tests {
     use super::*;
 
-    fn setup_crypto() {
-        let _ = rustls::crypto::ring::default_provider().install_default();
+    /// The WebTransport listener builds its rustls configuration from an
+    /// explicitly passed provider, so no process-wide-provider fixture is needed
+    /// — and none may be added, or an implicit builder call elsewhere would
+    /// start working by accident.
+    #[test]
+    fn test_no_process_wide_crypto_provider_is_installed() {
+        assert!(
+            rustls::crypto::CryptoProvider::get_default().is_none(),
+            "WebTransport configuration must not depend on a process-wide rustls provider"
+        );
     }
 
     #[test]
@@ -940,8 +964,6 @@ mod tests {
 
     #[tokio::test]
     async fn test_webtransport_server_creation() {
-        setup_crypto();
-
         let config = WebTransportConfig {
             bind_addr: "127.0.0.1:0".parse().unwrap(),
             ..Default::default()

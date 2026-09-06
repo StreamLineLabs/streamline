@@ -38,7 +38,7 @@ curl -fsSL https://get.streamline.io | sh
 # Docker — zero install, just run
 docker run -p 9092:9092 -p 9094:9094 ghcr.io/streamlinelabs/streamline
 
-# From source (Rust 1.80+)
+# From source (Rust 1.88+)
 git clone https://github.com/streamlinelabs/streamline && cd streamline
 cargo build --release
 ```
@@ -47,7 +47,7 @@ Then just run it:
 
 ```bash
 $ streamline --playground
-[INFO] Streamline v0.2.0 — listening on 0.0.0.0:9092 (Kafka) / 0.0.0.0:9094 (HTTP)
+[INFO] Streamline v0.4.0 — listening on 0.0.0.0:9092 (Kafka) / 0.0.0.0:9094 (HTTP)
 [INFO] Playground mode: created topics [demo-events, demo-logs, demo-metrics, demo-orders]
 ```
 
@@ -88,7 +88,7 @@ Streamline is a single statically-linked binary:
 # Download, run, done
 $ curl -fsSL https://get.streamline.io | sh
 $ streamline
-[INFO] Streamline v0.2.0 ready in 47ms
+[INFO] Streamline v0.4.0 ready in 47ms
 ```
 
 No JVM tuning. No heap size calculations. No `server.properties` with 200 options. It starts in milliseconds and stores data in `./data/` by default. Move the binary to another machine and it just works.
@@ -456,7 +456,7 @@ resource "streamline_cluster" "prod" {
 ## FAQ
 
 **Q: Is this production-ready?**
-A: Streamline is currently v0.2.0 (alpha). Single-node deployments are stable for development, testing, and low-to-medium throughput production workloads. Clustering is in Beta. We publish stability tiers for every API — see [API Stability](docs/API_STABILITY.md).
+A: Streamline is currently v0.4.0 and pre-1.0. Single-node deployments are suitable for development, testing, and low-to-medium throughput workloads. Clustering is Beta. We publish stability tiers for every API — see [API Stability](docs/API_STABILITY.md), which is the authoritative statement of what is Stable, Beta and Experimental.
 
 **Q: How compatible is it with Kafka, really?**
 A: We implement 50+ Kafka protocol APIs. Standard produce/consume, consumer groups, transactions, and schema registry work with all major Kafka client libraries. Some advanced admin APIs and features like quotas are still in progress. Check the [SDK Compatibility Matrix](docs/SDK_COMPATIBILITY_MATRIX.md) for details.

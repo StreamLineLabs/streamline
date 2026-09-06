@@ -4,14 +4,15 @@
 //! the AI pipeline to survive restarts without re-embedding all data.
 //! Uses a simple append-only binary format with periodic compaction.
 
+use crate::bincode_compat;
 use crate::error::{Result, StreamlineError};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::io::{BufReader, BufWriter, Read, Write};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use tracing::{debug, error, info, warn};
+use tracing::info;
 
 /// Magic bytes for the vector store file format
 const MAGIC: &[u8; 4] = b"SVEC";
@@ -118,15 +119,14 @@ impl PersistentVectorStore {
             return Ok(0);
         }
 
-        let file = std::fs::File::open(&data_file).map_err(|e| {
-            StreamlineError::Storage(format!("Failed to open vector store: {}", e))
-        })?;
+        let file = std::fs::File::open(&data_file)
+            .map_err(|e| StreamlineError::Storage(format!("Failed to open vector store: {e}")))?;
         let mut reader = BufReader::new(file);
 
         // Read and validate header
         let mut magic = [0u8; 4];
         reader.read_exact(&mut magic).map_err(|e| {
-            StreamlineError::Storage(format!("Failed to read vector store header: {}", e))
+            StreamlineError::Storage(format!("Failed to read vector store header: {e}"))
         })?;
 
         if &magic != MAGIC {
@@ -136,24 +136,23 @@ impl PersistentVectorStore {
         }
 
         let mut version_bytes = [0u8; 4];
-        reader.read_exact(&mut version_bytes).map_err(|e| {
-            StreamlineError::Storage(format!("Failed to read version: {}", e))
-        })?;
+        reader
+            .read_exact(&mut version_bytes)
+            .map_err(|e| StreamlineError::Storage(format!("Failed to read version: {e}")))?;
         let version = u32::from_le_bytes(version_bytes);
 
         if version != FORMAT_VERSION {
             return Err(StreamlineError::Storage(format!(
-                "Unsupported vector store version: {} (expected {})",
-                version, FORMAT_VERSION
+                "Unsupported vector store version: {version} (expected {FORMAT_VERSION})"
             )));
         }
 
         // Read entry count
         let mut count_bytes = [0u8; 8];
-        reader.read_exact(&mut count_bytes).map_err(|e| {
-            StreamlineError::Storage(format!("Failed to read entry count: {}", e))
-        })?;
-        let entry_count = u64::from_le_bytes(count_bytes);
+        reader
+            .read_exact(&mut count_bytes)
+            .map_err(|e| StreamlineError::Storage(format!("Failed to read entry count: {e}")))?;
+        let _entry_count = u64::from_le_bytes(count_bytes);
 
         // Read all entries
         let mut vectors = self.vectors.write().await;
@@ -161,13 +160,12 @@ impl PersistentVectorStore {
         let mut deleted = 0usize;
 
         let mut data = Vec::new();
-        reader.read_to_end(&mut data).map_err(|e| {
-            StreamlineError::Storage(format!("Failed to read vector data: {}", e))
-        })?;
+        reader
+            .read_to_end(&mut data)
+            .map_err(|e| StreamlineError::Storage(format!("Failed to read vector data: {e}")))?;
 
-        let entries: Vec<StoredVector> = bincode::deserialize(&data).map_err(|e| {
-            StreamlineError::Storage(format!("Failed to deserialize vectors: {}", e))
-        })?;
+        let entries: Vec<StoredVector> = bincode_compat::deserialize(&data)
+            .map_err(|e| StreamlineError::Storage(format!("Failed to deserialize vectors: {e}")))?;
 
         for entry in entries {
             if entry.deleted {
@@ -201,7 +199,13 @@ impl PersistentVectorStore {
     }
 
     /// Store a vector
-    pub async fn put(&self, id: String, vector: Vec<f32>, topic: Option<String>, text_preview: Option<String>) -> Result<()> {
+    pub async fn put(
+        &self,
+        id: String,
+        vector: Vec<f32>,
+        topic: Option<String>,
+        text_preview: Option<String>,
+    ) -> Result<()> {
         let entry = StoredVector {
             id: id.clone(),
             vector,
@@ -333,46 +337,38 @@ impl PersistentVectorStore {
         let tmp_file = data_file.with_extension("tmp");
 
         let file = std::fs::File::create(&tmp_file).map_err(|e| {
-            StreamlineError::Storage(format!("Failed to create snapshot file: {}", e))
+            StreamlineError::Storage(format!("Failed to create snapshot file: {e}"))
         })?;
         let mut writer = BufWriter::new(file);
 
         // Write header
-        writer.write_all(MAGIC).map_err(|e| {
-            StreamlineError::Storage(format!("Failed to write header: {}", e))
-        })?;
+        writer
+            .write_all(MAGIC)
+            .map_err(|e| StreamlineError::Storage(format!("Failed to write header: {e}")))?;
         writer
             .write_all(&FORMAT_VERSION.to_le_bytes())
-            .map_err(|e| {
-                StreamlineError::Storage(format!("Failed to write version: {}", e))
-            })?;
+            .map_err(|e| StreamlineError::Storage(format!("Failed to write version: {e}")))?;
         writer
             .write_all(&(entries.len() as u64).to_le_bytes())
-            .map_err(|e| {
-                StreamlineError::Storage(format!("Failed to write count: {}", e))
-            })?;
+            .map_err(|e| StreamlineError::Storage(format!("Failed to write count: {e}")))?;
 
         // Write entries
-        let data = bincode::serialize(&entries).map_err(|e| {
-            StreamlineError::Storage(format!("Failed to serialize vectors: {}", e))
-        })?;
-        writer.write_all(&data).map_err(|e| {
-            StreamlineError::Storage(format!("Failed to write vector data: {}", e))
-        })?;
-        writer.flush().map_err(|e| {
-            StreamlineError::Storage(format!("Failed to flush snapshot: {}", e))
-        })?;
+        let data = bincode_compat::serialize(&entries)
+            .map_err(|e| StreamlineError::Storage(format!("Failed to serialize vectors: {e}")))?;
+        writer
+            .write_all(&data)
+            .map_err(|e| StreamlineError::Storage(format!("Failed to write vector data: {e}")))?;
+        writer
+            .flush()
+            .map_err(|e| StreamlineError::Storage(format!("Failed to flush snapshot: {e}")))?;
 
         // Atomic rename
-        std::fs::rename(&tmp_file, &data_file).map_err(|e| {
-            StreamlineError::Storage(format!("Failed to finalize snapshot: {}", e))
-        })?;
+        std::fs::rename(&tmp_file, &data_file)
+            .map_err(|e| StreamlineError::Storage(format!("Failed to finalize snapshot: {e}")))?;
 
         let mut stats = self.stats.write().await;
         stats.flush_count += 1;
-        stats.disk_size_bytes = std::fs::metadata(&data_file)
-            .map(|m| m.len())
-            .unwrap_or(0);
+        stats.disk_size_bytes = std::fs::metadata(&data_file).map(|m| m.len()).unwrap_or(0);
         stats.deleted_vectors = 0; // Compaction happened via snapshot
 
         info!(
@@ -403,7 +399,7 @@ impl PersistentVectorStore {
         self.config.data_dir.join("vectors.svec")
     }
 
-    async fn flush_entries(&self, entries: &[StoredVector]) -> Result<()> {
+    async fn flush_entries(&self, _entries: &[StoredVector]) -> Result<()> {
         // For incremental flushes, we do a full snapshot
         // (A production implementation would use an append-only log)
         self.snapshot().await
@@ -452,15 +448,30 @@ mod tests {
 
         // Insert vectors
         store
-            .put("v1".to_string(), vec![1.0, 0.0, 0.0], Some("topic-a".to_string()), None)
+            .put(
+                "v1".to_string(),
+                vec![1.0, 0.0, 0.0],
+                Some("topic-a".to_string()),
+                None,
+            )
             .await
             .unwrap();
         store
-            .put("v2".to_string(), vec![0.0, 1.0, 0.0], Some("topic-a".to_string()), None)
+            .put(
+                "v2".to_string(),
+                vec![0.0, 1.0, 0.0],
+                Some("topic-a".to_string()),
+                None,
+            )
             .await
             .unwrap();
         store
-            .put("v3".to_string(), vec![0.9, 0.1, 0.0], Some("topic-b".to_string()), None)
+            .put(
+                "v3".to_string(),
+                vec![0.9, 0.1, 0.0],
+                Some("topic-b".to_string()),
+                None,
+            )
             .await
             .unwrap();
 
@@ -489,8 +500,14 @@ mod tests {
         // Create and populate
         {
             let store = PersistentVectorStore::new(config.clone()).unwrap();
-            store.put("v1".to_string(), vec![1.0, 2.0, 3.0], None, None).await.unwrap();
-            store.put("v2".to_string(), vec![4.0, 5.0, 6.0], None, None).await.unwrap();
+            store
+                .put("v1".to_string(), vec![1.0, 2.0, 3.0], None, None)
+                .await
+                .unwrap();
+            store
+                .put("v2".to_string(), vec![4.0, 5.0, 6.0], None, None)
+                .await
+                .unwrap();
             store.snapshot().await.unwrap();
         }
 
@@ -516,8 +533,14 @@ mod tests {
         };
 
         let store = PersistentVectorStore::new(config).unwrap();
-        store.put("v1".to_string(), vec![1.0], None, None).await.unwrap();
-        store.put("v2".to_string(), vec![2.0], None, None).await.unwrap();
+        store
+            .put("v1".to_string(), vec![1.0], None, None)
+            .await
+            .unwrap();
+        store
+            .put("v2".to_string(), vec![2.0], None, None)
+            .await
+            .unwrap();
 
         assert!(store.delete("v1").await.unwrap());
         assert!(!store.delete("v999").await.unwrap());

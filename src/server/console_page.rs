@@ -186,10 +186,25 @@ mod tests {
 
     #[test]
     fn test_console_html_content() {
-        assert!(CONSOLE_HTML.len() > 1000, "Console HTML must be substantive");
-        assert!(CONSOLE_HTML.contains("Streamline Console"), "Must contain title");
-        assert!(CONSOLE_HTML.contains("/api/v1/dashboard"), "Must reference dashboard API");
-        assert!(CONSOLE_HTML.contains("/api/v1/inspect"), "Must reference inspector API");
-        assert!(CONSOLE_HTML.contains("/api/v1/query"), "Must reference query API");
+        assert!(
+            CONSOLE_HTML.len() > 1000,
+            "Console HTML must be substantive"
+        );
+        assert!(
+            CONSOLE_HTML.contains("Streamline Console"),
+            "Must contain title"
+        );
+        assert!(
+            CONSOLE_HTML.contains("/api/v1/dashboard"),
+            "Must reference dashboard API"
+        );
+        assert!(
+            CONSOLE_HTML.contains("/api/v1/inspect"),
+            "Must reference inspector API"
+        );
+        assert!(
+            CONSOLE_HTML.contains("/api/v1/query"),
+            "Must reference query API"
+        );
     }
 }

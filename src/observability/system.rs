@@ -266,18 +266,17 @@ fn get_network_interfaces_linux() -> Vec<NetworkInterface> {
             };
 
             // Check if interface is up
-            if let Ok(operstate) = fs::read_to_string(format!("/sys/class/net/{}/operstate", name))
-            {
+            if let Ok(operstate) = fs::read_to_string(format!("/sys/class/net/{name}/operstate")) {
                 iface.is_up = operstate.trim() == "up";
             }
 
             // Get MAC address
-            if let Ok(mac) = fs::read_to_string(format!("/sys/class/net/{}/address", name)) {
+            if let Ok(mac) = fs::read_to_string(format!("/sys/class/net/{name}/address")) {
                 iface.mac_address = mac.trim().to_string();
             }
 
             // Get speed
-            if let Ok(speed) = fs::read_to_string(format!("/sys/class/net/{}/speed", name)) {
+            if let Ok(speed) = fs::read_to_string(format!("/sys/class/net/{name}/speed")) {
                 iface.speed_mbps = speed.trim().parse().unwrap_or(0);
             }
 

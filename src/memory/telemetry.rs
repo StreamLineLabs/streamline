@@ -59,8 +59,7 @@ pub fn get() -> &'static MemoryMetrics {
 pub fn record_recall(agent_id: &str, hit_count: usize) {
     let m = get();
     m.recall_total.fetch_add(1, Ordering::Relaxed);
-    m.recall_hits
-        .fetch_add(hit_count as u64, Ordering::Relaxed);
+    m.recall_hits.fetch_add(hit_count as u64, Ordering::Relaxed);
     lock_or_recover(&m.agents)
         .entry(agent_id.to_string())
         .or_default()

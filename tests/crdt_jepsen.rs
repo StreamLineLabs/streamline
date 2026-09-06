@@ -175,10 +175,7 @@ fn orset_shopping_cart_scenario() {
         !cart_a.contains(&"widget".to_string()),
         "widget was removed"
     );
-    assert!(
-        cart_a.contains(&"gadget".to_string()),
-        "gadget untouched"
-    );
+    assert!(cart_a.contains(&"gadget".to_string()), "gadget untouched");
     assert!(
         cart_a.contains(&"doohickey".to_string()),
         "doohickey untouched"
@@ -198,9 +195,7 @@ fn orset_shopping_cart_scenario() {
 /// Simulate a 5-node cluster with cascading partitions.
 #[test]
 fn gcounter_5node_cascading_partition() {
-    let mut nodes: Vec<GCounter> = (0..5)
-        .map(|i| GCounter::new(format!("node-{}", i)))
-        .collect();
+    let mut nodes: Vec<GCounter> = (0..5).map(|i| GCounter::new(format!("node-{i}"))).collect();
 
     // Each node increments independently
     for (i, node) in nodes.iter_mut().enumerate() {
@@ -276,8 +271,8 @@ fn orset_rapid_add_remove_convergence() {
 
     // Both should have 1..=15
     for i in 1..=15 {
-        assert!(node_a.contains(&i), "node_a missing {}", i);
-        assert!(node_b.contains(&i), "node_b missing {}", i);
+        assert!(node_a.contains(&i), "node_a missing {i}");
+        assert!(node_b.contains(&i), "node_b missing {i}");
     }
     assert_eq!(node_a.len(), node_b.len());
 }

@@ -14,9 +14,7 @@ use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use tower::ServiceExt;
 
-use streamline::schema::{
-    CompatibilityLevel, SchemaRegistryConfig, SchemaStore, SchemaType,
-};
+use streamline::schema::{CompatibilityLevel, SchemaRegistryConfig, SchemaStore, SchemaType};
 use streamline::server::schema_ui::{create_schema_ui_router, SchemaUiState};
 
 fn create_test_state() -> SchemaUiState {

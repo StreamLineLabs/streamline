@@ -139,12 +139,7 @@ pub const BADGE_DEFINITIONS: &[(&str, &str, &str, &str)] = &[
         "Completed all tutorials",
         "👑",
     ),
-    (
-        "multi-topic",
-        "Multi-Topic",
-        "Created 5+ topics",
-        "📚",
-    ),
+    ("multi-topic", "Multi-Topic", "Created 5+ topics", "📚"),
     (
         "data-analyst",
         "Data Analyst",
@@ -172,9 +167,9 @@ impl ProgressTracker {
     pub fn with_persistence(path: PathBuf) -> Result<Self> {
         let state = if path.exists() {
             let content = std::fs::read_to_string(&path)
-                .map_err(|e| StreamlineError::storage_msg(format!("Read progress: {}", e)))?;
+                .map_err(|e| StreamlineError::storage_msg(format!("Read progress: {e}")))?;
             serde_json::from_str(&content)
-                .map_err(|e| StreamlineError::storage_msg(format!("Parse progress: {}", e)))?
+                .map_err(|e| StreamlineError::storage_msg(format!("Parse progress: {e}")))?
         } else {
             ProgressState::default()
         };
@@ -256,13 +251,13 @@ impl ProgressTracker {
     /// Export progress as JSON for sharing.
     pub fn export(&self) -> Result<String> {
         serde_json::to_string_pretty(&self.state)
-            .map_err(|e| StreamlineError::storage_msg(format!("Export error: {}", e)))
+            .map_err(|e| StreamlineError::storage_msg(format!("Export error: {e}")))
     }
 
     /// Import progress from JSON.
     pub fn import(&mut self, json: &str) -> Result<()> {
         self.state = serde_json::from_str(json)
-            .map_err(|e| StreamlineError::storage_msg(format!("Import error: {}", e)))?;
+            .map_err(|e| StreamlineError::storage_msg(format!("Import error: {e}")))?;
         self.save()
     }
 
@@ -270,9 +265,9 @@ impl ProgressTracker {
     pub fn save(&self) -> Result<()> {
         if let Some(ref path) = self.save_path {
             let json = serde_json::to_string_pretty(&self.state)
-                .map_err(|e| StreamlineError::storage_msg(format!("Serialize: {}", e)))?;
+                .map_err(|e| StreamlineError::storage_msg(format!("Serialize: {e}")))?;
             std::fs::write(path, json)
-                .map_err(|e| StreamlineError::storage_msg(format!("Write: {}", e)))?;
+                .map_err(|e| StreamlineError::storage_msg(format!("Write: {e}")))?;
         }
         Ok(())
     }
@@ -280,8 +275,7 @@ impl ProgressTracker {
     /// Check and award any newly-earned badges.
     fn check_badges(&mut self) -> Vec<Badge> {
         let mut new_badges = Vec::new();
-        let earned_ids: HashSet<String> =
-            self.state.badges.iter().map(|b| b.id.clone()).collect();
+        let earned_ids: HashSet<String> = self.state.badges.iter().map(|b| b.id.clone()).collect();
 
         for (id, name, desc, icon) in BADGE_DEFINITIONS {
             if earned_ids.contains(*id) {
@@ -447,7 +441,10 @@ mod tests {
     #[test]
     fn test_progress_tracker_creation() {
         let tracker = ProgressTracker::new();
-        assert_eq!(tracker.progress().curriculum_level, CurriculumLevel::Beginner);
+        assert_eq!(
+            tracker.progress().curriculum_level,
+            CurriculumLevel::Beginner
+        );
         assert!(tracker.progress().badges.is_empty());
     }
 
@@ -522,7 +519,7 @@ mod tests {
         let mut tracker = ProgressTracker::new();
         // Complete 3 tutorials → Intermediate
         for i in 0..3 {
-            tracker.complete_step(&format!("t{}", i), 0);
+            tracker.complete_step(&format!("t{i}"), 0);
         }
         assert_eq!(
             tracker.progress().curriculum_level,

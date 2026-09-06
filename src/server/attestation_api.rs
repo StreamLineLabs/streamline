@@ -125,7 +125,7 @@ fn parse_algorithm(s: &str) -> Result<Algorithm, String> {
     match s.to_ascii_lowercase().as_str() {
         "ed25519" => Ok(Algorithm::Ed25519),
         "ecdsa-p256" | "ecdsa_p256" | "p256" => Ok(Algorithm::EcdsaP256),
-        other => Err(format!("unsupported algorithm: {}", other)),
+        other => Err(format!("unsupported algorithm: {other}")),
     }
 }
 
@@ -134,7 +134,7 @@ fn resolve_value(text: Option<&String>, b64: Option<&String>) -> Result<Vec<u8>,
         (Some(t), None) => Ok(t.as_bytes().to_vec()),
         (None, Some(s)) => base64::engine::general_purpose::STANDARD
             .decode(s.as_bytes())
-            .map_err(|e| format!("invalid base64: {}", e)),
+            .map_err(|e| format!("invalid base64: {e}")),
         (Some(_), Some(_)) => Err("provide exactly one of `value` or `value_b64`".into()),
         (None, None) => Err("missing record value: provide `value` or `value_b64`".into()),
     }
@@ -159,7 +159,11 @@ async fn attest(
 
     // Auto-register the key if missing so the API is self-contained for the
     // common dev/CI case. Production callers pre-provision keys via KMS.
-    if state.provider.register_key(&req.key_id, Algorithm::Ed25519).is_err() {
+    if state
+        .provider
+        .register_key(&req.key_id, Algorithm::Ed25519)
+        .is_err()
+    {
         // Already exists — ignore; sign() will surface real errors.
     }
 
@@ -214,10 +218,9 @@ async fn verify(
         Ok(a) => a,
         Err(m) => return bad_request(m),
     };
-    let sig = match base64::engine::general_purpose::STANDARD.decode(req.signature_b64.as_bytes())
-    {
+    let sig = match base64::engine::general_purpose::STANDARD.decode(req.signature_b64.as_bytes()) {
         Ok(s) => s,
-        Err(e) => return bad_request(format!("invalid signature_b64: {}", e)),
+        Err(e) => return bad_request(format!("invalid signature_b64: {e}")),
     };
     let att = Attestation::for_record(
         &req.topic,

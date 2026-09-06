@@ -14,6 +14,8 @@ use quinn::{
     ClientConfig, Connection, Endpoint, RecvStream, SendStream, ServerConfig, TransportConfig,
 };
 use rcgen::{CertificateParams, KeyPair};
+use rustls::pki_types::pem::{Error as PemError, PemObject};
+use rustls::pki_types::{CertificateDer, PrivateKeyDer};
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
@@ -136,9 +138,8 @@ impl QuicServer {
     pub fn new(config: QuicServerConfig) -> Result<Self> {
         let server_config = Self::build_server_config(&config)?;
 
-        let endpoint = Endpoint::server(server_config, config.bind_addr).map_err(|e| {
-            StreamlineError::Config(format!("Failed to create QUIC endpoint: {}", e))
-        })?;
+        let endpoint = Endpoint::server(server_config, config.bind_addr)
+            .map_err(|e| StreamlineError::Config(format!("Failed to create QUIC endpoint: {e}")))?;
 
         info!("QUIC server listening on {}", config.bind_addr);
 
@@ -154,50 +155,64 @@ impl QuicServer {
     /// Build server configuration
     fn build_server_config(config: &QuicServerConfig) -> Result<ServerConfig> {
         // Generate or load certificate
-        let (cert_der, key_der) =
-            if let (Some(cert_pem), Some(key_pem)) = (&config.cert_pem, &config.key_pem) {
-                // Parse provided certificates
-                let cert_chain = rustls_pemfile::certs(&mut cert_pem.as_bytes())
-                    .collect::<std::result::Result<Vec<_>, _>>()
-                    .map_err(|e| StreamlineError::Config(format!("Invalid certificate: {}", e)))?;
-                let key = rustls_pemfile::private_key(&mut key_pem.as_bytes())
-                    .map_err(|e| StreamlineError::Config(format!("Invalid private key: {}", e)))?
-                    .ok_or_else(|| StreamlineError::Config("No private key found".to_string()))?;
-                (cert_chain, key)
-            } else {
-                // Generate self-signed certificate
-                let key_pair = KeyPair::generate().map_err(|e| {
-                    StreamlineError::Config(format!("Failed to generate key pair: {}", e))
+        let (cert_der, key_der) = if let (Some(cert_pem), Some(key_pem)) =
+            (&config.cert_pem, &config.key_pem)
+        {
+            // Parse provided certificates
+            let cert_chain = CertificateDer::pem_slice_iter(cert_pem.as_bytes())
+                .collect::<std::result::Result<Vec<_>, _>>()
+                .map_err(|e| StreamlineError::Config(format!("Invalid certificate: {e}")))?;
+            let key = PrivateKeyDer::from_pem_slice(key_pem.as_bytes()).map_err(|e| match e {
+                PemError::NoItemsFound => {
+                    StreamlineError::Config("No private key found".to_string())
+                }
+                other => StreamlineError::Config(format!("Invalid private key: {other}")),
+            })?;
+            (cert_chain, key)
+        } else {
+            // Generate self-signed certificate
+            let key_pair = KeyPair::generate().map_err(|e| {
+                StreamlineError::Config(format!("Failed to generate key pair: {e}"))
+            })?;
+
+            let mut params =
+                CertificateParams::new(vec![config.server_name.clone()]).map_err(|e| {
+                    StreamlineError::Config(format!("Failed to create cert params: {e}"))
                 })?;
+            params.distinguished_name.push(
+                rcgen::DnType::CommonName,
+                rcgen::DnValue::Utf8String(config.server_name.clone()),
+            );
 
-                let mut params =
-                    CertificateParams::new(vec![config.server_name.clone()]).map_err(|e| {
-                        StreamlineError::Config(format!("Failed to create cert params: {}", e))
-                    })?;
-                params.distinguished_name.push(
-                    rcgen::DnType::CommonName,
-                    rcgen::DnValue::Utf8String(config.server_name.clone()),
-                );
+            let cert = params.self_signed(&key_pair).map_err(|e| {
+                StreamlineError::Config(format!("Failed to generate certificate: {e}"))
+            })?;
 
-                let cert = params.self_signed(&key_pair).map_err(|e| {
-                    StreamlineError::Config(format!("Failed to generate certificate: {}", e))
-                })?;
+            let cert_der = vec![cert.der().clone()];
+            let key_der = rustls::pki_types::PrivatePkcs8KeyDer::from(key_pair.serialize_der());
 
-                let cert_der = vec![cert.der().clone()];
-                let key_der = rustls::pki_types::PrivatePkcs8KeyDer::from(key_pair.serialize_der());
+            (cert_der, rustls::pki_types::PrivateKeyDer::Pkcs8(key_der))
+        };
 
-                (cert_der, rustls::pki_types::PrivateKeyDer::Pkcs8(key_der))
-            };
-
-        // Build rustls config
-        let rustls_config = rustls::ServerConfig::builder()
-            .with_no_client_auth()
-            .with_single_cert(cert_der, key_der)
-            .map_err(|e| StreamlineError::Config(format!("Failed to build TLS config: {}", e)))?;
+        // Build rustls config.
+        //
+        // QUIC is TLS 1.3 only, and the provider is passed explicitly rather
+        // than resolved from a process-wide default: `ServerConfig::builder()`
+        // panics when none is installed and silently switches implementation
+        // when a transitive dependency enables a second provider feature.
+        let rustls_config =
+            rustls::ServerConfig::builder_with_provider(crate::server::tls::crypto_provider())
+                .with_protocol_versions(&[&rustls::version::TLS13])
+                .map_err(|e| {
+                    StreamlineError::Config(format!("Invalid QUIC TLS protocol configuration: {e}"))
+                })?
+                .with_no_client_auth()
+                .with_single_cert(cert_der, key_der)
+                .map_err(|e| StreamlineError::Config(format!("Failed to build TLS config: {e}")))?;
 
         let mut server_config = ServerConfig::with_crypto(Arc::new(
             quinn::crypto::rustls::QuicServerConfig::try_from(rustls_config).map_err(|e| {
-                StreamlineError::Config(format!("Failed to create QUIC crypto config: {}", e))
+                StreamlineError::Config(format!("Failed to create QUIC crypto config: {e}"))
             })?,
         ));
 
@@ -208,7 +223,7 @@ impl QuicServer {
         transport.max_idle_timeout(Some(
             Duration::from_millis(config.idle_timeout_ms)
                 .try_into()
-                .map_err(|e| StreamlineError::Config(format!("Invalid idle timeout: {}", e)))?,
+                .map_err(|e| StreamlineError::Config(format!("Invalid idle timeout: {e}")))?,
         ));
         if config.keep_alive_interval_ms > 0 {
             transport
@@ -219,15 +234,12 @@ impl QuicServer {
             config
                 .receive_window
                 .try_into()
-                .map_err(|e| StreamlineError::Config(format!("Invalid receive window: {}", e)))?,
+                .map_err(|e| StreamlineError::Config(format!("Invalid receive window: {e}")))?,
         );
         transport.stream_receive_window(
-            config
-                .stream_receive_window
-                .try_into()
-                .map_err(|e| {
-                    StreamlineError::Config(format!("Invalid stream receive window: {}", e))
-                })?,
+            config.stream_receive_window.try_into().map_err(|e| {
+                StreamlineError::Config(format!("Invalid stream receive window: {e}"))
+            })?,
         );
 
         server_config.transport_config(Arc::new(transport));
@@ -249,7 +261,7 @@ impl QuicServer {
 
         let connection = incoming.await.map_err(|e| {
             self.metrics.write().connection_errors += 1;
-            StreamlineError::protocol_msg(format!("Connection failed: {}", e))
+            StreamlineError::protocol_msg(format!("Connection failed: {e}"))
         })?;
 
         self.connection_count.fetch_add(1, Ordering::Relaxed);
@@ -311,23 +323,24 @@ impl QuicConnection {
     pub async fn open_bi(&self) -> Result<QuicBiStream> {
         let (send, recv) =
             self.connection.open_bi().await.map_err(|e| {
-                StreamlineError::protocol_msg(format!("Failed to open stream: {}", e))
+                StreamlineError::protocol_msg(format!("Failed to open stream: {e}"))
             })?;
         Ok(QuicBiStream::new(send, recv))
     }
 
     /// Accept an incoming bidirectional stream
     pub async fn accept_bi(&self) -> Result<QuicBiStream> {
-        let (send, recv) = self.connection.accept_bi().await.map_err(|e| {
-            StreamlineError::protocol_msg(format!("Failed to accept stream: {}", e))
-        })?;
+        let (send, recv) =
+            self.connection.accept_bi().await.map_err(|e| {
+                StreamlineError::protocol_msg(format!("Failed to accept stream: {e}"))
+            })?;
         Ok(QuicBiStream::new(send, recv))
     }
 
     /// Open a new unidirectional send stream
     pub async fn open_uni(&self) -> Result<QuicSendStream> {
         let send = self.connection.open_uni().await.map_err(|e| {
-            StreamlineError::protocol_msg(format!("Failed to open uni stream: {}", e))
+            StreamlineError::protocol_msg(format!("Failed to open uni stream: {e}"))
         })?;
         Ok(QuicSendStream::new(send))
     }
@@ -335,7 +348,7 @@ impl QuicConnection {
     /// Accept an incoming unidirectional receive stream
     pub async fn accept_uni(&self) -> Result<QuicRecvStream> {
         let recv = self.connection.accept_uni().await.map_err(|e| {
-            StreamlineError::protocol_msg(format!("Failed to accept uni stream: {}", e))
+            StreamlineError::protocol_msg(format!("Failed to accept uni stream: {e}"))
         })?;
         Ok(QuicRecvStream::new(recv))
     }
@@ -418,7 +431,7 @@ impl QuicBiStream {
         self.recv
             .read(buf)
             .await
-            .map_err(|e| StreamlineError::protocol_msg(format!("Read error: {}", e)))
+            .map_err(|e| StreamlineError::protocol_msg(format!("Read error: {e}")))
     }
 
     /// Read exact amount of data
@@ -426,7 +439,7 @@ impl QuicBiStream {
         self.recv
             .read_exact(buf)
             .await
-            .map_err(|e| StreamlineError::protocol_msg(format!("Read exact error: {}", e)))
+            .map_err(|e| StreamlineError::protocol_msg(format!("Read exact error: {e}")))
     }
 
     /// Write data to the stream
@@ -434,21 +447,21 @@ impl QuicBiStream {
         self.send
             .write_all(data)
             .await
-            .map_err(|e| StreamlineError::protocol_msg(format!("Write error: {}", e)))
+            .map_err(|e| StreamlineError::protocol_msg(format!("Write error: {e}")))
     }
 
     /// Finish the send side of the stream
     pub async fn finish(&mut self) -> Result<()> {
         self.send
             .finish()
-            .map_err(|e| StreamlineError::protocol_msg(format!("Finish error: {}", e)))
+            .map_err(|e| StreamlineError::protocol_msg(format!("Finish error: {e}")))
     }
 
     /// Reset the stream
     pub fn reset(&mut self, error_code: u32) -> Result<()> {
         self.send
             .reset(error_code.into())
-            .map_err(|e| StreamlineError::protocol_msg(format!("Reset error: {}", e)))
+            .map_err(|e| StreamlineError::protocol_msg(format!("Reset error: {e}")))
     }
 
     /// Split into send and receive halves
@@ -485,21 +498,21 @@ impl QuicSendStream {
         self.send
             .write_all(data)
             .await
-            .map_err(|e| StreamlineError::protocol_msg(format!("Write error: {}", e)))
+            .map_err(|e| StreamlineError::protocol_msg(format!("Write error: {e}")))
     }
 
     /// Finish the stream
     pub async fn finish(&mut self) -> Result<()> {
         self.send
             .finish()
-            .map_err(|e| StreamlineError::protocol_msg(format!("Finish error: {}", e)))
+            .map_err(|e| StreamlineError::protocol_msg(format!("Finish error: {e}")))
     }
 
     /// Reset the stream
     pub fn reset(&mut self, error_code: u32) -> Result<()> {
         self.send
             .reset(error_code.into())
-            .map_err(|e| StreamlineError::protocol_msg(format!("Reset error: {}", e)))
+            .map_err(|e| StreamlineError::protocol_msg(format!("Reset error: {e}")))
     }
 }
 
@@ -528,7 +541,7 @@ impl QuicRecvStream {
         self.recv
             .read(buf)
             .await
-            .map_err(|e| StreamlineError::protocol_msg(format!("Read error: {}", e)))
+            .map_err(|e| StreamlineError::protocol_msg(format!("Read error: {e}")))
     }
 
     /// Read exact amount of data
@@ -536,7 +549,7 @@ impl QuicRecvStream {
         self.recv
             .read_exact(buf)
             .await
-            .map_err(|e| StreamlineError::protocol_msg(format!("Read exact error: {}", e)))
+            .map_err(|e| StreamlineError::protocol_msg(format!("Read exact error: {e}")))
     }
 
     /// Read to end
@@ -544,14 +557,14 @@ impl QuicRecvStream {
         self.recv
             .read_to_end(max_size)
             .await
-            .map_err(|e| StreamlineError::protocol_msg(format!("Read to end error: {}", e)))
+            .map_err(|e| StreamlineError::protocol_msg(format!("Read to end error: {e}")))
     }
 
     /// Stop receiving (send STOP_SENDING frame)
     pub fn stop(&mut self, error_code: u32) -> Result<()> {
         self.recv
             .stop(error_code.into())
-            .map_err(|e| StreamlineError::protocol_msg(format!("Stop error: {}", e)))
+            .map_err(|e| StreamlineError::protocol_msg(format!("Stop error: {e}")))
     }
 }
 
@@ -567,7 +580,7 @@ impl QuicClient {
     /// Create a new QUIC client
     pub fn new(config: QuicClientConfig) -> Result<Self> {
         let mut endpoint = Endpoint::client(SocketAddr::from(([0, 0, 0, 0], 0))).map_err(|e| {
-            StreamlineError::Config(format!("Failed to create client endpoint: {}", e))
+            StreamlineError::Config(format!("Failed to create client endpoint: {e}"))
         })?;
 
         let client_config = Self::build_client_config(&config)?;
@@ -578,24 +591,40 @@ impl QuicClient {
 
     /// Build client configuration
     fn build_client_config(config: &QuicClientConfig) -> Result<ClientConfig> {
+        // One explicit provider for both the `ClientConfig` and, when
+        // verification is skipped, the dangerous verifier installed into it.
+        let provider = crate::server::tls::crypto_provider();
+
+        // QUIC mandates TLS 1.3; state it rather than relying on the builder's
+        // defaults, which `builder_with_provider` does not supply.
+        let versions: &[&'static rustls::SupportedProtocolVersion] = &[&rustls::version::TLS13];
+
         let crypto = if config.skip_verification {
             // Skip certificate verification (for self-signed certs)
-            rustls::ClientConfig::builder()
+            rustls::ClientConfig::builder_with_provider(Arc::clone(&provider))
+                .with_protocol_versions(versions)
+                .map_err(|e| {
+                    StreamlineError::Config(format!("Invalid QUIC TLS protocol configuration: {e}"))
+                })?
                 .dangerous()
-                .with_custom_certificate_verifier(Arc::new(SkipServerVerification))
+                .with_custom_certificate_verifier(Arc::new(SkipServerVerification::new(provider)))
                 .with_no_client_auth()
         } else {
             // Use default certificate verification
             let mut roots = rustls::RootCertStore::empty();
             roots.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
-            rustls::ClientConfig::builder()
+            rustls::ClientConfig::builder_with_provider(provider)
+                .with_protocol_versions(versions)
+                .map_err(|e| {
+                    StreamlineError::Config(format!("Invalid QUIC TLS protocol configuration: {e}"))
+                })?
                 .with_root_certificates(roots)
                 .with_no_client_auth()
         };
 
         let mut client_config = ClientConfig::new(Arc::new(
             quinn::crypto::rustls::QuicClientConfig::try_from(crypto).map_err(|e| {
-                StreamlineError::Config(format!("Failed to create QUIC crypto config: {}", e))
+                StreamlineError::Config(format!("Failed to create QUIC crypto config: {e}"))
             })?,
         ));
 
@@ -604,7 +633,7 @@ impl QuicClient {
         transport.max_idle_timeout(Some(
             Duration::from_millis(config.idle_timeout_ms)
                 .try_into()
-                .map_err(|e| StreamlineError::Config(format!("Invalid idle timeout: {}", e)))?,
+                .map_err(|e| StreamlineError::Config(format!("Invalid idle timeout: {e}")))?,
         ));
         if config.keep_alive_interval_ms > 0 {
             transport
@@ -621,9 +650,9 @@ impl QuicClient {
         let connection = self
             .endpoint
             .connect(self.config.server_addr, &self.config.server_name)
-            .map_err(|e| StreamlineError::Config(format!("Failed to initiate connection: {}", e)))?
+            .map_err(|e| StreamlineError::Config(format!("Failed to initiate connection: {e}")))?
             .await
-            .map_err(|e| StreamlineError::protocol_msg(format!("Connection failed: {}", e)))?;
+            .map_err(|e| StreamlineError::protocol_msg(format!("Connection failed: {e}")))?;
 
         info!("Connected to QUIC server at {}", self.config.server_addr);
 
@@ -637,8 +666,20 @@ impl QuicClient {
 }
 
 /// Skip server certificate verification (for self-signed certs)
+///
+/// Carries the crypto provider the owning `ClientConfig` was built from, so
+/// `supported_verify_schemes` reports exactly what that provider can verify
+/// rather than a hardcoded list that could drift from it.
 #[derive(Debug)]
-struct SkipServerVerification;
+struct SkipServerVerification {
+    provider: Arc<rustls::crypto::CryptoProvider>,
+}
+
+impl SkipServerVerification {
+    fn new(provider: Arc<rustls::crypto::CryptoProvider>) -> Self {
+        Self { provider }
+    }
+}
 
 impl rustls::client::danger::ServerCertVerifier for SkipServerVerification {
     fn verify_server_cert(
@@ -671,18 +712,9 @@ impl rustls::client::danger::ServerCertVerifier for SkipServerVerification {
     }
 
     fn supported_verify_schemes(&self) -> Vec<rustls::SignatureScheme> {
-        vec![
-            rustls::SignatureScheme::RSA_PKCS1_SHA256,
-            rustls::SignatureScheme::RSA_PKCS1_SHA384,
-            rustls::SignatureScheme::RSA_PKCS1_SHA512,
-            rustls::SignatureScheme::ECDSA_NISTP256_SHA256,
-            rustls::SignatureScheme::ECDSA_NISTP384_SHA384,
-            rustls::SignatureScheme::ECDSA_NISTP521_SHA512,
-            rustls::SignatureScheme::RSA_PSS_SHA256,
-            rustls::SignatureScheme::RSA_PSS_SHA384,
-            rustls::SignatureScheme::RSA_PSS_SHA512,
-            rustls::SignatureScheme::ED25519,
-        ]
+        self.provider
+            .signature_verification_algorithms
+            .supported_schemes()
     }
 }
 
@@ -690,9 +722,36 @@ impl rustls::client::danger::ServerCertVerifier for SkipServerVerification {
 mod tests {
     use super::*;
 
-    fn setup_crypto() {
-        // Install the ring crypto provider for rustls
-        let _ = rustls::crypto::ring::default_provider().install_default();
+    /// Every rustls object in this module is built from an explicitly passed
+    /// provider, so no process-wide-provider fixture is needed — and none may be
+    /// added: installing one would let an implicit builder call start working by
+    /// accident.
+    #[test]
+    fn test_no_process_wide_crypto_provider_is_installed() {
+        assert!(
+            rustls::crypto::CryptoProvider::get_default().is_none(),
+            "QUIC configuration must not depend on a process-wide rustls provider"
+        );
+    }
+
+    /// The dangerous verifier must advertise exactly the schemes its provider
+    /// can verify. A hardcoded list silently disagrees with the provider as soon
+    /// as the provider's algorithm set changes.
+    #[test]
+    fn test_skip_verifier_schemes_come_from_its_provider() {
+        use rustls::client::danger::ServerCertVerifier;
+
+        let provider = crate::server::tls::crypto_provider();
+        let verifier = SkipServerVerification::new(Arc::clone(&provider));
+
+        assert_eq!(
+            verifier.supported_verify_schemes(),
+            provider
+                .signature_verification_algorithms
+                .supported_schemes(),
+            "the verifier must derive its schemes from the provider it was built with"
+        );
+        assert!(!verifier.supported_verify_schemes().is_empty());
     }
 
     #[test]
@@ -722,8 +781,6 @@ mod tests {
 
     #[tokio::test]
     async fn test_quic_server_creation() {
-        setup_crypto();
-
         let config = QuicServerConfig {
             bind_addr: "127.0.0.1:0".parse().unwrap(),
             ..Default::default()
@@ -740,8 +797,6 @@ mod tests {
 
     #[tokio::test]
     async fn test_quic_client_creation() {
-        setup_crypto();
-
         let config = QuicClientConfig::default();
         let client = QuicClient::new(config);
         assert!(client.is_ok());

@@ -94,7 +94,7 @@ impl ProviderEntry {
     /// Create an OpenAI provider entry.
     pub fn openai(model: &str) -> Self {
         Self {
-            name: format!("openai-{}", model),
+            name: format!("openai-{model}"),
             kind: ProviderKind::OpenAI,
             model: model.to_string(),
             endpoint: Some("https://api.openai.com/v1".to_string()),
@@ -108,7 +108,7 @@ impl ProviderEntry {
     /// Create an Ollama (local) provider entry.
     pub fn ollama(model: &str) -> Self {
         Self {
-            name: format!("ollama-{}", model),
+            name: format!("ollama-{model}"),
             kind: ProviderKind::Ollama,
             model: model.to_string(),
             endpoint: Some("http://localhost:11434".to_string()),
@@ -401,9 +401,7 @@ impl AIGateway {
         system_prompt: Option<&str>,
     ) -> Result<InferenceResult> {
         if self.cost_tracker.is_budget_exceeded() {
-            return Err(StreamlineError::AI(
-                "AI budget limit exceeded".to_string(),
-            ));
+            return Err(StreamlineError::AI("AI budget limit exceeded".to_string()));
         }
 
         let mut last_error: Option<StreamlineError> = None;
@@ -523,13 +521,11 @@ impl AIGateway {
                 self.call_http_llm(entry, prompt, system_prompt).await
             }
             ProviderKind::Ollama => self.call_ollama(entry, prompt, system_prompt).await,
-            ProviderKind::OnnxRuntime => {
-                Err(StreamlineError::AI(
-                    "ONNX Runtime provider requires the onnxruntime crate; \
+            ProviderKind::OnnxRuntime => Err(StreamlineError::AI(
+                "ONNX Runtime provider requires the onnxruntime crate; \
                      use Ollama or OpenAI for inference"
-                        .to_string(),
-                ))
-            }
+                    .to_string(),
+            )),
         }
     }
 
@@ -570,36 +566,33 @@ impl AIGateway {
             "max_tokens": 256,
         });
 
-        let client = reqwest::Client::builder()
+        let client = crate::http_client::builder()
+            .map_err(|e| StreamlineError::AI(format!("HTTP client error: {e}")))?
             .timeout(std::time::Duration::from_millis(self.config.timeout_ms))
             .build()
-            .map_err(|e| StreamlineError::AI(format!("HTTP client error: {}", e)))?;
+            .map_err(|e| StreamlineError::AI(format!("HTTP client error: {e}")))?;
 
         let resp = client
-            .post(format!("{}/chat/completions", endpoint))
-            .header("Authorization", format!("Bearer {}", api_key))
+            .post(format!("{endpoint}/chat/completions"))
+            .header("Authorization", format!("Bearer {api_key}"))
             .header("Content-Type", "application/json")
             .json(&body)
             .send()
             .await
-            .map_err(|e| StreamlineError::AI(format!("Request failed: {}", e)))?;
+            .map_err(|e| StreamlineError::AI(format!("Request failed: {e}")))?;
 
         if !resp.status().is_success() {
             let status = resp.status();
-            let text = resp
-                .text()
-                .await
-                .unwrap_or_else(|_| "unknown".to_string());
+            let text = resp.text().await.unwrap_or_else(|_| "unknown".to_string());
             return Err(StreamlineError::AI(format!(
-                "Provider returned {}: {}",
-                status, text
+                "Provider returned {status}: {text}"
             )));
         }
 
         let json: serde_json::Value = resp
             .json()
             .await
-            .map_err(|e| StreamlineError::AI(format!("Parse error: {}", e)))?;
+            .map_err(|e| StreamlineError::AI(format!("Parse error: {e}")))?;
 
         let text = json["choices"][0]["message"]["content"]
             .as_str()
@@ -633,38 +626,38 @@ impl AIGateway {
             "stream": false,
         });
 
-        let client = reqwest::Client::builder()
+        let client = crate::http_client::builder()
+            .map_err(|e| StreamlineError::AI(format!("HTTP client error: {e}")))?
             .timeout(std::time::Duration::from_millis(self.config.timeout_ms))
             .build()
-            .map_err(|e| StreamlineError::AI(format!("HTTP client error: {}", e)))?;
+            .map_err(|e| StreamlineError::AI(format!("HTTP client error: {e}")))?;
 
         let resp = client
-            .post(format!("{}/api/generate", endpoint))
+            .post(format!("{endpoint}/api/generate"))
             .json(&body)
             .send()
             .await
-            .map_err(|e| StreamlineError::AI(format!("Ollama request failed: {}", e)))?;
+            .map_err(|e| StreamlineError::AI(format!("Ollama request failed: {e}")))?;
 
         if !resp.status().is_success() {
             let status = resp.status();
             return Err(StreamlineError::AI(format!(
-                "Ollama returned status {}",
-                status
+                "Ollama returned status {status}"
             )));
         }
 
         let json: serde_json::Value = resp
             .json()
             .await
-            .map_err(|e| StreamlineError::AI(format!("Parse error: {}", e)))?;
+            .map_err(|e| StreamlineError::AI(format!("Parse error: {e}")))?;
 
         let text = json["response"].as_str().unwrap_or("").to_string();
-        let input_tokens = json["prompt_eval_count"].as_u64().unwrap_or_else(|| {
-            (prompt.len() / 4) as u64
-        });
+        let input_tokens = json["prompt_eval_count"]
+            .as_u64()
+            .unwrap_or((prompt.len() / 4) as u64);
         let output_tokens = json["eval_count"]
             .as_u64()
-            .unwrap_or_else(|| (text.len() / 4) as u64);
+            .unwrap_or((text.len() / 4) as u64);
 
         Ok(RawInferenceResult {
             text,

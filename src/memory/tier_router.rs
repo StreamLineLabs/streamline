@@ -25,14 +25,14 @@ fn lock_or_recover<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
 pub fn route(w: &MemoryWrite) -> Vec<(Tier, String)> {
     let base = format!("__mem.{}", w.agent_id);
     match &w.kind {
-        WriteKind::Observation => vec![(Tier::Episodic, format!("{}.episodic", base))],
+        WriteKind::Observation => vec![(Tier::Episodic, format!("{base}.episodic"))],
         WriteKind::Fact => vec![
-            (Tier::Episodic, format!("{}.episodic", base)),
-            (Tier::Semantic, format!("{}.semantic", base)),
+            (Tier::Episodic, format!("{base}.episodic")),
+            (Tier::Semantic, format!("{base}.semantic")),
         ],
         WriteKind::Procedure { .. } => vec![
-            (Tier::Episodic, format!("{}.episodic", base)),
-            (Tier::Procedural, format!("{}.procedural", base)),
+            (Tier::Episodic, format!("{base}.episodic")),
+            (Tier::Procedural, format!("{base}.procedural")),
         ],
     }
 }
@@ -72,14 +72,13 @@ pub fn remember(w: &MemoryWrite) -> Result<Vec<(String, i64)>, RememberError> {
     let mut written = Vec::new();
     for (tier, topic) in route(w) {
         let off = next_offset(&topic);
-        lock_or_recover(content_store())
-            .insert((topic.clone(), off), w.content.clone());
+        lock_or_recover(content_store()).insert((topic.clone(), off), w.content.clone());
 
         if tier == Tier::Semantic && should_mirror_to_semantic(w) {
             let embedder = HashEmbedder::default();
-            let vec = embedder.embed(&w.content).map_err(|e| {
-                RememberError::Embed(format!("{:?}", e))
-            })?;
+            let vec = embedder
+                .embed(&w.content)
+                .map_err(|e| RememberError::Embed(format!("{e:?}")))?;
             registry::get_or_create(&topic).insert(0, off, &vec);
         }
         written.push((topic, off));
@@ -95,16 +94,11 @@ pub enum RememberError {
 
 /// Recall fan-out: query semantic tier first, fall back to episodic linear
 /// scan if semantic returns < `min_hits`.
-pub fn recall(
-    agent_id: &str,
-    query: &str,
-    k: usize,
-    min_hits: usize,
-) -> Vec<RecalledMemory> {
+pub fn recall(agent_id: &str, query: &str, k: usize, min_hits: usize) -> Vec<RecalledMemory> {
     if k == 0 {
         return Vec::new();
     }
-    let semantic_topic = format!("__mem.{}.semantic", agent_id);
+    let semantic_topic = format!("__mem.{agent_id}.semantic");
     let mut hits = Vec::new();
     if let Some(idx) = registry::get(&semantic_topic) {
         let embedder = HashEmbedder::default();
@@ -128,7 +122,7 @@ pub fn recall(
         return hits;
     }
     // Fallback: substring scan over the episodic content store.
-    let episodic_topic = format!("__mem.{}.episodic", agent_id);
+    let episodic_topic = format!("__mem.{agent_id}.episodic");
     let q_lower = query.to_lowercase();
     let store = lock_or_recover(content_store());
     let mut episodic: Vec<RecalledMemory> = store
@@ -158,7 +152,7 @@ pub fn recall(
 /// record metadata. Currently returns an empty vec because the in-memory
 /// store does not track timestamps or importance per entry.
 pub fn content_store_snapshot(agent_id: &str) -> Vec<(f32, f64)> {
-    let prefix = format!("__mem.{}.", agent_id);
+    let prefix = format!("__mem.{agent_id}.");
     let store = lock_or_recover(content_store());
     store
         .keys()
@@ -223,7 +217,9 @@ mod tests {
     fn procedure_routes_to_episodic_and_procedural() {
         let w = MemoryWrite {
             agent_id: "alice".into(),
-            kind: WriteKind::Procedure { skill: "tie-knot".into() },
+            kind: WriteKind::Procedure {
+                skill: "tie-knot".into(),
+            },
             content: "...".into(),
             importance: 0.5,
             tags: vec![],
@@ -244,6 +240,7 @@ mod tests {
 
     #[test]
     fn remember_then_recall_returns_fact() {
+        let _guard = crate::ai::semantic_topics::registry::test_lock();
         reset_for_tests();
         let w = MemoryWrite {
             agent_id: "bob".into(),
@@ -262,6 +259,7 @@ mod tests {
 
     #[test]
     fn recall_unknown_agent_is_empty() {
+        let _guard = crate::ai::semantic_topics::registry::test_lock();
         reset_for_tests();
         let hits = recall("ghost", "anything", 5, 0);
         assert!(hits.is_empty());
@@ -269,6 +267,7 @@ mod tests {
 
     #[test]
     fn recall_falls_back_to_episodic_when_semantic_empty() {
+        let _guard = crate::ai::semantic_topics::registry::test_lock();
         reset_for_tests();
         let w = MemoryWrite {
             agent_id: "carol".into(),
@@ -285,6 +284,7 @@ mod tests {
 
     #[test]
     fn k_zero_short_circuits() {
+        let _guard = crate::ai::semantic_topics::registry::test_lock();
         reset_for_tests();
         assert!(recall("a", "q", 0, 0).is_empty());
     }

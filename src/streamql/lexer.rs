@@ -278,8 +278,7 @@ impl<'a> Lexer<'a> {
                 c if c.is_alphabetic() || c == '_' => self.identifier_or_keyword(),
 
                 _ => Err(StreamlineError::Parse(format!(
-                    "Unexpected character: '{}'",
-                    c
+                    "Unexpected character: '{c}'"
                 ))),
             },
         }
@@ -437,8 +436,7 @@ impl<'a> Lexer<'a> {
         }
 
         Err(StreamlineError::Parse(format!(
-            "Unterminated string literal starting at position {}",
-            start
+            "Unterminated string literal starting at position {start}"
         )))
     }
 
@@ -465,8 +463,7 @@ impl<'a> Lexer<'a> {
         }
 
         Err(StreamlineError::Parse(format!(
-            "Unterminated quoted identifier starting at position {}",
-            start
+            "Unterminated quoted identifier starting at position {start}"
         )))
     }
 
@@ -496,12 +493,12 @@ impl<'a> Lexer<'a> {
                     value
                         .parse::<f64>()
                         .map(Token::FloatLiteral)
-                        .map_err(|e| StreamlineError::Parse(format!("Invalid float: {}", e)))
+                        .map_err(|e| StreamlineError::Parse(format!("Invalid float: {e}")))
                 } else {
                     value
                         .parse::<i64>()
                         .map(Token::IntegerLiteral)
-                        .map_err(|e| StreamlineError::Parse(format!("Invalid integer: {}", e)))
+                        .map_err(|e| StreamlineError::Parse(format!("Invalid integer: {e}")))
                 };
             }
         }
@@ -512,12 +509,12 @@ impl<'a> Lexer<'a> {
             value
                 .parse::<f64>()
                 .map(Token::FloatLiteral)
-                .map_err(|e| StreamlineError::Parse(format!("Invalid float: {}", e)))
+                .map_err(|e| StreamlineError::Parse(format!("Invalid float: {e}")))
         } else {
             value
                 .parse::<i64>()
                 .map(Token::IntegerLiteral)
-                .map_err(|e| StreamlineError::Parse(format!("Invalid integer: {}", e)))
+                .map_err(|e| StreamlineError::Parse(format!("Invalid integer: {e}")))
         }
     }
 
@@ -700,4 +697,3 @@ mod tests {
         );
     }
 }
-
